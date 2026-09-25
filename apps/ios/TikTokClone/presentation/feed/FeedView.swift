@@ -5,14 +5,21 @@ import SwiftUI
 struct FeedView: View {
     @State private var viewModel: FeedViewModel
     let pool: AVPlayerPool
+    let interactions: VideoInteractionsModel
+    let container: AppContainer
     let isTabActive: Bool
     @State private var scrolledID: String?
+    @State private var commentsVideo: FeedVideo?
+    @State private var shareVideo: FeedVideo?
+    @State private var alertMessage: String?
     @Environment(SessionStore.self) private var session
     @Environment(\.scenePhase) private var scenePhase
 
-    init(viewModel: FeedViewModel, pool: AVPlayerPool, isTabActive: Bool) {
+    init(viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
+        self.interactions = interactions
+        self.container = container
         self.isTabActive = isTabActive
     }
 
@@ -31,7 +38,13 @@ struct FeedView: View {
         }
         .onChange(of: isTabActive, initial: true) { updateActivity() }
         .onChange(of: scenePhase) { updateActivity() }
-        .onChange(of: session.isSignedIn) { Task { await viewModel.reload() } }
+        .onChange(of: session.isSignedIn) { Task { await reload() } }
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, alert: $alertMessage, interactions: interactions, container: container)
+    }
+
+    private func reload() async {
+        interactions.reset()
+        await viewModel.reload()
     }
 
     @ViewBuilder
@@ -46,7 +59,7 @@ struct FeedView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Réessayer") { Task { await viewModel.reload() } }
+                Button("Réessayer") { Task { await reload() } }
                     .buttonStyle(.borderedProminent)
             }
         default:
@@ -63,14 +76,21 @@ struct FeedView: View {
             LazyVStack(spacing: 0) {
                 ForEach(viewModel.entries) { entry in
                     FeedPageView(
-                        video: entry.video,
+                        video: interactions.display(entry.video),
                         player: pool.player(for: entry.video.id),
                         showsPauseIndicator: entry.id == viewModel.currentEntryID && viewModel.isPaused,
-                        bottomInset: bottomInset
+                        bottomInset: bottomInset,
+                        showsFollowButton: !interactions.isOwn(entry.video),
+                        actions: .init(
+                            interactions: interactions,
+                            video: entry.video,
+                            togglePause: { viewModel.togglePause() },
+                            comments: { commentsVideo = interactions.display(entry.video) },
+                            share: { shareVideo = interactions.display(entry.video) },
+                            alert: { alertMessage = $0 }
+                        )
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
-                    .contentShape(Rectangle())
-                    .onTapGesture { viewModel.togglePause() }
                     .id(entry.id)
                 }
             }
@@ -80,7 +100,7 @@ struct FeedView: View {
         .scrollIndicators(.hidden)
         .scrollPosition(id: $scrolledID)
         .ignoresSafeArea()
-        .refreshable { await viewModel.reload() }
+        .refreshable { await reload() }
         // Nouvelle ScrollView à chaque rechargement : elle repart en haut, sur la vidéo courante.
         .id(viewModel.reloadCount)
         .accessibilityIdentifier("feed.pages")
@@ -91,12 +111,31 @@ struct FeedView: View {
     }
 }
 
-// Une page du feed : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et compteurs.
+// Actions d'une page vidéo, fournies par l'écran qui l'affiche (feed, vidéo seule).
+struct VideoPageActions {
+    var togglePause: () -> Void
+    var doubleTapLike: () -> Void
+    var toggle: (ReactionKind) -> Void
+    var comments: () -> Void
+    var share: () -> Void
+    var follow: () -> Void
+}
+
+// Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
+// Toucher : pause ou reprise ; double toucher : like, avec un cœur qui éclate à l'endroit touché.
 struct FeedPageView: View {
     let video: FeedVideo
     let player: AVPlayer?
     let showsPauseIndicator: Bool
     let bottomInset: CGFloat
+    let showsFollowButton: Bool
+    let actions: VideoPageActions
+    @State private var burst: HeartBurst?
+
+    private struct HeartBurst: Identifiable, Equatable {
+        let id = UUID()
+        let location: CGPoint
+    }
 
     var body: some View {
         // La miniature et la vidéo sont en overlay : recadrées (scaledToFill), elles ne doivent pas agrandir la page.
@@ -110,6 +149,14 @@ struct FeedPageView: View {
             }
             .overlay { PlayerLayerView(player: player) }
             .clipped()
+            .contentShape(Rectangle())
+            .gesture(
+                SpatialTapGesture(count: 2).onEnded { value in
+                    burst = HeartBurst(location: value.location)
+                    actions.doubleTapLike()
+                }
+                .exclusively(before: TapGesture().onEnded { actions.togglePause() })
+            )
             .overlay {
                 if showsPauseIndicator {
                     Image(systemName: "play.fill")
@@ -117,7 +164,20 @@ struct FeedPageView: View {
                         .foregroundStyle(.white.opacity(0.85))
                         .shadow(radius: 8)
                         .transition(.scale.combined(with: .opacity))
+                        .allowsHitTesting(false)
                         .accessibilityLabel("En pause")
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if let burst {
+                    HeartBurstView()
+                        .position(burst.location)
+                        .id(burst.id)
+                        .allowsHitTesting(false)
+                        .task(id: burst.id) {
+                            try? await Task.sleep(for: .milliseconds(700))
+                            if self.burst == burst { self.burst = nil }
+                        }
                 }
             }
             .overlay(alignment: .bottom) {
@@ -131,7 +191,8 @@ struct FeedPageView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Lisible sur une vidéo claire.
                     .shadow(color: .black.opacity(0.6), radius: 3)
-                    FeedActionColumn(video: video)
+                    .allowsHitTesting(false)
+                    FeedActionColumn(video: video, showsFollowButton: showsFollowButton, actions: actions)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, bottomInset + 12)
@@ -146,20 +207,64 @@ struct FeedPageView: View {
     }
 }
 
-// Colonne de droite : auteur et compteurs, avec l'état du compte connecté (cœur rempli…).
-// En lecture seule pour l'instant ; les actions viendront avec les interactions.
-struct FeedActionColumn: View {
-    let video: FeedVideo
+// Cœur du double toucher : grossit puis s'efface.
+struct HeartBurstView: View {
+    @State private var isVisible = false
 
     var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 96))
+            .foregroundStyle(.red.gradient)
+            .shadow(radius: 10)
+            .scaleEffect(isVisible ? 1 : 0.4)
+            .opacity(isVisible ? 0 : 1)
+            .rotationEffect(.degrees(isVisible ? -12 : 0))
+            .onAppear {
+                withAnimation(.spring(duration: 0.6)) { isVisible = true }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+// Colonne de droite : auteur (avec « + » pour le suivre), puis like, commentaires, favori, republication, partage.
+struct FeedActionColumn: View {
+    let video: FeedVideo
+    let showsFollowButton: Bool
+    let actions: VideoPageActions
+
+    var body: some View {
+        let viewer = video.viewer ?? .empty
         VStack(spacing: 18) {
             AvatarView(url: video.author.avatarURL, name: video.author.displayName, size: 48)
                 .overlay(Circle().stroke(.white, lineWidth: 2))
-            FeedCounter(systemImage: "heart.fill", count: video.stats.likes, isActive: video.viewer?.liked == true, activeColor: .red, label: "J’aime")
-            FeedCounter(systemImage: "ellipsis.bubble.fill", count: video.stats.comments, label: "Commentaires")
-            FeedCounter(systemImage: "bookmark.fill", count: video.stats.favorites, isActive: video.viewer?.favorited == true, activeColor: .yellow, label: "Favoris")
-            FeedCounter(systemImage: "arrow.2.squarepath", count: video.stats.reposts, isActive: video.viewer?.reposted == true, activeColor: .green, label: "Republications")
-            FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partages")
+                .overlay(alignment: .bottom) {
+                    if showsFollowButton && !viewer.followingAuthor {
+                        Button(action: actions.follow) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .background(Color.accentColor, in: Circle())
+                        }
+                        .offset(y: 11)
+                        .accessibilityLabel("Suivre @\(video.author.username)")
+                        .accessibilityIdentifier("video.follow")
+                    }
+                }
+                .padding(.bottom, 6)
+            FeedCounter(systemImage: "heart.fill", count: video.stats.likes, isActive: viewer.liked, activeColor: .red,
+                        label: viewer.liked ? "Je n’aime plus" : "J’aime") { actions.toggle(.like) }
+                .accessibilityIdentifier("video.like")
+            FeedCounter(systemImage: "ellipsis.bubble.fill", count: video.stats.comments, label: "Commentaires", action: actions.comments)
+                .accessibilityIdentifier("video.comments")
+            FeedCounter(systemImage: "bookmark.fill", count: video.stats.favorites, isActive: viewer.favorited, activeColor: .yellow,
+                        label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris") { actions.toggle(.favorite) }
+                .accessibilityIdentifier("video.favorite")
+            FeedCounter(systemImage: "arrow.2.squarepath", count: video.stats.reposts, isActive: viewer.reposted, activeColor: .green,
+                        label: viewer.reposted ? "Annuler la republication" : "Republier") { actions.toggle(.repost) }
+                .accessibilityIdentifier("video.repost")
+            FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
+                .accessibilityIdentifier("video.share")
         }
     }
 }
@@ -170,19 +275,30 @@ struct FeedCounter: View {
     var isActive = false
     var activeColor: Color = .white
     let label: String
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 28))
-                .foregroundStyle(isActive ? activeColor : .white)
-                .shadow(radius: 4)
-            Text(count, format: .number.notation(.compactName))
-                .font(.caption.bold())
-                .shadow(color: .black.opacity(0.6), radius: 3)
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 28))
+                    .foregroundStyle(isActive ? activeColor : .white)
+                    .shadow(radius: 4)
+                    .symbolEffect(.bounce, value: isActive)
+                Text(count, format: .number.notation(.compactName))
+                    .font(.caption.bold())
+                    .shadow(color: .black.opacity(0.6), radius: 3)
+                    .contentTransition(.numericText(value: Double(count)))
+            }
+            // Toute la zone du bouton est touchable : sinon un toucher entre l'icône et le compteur
+            // passe à la vidéo dessous (pause).
+            .frame(width: 56)
+            .contentShape(Rectangle())
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label) : \(count)")
+        .buttonStyle(.plain)
+        .animation(.snappy, value: count)
+        .accessibilityLabel(label)
+        .accessibilityValue(Text(count, format: .number))
     }
 }
 

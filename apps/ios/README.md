@@ -82,6 +82,14 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Connexion ou déconnexion : le feed est rechargé (l'état des boutons change).
 - En simulateur, les vidéos viennent de MinIO en HTTP (`localhost:9000`) : ATS l'autorise par `NSAllowsLocalNetworking`.
 
+## Interactions
+
+- Colonne de droite : like, commentaires, favori, republication, partage ; « + » sur l'avatar pour suivre l'auteur. Double toucher sur la vidéo : like.
+- Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
+- En invité, toute action ouvre la connexion.
+- Commentaires : feuille native à mi-hauteur, glisser vers la gauche pour supprimer le sien.
+- Partage : feuille de partage système avec le lien `tiktokclone://videos/<id>` ; compté seulement s'il est réellement envoyé. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
+
 ## Temps réel (ADR-011)
 
 WebSocket `ws://<hôte>:3000/realtime`, ouvert avec `URLSessionWebSocketTask` et l'access token dans l'en-tête :

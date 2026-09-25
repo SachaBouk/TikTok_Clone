@@ -9,6 +9,7 @@ struct AuthFlowView: View {
 
     let container: AppContainer
     @Environment(\.dismiss) private var dismiss
+    @Environment(SessionStore.self) private var session
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,10 @@ struct AuthFlowView: View {
                         Button("Fermer") { dismiss() }
                     }
                 }
+        }
+        // Présentée aussi depuis d'autres feuilles (commentaires) : se ferme d'elle-même une fois connecté.
+        .onChange(of: session.isSignedIn) { _, signedIn in
+            if signedIn { dismiss() }
         }
     }
 }

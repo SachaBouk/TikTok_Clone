@@ -24,5 +24,6 @@ struct RootView: View {
             }
         }
         .task { await session.restore() }
+        .onOpenURL { container.router.open($0) }
     }
 }

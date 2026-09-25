@@ -52,6 +52,11 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         ITSAppUsesNonExemptEncryption: false
+        # Lien d'app vers une vidéo : tiktokclone://videos/<id> (partage).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.sachabouk.tiktokclone
+            CFBundleURLSchemes:
+              - tiktokclone
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sachabouk.tiktokclone

@@ -6,6 +6,10 @@ enum AppError: Error, Equatable, Sendable {
     case rejected(String)
     // Session expirée ou révoquée, ou compte supprimé : il faut se reconnecter.
     case sessionExpired
+    // L'un des deux comptes a bloqué l'autre (403).
+    case blocked
+    // Vidéo, commentaire ou compte disparu entre-temps (404).
+    case notFound
     // API injoignable (réseau, serveur arrêté).
     case network
     // Réponse inattendue.
@@ -17,6 +21,8 @@ enum AppError: Error, Equatable, Sendable {
         case .invalidCredentials: "Email ou mot de passe incorrect."
         case .rejected(let message): message
         case .sessionExpired: "Ta session a expiré. Reconnecte-toi."
+        case .blocked: "Action impossible : l’un de vous a bloqué l’autre."
+        case .notFound: "Ce contenu n’est plus disponible."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
         }

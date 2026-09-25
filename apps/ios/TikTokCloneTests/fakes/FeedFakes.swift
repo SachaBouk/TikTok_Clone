@@ -11,6 +11,13 @@ final class FakeFeedRepository: FeedRepository {
     }
 
     var requestedCursors: [String?] { state.withLock { $0.cursors } }
+    // Vidéos seules disponibles (`video(id:)`).
+    nonisolated(unsafe) var videos: [String: FeedVideo] = [:]
+
+    func video(id: String) async throws -> FeedVideo {
+        guard let video = videos[id] else { throw AppError.notFound }
+        return video
+    }
 
     func page(cursor: String?) async throws -> FeedPage {
         try state.withLock { state in

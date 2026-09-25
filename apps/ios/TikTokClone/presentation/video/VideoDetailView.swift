@@ -1,0 +1,68 @@
+import SwiftUI
+
+// Vidéo seule en plein écran (lien d'app), fermée par le bouton natif de la barre d'outils.
+struct VideoDetailView: View {
+    @State private var viewModel: VideoDetailViewModel
+    let pool: AVPlayerPool
+    let interactions: VideoInteractionsModel
+    let container: AppContainer
+    @State private var commentsVideo: FeedVideo?
+    @State private var shareVideo: FeedVideo?
+    @State private var alertMessage: String?
+    @Environment(\.dismiss) private var dismiss
+
+    init(viewModel: VideoDetailViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer) {
+        _viewModel = State(initialValue: viewModel)
+        self.pool = pool
+        self.interactions = interactions
+        self.container = container
+    }
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                content(bottomInset: geometry.safeAreaInsets.bottom)
+                    .ignoresSafeArea()
+            }
+            .background(.black)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Fermer", systemImage: "xmark") { dismiss() }
+                        .accessibilityIdentifier("video.close")
+                }
+            }
+            .toolbarBackground(.hidden, for: .navigationBar)
+        }
+        .environment(\.colorScheme, .dark)
+        .task { await viewModel.start() }
+        .onDisappear { viewModel.stop() }
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, alert: $alertMessage, interactions: interactions, container: container)
+    }
+
+    @ViewBuilder
+    private func content(bottomInset: CGFloat) -> some View {
+        switch viewModel.state {
+        case .loading:
+            ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView("Vidéo indisponible", systemImage: "video.slash", description: Text(message))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .loaded(let video):
+            FeedPageView(
+                video: interactions.display(video),
+                player: pool.player(for: video.id),
+                showsPauseIndicator: viewModel.isPaused,
+                bottomInset: bottomInset,
+                showsFollowButton: !interactions.isOwn(video),
+                actions: .init(
+                    interactions: interactions,
+                    video: video,
+                    togglePause: { viewModel.togglePause() },
+                    comments: { commentsVideo = interactions.display(video) },
+                    share: { shareVideo = interactions.display(video) },
+                    alert: { alertMessage = $0 }
+                )
+            )
+        }
+    }
+}

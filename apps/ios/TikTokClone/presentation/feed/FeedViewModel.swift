@@ -116,6 +116,10 @@ final class FeedViewModel {
             viewTask?.cancel()
             playback.pauseAll()
         } else if let video = currentVideo, !isPaused {
+            // Une vidéo seule a pu occuper les lecteurs entre-temps : on recharge la fenêtre.
+            if let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
+                playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
+            }
             playback.play(video.id)
             scheduleView(of: video)
         }

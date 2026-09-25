@@ -9,12 +9,21 @@ struct MainTabView: View {
     let container: AppContainer
     @Environment(SessionStore.self) private var session
     @State private var selection: Destination = .home
+    private var router: AppRouter { container.router }
 
     var body: some View {
         @Bindable var session = session
+        @Bindable var router = container.router
         TabView(selection: $selection) {
             Tab("Accueil", systemImage: "house", value: .home) {
-                FeedView(viewModel: container.makeFeedViewModel(), pool: container.playerPool, isTabActive: selection == .home)
+                FeedView(
+                    viewModel: container.makeFeedViewModel(),
+                    pool: container.playerPool,
+                    interactions: container.videoInteractions,
+                    container: container,
+                    // En pause pendant qu'une vidéo seule est ouverte par-dessus.
+                    isTabActive: selection == .home && router.presentedVideo == nil
+                )
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
@@ -34,6 +43,18 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $session.isPresentingSignIn) {
             AuthFlowView(container: container)
+        }
+        .fullScreenCover(item: $router.presentedVideo) { route in
+            VideoDetailView(
+                viewModel: container.makeVideoDetailViewModel(videoID: route.id),
+                pool: container.playerPool,
+                interactions: container.videoInteractions,
+                container: container
+            )
+            // La feuille de connexion doit pouvoir s'ouvrir par-dessus la vidéo seule.
+            .sheet(isPresented: $session.isPresentingSignIn) {
+                AuthFlowView(container: container)
+            }
         }
         .alert("Session expirée", isPresented: Binding(
             get: { session.notice != nil },

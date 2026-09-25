@@ -16,6 +16,16 @@ struct RemoteFeedRepository: FeedRepository {
         case .undocumented: throw AppError.unexpected
         }
     }
+
+    func video(id: String) async throws -> FeedVideo {
+        switch try await mappingErrors({ try await client.getFeedItem(path: .init(id: id)) }) {
+        case .ok(let ok):
+            guard let video = FeedVideo(try ok.body.json) else { throw AppError.unexpected }
+            return video
+        case .badRequest, .notFound: throw AppError.notFound
+        case .undocumented: throw AppError.unexpected
+        }
+    }
 }
 
 struct RemoteViewHistoryRepository: ViewHistoryRepository {

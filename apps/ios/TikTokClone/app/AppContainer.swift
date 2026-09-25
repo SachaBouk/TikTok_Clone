@@ -6,12 +6,16 @@ import TikTokAPI
 @MainActor
 final class AppContainer {
     let session: SessionStore
-    // Lecteurs vidéo partagés par les écrans qui lisent des vidéos (feed, puis grilles).
+    // Lecteurs vidéo partagés par les écrans qui lisent des vidéos (feed, vidéo seule, puis grilles).
     let playerPool = AVPlayerPool()
+    let router = AppRouter()
+    // État des interactions partagé par tous les écrans vidéo (un like dans l'un se voit dans l'autre).
+    let videoInteractions: VideoInteractionsModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
     private let viewHistory: any ViewHistoryRepository
+    private let interactions: any InteractionRepository
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -28,11 +32,18 @@ final class AppContainer {
         profiles = RemoteProfileRepository(client: client)
         feed = RemoteFeedRepository(client: client)
         viewHistory = RemoteViewHistoryRepository(client: client)
+        interactions = RemoteInteractionRepository(client: client)
         session = SessionStore(
             restoreSession: RestoreSessionUseCase(auth: auth, profiles: profiles),
             logout: LogoutUseCase(auth: auth)
         )
         expiry.session = session
+        videoInteractions = VideoInteractionsModel(
+            setReaction: SetReactionUseCase(interactions: interactions),
+            setFollow: SetFollowUseCase(interactions: interactions),
+            recordShare: ShareVideoUseCase(interactions: interactions),
+            session: session
+        )
     }
 
     func makeLoginViewModel() -> LoginViewModel {
@@ -46,6 +57,27 @@ final class AppContainer {
     func makeFeedViewModel() -> FeedViewModel {
         FeedViewModel(
             loadPage: LoadFeedPageUseCase(feed: feed),
+            recordView: RecordViewUseCase(history: viewHistory),
+            playback: playerPool,
+            session: session
+        )
+    }
+
+    func makeCommentsViewModel(video: FeedVideo, onCountChange: @escaping (Int) -> Void) -> CommentsViewModel {
+        CommentsViewModel(
+            video: video,
+            loadComments: LoadCommentsUseCase(interactions: interactions),
+            addComment: AddCommentUseCase(interactions: interactions),
+            deleteComment: DeleteCommentUseCase(interactions: interactions),
+            session: session,
+            onCountChange: onCountChange
+        )
+    }
+
+    func makeVideoDetailViewModel(videoID: String) -> VideoDetailViewModel {
+        VideoDetailViewModel(
+            videoID: videoID,
+            loadVideo: LoadVideoUseCase(feed: feed),
             recordView: RecordViewUseCase(history: viewHistory),
             playback: playerPool,
             session: session
