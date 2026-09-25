@@ -12,7 +12,7 @@ Une application type TikTok, développée par une seule personne. Elle comprend 
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer. Ne jamais marquer comme accepté un ADR que l'on rédige ou modifie.
 
-Le projet est en construction, ADR par ADR. Sont en place : l'infrastructure Docker locale (ADR-015), le schéma Prisma (ADR-006), l'architecture backend (ADR-003) avec le module de référence `users`, l'authentification (ADR-010, module `auth`), le contrat OpenAPI (ADR-005), l'upload direct des vidéos (ADR-007, module `videos`), le traitement asynchrone BullMQ (ADR-012), le transcodage HLS du worker (ADR-008), le seed de démo, le feed aléatoire (ADR-016, module `feed`, cache Redis de l'ADR-014), les interactions sociales (module `interactions`), le centre d'activité (module `notifications`), le temps réel (ADR-011, module `realtime` : fin du transcodage, activité et badge en direct), la messagerie directe (module `messaging` : demandes, blocage, suppression, partage de vidéo, « en train d'écrire », limites d'envoi) les notifications push (module `push`, APNs) et le profil (module `users` : modification, photo de profil ; listes d'abonnés, relation, grilles, vues, historiques de visionnage et de commentaires dans `interactions` et `feed`). Restent notamment le portefeuille (ADR-009), PostHog (ADR-013), le backoffice (ADR-004) et l'app iOS (ADR-002). La documentation, les commentaires de code et les textes d'interface sont en français et doivent le rester.
+Le projet est en construction, ADR par ADR. Sont en place : l'infrastructure Docker locale (ADR-015), le schéma Prisma (ADR-006), l'architecture backend (ADR-003) avec le module de référence `users`, l'authentification (ADR-010, module `auth`), le contrat OpenAPI (ADR-005), l'upload direct des vidéos (ADR-007, module `videos`), le traitement asynchrone BullMQ (ADR-012), le transcodage HLS du worker (ADR-008), le seed de démo, le feed aléatoire (ADR-016, module `feed`, cache Redis de l'ADR-014), les interactions sociales (module `interactions`), le centre d'activité (module `notifications`), le temps réel (ADR-011, module `realtime` : fin du transcodage, activité et badge en direct), la messagerie directe (module `messaging` : demandes, blocage, suppression, partage de vidéo, « en train d'écrire », limites d'envoi) les notifications push (module `push`, APNs) et le profil (module `users` : modification, photo de profil ; listes d'abonnés, relation, grilles, vues, historiques de visionnage et de commentaires dans `interactions` et `feed`), et le socle de l'app iOS (ADR-002 : projet XcodeGen, client généré, authentification et Keychain, navigation native, mode invité). Restent notamment les écrans de l'app iOS (feed et lecteur, interactions, publication, profil, activité, messagerie, temps réel, push), le portefeuille (ADR-009), PostHog (ADR-013) et le backoffice (ADR-004). La documentation, les commentaires de code et les textes d'interface sont en français et doivent le rester.
 
 ## Commandes
 
@@ -81,7 +81,13 @@ pnpm --filter api exec vitest run -t "pseudo"    # un seul test (filtre sur le n
 
 Le worker a besoin de FFmpeg (`brew install ffmpeg`, ou définir `FFMPEG_PATH`). Il s'arrête au démarrage si FFmpeg est introuvable.
 
-`apps/ios` se builde uniquement avec Xcode. Cette app est hors du workspace pnpm et hors de Turborepo.
+`apps/ios` se builde uniquement avec Xcode. Cette app est hors du workspace pnpm et hors de Turborepo. Projet décrit par XcodeGen (voir « App iOS ») :
+
+```bash
+cd apps/ios && xcodegen generate     # après tout ajout, retrait ou déplacement de fichier Swift
+xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -skipPackagePluginValidation test
+```
 
 Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clone (privé).
 
@@ -242,10 +248,19 @@ Seed de démo (ADR-016), `apps/api/scripts/seed.ts` :
   - Tailwind + shadcn/ui, architecture MVC.
   - Les Server Actions servent de controllers ; les models appellent l'API via un `apiClient`.
   - **Le backoffice ne contacte jamais PostgreSQL ni Redis directement**, uniquement l'API REST.
-- **iOS** (ADR-002) :
-  - MVVM SwiftUI (`@Observable`), en couches `presentation/`, `domain/` et `data/`.
-  - Injection de dépendances manuelle via des protocoles.
-  - Tokens stockés dans le Keychain.
+- **iOS** (ADR-002) : voir « App iOS » ci-dessous.
+
+### App iOS (ADR-002, `apps/ios`)
+
+Socle implémenté ; détails et commandes dans `apps/ios/README.md`.
+- **Choix du développeur** : projet **XcodeGen** (`project.yml` versionné, `.xcodeproj` et `Info.plist` générés et ignorés par git) ; **iOS 18** minimum ; **composants natifs** (TabView et `Tab`, NavigationStack et bouton retour, Form, Menu, alertes et `confirmationDialog`, `ContentUnavailableView`) ; bundle `com.sachabouk.tiktokclone` (= `APPLE_BUNDLE_ID`), nom « TikTok Clone » ; pas encore de compte Apple Developer (pas de signature, ni Sign in with Apple, ni push sur l'app).
+- **Couches** : `domain/` (entités, erreurs, protocoles de repositories, use cases ; n'importe ni `TikTokAPI` ni SwiftUI), `data/` (`local/` Keychain, `remote/` client et middleware, `repositories/` implémentations avec mapping DTO → entité champ par champ), `presentation/` (vues et ViewModels `@MainActor @Observable`). `app/AppContainer` est la seule injection de dépendances.
+- **Swift 6**, concurrence stricte (`SWIFT_STRICT_CONCURRENCY: complete`). Tests en **Swift Testing**, avec adaptateurs en mémoire (`TikTokCloneTests/fakes`) et `MockTransport` qui exécute le vrai client généré sans réseau.
+- **Client généré** : paquet local `Packages/TikTokAPI`, `openapi.json` en lien symbolique vers `apps/api/openapi.json`, types et client `public`. Versions de swift-openapi-generator, runtime et urlsession figées (`exact:`), le `Package.resolved` du `.xcodeproj` n'étant pas versionné. Le paquet réexporte le runtime, URLSession et HTTPTypes.
+- **Authentification** : `AuthMiddleware` + `TokenRefresher` (actor, un seul rafraîchissement à la fois). Un token expiré est **rafraîchi avant l'envoi** : sur une route publique, l'API ignore un token expiré sans répondre 401, l'état `viewer` serait faux. Refresh refusé → invité + alerte ; API injoignable → session gardée.
+- **Configuration** : `API_BASE_URL` dans `Config/*.xcconfig` (`localhost:3000` en Debug) → `Info.plist` → `AppConfiguration`. ATS : `NSAllowsLocalNetworking` (HTTP local pour l'API et MinIO).
+- **Piège simulateur** : le clavier du simulateur est en AZERTY, la saisie injectée par les outils de test suppose un QWERTY (texte déformé). Pour les tests manuels, passer par `xcrun simctl pbcopy booted` puis « Coller ».
+- **Pas encore** : feed et lecteur HLS, interactions, publication, écrans du profil, activité, messagerie, temps réel, push, suppression du compte depuis l'app (exigence Apple), Sign in with Apple, CI iOS (runner macOS).
 
 ### Profil (ADR-016, module `users`)
 

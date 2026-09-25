@@ -1,0 +1,2 @@
+// URL de l'API en production : à définir avec l'hébergement (ADR-015).
+API_BASE_URL = https:/$()/api.example.com

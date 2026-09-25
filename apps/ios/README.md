@@ -1,65 +1,77 @@
 # apps/ios
 
-Application iOS native (SwiftUI), versionnée dans le monorepo mais **buildée avec Xcode**.
+Application iOS native (SwiftUI, iOS 18 minimum), versionnée dans le monorepo mais **buildée avec Xcode**.
 Elle ne fait pas partie du workspace pnpm et Turborepo ne l'orchestre pas (ADR-001).
 
-Le projet Xcode est à créer ici (`File > New > Project…`, emplacement `apps/ios`).
+- Architecture : Clean Architecture + MVVM (ADR-002), composants natifs (TabView, NavigationStack, Form, Menu…).
+- Client d'API : généré depuis la spec OpenAPI de `apps/api` avec `swift-openapi-generator` (ADR-005).
+- Bundle ID `com.sachabouk.tiktokclone` (= `APPLE_BUNDLE_ID` de l'API), nom affiché « TikTok Clone ».
 
-- Architecture : Clean Architecture + MVVM (ADR-002)
-- Client d'API : généré depuis la spec OpenAPI de `apps/api` avec `swift-openapi-generator` (ADR-005),
-  les types TypeScript de `packages/shared` ne couvrant pas le code Swift.
+## Mise en route
+
+Prérequis : Xcode 26 ou plus, XcodeGen (`brew install xcodegen`).
+
+```bash
+cd apps/ios
+xcodegen generate          # produit TikTokClone.xcodeproj (non versionné)
+open TikTokClone.xcodeproj
+```
+
+- Le projet est décrit par `project.yml` (XcodeGen). **Relancer `xcodegen generate` après tout ajout, retrait ou déplacement de fichier** ; ne jamais modifier le `.xcodeproj` à la main (il est régénéré).
+- Au premier build, Xcode demande d'autoriser le plugin `OpenAPIGenerator` (« Trust & Enable »). En ligne de commande : `-skipPackagePluginValidation`.
+- L'API doit tourner (`pnpm infra:up` puis `pnpm dev` à la racine). URL dans `Config/Debug.xcconfig` : `localhost:3000` pour le simulateur. Sur un iPhone physique, mettre l'IP du Mac (comme `S3_PUBLIC_ENDPOINT` et `HLS_PUBLIC_BASE_URL` côté API).
+- Pas encore d'équipe de signature : l'app tourne dans le simulateur. Sign in with Apple et les notifications push attendront un compte Apple Developer.
+
+Build et tests en ligne de commande :
+
+```bash
+xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -skipPackagePluginValidation test
+```
+
+## Organisation (ADR-002)
+
+```
+project.yml                 projet XcodeGen (cibles, réglages, Info.plist)
+Config/                     URL de l'API par configuration (Debug, Release)
+Packages/TikTokAPI/         paquet Swift local : client généré
+  Sources/TikTokAPI/openapi.json -> ../../../../../api/openapi.json   (lien symbolique)
+TikTokClone/
+  app/                      point d'entrée, configuration, AppContainer (injection de dépendances manuelle)
+  domain/                   entités, erreurs, protocoles de repositories, use cases : aucun import d'API ni de framework UI
+  data/
+    local/                  TokenStore, KeychainTokenStore
+    remote/                 client, AuthMiddleware, TokenRefresher, traduction des erreurs
+    repositories/           implémentations des protocoles du domaine (mapping DTO → entité, champ par champ)
+  presentation/             vues SwiftUI et ViewModels (@Observable), par écran ; SessionStore (état de connexion)
+TikTokCloneTests/           Swift Testing : fakes en mémoire, transport HTTP simulé
+```
+
+- Les ViewModels ne dépendent que de use cases, qui ne dépendent que de protocoles du domaine. `AppContainer` est le seul endroit qui choisit les implémentations.
+- Les tests suivent le même principe que l'API : adaptateurs en mémoire (`fakes/`), et un `MockTransport` qui fait tourner le vrai client généré et ses middlewares sans réseau.
 
 ## Client d'API généré (ADR-005)
 
 La spec fait foi : `apps/api/openapi.json`, versionnée, régénérée par `pnpm openapi:export` à la racine.
-Le client Swift est généré à chaque build par le plugin de `swift-openapi-generator` : il n'est jamais committé.
+Le client est généré à chaque build par le plugin de `swift-openapi-generator`, dans le paquet local `Packages/TikTokAPI` (types et client `public`, `namingStrategy: idiomatic`). Il n'est jamais versionné.
 
-Mise en place, une fois le projet Xcode créé :
+- Versions figées dans `Packages/TikTokAPI/Package.swift` (`exact:`) : le `.xcodeproj`, et donc son `Package.resolved`, n'est pas versionné.
+- Le paquet réexporte `OpenAPIRuntime`, `OpenAPIURLSession` et `HTTPTypes` : une seule source de versions.
+- Seule la couche `data/` importe `TikTokAPI`. Les DTO générés ne sortent jamais de `data/` : ils sont convertis en entités du domaine.
+- Client : `APIClientFactory.make` (dates ISO 8601 avec millisecondes, `.iso8601WithFractionalSeconds`, obligatoire).
+- Le nom de chaque méthode du client est celui de la méthode du controller NestJS (`login`, `getMyProfile`…). Chaque code de réponse documenté est un cas d'enum (`.ok`, `.unauthorized`, `.conflict`…) : un code ajouté côté API apparaît à la compilation.
 
-1. Ajouter les packages (`File > Add Package Dependencies…`) :
-   - `https://github.com/apple/swift-openapi-generator` (1.13 ou plus), sans lier de produit ;
-   - `https://github.com/apple/swift-openapi-runtime` → produit `OpenAPIRuntime` ;
-   - `https://github.com/apple/swift-openapi-urlsession` → produit `OpenAPIURLSession`.
-2. Dans le dossier de sources de la cible (ou du module `data/`, ADR-002), créer un **lien symbolique**
-   vers la spec, pour ne jamais avoir de copie désynchronisée :
-   ```bash
-   ln -s <chemin relatif vers>/apps/api/openapi.json openapi.json
-   ```
-   puis l'ajouter à la cible dans Xcode.
-3. À côté, créer `openapi-generator-config.yaml` et l'ajouter à la cible :
-   ```yaml
-   generate:
-     - types
-     - client
-   accessModifier: internal
-   namingStrategy: idiomatic
-   ```
-4. Cible → `Build Phases` → `Run Build Tool Plug-ins` → ajouter `OpenAPIGenerator`.
+## Authentification (ADR-010)
 
-Utilisation :
-
-```swift
-import OpenAPIRuntime
-import OpenAPIURLSession
-
-// Obligatoire : l'API envoie des dates ISO 8601 avec millisecondes (`2026-01-01T12:00:00.123Z`),
-// que le décodeur par défaut refuse.
-let configuration = Configuration(dateTranscoder: .iso8601WithFractionalSeconds)
-let client = Client(
-    serverURL: URL(string: "http://localhost:3000")!,
-    configuration: configuration,
-    transport: URLSessionTransport(),
-    middlewares: [/* middleware qui ajoute `Authorization: Bearer <access token>` */]
-)
-
-let tokens = try await client.login(body: .json(.init(email: "alice@example.com", password: "…"))).ok.body.json
-```
-
-- Le nom de chaque méthode du client est celui de la méthode du controller NestJS (`login`, `getMyProfile`…).
-- Le générateur ne gère pas l'authentification : un `ClientMiddleware` ajoute l'access token,
-  et rafraîchit la paire via `refresh` sur une réponse `.unauthorized`. Tokens stockés dans le Keychain (ADR-010).
-- Chaque code de réponse documenté est un cas d'enum (`.ok`, `.unauthorized`, `.conflict`…) : un code ajouté
-  côté API apparaît à la compilation.
+- Connexion et inscription par email ; mode invité au lancement (l'accueil est lisible, les autres onglets invitent à se connecter).
+- Tokens dans le Keychain (`KeychainTokenStore`, `AfterFirstUnlockThisDeviceOnly`), avec la date d'expiration de l'access token.
+- `AuthMiddleware` (sur toutes les routes sauf `login`, `register`, `refresh`, `logout`, `loginWithApple`) :
+  - ajoute `Authorization: Bearer …` ;
+  - **rafraîchit avant l'envoi un token expiré** (marge de 30 s). Indispensable : sur une route publique (feed, profils), l'API traite un token expiré comme une absence de compte, sans 401 ;
+  - sur un 401, rafraîchit puis rejoue la requête une fois.
+- `TokenRefresher` (actor) : **un seul rafraîchissement à la fois**, les requêtes simultanées attendent le même résultat (rejouer un refresh token déjà utilisé révoquerait toute la session). Refresh refusé : session effacée, l'app repasse en invité avec l'alerte « Session expirée ». API injoignable : la session est gardée.
+- Lancement : la session enregistrée est reprise (`RestoreSessionUseCase`) ; API injoignable : écran « Serveur injoignable » (réessayer, ou continuer sans compte).
+- Déconnexion : session oubliée localement, puis révoquée côté serveur au mieux (`POST /auth/logout`).
 
 ## Temps réel (ADR-011)
 

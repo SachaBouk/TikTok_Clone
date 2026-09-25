@@ -1,0 +1,6 @@
+# Types et client, publics pour être utilisés par la couche data/ de l'app (ADR-002).
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic

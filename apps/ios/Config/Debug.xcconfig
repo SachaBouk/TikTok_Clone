@@ -1,0 +1,4 @@
+// URL de l'API en développement. Simulateur : localhost. iPhone physique : l'IP du Mac sur le réseau local
+// (ex. http:/$()/192.168.1.20:3000), comme S3_PUBLIC_ENDPOINT et HLS_PUBLIC_BASE_URL côté API.
+// `/$()/` : `//` commencerait un commentaire dans un .xcconfig.
+API_BASE_URL = http:/$()/localhost:3000

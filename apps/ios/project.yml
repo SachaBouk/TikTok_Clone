@@ -1,0 +1,85 @@
+# Projet Xcode décrit pour XcodeGen (choix du développeur) : `xcodegen generate` dans apps/ios produit
+# TikTokClone.xcodeproj, qui n'est pas versionné. Relancer la commande après tout ajout ou retrait de fichier.
+name: TikTokClone
+
+options:
+  bundleIdPrefix: com.sachabouk
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: fr
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Pas encore d'équipe de signature (compte Apple Developer) : le simulateur n'en a pas besoin.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+
+packages:
+  # Client généré depuis apps/api/openapi.json (ADR-005).
+  TikTokAPI:
+    path: Packages/TikTokAPI
+
+targets:
+  TikTokClone:
+    type: application
+    platform: iOS
+    sources:
+      - path: TikTokClone
+    dependencies:
+      - package: TikTokAPI
+    info:
+      path: TikTokClone/Info.plist
+      properties:
+        CFBundleDisplayName: TikTok Clone
+        CFBundleDevelopmentRegion: fr
+        # Lue par AppConfiguration ; valeur par configuration dans Config/*.xcconfig.
+        APIBaseURL: $(API_BASE_URL)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # En développement, l'API et MinIO sont en HTTP sur le réseau local (localhost, IP du Mac).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sachabouk.tiktokclone
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  TikTokCloneTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TikTokCloneTests
+    dependencies:
+      - target: TikTokClone
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.sachabouk.tiktokclone.tests
+
+schemes:
+  TikTokClone:
+    build:
+      targets:
+        TikTokClone: all
+        TikTokCloneTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TikTokCloneTests

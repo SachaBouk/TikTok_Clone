@@ -38,3 +38,7 @@ build/
 # Vidéos de démo déposées localement (voir seed/README.md) ; le dossier est gardé par .gitkeep
 seed/videos/*
 !seed/videos/.gitkeep
+
+# Généré par XcodeGen (apps/ios/project.yml)
+apps/ios/*.xcodeproj/
+apps/ios/TikTokClone/Info.plist
