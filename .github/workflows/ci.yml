@@ -1,0 +1,96 @@
+# Intégration continue : à chaque push sur main et sur chaque pull request.
+# - verify : typecheck, tests (le worker lance le vrai FFmpeg), build, contrat OpenAPI à jour (ADR-005) ;
+# - migrations : les migrations (triggers et CHECK écrits à la main compris) s'appliquent sur une base vierge,
+#   et le schéma Prisma ne présente aucun écart avec elles.
+# Aucun secret : l'export OpenAPI complète l'environnement avec .env.example, sans PostgreSQL ni Redis.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, tests, build, OpenAPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version de pnpm lue dans `packageManager` (package.json).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: FFmpeg (tests du worker)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Contrat OpenAPI à jour
+        run: pnpm openapi:check
+
+  migrations:
+    name: Migrations Prisma
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        # Même image qu'en local (docker-compose.yml).
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Appliquer les migrations sur une base vierge
+        working-directory: apps/api
+        run: pnpm exec prisma migrate deploy
+
+      # Une migration manquante ou un schéma modifié sans migration ferait apparaître du SQL ici.
+      - name: Aucun écart entre le schéma et les migrations
+        working-directory: apps/api
+        run: |
+          diff=$(pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script)
+          echo "$diff"
+          echo "$diff" | grep -q "This is an empty migration" || { echo "::error::Le schéma Prisma diffère des migrations : créer une migration."; exit 1; }

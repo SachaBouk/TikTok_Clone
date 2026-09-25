@@ -105,4 +105,10 @@ pnpm typecheck
 pnpm --filter api dev   # une seule app
 ```
 
+## Intégration continue
+
+GitHub Actions (`.github/workflows/ci.yml`) vérifie chaque push sur `main` et chaque pull request :
+- typecheck, tests, build et contrat OpenAPI à jour ;
+- migrations Prisma appliquées sur une base PostgreSQL vierge, sans écart avec le schéma.
+
 `packages/shared` est compilé dans `dist/` ; Turborepo le builde automatiquement avant ses consommateurs (`dependsOn: ["^build"]`).

@@ -83,7 +83,12 @@ Le worker a besoin de FFmpeg (`brew install ffmpeg`, ou définir `FFMPEG_PATH`).
 
 `apps/ios` se builde uniquement avec Xcode. Cette app est hors du workspace pnpm et hors de Turborepo.
 
-Git : dépôt local, branche `main`, pas encore de remote ni de CI. Jamais versionnés (`.gitignore`) :
+Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clone (privé).
+
+CI GitHub Actions (`.github/workflows/ci.yml`), à chaque push sur `main` et sur chaque pull request, sans secret :
+- `verify` : `pnpm install --frozen-lockfile`, `typecheck`, `test` (FFmpeg de la distribution Ubuntu pour le worker), `build`, `openapi:check` ;
+- `migrations` : PostgreSQL 18 vierge (service), `prisma migrate deploy`, puis `prisma migrate diff` doit être vide. Un schéma modifié sans migration, ou une migration SQL écrite à la main qui échoue, fait échouer la CI.
+Un changement du lockfile doit être committé (`--frozen-lockfile`). Pour reproduire la CI en local : mêmes commandes, dans cet ordre. Jamais versionnés (`.gitignore`) :
 - `.env` (seul `.env.example` l'est) et les clés `*.p8`, `*.pem`, `*.key` (clé APNs notamment) ;
 - builds et fichiers générés (`dist`, `.turbo`, `.next`, client Prisma) ;
 - vidéos déposées dans `seed/videos/`.
