@@ -1,0 +1,400 @@
+// Modèle de données (ADR-006), périmètre MVP (ADR-016).
+// Conventions : modèles et champs en camelCase côté code, tables et colonnes en snake_case en base.
+// Les clés primaires suivent le nommage des ADR (`user_id`, `video_id`, `conversation_id`…).
+// Identifiants UUID v7 : ordonnés dans le temps, donc adaptés à la pagination.
+//
+// Contraintes CHECK ajoutées à la main dans les migrations (Prisma ne sait pas les exprimer) :
+// pas d'auto-follow, solde de portefeuille ≥ 0, montant de cadeau > 0 (migration initiale) ;
+// notification cohérente avec son type et jamais adressée à son auteur (migration notifications).
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = "js"
+  // Index uniques partiels (`where`) des notifications.
+  previewFeatures     = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Compte (ADR-010, ADR-016) ───────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid(7)) @map("user_id") @db.Uuid
+  // Nul pour un compte Apple dont l'email n'a pas été partagé.
+  email          String?  @unique
+  // Nul pour un compte créé uniquement via Sign in with Apple.
+  passwordHash   String?  @map("password_hash")
+  // Identifiant stable renvoyé par Sign in with Apple (`sub`).
+  appleSub       String?  @unique @map("apple_sub")
+  // Pseudo (@handle).
+  username       String   @unique
+  // Nom affiché.
+  displayName    String   @map("display_name")
+  avatarUrl      String?  @map("avatar_url")
+  bio            String?
+  // Compteurs dénormalisés, maintenus par les services applicatifs.
+  followersCount Int      @default(0) @map("followers_count")
+  followingCount Int      @default(0) @map("following_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  videos                   Video[]
+  likes                    Like[]
+  favorites                Favorite[]
+  reposts                  Repost[]
+  comments                 Comment[]
+  following                Follow[]                  @relation("Follower")
+  followers                Follow[]                  @relation("Following")
+  viewHistory              ViewHistory[]
+  conversationParticipants ConversationParticipant[]
+  messagesSent             Message[]
+  notificationsReceived    Notification[]            @relation("NotificationRecipient")
+  notificationsTriggered   Notification[]            @relation("NotificationActor")
+  wallet                   Wallet?
+  giftsSent                GiftSent[]                @relation("GiftSender")
+  giftsReceived            GiftSent[]                @relation("GiftRecipient")
+  refreshTokens            RefreshToken[]
+  blocksMade               Block[]                   @relation("Blocker")
+  blocksReceived           Block[]                   @relation("Blocked")
+  conversationRequests     Conversation[]            @relation("ConversationRequestSender")
+  pushDevices              PushDevice[]
+
+  @@map("users")
+}
+
+// Refresh tokens (ADR-010) : opaques, stockés hachés (SHA-256), rotatifs.
+// Chaque rotation crée un nouveau token dans la même famille et révoque l'ancien.
+// Présenter un token déjà révoqué (réutilisation, donc vol probable) révoque toute la famille.
+model RefreshToken {
+  id        String    @id @default(uuid(7)) @map("refresh_token_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // Une famille = une session (un appareil connecté).
+  familyId  String    @map("family_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── Vidéos (ADR-006, ADR-007, ADR-008) ──────────────────────────────────────
+
+enum VideoStatus {
+  uploading
+  processing
+  ready
+  failed
+
+  @@map("video_status")
+}
+
+model Video {
+  id             String      @id @default(uuid(7)) @map("video_id") @db.Uuid
+  userId         String      @map("user_id") @db.Uuid
+  description    String?
+  // Clé de l'objet brut dans le bucket des uploads (ADR-007).
+  rawKey         String      @map("raw_key")
+  // Identifiant de l'upload multipart en cours ; nul une fois l'upload terminé (ADR-007).
+  uploadId       String?     @map("upload_id")
+  // Taille déclarée du fichier brut, en octets : l'objet assemblé doit la respecter exactement.
+  rawSize        Int         @map("raw_size")
+  // URL du manifeste HLS, renseignée quand le transcodage est terminé (ADR-008).
+  hlsUrl         String?     @map("hls_url")
+  thumbnailUrl   String?     @map("thumbnail_url")
+  status         VideoStatus @default(uploading)
+  // Compteurs dénormalisés, maintenus par les services applicatifs.
+  viewsCount     Int         @default(0) @map("views_count")
+  likesCount     Int         @default(0) @map("likes_count")
+  commentsCount  Int         @default(0) @map("comments_count")
+  favoritesCount Int         @default(0) @map("favorites_count")
+  repostsCount   Int         @default(0) @map("reposts_count")
+  sharesCount    Int         @default(0) @map("shares_count")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes         Like[]
+  favorites     Favorite[]
+  reposts       Repost[]
+  comments      Comment[]
+  viewHistory   ViewHistory[]
+  notifications Notification[]
+
+  @@index([userId, createdAt])
+  // Le feed ne sert que les vidéos `ready`.
+  @@index([status])
+  @@map("videos")
+}
+
+// ─── Interactions (ADR-006, ADR-016) ─────────────────────────────────────────
+// Clés composites : double like / favori / republication / follow impossibles par construction.
+
+model Like {
+  userId    String   @map("user_id") @db.Uuid
+  videoId   String   @map("video_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, videoId])
+  @@index([videoId])
+  // Grille des vidéos likées, du like le plus récent au plus ancien.
+  @@index([userId, createdAt])
+  @@map("likes")
+}
+
+model Favorite {
+  userId    String   @map("user_id") @db.Uuid
+  videoId   String   @map("video_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, videoId])
+  @@index([videoId])
+  // Grille du profil, de l'action la plus récente à la plus ancienne.
+  @@index([userId, createdAt])
+  @@map("favorites")
+}
+
+model Repost {
+  userId    String   @map("user_id") @db.Uuid
+  videoId   String   @map("video_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, videoId])
+  @@index([videoId])
+  // Grille du profil, de l'action la plus récente à la plus ancienne.
+  @@index([userId, createdAt])
+  @@map("reposts")
+}
+
+model Follow {
+  followerId  String   @map("follower_id") @db.Uuid
+  followingId String   @map("following_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  // Listes d'abonnés et d'abonnements, du follow le plus récent au plus ancien.
+  @@index([followingId, createdAt])
+  @@index([followerId, createdAt])
+  @@map("follows")
+}
+
+model Comment {
+  id        String   @id @default(uuid(7)) @map("comment_id") @db.Uuid
+  videoId   String   @map("video_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  video         Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([videoId, createdAt])
+  // Historique des commentaires du centre d'activités.
+  @@index([userId, createdAt])
+  @@map("comments")
+}
+
+// Une ligne par vidéo vue ; `viewed_at` est mis à jour à chaque nouveau visionnage.
+model ViewHistory {
+  userId   String   @map("user_id") @db.Uuid
+  videoId  String   @map("video_id") @db.Uuid
+  viewedAt DateTime @default(now()) @map("viewed_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, videoId])
+  @@index([userId, viewedAt])
+  @@map("view_history")
+}
+
+// ─── Messagerie directe (ADR-006, ADR-011) ───────────────────────────────────
+
+model Conversation {
+  id              String    @id @default(uuid(7)) @map("conversation_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  // Demande de message (ADR-016) : premier message envoyé hors abonnés mutuels, par ce compte.
+  requestSenderId String?   @map("request_sender_id") @db.Uuid
+  // Conversation ouverte durablement (demande acceptée, réponse, ou premier message entre abonnés mutuels).
+  acceptedAt      DateTime? @map("accepted_at")
+  // Demande refusée par son destinataire : elle ne lui est plus montrée, l'expéditeur n'en sait rien.
+  declinedAt      DateTime? @map("declined_at")
+
+  requestSender User?                     @relation("ConversationRequestSender", fields: [requestSenderId], references: [id], onDelete: SetNull)
+  participants  ConversationParticipant[]
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId       String  @map("conversation_id") @db.Uuid
+  userId               String  @map("user_id") @db.Uuid
+  // Dernier message lu (non-lus, badge, « Vu »). Simple repère ordonné (UUID v7), sans clé étrangère :
+  // si ce message disparaît (compte de son auteur supprimé), le repère reste valable.
+  lastReadMessageId    String? @map("last_read_message_id") @db.Uuid
+  // Conversation supprimée pour ce participant : les messages jusqu'à ce repère lui sont masqués.
+  // Elle réapparaît au message suivant. Même principe de repère ordonné, sans clé étrangère.
+  clearedUpToMessageId String? @map("cleared_up_to_message_id") @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  // Retrouver les conversations d'un utilisateur.
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(uuid(7)) @map("message_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  senderId       String   @map("sender_id") @db.Uuid
+  // Vide si le message ne fait que partager une vidéo (contrainte CHECK : texte ou vidéo).
+  content        String
+  // Vidéo partagée. Sans clé étrangère : une vidéo supprimée reste signalée « indisponible » dans le message.
+  sharedVideoId  String?  @map("shared_video_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  // Pagination et dernier message d'une conversation, par identifiant (UUID v7, ordonné dans le temps).
+  @@index([conversationId, id])
+  @@map("messages")
+}
+
+// ─── Activité / notifications (ADR-016) ──────────────────────────────────────
+
+enum NotificationType {
+  like
+  comment
+  follow
+  repost
+
+  @@map("notification_type")
+}
+
+model Notification {
+  id          String           @id @default(uuid(7)) @map("notification_id") @db.Uuid
+  // Destinataire.
+  userId      String           @map("user_id") @db.Uuid
+  // Auteur de l'action.
+  actorId     String           @map("actor_id") @db.Uuid
+  type        NotificationType
+  // Renseignés selon le type (nuls pour un follow).
+  videoId     String?          @map("video_id") @db.Uuid
+  commentId   String?          @map("comment_id") @db.Uuid
+  // Copie du commentaire (type comment) : le module notifications ne lit pas la table des commentaires
+  // (ADR-003). Pas de décalage possible : un commentaire ne se modifie pas, et sa suppression supprime
+  // la notification (cascade).
+  commentText String?          @map("comment_text")
+  readAt      DateTime?        @map("read_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user    User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor   User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  video   Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  // Au plus une notification par like, republication et follow : retirée au retrait de l'interaction,
+  // recréée si elle revient. `createMany({ skipDuplicates })` s'appuie sur ces index.
+  // Un index par type : PostgreSQL réécrit `type IN (…)`, ce que Prisma verrait comme une dérive.
+  @@unique([actorId, videoId], map: "notifications_like_key", where: raw("type = 'like'"))
+  @@unique([actorId, videoId], map: "notifications_repost_key", where: raw("type = 'repost'"))
+  @@unique([actorId, userId], map: "notifications_follow_key", where: raw("type = 'follow'"))
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ─── Jetons (ADR-009) ────────────────────────────────────────────────────────
+// PostgreSQL est la source de vérité du solde ; RevenueCat ne fait que valider les achats.
+
+model Wallet {
+  // Un portefeuille par utilisateur.
+  userId    String   @id @map("user_id") @db.Uuid
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+// Dépense de jetons (cadeaux) : reportée après le MVP (ADR-016), table prévue par l'ADR-006.
+// Émetteur et destinataire passent à NULL si un compte est supprimé : l'historique des transferts est conservé.
+model GiftSent {
+  id          String   @id @default(uuid(7)) @map("gift_id") @db.Uuid
+  senderId    String?  @map("sender_id") @db.Uuid
+  recipientId String?  @map("recipient_id") @db.Uuid
+  amount      Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  sender    User? @relation("GiftSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient User? @relation("GiftRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, createdAt])
+  @@index([recipientId, createdAt])
+  @@map("gifts_sent")
+}
+
+// ─── Blocage (ADR-016) ───────────────────────────────────────────────────────
+// Dans les deux sens : ni messages, ni follows, ni likes, commentaires ou republications entre les deux comptes.
+
+model Block {
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("blocks")
+}
+
+// ─── Notifications push (APNs) ───────────────────────────────────────────────
+
+enum PushEnvironment {
+  sandbox
+  production
+
+  @@map("push_environment")
+}
+
+model PushDevice {
+  // Token APNs de l'appareil : unique, il passe au dernier compte connecté sur l'appareil.
+  token       String          @id
+  userId      String          @map("user_id") @db.Uuid
+  // Build de développement (sandbox) ou App Store / TestFlight (production) : serveurs APNs différents.
+  environment PushEnvironment
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_devices")
+}

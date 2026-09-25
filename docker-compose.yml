@@ -1,0 +1,90 @@
+# Environnement local : PostgreSQL, Redis, MinIO (ADR-015).
+# Les apps (api, worker, backoffice) tournent sur la machine via `pnpm dev`.
+# Valeurs par défaut surchargeables dans `.env` (voir `.env.example`).
+name: tiktok-clone
+
+services:
+  postgres:
+    # ADR-006
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # À partir de PostgreSQL 18, le volume se monte sur /var/lib/postgresql (et non plus /data).
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    # ADR-014 : cache, sessions, compteurs, BullMQ (ADR-012), pub/sub WebSocket (ADR-011).
+    # BullMQ exige `noeviction` : Redis ne doit jamais supprimer de clés de la queue.
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    # Stockage objet compatible S3 (ADR-015). MinIO ne publie plus sur Docker Hub : images quay.io.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    # Crée les buckets au démarrage, puis s'arrête. Idempotent.
+    # - bucket brut : privé, reçoit les uploads via URL pré-signée (ADR-007) ;
+    # - bucket HLS : lecture publique, joue le rôle du CDN en local (ADR-008, vidéos publiques au MVP) ;
+    # - bucket des photos de profil : lecture publique, envoi direct via URL pré-signée.
+    # Lecture anonyme des objets seulement (s3:GetObject) : la politique `download` de mc autoriserait
+    # aussi à lister le bucket, donc à énumérer les comptes et les vidéos.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_RAW: ${S3_BUCKET_RAW:-videos-raw}
+      S3_BUCKET_HLS: ${S3_BUCKET_HLS:-videos-hls}
+      S3_BUCKET_AVATARS: ${S3_BUCKET_AVATARS:-avatars}
+    entrypoint: >
+      /bin/sh -c "
+      set -e;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/$${S3_BUCKET_RAW} local/$${S3_BUCKET_HLS} local/$${S3_BUCKET_AVATARS};
+      for bucket in $${S3_BUCKET_HLS} $${S3_BUCKET_AVATARS}; do
+      printf '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::%s/*\"]}]}' $$bucket > /tmp/public-read.json;
+      mc anonymous set-json /tmp/public-read.json local/$$bucket;
+      done;
+      "
+    restart: "no"
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

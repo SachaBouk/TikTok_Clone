@@ -1,0 +1,16 @@
+# apps/ios n'est pas un package JS : il est versionné ici mais buildé avec Xcode (ADR-001).
+packages:
+  - apps/api
+  - apps/worker
+  - apps/backoffice
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - esbuild
+  - prisma
+
+# Scripts d'installation volontairement bloqués.
+ignoredBuiltDependencies:
+  # Télémétrie embarquée par @nestjs/swagger : aucune utilité, n'envoie que des statistiques d'usage.
+  - '@scarf/scarf'

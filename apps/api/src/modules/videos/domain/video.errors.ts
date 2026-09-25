@@ -1,0 +1,41 @@
+import { MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from './upload-rules';
+
+// Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
+export abstract class VideoError extends Error {}
+
+export class VideoNotFoundError extends VideoError {
+  constructor(id: string) {
+    super(`Vidéo introuvable : ${id}`);
+    this.name = 'VideoNotFoundError';
+  }
+}
+
+export class UnsupportedVideoTypeError extends VideoError {
+  constructor(contentType: string) {
+    super(`Format non pris en charge : ${contentType}. Formats acceptés : ${Object.keys(SUPPORTED_VIDEO_TYPES).join(', ')}`);
+    this.name = 'UnsupportedVideoTypeError';
+  }
+}
+
+export class VideoTooLargeError extends VideoError {
+  constructor() {
+    super(`Vidéo trop volumineuse (maximum ${MAX_VIDEO_SIZE_BYTES / 1024 ** 2} Mio)`);
+    this.name = 'VideoTooLargeError';
+  }
+}
+
+// L'upload a déjà été confirmé (ou la vidéo a échoué) : il n'y a plus rien à confirmer.
+export class VideoNotAwaitingUploadError extends VideoError {
+  constructor(id: string) {
+    super(`La vidéo ${id} n'attend plus d'upload`);
+    this.name = 'VideoNotAwaitingUploadError';
+  }
+}
+
+// Parties manquantes ou ETags incorrects : le client peut renvoyer les parties puis confirmer à nouveau.
+export class UploadIncompleteError extends VideoError {
+  constructor(detail?: string) {
+    super(`Upload incomplet${detail ? ` : ${detail}` : ''}`);
+    this.name = 'UploadIncompleteError';
+  }
+}

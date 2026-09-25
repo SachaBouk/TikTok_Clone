@@ -1,0 +1,344 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { InteractionsService } from '../../interactions/application/interactions.service';
+import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
+import { NotificationsService } from '../../notifications/application/notifications.service';
+import { InMemoryNotificationPublisher } from '../../notifications/infrastructure/in-memory-notification-publisher';
+import { InMemoryNotificationRepository } from '../../notifications/infrastructure/in-memory-notification.repository';
+import { UsersService } from '../../users/application/users.service';
+import type { User } from '../../users/domain/user';
+import { UserNotFoundError } from '../../users/domain/user.errors';
+import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-user.repository';
+import { InMemoryAvatarStorage } from '../../users/infrastructure/in-memory-avatar-storage';
+import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
+import { VideosService } from '../../videos/application/videos.service';
+import { TranscodingQueue } from '../../videos/domain/transcoding-queue';
+import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
+import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory-video-cleanup-queue';
+import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
+import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
+import { encodeCursor, InvalidFeedCursorError } from '../domain/feed-cursor';
+import { FeedItemNotFoundError } from '../domain/feed.errors';
+import { encodeListCursor } from '../domain/list-cursor';
+import { seededShuffle } from '../domain/seeded-shuffle';
+import { InMemoryFeedSnapshotStore } from '../infrastructure/in-memory-feed-snapshot.store';
+import { FeedService } from './feed.service';
+
+class NoopTranscodingQueue extends TranscodingQueue {
+  async enqueue() {}
+  async cancel() {}
+}
+
+const user = (id: string): User => ({
+  id,
+  username: id,
+  displayName: id.toUpperCase(),
+  avatarUrl: null,
+  bio: null,
+  followersCount: 0,
+  followingCount: 0,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+});
+
+describe('FeedService', () => {
+  let videoRepository: InMemoryVideoRepository;
+  let users: InMemoryUserRepository;
+  let snapshots: InMemoryFeedSnapshotStore;
+  let interactions: InteractionsService;
+  let feed: FeedService;
+
+  // Crée une vidéo publiée (`ready`) directement dans le dépôt en mémoire.
+  async function publish(userId = 'alice', status: 'ready' | 'processing' = 'ready') {
+    const video = await videoRepository.create({ userId, description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
+    Object.assign(videoRepository.videos.get(video.id)!, { status, hlsUrl: `https://cdn/${video.id}/master.m3u8`, thumbnailUrl: 't' });
+    return video.id;
+  }
+
+  // Parcourt toute la session à partir de `cursor` et renvoie les identifiants vus, page par page.
+  async function scrollAll(limit: number, cursor?: string) {
+    const pages: string[][] = [];
+    do {
+      const page = await feed.getPage(cursor, limit);
+      pages.push(page.items.map((i) => i.video.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return pages;
+  }
+
+  beforeEach(() => {
+    // Dates de création strictement croissantes : ordre des grilles du profil déterministe.
+    let tick = 0;
+    videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
+    users = new InMemoryUserRepository([user('alice'), user('bob')]);
+    snapshots = new InMemoryFeedSnapshotStore();
+    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
+    const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
+    const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher());
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications);
+    feed = new FeedService(snapshots, videos, usersService, interactions);
+  });
+
+  it('parcourt toutes les vidéos publiées, sans doublon ni oubli, page par page', async () => {
+    const ids = await Promise.all(Array.from({ length: 25 }, (_, i) => publish(i % 2 ? 'alice' : 'bob')));
+    const pages = await scrollAll(10);
+
+    expect(pages.map((p) => p.length)).toEqual([10, 10, 5]);
+    expect(pages.flat().sort()).toEqual([...ids].sort());
+  });
+
+  it("n'affiche que les vidéos publiées", async () => {
+    const ready = await publish();
+    await publish('alice', 'processing');
+    expect((await scrollAll(10)).flat()).toEqual([ready]);
+  });
+
+  it("joint l'auteur de chaque vidéo", async () => {
+    await publish('bob');
+    const { items } = await feed.getPage(undefined, 10);
+    expect(items[0]!.author).toMatchObject({ id: 'bob', displayName: 'BOB' });
+  });
+
+  it("donne l'état des boutons à l'utilisateur connecté, et rien en mode invité", async () => {
+    const liked = await publish('bob');
+    const other = await publish('alice');
+    await interactions.setReaction('alice', liked, 'like', true);
+    await interactions.setReaction('alice', liked, 'repost', true);
+    await interactions.setFollow('alice', 'bob', true);
+
+    const { items } = await feed.getPage(undefined, 10, 'alice');
+    const state = (id: string) => items.find((i) => i.video.id === id)!;
+    expect(state(liked).viewer).toEqual({ liked: true, favorited: false, reposted: true, followingAuthor: true });
+    expect(state(other).viewer).toEqual({ liked: false, favorited: false, reposted: false, followingAuthor: false });
+    expect(state(liked).video.likesCount).toBe(1);
+
+    expect((await feed.getPage(undefined, 10)).items.every((i) => i.viewer === null)).toBe(true);
+  });
+
+  it('donne un ordre différent à chaque session, reproductible au sein de la session', async () => {
+    await Promise.all(Array.from({ length: 30 }, () => publish()));
+    const first = await feed.getPage(undefined, 30);
+    const second = await feed.getPage(undefined, 30);
+    expect(first.items.map((i) => i.video.id)).not.toEqual(second.items.map((i) => i.video.id));
+    // Même photo : les deux sessions partagent le cache.
+    expect(snapshots.snapshots.size).toBe(1);
+
+    const session = await feed.getPage(undefined, 5);
+    const replayed = await feed.getPage(session.nextCursor!, 5);
+    const again = await feed.getPage(session.nextCursor!, 5);
+    expect(replayed.items.map((i) => i.video.id)).toEqual(again.items.map((i) => i.video.id));
+  });
+
+  it('une vidéo publiée en cours de session n’apparaît pas dans cette session, mais dans la suivante après renouvellement', async () => {
+    await Promise.all(Array.from({ length: 4 }, () => publish()));
+    const firstPage = await feed.getPage(undefined, 2);
+    const late = await publish();
+
+    const rest = await scrollAll(2, firstPage.nextCursor!);
+    expect(rest.flat()).not.toContain(late);
+
+    expect((await scrollAll(10)).flat()).not.toContain(late); // photo courante encore valide
+    snapshots.expireCurrent();
+    expect((await scrollAll(10)).flat()).toContain(late);
+  });
+
+  it('saute une vidéo supprimée depuis la photo, sans casser la pagination', async () => {
+    await Promise.all(Array.from({ length: 6 }, () => publish()));
+    const first = await feed.getPage(undefined, 3);
+    const upcoming = seededShuffle(snapshots.snapshots.values().next().value!.videoIds, decodeSeed(first.nextCursor!));
+    await videoRepository.delete(upcoming[3]!);
+
+    const second = await feed.getPage(first.nextCursor!, 3);
+    expect(second.items.map((i) => i.video.id)).toEqual(upcoming.slice(4, 6));
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('repart sur une nouvelle session si la photo a expiré', async () => {
+    await Promise.all(Array.from({ length: 4 }, () => publish()));
+    const first = await feed.getPage(undefined, 2);
+    snapshots.expire([...snapshots.snapshots.keys()][0]!);
+
+    const page = await feed.getPage(first.nextCursor!, 2);
+    expect(page.items).toHaveLength(2);
+    expect(snapshots.snapshots.size).toBe(1); // nouvelle photo
+  });
+
+  it('refuse un curseur qui n’a pas été produit par l’API', async () => {
+    await expect(feed.getPage('pas-un-curseur', 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    const forged = Buffer.from(JSON.stringify({ s: 'x', r: 1, o: -5 })).toString('base64url');
+    await expect(feed.getPage(forged, 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+  });
+
+  describe('grilles du profil', () => {
+    // Parcourt toute une grille, page par page, et renvoie les identifiants des vidéos.
+    async function readAll(list: (cursor: string | undefined) => ReturnType<FeedService['listAuthorVideos']>) {
+      const pages: string[][] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await list(cursor);
+        pages.push(page.items.map((i) => i.video.id));
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      return pages;
+    }
+
+    it("liste les vidéos publiées d'un compte, de la plus récente à la plus ancienne, page par page", async () => {
+      const first = await publish('alice');
+      await publish('bob');
+      await publish('alice', 'processing');
+      const second = await publish('alice');
+      const third = await publish('alice');
+
+      const pages = await readAll((cursor) => feed.listAuthorVideos('alice', cursor, 2, null));
+      expect(pages).toEqual([[third, second], [first]]);
+      await expect(feed.listAuthorVideos('bob', undefined, 1, null)).resolves.toMatchObject({ nextCursor: null });
+    });
+
+    it("départage les vidéos publiées à la même date sans en perdre", async () => {
+      const ids = await Promise.all(Array.from({ length: 5 }, () => publish('alice')));
+      for (const id of ids) videoRepository.videos.get(id)!.createdAt = new Date('2026-06-01T00:00:00Z');
+      const pages = await readAll((cursor) => feed.listAuthorVideos('alice', cursor, 1, null));
+      expect(pages.flat()).toEqual([...ids].sort().reverse());
+    });
+
+    it("porte l'auteur et l'état des boutons pour un compte connecté", async () => {
+      const video = await publish('bob');
+      await interactions.setReaction('alice', video, 'like', true);
+      const { items } = await feed.listAuthorVideos('bob', undefined, 10, 'alice');
+      expect(items[0]!.author).toMatchObject({ id: 'bob' });
+      expect(items[0]!.viewer).toEqual({ liked: true, favorited: false, reposted: false, followingAuthor: false });
+      expect((await feed.listAuthorVideos('bob', undefined, 10, null)).items[0]!.viewer).toBeNull();
+    });
+
+    it('liste les republications, de la plus récente à la plus ancienne', async () => {
+      const [a, b, c] = [await publish('bob'), await publish('bob'), await publish('alice')];
+      for (const id of [b, a, c]) await interactions.setReaction('alice', id, 'repost', true);
+      await interactions.setReaction('bob', a, 'repost', true);
+
+      const pages = await readAll((cursor) => feed.listReposts('alice', cursor, 2, 'bob'));
+      expect(pages).toEqual([[c, a], [b]]);
+      const { items } = await feed.listReposts('alice', undefined, 10, 'bob');
+      // Chaque vidéo garde son propre auteur ; `viewer` est celui du compte connecté (bob).
+      expect(items.map((i) => i.author.id)).toEqual(['alice', 'bob', 'bob']);
+      expect(items[1]!.viewer).toMatchObject({ reposted: true });
+    });
+
+    it('saute une vidéo supprimée depuis, sans décaler la pagination', async () => {
+      const ids = [await publish('bob'), await publish('bob'), await publish('bob')];
+      for (const id of ids) await interactions.setReaction('alice', id, 'repost', true);
+      await videoRepository.delete(ids[1]!);
+      const first = await feed.listReposts('alice', undefined, 2, null);
+      expect(first.items.map((i) => i.video.id)).toEqual([ids[2]]);
+      const second = await feed.listReposts('alice', first.nextCursor!, 2, null);
+      expect(second).toMatchObject({ nextCursor: null });
+      expect(second.items.map((i) => i.video.id)).toEqual([ids[0]]);
+    });
+
+    it('liste les favoris du compte connecté seulement', async () => {
+      const [a, b] = [await publish('bob'), await publish('bob')];
+      await interactions.setReaction('alice', a, 'favorite', true);
+      await interactions.setReaction('alice', b, 'favorite', true);
+      await interactions.setReaction('bob', a, 'favorite', true);
+
+      const { items, nextCursor } = await feed.listFavorites('alice', undefined, 10);
+      expect(items.map((i) => i.video.id)).toEqual([b, a]);
+      expect(items.every((i) => i.viewer?.favorited)).toBe(true);
+      expect(nextCursor).toBeNull();
+      await expect(feed.listFavorites('bob', undefined, 10).then((p) => p.items.map((i) => i.video.id))).resolves.toEqual([a]);
+    });
+
+    it('liste les vidéos likées du compte connecté seulement, likes retirés exclus', async () => {
+      const [a, b, c] = [await publish('bob'), await publish('bob'), await publish('alice')];
+      for (const id of [a, c, b]) await interactions.setReaction('alice', id, 'like', true);
+      await interactions.setReaction('bob', a, 'like', true);
+      await interactions.setReaction('alice', c, 'like', false);
+
+      const pages = await readAll((cursor) => feed.listLikes('alice', cursor, 1));
+      expect(pages.flat()).toEqual([b, a]);
+      const { items } = await feed.listLikes('alice', undefined, 10);
+      expect(items.every((i) => i.viewer?.liked)).toBe(true);
+      await expect(feed.listLikes('bob', undefined, 10).then((p) => p.items.map((i) => i.video.id))).resolves.toEqual([a]);
+    });
+
+    it("liste l'historique du compte connecté, une vidéo revue remontant en tête", async () => {
+      const [a, b, c] = [await publish('bob'), await publish('bob'), await publish('bob')];
+      for (const id of [a, b, c]) await interactions.recordView('alice', id);
+      await interactions.recordView('alice', a);
+      await interactions.recordView('carol', b);
+
+      const pages = await readAll((cursor) => feed.listHistory('alice', cursor, 2));
+      expect(pages).toEqual([[a, c], [b]]);
+      const { items } = await feed.listHistory('alice', undefined, 10);
+      expect(items[0]!.video.viewsCount).toBe(1);
+      expect(items.every((i) => i.viewer !== null)).toBe(true);
+
+      // Vidéo supprimée depuis : sautée.
+      await videoRepository.delete(c);
+      await expect(feed.listHistory('alice', undefined, 10).then((p) => p.items.map((i) => i.video.id))).resolves.toEqual([a, b]);
+      await expect(feed.listHistory('bob', undefined, 10)).resolves.toEqual({ items: [], nextCursor: null });
+    });
+
+    it('refuse un pseudo inconnu et un curseur invalide', async () => {
+      await expect(feed.listAuthorVideos('carol', undefined, 10, null)).rejects.toBeInstanceOf(UserNotFoundError);
+      await expect(feed.listReposts('carol', undefined, 10, null)).rejects.toBeInstanceOf(UserNotFoundError);
+      for (const cursor of ['???', Buffer.from('{"t":1,"v":"x"}').toString('base64url'), encodeCursor({ snapshotId: 's', seed: 1, offset: 0 })]) {
+        await expect(feed.listAuthorVideos('alice', cursor, 10, null)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+        await expect(feed.listFavorites('alice', cursor, 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+      }
+    });
+
+    it('le curseur encode la date et la vidéo', () => {
+      const videoId = '0192f3a0-0000-7000-8000-000000000001';
+      expect(encodeListCursor({ at: new Date(1000), videoId })).toBe(Buffer.from(`{"t":1000,"v":"${videoId}"}`).toString('base64url'));
+    });
+  });
+
+  describe('vidéo seule', () => {
+    it("donne l'élément du feed d'une vidéo publiée, avec l'état des boutons pour un compte connecté", async () => {
+      const video = await publish('bob');
+      await interactions.setReaction('alice', video, 'like', true);
+      await interactions.setFollow('alice', 'bob', true);
+
+      const item = await feed.getItem(video, 'alice');
+      expect(item.video).toMatchObject({ id: video, likesCount: 1 });
+      expect(item.author).toMatchObject({ id: 'bob' });
+      expect(item.viewer).toEqual({ liked: true, favorited: false, reposted: false, followingAuthor: true });
+      await expect(feed.getItem(video, null)).resolves.toMatchObject({ viewer: null });
+    });
+
+    it('refuse une vidéo non publiée, supprimée ou inconnue', async () => {
+      const processing = await publish('bob', 'processing');
+      const deleted = await publish('bob');
+      await videoRepository.delete(deleted);
+      for (const id of [processing, deleted, 'inconnue']) {
+        await expect(feed.getItem(id, 'bob')).rejects.toBeInstanceOf(FeedItemNotFoundError);
+      }
+    });
+  });
+
+  it('feed vide : aucune vidéo, pas de page suivante', async () => {
+    await expect(feed.getPage(undefined, 10)).resolves.toEqual({ items: [], nextCursor: null });
+  });
+
+  it('un curseur valide encode photo, graine et position', () => {
+    expect(encodeCursor({ snapshotId: 's', seed: 42, offset: 10 })).toBe(
+      Buffer.from('{"s":"s","r":42,"o":10}').toString('base64url'),
+    );
+  });
+});
+
+describe('seededShuffle', () => {
+  const items = Array.from({ length: 50 }, (_, i) => i);
+
+  it('est une permutation : mêmes éléments, aucun perdu ni dupliqué', () => {
+    expect(seededShuffle(items, 7).sort((a, b) => a - b)).toEqual(items);
+  });
+
+  it('est déterministe pour une graine, et varie selon la graine', () => {
+    expect(seededShuffle(items, 7)).toEqual(seededShuffle(items, 7));
+    expect(seededShuffle(items, 7)).not.toEqual(seededShuffle(items, 8));
+    expect(seededShuffle(items, 7)).not.toEqual(items);
+  });
+});
+
+function decodeSeed(cursor: string): number {
+  return JSON.parse(Buffer.from(cursor, 'base64url').toString()).r as number;
+}

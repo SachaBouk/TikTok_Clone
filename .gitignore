@@ -1,0 +1,40 @@
+# Dépendances et builds (pnpm, Turborepo, tsc, Next.js)
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+
+# Client Prisma généré (apps/api) : régénéré par build, dev et typecheck
+apps/api/src/generated/
+
+# Secrets : seul .env.example est versionné
+.env
+.env.*
+!.env.example
+# Clés (APNs .p8, certificats)
+*.p8
+*.pem
+*.key
+
+# Journaux
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Système
+.DS_Store
+
+# Xcode et SwiftPM (apps/ios)
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
+.build/
+.swiftpm/
+
+# Vidéos de démo déposées localement (voir seed/README.md) ; le dossier est gardé par .gitkeep
+seed/videos/*
+!seed/videos/.gitkeep

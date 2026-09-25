@@ -1,0 +1,5186 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ],
+        "security": []
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email ou pseudo déjà pris.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": []
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Email ou mot de passe incorrect.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": []
+      }
+    },
+    "/auth/apple": {
+      "post": {
+        "operationId": "loginWithApple",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compte créé à la première connexion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity token Apple invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email Apple déjà utilisé par un compte email.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": []
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nouvelle paire ; l’ancien refresh token est invalidé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Corps de requête invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session expirée, révoquée ou token réutilisé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": []
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Session révoquée (idempotent)."
+          },
+          "400": {
+            "description": "Corps de requête invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": []
+      }
+    },
+    "/users/me": {
+      "get": {
+        "operationId": "getMyProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "updateMyProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profil à jour.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pseudo, nom ou bio invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pseudo déjà pris.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteMyAccount",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Compte et données associées supprimés."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte déjà supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/avatar/upload-url": {
+      "post": {
+        "operationId": "createAvatarUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAvatarUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Format non pris en charge (JPEG ou PNG) ou fichier de plus de 5 Mio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/avatar": {
+      "put": {
+        "operationId": "setMyAvatar",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAvatarRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profil à jour.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fichier absent (envoi pas fait, expiré ou remplacé depuis), ou qui n’est pas une image JPEG ou PNG valide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "delete": {
+        "operationId": "removeMyAvatar",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Profil à jour, sans photo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/{username}": {
+      "get": {
+        "operationId": "getProfile",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ],
+        "security": []
+      }
+    },
+    "/videos/upload-url": {
+      "post": {
+        "operationId": "createUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vidéo créée en `uploading`. Envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, garder les en-têtes `ETag`, puis appeler `completeUpload`. Une partie en échec se renvoie sur la même URL tant qu’elle est valide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Format non pris en charge ou fichier trop volumineux.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}/uploaded": {
+      "patch": {
+        "operationId": "completeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload assemblé : la vidéo passe en `processing` et le transcodage est lancé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parties manquantes ou ETags incorrects : renvoyer les parties, puis réessayer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Upload déjà confirmé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}": {
+      "delete": {
+        "operationId": "deleteVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Vidéo supprimée."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue, déjà supprimée, ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      },
+      "get": {
+        "operationId": "getVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue, ou pas encore prête et appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ],
+        "security": []
+      }
+    },
+    "/users/me/videos/pending": {
+      "get": {
+        "operationId": "listMyPendingVideos",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingVideosResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/push/devices": {
+      "put": {
+        "operationId": "registerPushDevice",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Appareil enregistré."
+          },
+          "400": {
+            "description": "Token ou environnement invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/push/devices/{token}": {
+      "delete": {
+        "operationId": "unregisterPushDevice",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Appareil retiré."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/videos/{id}/like": {
+      "put": {
+        "operationId": "likeVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "L’un des deux comptes a bloqué l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unlikeVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/videos/{id}/favorite": {
+      "put": {
+        "operationId": "favoriteVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unfavoriteVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/videos/{id}/repost": {
+      "put": {
+        "operationId": "repostVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "L’un des deux comptes a bloqué l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unrepostVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/videos/{id}/view": {
+      "post": {
+        "operationId": "recordView",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Visionnage enregistré (à envoyer après ~1 s de lecture). Sans effet sur ses propres vidéos."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/me/history/{videoId}": {
+      "delete": {
+        "operationId": "removeFromHistory",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Vidéo retirée de l’historique (sans effet si elle n’y était pas)."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/me/history": {
+      "delete": {
+        "operationId": "clearHistory",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Historique effacé."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "get": {
+        "operationId": "listMyHistory",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historique de visionnage du compte connecté, du plus récent au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/videos/{id}/share": {
+      "post": {
+        "operationId": "shareVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "À appeler quand l’utilisateur partage le lien de la vidéo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareResultResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ],
+        "security": []
+      }
+    },
+    "/videos/{id}/comments": {
+      "get": {
+        "operationId": "listComments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ],
+        "security": []
+      },
+      "post": {
+        "operationId": "addComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Commentaire vide ou trop long.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "L’un des deux comptes a bloqué l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/me/comments": {
+      "get": {
+        "operationId": "listMyComments",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentHistoryPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/comments/{id}": {
+      "delete": {
+        "operationId": "deleteComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Commentaire supprimé."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Commentaire d’un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Commentaire inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/{username}/follow": {
+      "put": {
+        "operationId": "followUser",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`count` : abonnés du compte suivi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Impossible de se suivre soi-même.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "L’un des deux comptes a bloqué l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unfollowUser",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`count` : abonnés du compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Impossible de se suivre soi-même.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/{username}/relationship": {
+      "get": {
+        "operationId": "getRelationship",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRelationshipResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/{username}/followers": {
+      "get": {
+        "operationId": "listFollowers",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Abonnés du compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ],
+        "security": []
+      }
+    },
+    "/users/{username}/following": {
+      "get": {
+        "operationId": "listFollowing",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comptes suivis par le compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ],
+        "security": []
+      }
+    },
+    "/users/{username}/block": {
+      "put": {
+        "operationId": "blockUser",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Compte bloqué."
+          },
+          "400": {
+            "description": "Impossible de se bloquer soi-même.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unblockUser",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Compte débloqué (les follows ne sont pas rétablis)."
+          },
+          "400": {
+            "description": "Impossible de se bloquer soi-même.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/users/me/blocks": {
+      "get": {
+        "operationId": "listBlockedUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockedUsersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "countUnreadNotifications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Badge du centre d’activité.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadNotificationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/notifications/read": {
+      "post": {
+        "operationId": "markNotificationsRead",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkNotificationsReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Badge après le marquage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/feed": {
+      "get": {
+        "operationId": "getFeed",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente ; absent pour démarrer une nouvelle session.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos publiées, dans un ordre aléatoire propre à la session. Sans `cursor` : nouvelle session. Avec le `nextCursor` reçu : page suivante, sans doublon. Une session de plus de 2 h repart sur un nouvel ordre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ],
+        "security": []
+      }
+    },
+    "/feed/items/{id}": {
+      "get": {
+        "operationId": "getFeedItem",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue, supprimée ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ],
+        "security": []
+      }
+    },
+    "/users/me/favorites": {
+      "get": {
+        "operationId": "listMyFavorites",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favoris du compte connecté, du plus récent au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/users/me/likes": {
+      "get": {
+        "operationId": "listMyLikes",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos likées par le compte connecté, du like le plus récent au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/users/{username}/videos": {
+      "get": {
+        "operationId": "listAccountVideos",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos publiées du compte, de la plus récente à la plus ancienne.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ],
+        "security": []
+      }
+    },
+    "/users/{username}/reposts": {
+      "get": {
+        "operationId": "listReposts",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos republiées par le compte, de la republication la plus récente à la plus ancienne.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ],
+        "security": []
+      }
+    },
+    "/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Boîte de réception : conversations acceptées et demandes envoyées.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      },
+      "post": {
+        "operationId": "openConversation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenConversationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La conversation avec ce compte : l’existante, sinon une nouvelle, vide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pseudo manquant, ou son propre pseudo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/requests": {
+      "get": {
+        "operationId": "listMessageRequests",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Demandes reçues en attente (hors comptes bloqués).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/unread-count": {
+      "get": {
+        "operationId": "countUnreadConversations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Badges de la messagerie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadConversationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}": {
+      "get": {
+        "operationId": "getConversation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteConversation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Conversation supprimée pour le compte connecté ; l’autre participant la garde."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/accept": {
+      "post": {
+        "operationId": "acceptMessageRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Demande acceptée : la conversation devient libre pour les deux.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pas une demande reçue en attente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/decline": {
+      "post": {
+        "operationId": "declineMessageRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Demande refusée : elle disparaît, ses messages suivants ne sont plus remis. L’expéditeur n’est pas prévenu."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pas une demande reçue en attente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/messages": {
+      "get": {
+        "operationId": "listMessages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      },
+      "post": {
+        "operationId": "sendMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ni texte ni vidéo, texte trop long, ou identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Blocage entre les deux comptes, ou demande en attente ayant atteint sa limite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue (ou non participant), ou vidéo introuvable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/read": {
+      "post": {
+        "operationId": "markConversationRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkConversationReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Badges de la messagerie après le marquage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadConversationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/messages/{id}": {
+      "delete": {
+        "operationId": "deleteMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Message retiré pour les deux participants."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Message d’un autre participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message inconnu, ou d’une conversation dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "API TikTok clone",
+    "description": "API REST du backend. Les routes exigent un access token (`Authorization: Bearer …`), sauf celles sans cadenas, accessibles en mode invité.\n\n**Temps réel** : WebSocket `ws://<hôte>/realtime`, avec le même en-tête `Authorization: Bearer …` (sans token valide : HTTP 401 au handshake). Le serveur envoie des messages JSON décrits par le schéma `RealtimeEvent` ; l’app peut envoyer ceux du schéma `RealtimeClientMessage` (`typing`), les autres sont ignorés. Fermeture 4001 : access token expiré, rafraîchir puis se reconnecter. Rien n’est rejoué après une coupure : à la reconnexion, relire l’état par l’API REST.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "degraded"
+        ]
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          },
+          "service": {
+            "type": "string",
+            "example": "api"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "timestamp"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 401
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": "Email ou mot de passe incorrect"
+          },
+          "error": {
+            "type": "string",
+            "example": "Unauthorized"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message"
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "example": "alice@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "format": "password"
+          },
+          "username": {
+            "type": "string",
+            "pattern": "^[a-z0-9._]{2,24}$",
+            "example": "alice"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "example": "Alice"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "username",
+          "displayName"
+        ]
+      },
+      "AuthTokensResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT à envoyer dans l’en-tête `Authorization: Bearer …`."
+          },
+          "accessTokenExpiresIn": {
+            "type": "integer",
+            "description": "Durée de validité de l’access token, en secondes.",
+            "example": 900
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opaque, à usage unique : chaque appel à /auth/refresh en renvoie un nouveau."
+          }
+        },
+        "required": [
+          "accessToken",
+          "accessTokenExpiresIn",
+          "refreshToken"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "alice@example.com"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AppleLoginRequest": {
+        "type": "object",
+        "properties": {
+          "identityToken": {
+            "type": "string",
+            "description": "Identity token (JWT) renvoyé par Sign in with Apple."
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Nom fourni par Apple, uniquement à la première connexion."
+          }
+        },
+        "required": [
+          "identityToken"
+        ]
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "UserProfileResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string",
+            "example": "alice"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Alice"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "followersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "followingCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "avatarUrl",
+          "bio",
+          "followersCount",
+          "followingCount",
+          "createdAt"
+        ]
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "pattern": "^[a-z0-9._]{2,24}$",
+            "example": "alice"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "example": "Alice"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80,
+            "example": "Danse et cuisine 🍜"
+          }
+        }
+      },
+      "CreateAvatarUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "example": "image/jpeg"
+          },
+          "fileSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5242880,
+            "description": "Taille du fichier en octets."
+          }
+        },
+        "required": [
+          "contentType",
+          "fileSize"
+        ]
+      },
+      "AvatarUploadResponse": {
+        "type": "object",
+        "properties": {
+          "avatarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "À renvoyer à `PUT /users/me/avatar` après l’envoi."
+          },
+          "uploadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL signée : un seul PUT du fichier, avec exactement les Content-Type et Content-Length annoncés."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "avatarId",
+          "uploadUrl",
+          "expiresAt"
+        ]
+      },
+      "SetAvatarRequest": {
+        "type": "object",
+        "properties": {
+          "avatarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "`avatarId` renvoyé par `POST /users/me/avatar/upload-url`."
+          }
+        },
+        "required": [
+          "avatarId"
+        ]
+      },
+      "CreateUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "video/mp4",
+              "video/quicktime"
+            ],
+            "example": "video/quicktime"
+          },
+          "fileSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1073741824,
+            "description": "Taille du fichier en octets."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2200
+          }
+        },
+        "required": [
+          "contentType",
+          "fileSize"
+        ]
+      },
+      "VideoStatus": {
+        "type": "string",
+        "enum": [
+          "uploading",
+          "processing",
+          "ready",
+          "failed"
+        ]
+      },
+      "VideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Auteur de la vidéo."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/VideoStatus"
+          },
+          "hlsUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Manifeste HLS, quand la vidéo est `ready`."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "description",
+          "status",
+          "hlsUrl",
+          "thumbnailUrl",
+          "createdAt"
+        ]
+      },
+      "UploadPartUrlResponse": {
+        "type": "object",
+        "properties": {
+          "partNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL signée : envoyer la partie en PUT, garder l’en-tête `ETag` de la réponse."
+          }
+        },
+        "required": [
+          "partNumber",
+          "url"
+        ]
+      },
+      "VideoUploadResponse": {
+        "type": "object",
+        "properties": {
+          "video": {
+            "$ref": "#/components/schemas/VideoResponse"
+          },
+          "partSize": {
+            "type": "integer",
+            "description": "Taille de chaque partie en octets ; la dernière peut être plus petite."
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadPartUrlResponse"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiration des URLs signées."
+          }
+        },
+        "required": [
+          "video",
+          "partSize",
+          "parts",
+          "expiresAt"
+        ]
+      },
+      "UploadedPartRequest": {
+        "type": "object",
+        "properties": {
+          "partNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "etag": {
+            "type": "string",
+            "description": "En-tête `ETag` de la réponse au PUT de la partie, tel quel."
+          }
+        },
+        "required": [
+          "partNumber",
+          "etag"
+        ]
+      },
+      "CompleteUploadRequest": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "minItems": 1,
+            "maxItems": 10000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadedPartRequest"
+            }
+          }
+        },
+        "required": [
+          "parts"
+        ]
+      },
+      "PendingVideosResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "En traitement ou en échec, de la plus récente à la plus ancienne (50 au plus).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "PushEnvironment": {
+        "type": "string",
+        "enum": [
+          "sandbox",
+          "production"
+        ]
+      },
+      "RegisterPushDeviceRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token APNs de l’appareil, en hexadécimal.",
+            "example": "a1b2…"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/PushEnvironment"
+          }
+        },
+        "required": [
+          "token",
+          "environment"
+        ]
+      },
+      "InteractionStateResponse": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Liké / en favori / republié / suivi, après la requête."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Compteur à jour (likes, favoris, republications de la vidéo, ou abonnés du compte)."
+          }
+        },
+        "required": [
+          "active",
+          "count"
+        ]
+      },
+      "ShareResultResponse": {
+        "type": "object",
+        "properties": {
+          "sharesCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "sharesCount"
+        ]
+      },
+      "UserSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string",
+            "example": "lea.martin"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Léa Martin"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "avatarUrl"
+        ]
+      },
+      "CommentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "videoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "videoId",
+          "content",
+          "createdAt",
+          "author"
+        ]
+      },
+      "CommentPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommentResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "CreateCommentRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "example": "Trop bien !"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "CommentedVideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "thumbnailUrl",
+          "author"
+        ]
+      },
+      "CommentHistoryItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant du commentaire."
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "video": {
+            "$ref": "#/components/schemas/CommentedVideoResponse"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "createdAt",
+          "video"
+        ]
+      },
+      "CommentHistoryPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommentHistoryItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "UserRelationshipResponse": {
+        "type": "object",
+        "properties": {
+          "following": {
+            "type": "boolean",
+            "description": "Le compte connecté suit ce compte."
+          },
+          "followedBy": {
+            "type": "boolean",
+            "description": "Ce compte suit le compte connecté."
+          },
+          "blockedByMe": {
+            "type": "boolean",
+            "description": "Le compte connecté a bloqué ce compte."
+          }
+        },
+        "required": [
+          "following",
+          "followedBy",
+          "blockedByMe"
+        ]
+      },
+      "FollowViewerStateResponse": {
+        "type": "object",
+        "properties": {
+          "following": {
+            "type": "boolean",
+            "description": "Le compte connecté suit ce compte."
+          },
+          "followedBy": {
+            "type": "boolean",
+            "description": "Ce compte suit le compte connecté."
+          }
+        },
+        "required": [
+          "following",
+          "followedBy"
+        ]
+      },
+      "FollowItemResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "followedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date du follow."
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/FollowViewerStateResponse"
+          }
+        },
+        "required": [
+          "user",
+          "followedAt"
+        ]
+      },
+      "FollowPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du follow le plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FollowItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "BlockedUsersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSummaryResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "NotificationType": {
+        "type": "string",
+        "enum": [
+          "like",
+          "comment",
+          "follow",
+          "repost"
+        ]
+      },
+      "NotificationVideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "thumbnailUrl"
+        ]
+      },
+      "NotificationCommentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "content"
+        ]
+      },
+      "NotificationResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "video": {
+            "$ref": "#/components/schemas/NotificationVideoResponse"
+          },
+          "comment": {
+            "$ref": "#/components/schemas/NotificationCommentResponse"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "actor",
+          "read",
+          "createdAt"
+        ]
+      },
+      "NotificationPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "UnreadNotificationsResponse": {
+        "type": "object",
+        "properties": {
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unreadCount"
+        ]
+      },
+      "MarkNotificationsReadRequest": {
+        "type": "object",
+        "properties": {
+          "upToId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Notification la plus récente affichée : elle et les plus anciennes passent en lues, celles arrivées depuis restent non lues. Absent : toutes."
+          }
+        }
+      },
+      "FeedViewerStateResponse": {
+        "type": "object",
+        "properties": {
+          "liked": {
+            "type": "boolean"
+          },
+          "favorited": {
+            "type": "boolean"
+          },
+          "reposted": {
+            "type": "boolean"
+          },
+          "followingAuthor": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "liked",
+          "favorited",
+          "reposted",
+          "followingAuthor"
+        ]
+      },
+      "FeedItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant de la vidéo."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "hlsUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Manifeste HLS à donner à AVPlayer."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "likesCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "commentsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "favoritesCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sharesCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repostsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/FeedViewerStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "description",
+          "hlsUrl",
+          "thumbnailUrl",
+          "createdAt",
+          "viewsCount",
+          "likesCount",
+          "commentsCount",
+          "favoritesCount",
+          "sharesCount",
+          "repostsCount",
+          "author"
+        ]
+      },
+      "FeedPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null à la fin du feed (repartir sans curseur pour un nouvel ordre)."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "VideoPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "De la plus récente à la plus ancienne.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "ConversationStatus": {
+        "type": "string",
+        "enum": [
+          "direct",
+          "requestSent",
+          "requestReceived"
+        ]
+      },
+      "SharedVideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Faux si la vidéo a été supprimée depuis le partage : les autres champs sont alors nuls."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "hlsUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "available",
+          "thumbnailUrl",
+          "hlsUrl",
+          "description"
+        ]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string",
+            "description": "Vide si le message ne fait que partager une vidéo."
+          },
+          "sharedVideo": {
+            "$ref": "#/components/schemas/SharedVideoResponse"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "senderId",
+          "content",
+          "createdAt"
+        ]
+      },
+      "ConversationResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConversationStatus"
+          },
+          "lastMessage": {
+            "$ref": "#/components/schemas/MessageResponse"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Messages de l’autre participant non lus."
+          },
+          "participantLastReadMessageId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Dernier message lu par l’autre (« Vu »). Null tant que la conversation n’est pas acceptée."
+          },
+          "canSend": {
+            "type": "boolean",
+            "description": "Faux si l’un des deux a bloqué l’autre, ou si la demande envoyée a atteint sa limite."
+          },
+          "remainingRequestMessages": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Messages encore possibles dans une demande envoyée ; null hors demande envoyée."
+          },
+          "blockedByMe": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "participant",
+          "status",
+          "unreadCount",
+          "participantLastReadMessageId",
+          "canSend",
+          "remainingRequestMessages",
+          "blockedByMe",
+          "createdAt"
+        ]
+      },
+      "ConversationPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "De la plus récemment active à la plus ancienne, sans les conversations vides.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "OpenConversationRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "lea.martin",
+            "description": "Pseudo de l’autre participant."
+          }
+        },
+        "required": [
+          "username"
+        ]
+      },
+      "UnreadConversationsResponse": {
+        "type": "object",
+        "properties": {
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "requestCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          }
+        },
+        "required": [
+          "unreadCount",
+          "requestCount"
+        ]
+      },
+      "MessagePageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour les messages plus anciens ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 1000,
+            "example": "Salut !"
+          },
+          "videoId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Vidéo publiée à partager (comptée comme un partage)."
+          }
+        }
+      },
+      "MarkConversationReadRequest": {
+        "type": "object",
+        "properties": {
+          "upToId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message le plus récent affiché : lu jusqu’à celui-ci. Absent : jusqu’au dernier message."
+          }
+        }
+      },
+      "VideoProcessedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "videoProcessed"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/VideoResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "NotificationCreatedData": {
+        "type": "object",
+        "properties": {
+          "notification": {
+            "$ref": "#/components/schemas/NotificationResponse"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Badge à jour."
+          }
+        },
+        "required": [
+          "notification",
+          "unreadCount"
+        ]
+      },
+      "NotificationCreatedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "notificationCreated"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationCreatedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "UnreadNotificationsChangedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "unreadNotificationsChanged"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/UnreadNotificationsResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "MessageCreatedData": {
+        "type": "object",
+        "properties": {
+          "unreadConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "pendingRequests": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          },
+          "message": {
+            "$ref": "#/components/schemas/MessageResponse"
+          }
+        },
+        "required": [
+          "unreadConversations",
+          "pendingRequests",
+          "message"
+        ]
+      },
+      "MessageCreatedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "messageCreated"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/MessageCreatedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "MessageDeletedData": {
+        "type": "object",
+        "properties": {
+          "unreadConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "pendingRequests": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message retiré."
+          }
+        },
+        "required": [
+          "unreadConversations",
+          "pendingRequests",
+          "conversationId",
+          "messageId"
+        ]
+      },
+      "MessageDeletedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "messageDeleted"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/MessageDeletedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "ConversationReadData": {
+        "type": "object",
+        "properties": {
+          "unreadConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "pendingRequests": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Participant qui a lu."
+          },
+          "lastReadMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Lu jusqu’à ce message inclus."
+          }
+        },
+        "required": [
+          "unreadConversations",
+          "pendingRequests",
+          "conversationId",
+          "readerId",
+          "lastReadMessageId"
+        ]
+      },
+      "ConversationReadEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "conversationRead"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationReadData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "ConversationAcceptedData": {
+        "type": "object",
+        "properties": {
+          "unreadConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "pendingRequests": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "unreadConversations",
+          "pendingRequests",
+          "conversationId"
+        ]
+      },
+      "ConversationAcceptedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "conversationAccepted"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationAcceptedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "ConversationDeletedData": {
+        "type": "object",
+        "properties": {
+          "unreadConversations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Conversations (hors demandes) ayant au moins un message non lu."
+          },
+          "pendingRequests": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Demandes reçues en attente."
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "unreadConversations",
+          "pendingRequests",
+          "conversationId"
+        ]
+      },
+      "ConversationDeletedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "conversationDeleted"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationDeletedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "TypingData": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Participant en train d’écrire."
+          }
+        },
+        "required": [
+          "conversationId",
+          "userId"
+        ]
+      },
+      "TypingEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "typing"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/TypingData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "TypingClientData": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "conversationId"
+        ]
+      },
+      "TypingClientMessage": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "typing"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/TypingClientData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "RealtimeEvent": {
+        "description": "Message envoyé par le serveur sur le WebSocket `/realtime` (ADR-011).",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/VideoProcessedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/NotificationCreatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/UnreadNotificationsChangedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/MessageCreatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/MessageDeletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationReadEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationAcceptedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationDeletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TypingEvent"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "event",
+          "mapping": {
+            "videoProcessed": "#/components/schemas/VideoProcessedEvent",
+            "notificationCreated": "#/components/schemas/NotificationCreatedEvent",
+            "unreadNotificationsChanged": "#/components/schemas/UnreadNotificationsChangedEvent",
+            "messageCreated": "#/components/schemas/MessageCreatedEvent",
+            "messageDeleted": "#/components/schemas/MessageDeletedEvent",
+            "conversationRead": "#/components/schemas/ConversationReadEvent",
+            "conversationAccepted": "#/components/schemas/ConversationAcceptedEvent",
+            "conversationDeleted": "#/components/schemas/ConversationDeletedEvent",
+            "typing": "#/components/schemas/TypingEvent"
+          }
+        }
+      },
+      "RealtimeClientMessage": {
+        "description": "Message envoyé par l’app sur le WebSocket `/realtime` (les autres sont ignorés).",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TypingClientMessage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "event",
+          "mapping": {
+            "typing": "#/components/schemas/TypingClientMessage"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
+}

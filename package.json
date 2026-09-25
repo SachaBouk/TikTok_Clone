@@ -1,0 +1,31 @@
+{
+  "name": "monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "start": "turbo run start",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "openapi:export": "pnpm --filter api openapi:export",
+    "openapi:check": "pnpm --filter api openapi:check",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "infra:up": "docker compose up -d --wait postgres redis minio && docker compose run --rm minio-init",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "infra:reset": "docker compose down -v && pnpm infra:up",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:deploy": "pnpm --filter api db:deploy",
+    "db:reset": "pnpm --filter api db:reset",
+    "db:studio": "pnpm --filter api db:studio",
+    "seed": "pnpm --filter api seed --"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.3",
+    "typescript": "~6.0.2"
+  }
+}
