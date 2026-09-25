@@ -1,5 +1,5 @@
-// Erreurs d'authentification et de session, indépendantes du transport (ADR-002).
-enum AuthError: Error, Equatable, Sendable {
+// Erreurs des appels à l'API, vues par le domaine : indépendantes du transport (ADR-002).
+enum AppError: Error, Equatable, Sendable {
     // Email ou mot de passe incorrect (le serveur ne dit pas lequel).
     case invalidCredentials
     // Requête refusée par l'API, avec son message (pseudo déjà pris, email invalide…).

@@ -9,8 +9,8 @@ struct RemoteProfileRepository: ProfileRepository {
         switch output {
         case .ok(let ok): return UserProfile(try ok.body.json)
         // 401 après échec du rafraîchissement, ou compte supprimé (404).
-        case .unauthorized, .notFound: throw AuthError.sessionExpired
-        case .undocumented: throw AuthError.unexpected
+        case .unauthorized, .notFound: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
         }
     }
 }

@@ -66,7 +66,7 @@ final class SessionStore {
     func sessionExpired() {
         guard isSignedIn else { return }
         state = .guest
-        notice = AuthError.sessionExpired.message
+        notice = AppError.sessionExpired.message
     }
 
     func requestSignIn() {

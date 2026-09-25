@@ -16,7 +16,7 @@ struct RegisterUseCase: Sendable {
     let profiles: any ProfileRepository
 
     func callAsFunction(_ registration: Registration) async throws -> UserProfile {
-        if let problem = RegistrationRules.problem(with: registration) { throw AuthError.rejected(problem) }
+        if let problem = RegistrationRules.problem(with: registration) { throw AppError.rejected(problem) }
         try await auth.register(Registration(
             email: registration.email.trimmingCharacters(in: .whitespaces),
             password: registration.password,
@@ -51,7 +51,7 @@ struct RestoreSessionUseCase: Sendable {
         guard auth.hasStoredSession() else { return .guest }
         do {
             return .signedIn(try await profiles.myProfile())
-        } catch AuthError.network {
+        } catch AppError.network {
             return .unavailable
         } catch {
             // Session expirée, révoquée ou compte supprimé : on repart en invité, sans session enregistrée.

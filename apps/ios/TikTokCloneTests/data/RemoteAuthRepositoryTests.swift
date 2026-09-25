@@ -25,7 +25,7 @@ struct RemoteAuthRepositoryTests {
 
     @Test("connexion refusée : invalidCredentials, rien d'enregistré")
     func loginRejected() async {
-        await #expect(throws: AuthError.invalidCredentials) {
+        await #expect(throws: AppError.invalidCredentials) {
             try await repository { _ in json(.unauthorized, errorJSON(401, "Email ou mot de passe incorrect")) }.login(email: "a@b.c", password: "x")
         }
         #expect(store.load() == nil)
@@ -33,7 +33,7 @@ struct RemoteAuthRepositoryTests {
 
     @Test("inscription refusée : message de l'API (pseudo pris)")
     func registerConflict() async {
-        await #expect(throws: AuthError.rejected("Le pseudo @alice est déjà pris")) {
+        await #expect(throws: AppError.rejected("Le pseudo @alice est déjà pris")) {
             try await repository { _ in json(.conflict, errorJSON(409, "Le pseudo @alice est déjà pris")) }
                 .register(Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice"))
         }
@@ -42,14 +42,14 @@ struct RemoteAuthRepositoryTests {
     @Test("erreurs de validation : messages réunis")
     func validationMessages() async {
         let body = #"{"statusCode":400,"message":["email must be an email","password too short"]}"#
-        await #expect(throws: AuthError.rejected("email must be an email\npassword too short")) {
+        await #expect(throws: AppError.rejected("email must be an email\npassword too short")) {
             try await repository { _ in json(.badRequest, body) }.login(email: "x", password: "y")
         }
     }
 
     @Test("API injoignable : network")
     func network() async {
-        await #expect(throws: AuthError.network) {
+        await #expect(throws: AppError.network) {
             try await repository { _ in throw URLError(.cannotConnectToHost) }.login(email: "a@b.c", password: "motdepasse")
         }
     }
@@ -76,7 +76,7 @@ struct RemoteAuthRepositoryTests {
     func profileExpired() async {
         for status in [HTTPResponse.Status.unauthorized, .notFound] {
             let client = makeClient(transport: MockTransport { _, _ in json(status, errorJSON(status.code, "x")) })
-            await #expect(throws: AuthError.sessionExpired) { try await RemoteProfileRepository(client: client).myProfile() }
+            await #expect(throws: AppError.sessionExpired) { try await RemoteProfileRepository(client: client).myProfile() }
         }
     }
 }

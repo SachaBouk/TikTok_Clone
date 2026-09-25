@@ -38,7 +38,7 @@ final class RegisterViewModel {
             let registration = Registration(email: email, password: password, username: username, displayName: displayName)
             session.signedIn(try await register(registration))
         } catch {
-            errorMessage = AuthError.from(error).message
+            errorMessage = AppError.from(error).message
         }
     }
 }

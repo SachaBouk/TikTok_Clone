@@ -20,10 +20,10 @@ final class ProfileViewModel {
         do {
             session.update(try await getMyProfile())
             errorMessage = nil
-        } catch AuthError.sessionExpired {
+        } catch AppError.sessionExpired {
             session.sessionExpired()
         } catch {
-            errorMessage = AuthError.from(error).message
+            errorMessage = AppError.from(error).message
         }
     }
 

@@ -6,8 +6,12 @@ import TikTokAPI
 @MainActor
 final class AppContainer {
     let session: SessionStore
+    // Lecteurs vidéo partagés par les écrans qui lisent des vidéos (feed, puis grilles).
+    let playerPool = AVPlayerPool()
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
+    private let feed: any FeedRepository
+    private let viewHistory: any ViewHistoryRepository
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -22,6 +26,8 @@ final class AppContainer {
 
         auth = RemoteAuthRepository(client: client, store: tokenStore)
         profiles = RemoteProfileRepository(client: client)
+        feed = RemoteFeedRepository(client: client)
+        viewHistory = RemoteViewHistoryRepository(client: client)
         session = SessionStore(
             restoreSession: RestoreSessionUseCase(auth: auth, profiles: profiles),
             logout: LogoutUseCase(auth: auth)
@@ -35,6 +41,15 @@ final class AppContainer {
 
     func makeRegisterViewModel() -> RegisterViewModel {
         RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: profiles), session: session)
+    }
+
+    func makeFeedViewModel() -> FeedViewModel {
+        FeedViewModel(
+            loadPage: LoadFeedPageUseCase(feed: feed),
+            recordView: RecordViewUseCase(history: viewHistory),
+            playback: playerPool,
+            session: session
+        )
     }
 
     func makeProfileViewModel() -> ProfileViewModel {

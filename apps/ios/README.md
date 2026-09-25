@@ -73,6 +73,15 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Lancement : la session enregistrée est reprise (`RestoreSessionUseCase`) ; API injoignable : écran « Serveur injoignable » (réessayer, ou continuer sans compte).
 - Déconnexion : session oubliée localement, puis révoquée côté serveur au mieux (`POST /auth/logout`).
 
+## Feed et lecteur
+
+- Une vidéo par page, défilement vertical natif (`ScrollView` en pagination), toucher pour mettre en pause.
+- Lecture HLS (`AVPlayerPool`) : 3 lecteurs au plus (vidéo courante, suivante, précédente), bouclés ; les voisines sont préchargées. La miniature s'affiche jusqu'à la première image.
+- Vue envoyée (`recordView`) après 1 s de lecture continue, une fois par vidéo et par session, pour un compte connecté seulement.
+- Fin de session du feed : l'app repart sans curseur, sur un nouvel ordre ; le feed est sans fin.
+- Connexion ou déconnexion : le feed est rechargé (l'état des boutons change).
+- En simulateur, les vidéos viennent de MinIO en HTTP (`localhost:9000`) : ATS l'autorise par `NSAllowsLocalNetworking`.
+
 ## Temps réel (ADR-011)
 
 WebSocket `ws://<hôte>:3000/realtime`, ouvert avec `URLSessionWebSocketTask` et l'access token dans l'en-tête :

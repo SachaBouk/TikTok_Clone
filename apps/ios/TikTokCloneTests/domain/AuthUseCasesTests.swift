@@ -41,7 +41,7 @@ struct AuthUseCasesTests {
     func registrationRules(email: String, username: String, displayName: String, password: String, message: String) async {
         let auth = FakeAuthRepository()
         let register = RegisterUseCase(auth: auth, profiles: FakeProfileRepository())
-        await #expect(throws: AuthError.rejected(message)) {
+        await #expect(throws: AppError.rejected(message)) {
             try await register(Registration(email: email, password: password, username: username, displayName: displayName))
         }
         #expect(auth.state.withLock { $0.registrations.isEmpty })

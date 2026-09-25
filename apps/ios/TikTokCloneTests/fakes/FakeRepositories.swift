@@ -5,8 +5,8 @@ import Synchronization
 // Adaptateurs en mémoire des ports du domaine, pour tester cas d'usage et ViewModels (ADR-002).
 final class FakeAuthRepository: AuthRepository {
     struct State {
-        var loginError: AuthError?
-        var registerError: AuthError?
+        var loginError: AppError?
+        var registerError: AppError?
         var hasSession = false
         var logins: [String] = []
         var registrations: [Registration] = []
@@ -15,7 +15,7 @@ final class FakeAuthRepository: AuthRepository {
 
     let state: Mutex<State>
 
-    init(hasSession: Bool = false, loginError: AuthError? = nil, registerError: AuthError? = nil) {
+    init(hasSession: Bool = false, loginError: AppError? = nil, registerError: AppError? = nil) {
         state = Mutex(State(loginError: loginError, registerError: registerError, hasSession: hasSession))
     }
 
@@ -46,9 +46,9 @@ final class FakeAuthRepository: AuthRepository {
 }
 
 final class FakeProfileRepository: ProfileRepository {
-    let result: Mutex<Result<UserProfile, AuthError>>
+    let result: Mutex<Result<UserProfile, AppError>>
 
-    init(_ result: Result<UserProfile, AuthError> = .success(.alice)) {
+    init(_ result: Result<UserProfile, AppError> = .success(.alice)) {
         self.result = Mutex(result)
     }
 

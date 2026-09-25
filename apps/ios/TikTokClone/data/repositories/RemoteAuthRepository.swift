@@ -11,9 +11,9 @@ struct RemoteAuthRepository: AuthRepository {
         let output = try await mappingErrors { try await client.login(body: .json(.init(email: email, password: password))) }
         switch output {
         case .ok(let ok): try save(try ok.body.json)
-        case .unauthorized: throw AuthError.invalidCredentials
-        case .badRequest(let error): throw AuthError.rejected(try error.body.json.text)
-        case .undocumented: throw AuthError.unexpected
+        case .unauthorized: throw AppError.invalidCredentials
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .undocumented: throw AppError.unexpected
         }
     }
 
@@ -27,9 +27,9 @@ struct RemoteAuthRepository: AuthRepository {
         let output = try await mappingErrors { try await client.register(body: .json(body)) }
         switch output {
         case .created(let created): try save(try created.body.json)
-        case .badRequest(let error): throw AuthError.rejected(try error.body.json.text)
-        case .conflict(let error): throw AuthError.rejected(try error.body.json.text)
-        case .undocumented: throw AuthError.unexpected
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .undocumented: throw AppError.unexpected
         }
     }
 
@@ -48,7 +48,7 @@ struct RemoteAuthRepository: AuthRepository {
         do {
             try store.save(AuthTokens(response, receivedAt: now()))
         } catch {
-            throw AuthError.unexpected
+            throw AppError.unexpected
         }
     }
 }

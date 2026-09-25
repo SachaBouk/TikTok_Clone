@@ -29,7 +29,7 @@ final class LoginViewModel {
         do {
             session.signedIn(try await login(email: email, password: password))
         } catch {
-            errorMessage = AuthError.from(error).message
+            errorMessage = AppError.from(error).message
         }
     }
 }

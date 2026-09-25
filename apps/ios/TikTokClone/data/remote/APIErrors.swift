@@ -11,10 +11,10 @@ extension Components.Schemas.ErrorResponse {
     }
 }
 
-extension AuthError {
+extension AppError {
     // Erreur levée par le client généré : l'API injoignable devient `.network`, le reste `.unexpected`.
-    static func from(_ error: any Error) -> AuthError {
-        if let error = error as? AuthError { return error }
+    static func from(_ error: any Error) -> AppError {
+        if let error = error as? AppError { return error }
         if let clientError = error as? ClientError, clientError.underlyingError is URLError { return .network }
         if error is URLError { return .network }
         return .unexpected
@@ -26,6 +26,6 @@ func mappingErrors<T>(_ call: () async throws -> T) async throws -> T {
     do {
         return try await call()
     } catch {
-        throw AuthError.from(error)
+        throw AppError.from(error)
     }
 }

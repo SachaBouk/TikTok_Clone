@@ -14,7 +14,7 @@ struct MainTabView: View {
         @Bindable var session = session
         TabView(selection: $selection) {
             Tab("Accueil", systemImage: "house", value: .home) {
-                HomeView()
+                FeedView(viewModel: container.makeFeedViewModel(), pool: container.playerPool, isTabActive: selection == .home)
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
@@ -43,16 +43,6 @@ struct MainTabView: View {
             Button("Plus tard", role: .cancel) {}
         } message: {
             Text(session.notice ?? "")
-        }
-    }
-}
-
-// Accueil. Le feed vidéo viendra à l'étape suivante.
-struct HomeView: View {
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView("Feed", systemImage: "play.rectangle.on.rectangle", description: Text("Le feed vidéo arrive bientôt."))
-                .navigationTitle("Accueil")
         }
     }
 }

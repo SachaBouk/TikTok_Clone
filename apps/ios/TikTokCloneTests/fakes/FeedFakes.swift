@@ -1,0 +1,67 @@
+import Foundation
+import Synchronization
+@testable import TikTokClone
+
+// Feed en mémoire : renvoie les pages prévues, dans l'ordre, et garde les curseurs demandés.
+final class FakeFeedRepository: FeedRepository {
+    private let state: Mutex<(pages: [Result<FeedPage, AppError>], cursors: [String?])>
+
+    init(_ pages: [Result<FeedPage, AppError>]) {
+        state = Mutex((pages, []))
+    }
+
+    var requestedCursors: [String?] { state.withLock { $0.cursors } }
+
+    func page(cursor: String?) async throws -> FeedPage {
+        try state.withLock { state in
+            state.cursors.append(cursor)
+            guard !state.pages.isEmpty else { return FeedPage(videos: [], nextCursor: nil) }
+            return try state.pages.removeFirst().get()
+        }
+    }
+}
+
+final class FakeViewHistoryRepository: ViewHistoryRepository {
+    private let state = Mutex<(recorded: [String], error: AppError?)>(([], nil))
+
+    var recorded: [String] { state.withLock { $0.recorded } }
+    func fail(with error: AppError?) { state.withLock { $0.error = error } }
+
+    func recordView(videoID: String) async throws {
+        try state.withLock { state in
+            if let error = state.error { throw error }
+            state.recorded.append(videoID)
+        }
+    }
+}
+
+// Lecteur simulé : enregistre les ordres reçus (ADR-002 : ViewModel testé sans AVFoundation).
+@MainActor
+final class FakePlayback: VideoPlayback {
+    private(set) var loaded: [[String]] = []
+    private(set) var played: [String] = []
+    private(set) var pauseCount = 0
+
+    func keepLoaded(_ videos: [FeedVideo]) { loaded.append(videos.map(\.id)) }
+    func play(_ videoID: String) { played.append(videoID) }
+    func pauseAll() { pauseCount += 1 }
+}
+
+extension FeedVideo {
+    static func sample(_ id: String, author: String = "bob", viewer: ViewerState? = nil) -> FeedVideo {
+        FeedVideo(
+            id: id,
+            description: "Vidéo \(id)",
+            hlsURL: URL(string: "http://cdn.test/\(id)/master.m3u8")!,
+            thumbnailURL: URL(string: "http://cdn.test/\(id)/thumbnail.jpg")!,
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+            stats: VideoStats(views: 1, likes: 2, comments: 3, favorites: 4, shares: 5, reposts: 6),
+            author: UserSummary(id: "\(author)-id", username: author, displayName: author.capitalized, avatarURL: nil),
+            viewer: viewer
+        )
+    }
+}
+
+func page(_ ids: [String], next: String?) -> FeedPage {
+    FeedPage(videos: ids.map { FeedVideo.sample($0) }, nextCursor: next)
+}
