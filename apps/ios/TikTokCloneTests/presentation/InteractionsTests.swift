@@ -6,6 +6,7 @@ import Testing
 @Suite("Interactions : modèle partagé, commentaires, vidéo seule")
 struct InteractionsTests {
     let repository = FakeInteractionRepository()
+    let videos = FakeVideoPublishingRepository()
 
     func makeModel(signedIn: Bool = true) async -> (VideoInteractionsModel, SessionStore) {
         let session = makeSession(auth: FakeAuthRepository(hasSession: signedIn))
@@ -14,6 +15,7 @@ struct InteractionsTests {
             setReaction: SetReactionUseCase(interactions: repository),
             setFollow: SetFollowUseCase(interactions: repository),
             recordShare: ShareVideoUseCase(interactions: repository),
+            deleteVideo: DeleteVideoUseCase(videos: videos),
             session: session
         )
         return (model, session)

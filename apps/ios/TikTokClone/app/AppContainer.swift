@@ -19,6 +19,9 @@ final class AppContainer {
     private let feed: any FeedRepository
     private let viewHistory: any ViewHistoryRepository
     private let interactions: any InteractionRepository
+    private let relationships: any RelationshipRepository
+    private let videoLists: any VideoListRepository
+    private let uploads: any UploadStore
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -36,8 +39,11 @@ final class AppContainer {
         feed = RemoteFeedRepository(client: client)
         viewHistory = RemoteViewHistoryRepository(client: client)
         interactions = RemoteInteractionRepository(client: client)
+        relationships = RemoteRelationshipRepository(client: client)
+        videoLists = RemoteVideoListRepository(client: client)
         let videos = RemoteVideoPublishingRepository(client: client)
         let uploads = FileUploadStore()
+        self.uploads = uploads
         session = SessionStore(
             restoreSession: RestoreSessionUseCase(auth: auth, profiles: profiles),
             logout: LogoutUseCase(auth: auth)
@@ -47,6 +53,7 @@ final class AppContainer {
             setReaction: SetReactionUseCase(interactions: interactions),
             setFollow: SetFollowUseCase(interactions: interactions),
             recordShare: ShareVideoUseCase(interactions: interactions),
+            deleteVideo: DeleteVideoUseCase(videos: videos),
             session: session
         )
         publishing = PublishingModel(
@@ -118,8 +125,81 @@ final class AppContainer {
         )
     }
 
-    func makeProfileViewModel() -> ProfileViewModel {
-        ProfileViewModel(getMyProfile: GetMyProfileUseCase(profiles: profiles), session: session)
+    // `username` nil : son propre profil.
+    func makeProfileViewModel(username: String?) -> ProfileViewModel {
+        ProfileViewModel(
+            username: username,
+            getMyProfile: GetMyProfileUseCase(profiles: profiles),
+            loadProfile: LoadProfileUseCase(profiles: profiles),
+            loadRelationship: LoadRelationshipUseCase(relationships: relationships),
+            loadVideoPage: LoadVideoPageUseCase(videos: videoLists),
+            setBlocked: SetBlockedUseCase(relationships: relationships),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    func makeEditProfileViewModel() -> EditProfileViewModel {
+        EditProfileViewModel(
+            updateProfile: UpdateProfileUseCase(profiles: profiles),
+            changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: URLSessionAvatarUploader()),
+            removeAvatar: RemoveAvatarUseCase(profiles: profiles),
+            session: session
+        )
+    }
+
+    func makeFollowListViewModel(_ route: FollowListRoute) -> FollowListViewModel {
+        FollowListViewModel(
+            kind: route.kind,
+            username: route.username,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    func makeAccountSettingsViewModel() -> AccountSettingsViewModel {
+        AccountSettingsViewModel(
+            deleteAccount: DeleteAccountUseCase(profiles: profiles, auth: auth),
+            discardUploads: DiscardUploadsUseCase(store: uploads),
+            session: session
+        )
+    }
+
+    func makeViewHistoryViewModel() -> ViewHistoryViewModel {
+        ViewHistoryViewModel(
+            loadVideoPage: LoadVideoPageUseCase(videos: videoLists),
+            removeFromHistory: RemoveFromHistoryUseCase(videos: videoLists),
+            clearHistory: ClearHistoryUseCase(videos: videoLists),
+            session: session
+        )
+    }
+
+    func makeCommentHistoryViewModel() -> CommentHistoryViewModel {
+        CommentHistoryViewModel(
+            loadComments: LoadCommentHistoryUseCase(interactions: interactions),
+            deleteComment: DeleteCommentUseCase(interactions: interactions),
+            session: session
+        )
+    }
+
+    func makeBlockedAccountsViewModel() -> BlockedAccountsViewModel {
+        BlockedAccountsViewModel(
+            loadBlockedUsers: LoadBlockedUsersUseCase(relationships: relationships),
+            setBlocked: SetBlockedUseCase(relationships: relationships),
+            session: session
+        )
+    }
+
+    // Lecteur vertical ouvert depuis une grille.
+    func makeVideoListViewModel(_ route: VideoPlayerRoute) -> FeedViewModel {
+        FeedViewModel(
+            loadPage: LoadVideoListUseCase(videos: videoLists, list: route.list),
+            recordView: RecordViewUseCase(history: viewHistory),
+            playback: playerPool,
+            session: session,
+            mode: .list(route.page, startIndex: route.startIndex)
+        )
     }
 }
 

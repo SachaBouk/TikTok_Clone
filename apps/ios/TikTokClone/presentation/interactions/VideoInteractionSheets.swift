@@ -9,6 +9,7 @@ extension VideoPageActions {
         togglePause: @escaping () -> Void,
         comments: @escaping () -> Void,
         share: @escaping () -> Void,
+        manage: @escaping () -> Void = {},
         alert: @escaping (String) -> Void
     ) {
         self.init(
@@ -17,7 +18,8 @@ extension VideoPageActions {
             toggle: { kind in Task { if let message = await interactions.toggle(kind, on: video) { alert(message) } } },
             comments: comments,
             share: share,
-            follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } }
+            follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } },
+            manage: manage
         )
     }
 }
@@ -28,6 +30,7 @@ extension View {
     func videoInteractionSheets(
         comments: Binding<FeedVideo?>,
         share: Binding<FeedVideo?>,
+        manage: Binding<FeedVideo?>,
         alert: Binding<String?>,
         interactions: VideoInteractionsModel,
         container: AppContainer
@@ -50,6 +53,17 @@ extension View {
                 }
                 .presentationDetents([.medium, .large])
                 .ignoresSafeArea()
+            }
+            // Sa propre vidéo : suppression, quel que soit son statut (les autres écrans la retirent ensuite).
+            .confirmationDialog("Supprimer cette vidéo ?", isPresented: Binding(
+                get: { manage.wrappedValue != nil },
+                set: { if !$0 { manage.wrappedValue = nil } }
+            ), titleVisibility: .visible, presenting: manage.wrappedValue) { video in
+                Button("Supprimer", role: .destructive) {
+                    Task { if let message = await interactions.delete(video) { alert.wrappedValue = message } }
+                }
+            } message: { _ in
+                Text("Ses likes, commentaires et republications disparaîtront aussi.")
             }
             .alert("Action impossible", isPresented: Binding(
                 get: { alert.wrappedValue != nil },

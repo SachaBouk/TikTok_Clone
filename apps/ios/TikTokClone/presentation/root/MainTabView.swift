@@ -9,6 +9,8 @@ struct MainTabView: View {
     let container: AppContainer
     @Environment(SessionStore.self) private var session
     @State private var selection: Destination = .home
+    // Écrans poussés au-dessus du feed (profils, lecteur d'une grille) : le feed se met en pause.
+    @State private var feedPath = NavigationPath()
     private var router: AppRouter { container.router }
 
     var body: some View {
@@ -16,14 +18,18 @@ struct MainTabView: View {
         @Bindable var router = container.router
         TabView(selection: $selection) {
             Tab("Accueil", systemImage: "house", value: .home) {
-                FeedView(
-                    viewModel: container.makeFeedViewModel(),
-                    pool: container.playerPool,
-                    interactions: container.videoInteractions,
-                    container: container,
-                    // En pause pendant qu'une vidéo seule est ouverte par-dessus.
-                    isTabActive: selection == .home && router.presentedVideo == nil
-                )
+                NavigationStack(path: $feedPath) {
+                    FeedView(
+                        viewModel: container.makeFeedViewModel(),
+                        pool: container.playerPool,
+                        interactions: container.videoInteractions,
+                        container: container,
+                        // En pause pendant qu'une vidéo seule est ouverte par-dessus.
+                        isTabActive: selection == .home && router.presentedVideo == nil
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                    .appDestinations(container)
+                }
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
@@ -39,7 +45,10 @@ struct MainTabView: View {
             }
             Tab("Profil", systemImage: "person", value: .profile) {
                 SignedInOnly(title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.") {
-                    ProfileView(viewModel: container.makeProfileViewModel())
+                    NavigationStack {
+                        ProfileView(viewModel: container.makeProfileViewModel(username: nil), container: container)
+                            .appDestinations(container)
+                    }
                 }
             }
         }

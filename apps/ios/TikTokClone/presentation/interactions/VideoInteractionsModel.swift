@@ -8,9 +8,18 @@ import Observation
 //   il revient à l'état d'avant.
 // - Mode invité : toute action ouvre la connexion (ADR-010).
 // Les actions renvoient un message d'erreur à afficher (nil si tout va bien) : chaque écran l'affiche lui-même.
+// Le suivi d'un compte est partagé de la même façon avec les profils et les listes d'abonnés.
 @MainActor
 @Observable
 final class VideoInteractionsModel {
+    enum FollowOutcome: Equatable {
+        // Nouveau nombre d'abonnés du compte suivi.
+        case done(followers: Int)
+        case failed(String)
+        // Invité (la connexion s'ouvre), requête déjà en cours, ou session expirée.
+        case ignored
+    }
+
     private struct Override {
         var stats: VideoStats
         var viewer: ViewerState?
@@ -21,16 +30,20 @@ final class VideoInteractionsModel {
     private var followOverrides: [String: Bool] = [:]
     // Requêtes en cours (« like-<id> », « follow-<id> ») : un second toucher pendant l'envoi est ignoré.
     private var pending: Set<String> = []
+    // Vidéos supprimées par leur auteur depuis leur chargement : les écrans les retirent.
+    private(set) var deletedVideoIDs: Set<String> = []
 
     private let setReaction: SetReactionUseCase
     private let setFollow: SetFollowUseCase
     private let recordShare: ShareVideoUseCase
+    private let deleteVideo: DeleteVideoUseCase
     private let session: SessionStore
 
-    init(setReaction: SetReactionUseCase, setFollow: SetFollowUseCase, recordShare: ShareVideoUseCase, session: SessionStore) {
+    init(setReaction: SetReactionUseCase, setFollow: SetFollowUseCase, recordShare: ShareVideoUseCase, deleteVideo: DeleteVideoUseCase, session: SessionStore) {
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
+        self.deleteVideo = deleteVideo
         self.session = session
     }
 
@@ -70,18 +83,48 @@ final class VideoInteractionsModel {
     }
 
     func toggleFollow(authorOf video: FeedVideo) async -> String? {
-        guard session.isSignedIn else { session.requestSignIn(); return nil }
         guard !isOwn(video) else { return nil }
-        let key = "follow-\(video.author.id)"
-        guard pending.insert(key).inserted else { return nil }
-        defer { pending.remove(key) }
         let following = display(video).viewer?.followingAuthor ?? false
-        followOverrides[video.author.id] = !following
+        if case .failed(let message) = await setFollowing(video.author, active: !following, wasFollowing: following) { return message }
+        return nil
+    }
+
+    // Le compte connecté suit-il ce compte ? Changement fait depuis le chargement, sinon l'état chargé.
+    func isFollowing(_ userID: String, loaded: Bool) -> Bool {
+        followOverrides[userID] ?? loaded
+    }
+
+    // Suivre ou ne plus suivre un compte (profil, liste d'abonnés, feed) ; optimiste, comme les réactions.
+    func setFollowing(_ user: UserSummary, active: Bool, wasFollowing: Bool) async -> FollowOutcome {
+        guard session.isSignedIn else { session.requestSignIn(); return .ignored }
+        guard session.profile?.id != user.id else { return .ignored }
+        let key = "follow-\(user.id)"
+        guard pending.insert(key).inserted else { return .ignored }
+        defer { pending.remove(key) }
+        followOverrides[user.id] = active
         do {
-            followOverrides[video.author.id] = try await setFollow(username: video.author.username, active: !following).active
+            let state = try await setFollow(username: user.username, active: active)
+            followOverrides[user.id] = state.active
+            return .done(followers: state.count)
+        } catch {
+            followOverrides[user.id] = wasFollowing
+            return handle(error).map(FollowOutcome.failed) ?? .ignored
+        }
+    }
+
+    // Compte bloqué : les follows sont supprimés dans les deux sens par l'API.
+    func blocked(_ userID: String) {
+        followOverrides[userID] = false
+    }
+
+    // Suppression d'une de ses vidéos, quel que soit l'écran (feed, lecteur d'une grille, vidéo seule).
+    func delete(_ video: FeedVideo) async -> String? {
+        guard isOwn(video) else { return nil }
+        do {
+            try await deleteVideo(id: video.id)
+            deletedVideoIDs.insert(video.id)
             return nil
         } catch {
-            followOverrides[video.author.id] = following
             return handle(error)
         }
     }

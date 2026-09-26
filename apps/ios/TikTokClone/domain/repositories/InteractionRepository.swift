@@ -9,4 +9,6 @@ protocol InteractionRepository: Sendable {
     func comments(videoID: String, cursor: String?) async throws -> CommentPage
     func addComment(videoID: String, content: String) async throws -> VideoComment
     func deleteComment(id: String) async throws
+    // Historique des commentaires du compte connecté (privé), du plus récent au plus ancien.
+    func myComments(cursor: String?) async throws -> CommentHistoryPage
 }

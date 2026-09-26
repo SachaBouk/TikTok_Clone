@@ -62,6 +62,11 @@ final class SessionStore {
         state = .guest
     }
 
+    // Compte supprimé : la session est déjà oubliée (DeleteAccountUseCase).
+    func accountDeleted() {
+        state = .guest
+    }
+
     // Refresh token refusé (expiré, révoqué, compte supprimé) : retour en invité, avec un message.
     func sessionExpired() {
         guard isSignedIn else { return }

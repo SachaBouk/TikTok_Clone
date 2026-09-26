@@ -1,8 +1,10 @@
 import Foundation
 import Observation
 
-// Feed principal (ADR-016) : pages de l'API, lecture de la vidéo courante, préchargement des voisines,
-// vues comptées après 1 s. À la fin d'une session, le feed repart sur un nouvel ordre : il ne s'arrête jamais.
+// Lecteur vertical : pages de l'API, lecture de la vidéo courante, préchargement des voisines, vues comptées
+// après 1 s. Deux usages :
+// - le feed principal (ADR-016) : à la fin d'une session, il repart sur un nouvel ordre, il ne s'arrête jamais ;
+// - une liste (grille d'un profil, historique) : ouverte sur la vidéo touchée, elle s'arrête à la fin.
 @MainActor
 @Observable
 final class FeedViewModel {
@@ -10,6 +12,12 @@ final class FeedViewModel {
     struct Entry: Identifiable, Equatable {
         let id: String
         let video: FeedVideo
+    }
+
+    enum Mode {
+        case endlessFeed
+        // Vidéos déjà chargées par la grille, et vidéo touchée.
+        case list(FeedPage, startIndex: Int)
     }
 
     enum LoadState: Equatable {
@@ -28,7 +36,8 @@ final class FeedViewModel {
     // La fin de session (loadMore) ne l'incrémente pas : les vidéos s'ajoutent à la suite.
     private(set) var reloadCount = 0
 
-    private let loadPage: LoadFeedPageUseCase
+    private let loadPage: any VideoPageSource
+    private let mode: Mode
     private let recordView: RecordViewUseCase
     private let playback: any VideoPlayback
     private let session: SessionStore
@@ -43,13 +52,15 @@ final class FeedViewModel {
     private var viewTask: Task<Void, Never>?
 
     init(
-        loadPage: LoadFeedPageUseCase,
+        loadPage: any VideoPageSource,
         recordView: RecordViewUseCase,
         playback: any VideoPlayback,
         session: SessionStore,
+        mode: Mode = .endlessFeed,
         viewDelay: Duration = ViewTracker.minimumWatchTime
     ) {
         self.loadPage = loadPage
+        self.mode = mode
         self.recordView = recordView
         self.playback = playback
         self.session = session
@@ -63,7 +74,29 @@ final class FeedViewModel {
     // Premier affichage : charge la première page si ce n'est pas déjà fait.
     func start() async {
         guard entries.isEmpty, loadState != .loading else { return }
+        if case .list(let page, let startIndex) = mode {
+            append(page)
+            loadState = .loaded
+            if entries.indices.contains(startIndex) { show(entries[startIndex].id) }
+            return
+        }
         await loadFirstPage()
+    }
+
+    // Vidéo supprimée (par son auteur) : retirée ; la suivante devient courante.
+    func remove(videoIDs: Set<String>) {
+        guard entries.contains(where: { videoIDs.contains($0.video.id) }) else { return }
+        let currentIndex = entries.firstIndex { $0.id == currentEntryID }
+        let wasCurrentRemoved = currentVideo.map { videoIDs.contains($0.id) } ?? false
+        entries.removeAll { videoIDs.contains($0.video.id) }
+        guard wasCurrentRemoved else { return }
+        currentEntryID = nil
+        viewTask?.cancel()
+        if let currentIndex, !entries.isEmpty {
+            show(entries[min(currentIndex, entries.count - 1)].id)
+        } else {
+            playback.pauseAll()
+        }
     }
 
     // Nouvelle session (tirer pour actualiser, connexion ou déconnexion : l'état des boutons change).
@@ -127,12 +160,14 @@ final class FeedViewModel {
 
     func loadMore() async {
         guard !isLoadingMore, loadState == .loaded, !entries.isEmpty else { return }
+        // Une liste s'arrête à sa fin.
+        if case .list = mode, nextCursor == nil { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         // Fin de session : nouvelle session, nouvel ordre (les vidéos peuvent revenir).
         if nextCursor == nil { generation += 1 }
         do {
-            append(try await loadPage(cursor: nextCursor))
+            append(try await loadPage.page(cursor: nextCursor))
             // La fenêtre de préchargement peut maintenant inclure la vidéo suivante.
             if let currentEntryID, let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
                 playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
@@ -145,7 +180,7 @@ final class FeedViewModel {
     private func loadFirstPage() async {
         loadState = .loading
         do {
-            append(try await loadPage(cursor: nil))
+            append(try await loadPage.page(cursor: nil))
             loadState = .loaded
             if let first = entries.first { show(first.id) }
         } catch {

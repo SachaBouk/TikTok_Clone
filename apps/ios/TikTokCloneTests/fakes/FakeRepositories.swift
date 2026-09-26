@@ -46,14 +46,84 @@ final class FakeAuthRepository: AuthRepository {
 }
 
 final class FakeProfileRepository: ProfileRepository {
+    struct State {
+        var others: [String: UserProfile] = [:]
+        var updates: [ProfileChanges] = []
+        var calls: [String] = []
+        var error: AppError?
+        var deleted = false
+    }
+
     let result: Mutex<Result<UserProfile, AppError>>
+    let state = Mutex(State())
 
     init(_ result: Result<UserProfile, AppError> = .success(.alice)) {
         self.result = Mutex(result)
     }
 
+    var calls: [String] { state.withLock { $0.calls } }
+    var updates: [ProfileChanges] { state.withLock { $0.updates } }
+    func fail(with error: AppError?) { state.withLock { $0.error = error } }
+
     func myProfile() async throws -> UserProfile {
         try result.withLock { $0 }.get()
+    }
+
+    func profile(username: String) async throws -> UserProfile {
+        try state.withLock {
+            $0.calls.append("profile-\(username)")
+            guard let profile = $0.others[username] else { throw AppError.notFound }
+            return profile
+        }
+    }
+
+    func updateMyProfile(_ changes: ProfileChanges) async throws -> UserProfile {
+        let current = try result.withLock { $0 }.get()
+        return try state.withLock {
+            $0.updates.append(changes)
+            if let error = $0.error { throw error }
+            let updated = UserProfile(
+                id: current.id, username: changes.username ?? current.username, displayName: changes.displayName ?? current.displayName,
+                avatarURL: current.avatarURL, bio: changes.bio.map { $0.isEmpty ? nil : $0 } ?? current.bio,
+                followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt
+            )
+            result.withLock { $0 = .success(updated) }
+            return updated
+        }
+    }
+
+    func createAvatarUpload(type: AvatarImageType, size: Int) async throws -> AvatarUpload {
+        try state.withLock {
+            $0.calls.append("avatarUpload-\(type.rawValue)-\(size)")
+            if let error = $0.error { throw error }
+            return AvatarUpload(id: "avatar-1", uploadURL: URL(string: "http://storage.test/avatars/a")!, expiresAt: .now)
+        }
+    }
+
+    func setAvatar(id: String) async throws -> UserProfile {
+        state.withLock { $0.calls.append("setAvatar-\(id)") }
+        return try withAvatar(URL(string: "http://cdn.test/avatars/\(id)"))
+    }
+
+    func removeAvatar() async throws -> UserProfile {
+        state.withLock { $0.calls.append("removeAvatar") }
+        return try withAvatar(nil)
+    }
+
+    func deleteAccount() async throws {
+        try state.withLock {
+            $0.calls.append("deleteAccount")
+            if let error = $0.error { throw error }
+            $0.deleted = true
+        }
+    }
+
+    private func withAvatar(_ url: URL?) throws -> UserProfile {
+        let current = try result.withLock { $0 }.get()
+        let updated = UserProfile(id: current.id, username: current.username, displayName: current.displayName, avatarURL: url, bio: current.bio,
+                                  followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt)
+        result.withLock { $0 = .success(updated) }
+        return updated
     }
 }
 

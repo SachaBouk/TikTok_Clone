@@ -12,6 +12,7 @@ final class FakeInteractionRepository: InteractionRepository {
         var shares = 0
         var followers = 10
         var delay: Duration = .zero
+        var myComments: [CommentHistoryEntry] = []
     }
 
     let state = Mutex(State())
@@ -69,6 +70,13 @@ final class FakeInteractionRepository: InteractionRepository {
             let comment = VideoComment.sample("new-\(state.calls.count)", videoID: videoID, content: content, author: .alice)
             state.comments[videoID, default: []].insert(comment, at: 0)
             return comment
+        }
+    }
+
+    func myComments(cursor: String?) async throws -> CommentHistoryPage {
+        try state.withLock { state in
+            if let error = state.error { throw error }
+            return CommentHistoryPage(entries: state.myComments, nextCursor: nil)
         }
     }
 

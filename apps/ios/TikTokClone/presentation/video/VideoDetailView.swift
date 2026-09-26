@@ -8,6 +8,7 @@ struct VideoDetailView: View {
     let container: AppContainer
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
+    @State private var manageVideo: FeedVideo?
     @State private var alertMessage: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -32,11 +33,17 @@ struct VideoDetailView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .onAppear { viewModel.resume() }
+            .onDisappear { viewModel.stop() }
+            // Profils ouverts depuis la vidéo, dans la même pile.
+            .appDestinations(container)
         }
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
-        .onDisappear { viewModel.stop() }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .onChange(of: interactions.deletedVideoIDs) { _, ids in
+            if ids.contains(viewModel.videoID) { dismiss() }
+        }
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
     }
 
     @ViewBuilder
@@ -60,6 +67,7 @@ struct VideoDetailView: View {
                     togglePause: { viewModel.togglePause() },
                     comments: { commentsVideo = interactions.display(video) },
                     share: { shareVideo = interactions.display(video) },
+                    manage: { manageVideo = video },
                     alert: { alertMessage = $0 }
                 )
             )

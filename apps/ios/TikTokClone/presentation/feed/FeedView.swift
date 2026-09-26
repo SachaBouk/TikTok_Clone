@@ -1,26 +1,32 @@
 import AVFoundation
 import SwiftUI
 
-// Feed plein écran : une vidéo par page, défilement vertical natif (ScrollView en pagination).
+// Lecteur plein écran : une vidéo par page, défilement vertical natif (ScrollView en pagination).
+// Le feed principal, ou une liste ouverte depuis une grille (`allowsRefresh` faux).
 struct FeedView: View {
     @State private var viewModel: FeedViewModel
     let pool: AVPlayerPool
     let interactions: VideoInteractionsModel
     let container: AppContainer
     let isTabActive: Bool
+    let allowsRefresh: Bool
     @State private var scrolledID: String?
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
+    @State private var manageVideo: FeedVideo?
     @State private var alertMessage: String?
+    // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
+    @State private var isOnScreen = false
     @Environment(SessionStore.self) private var session
     @Environment(\.scenePhase) private var scenePhase
 
-    init(viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool) {
+    init(viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool, allowsRefresh: Bool = true) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
         self.interactions = interactions
         self.container = container
         self.isTabActive = isTabActive
+        self.allowsRefresh = allowsRefresh
     }
 
     var body: some View {
@@ -36,10 +42,14 @@ struct FeedView: View {
         .onChange(of: scrolledID) { _, id in
             if let id, id != viewModel.currentEntryID { viewModel.show(id) }
         }
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .onChange(of: isTabActive, initial: true) { updateActivity() }
+        .onChange(of: isOnScreen) { updateActivity() }
         .onChange(of: scenePhase) { updateActivity() }
         .onChange(of: session.isSignedIn) { Task { await reload() } }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
     }
 
     private func reload() async {
@@ -87,6 +97,7 @@ struct FeedView: View {
                             togglePause: { viewModel.togglePause() },
                             comments: { commentsVideo = interactions.display(entry.video) },
                             share: { shareVideo = interactions.display(entry.video) },
+                            manage: { manageVideo = entry.video },
                             alert: { alertMessage = $0 }
                         )
                     )
@@ -100,14 +111,28 @@ struct FeedView: View {
         .scrollIndicators(.hidden)
         .scrollPosition(id: $scrolledID)
         .ignoresSafeArea()
-        .refreshable { await reload() }
+        .modifier(RefreshIfAllowed(isAllowed: allowsRefresh) { await reload() })
         // Nouvelle ScrollView à chaque rechargement : elle repart en haut, sur la vidéo courante.
         .id(viewModel.reloadCount)
         .accessibilityIdentifier("feed.pages")
     }
 
     private func updateActivity() {
-        viewModel.setActive(isTabActive && scenePhase == .active)
+        viewModel.setActive(isTabActive && isOnScreen && scenePhase == .active)
+    }
+}
+
+// Tirer pour actualiser : le feed seulement (une liste ouverte depuis une grille garde son ordre).
+private struct RefreshIfAllowed: ViewModifier {
+    let isAllowed: Bool
+    let action: @Sendable () async -> Void
+
+    func body(content: Content) -> some View {
+        if isAllowed {
+            content.refreshable { await action() }
+        } else {
+            content
+        }
     }
 }
 
@@ -119,6 +144,8 @@ struct VideoPageActions {
     var comments: () -> Void
     var share: () -> Void
     var follow: () -> Void
+    // Sa propre vidéo : « Supprimer ».
+    var manage: () -> Void
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
@@ -183,15 +210,19 @@ struct FeedPageView: View {
             .overlay(alignment: .bottom) {
                 HStack(alignment: .bottom, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("@\(video.author.username)").font(.headline)
+                        NavigationLink(value: ProfileRoute(username: video.author.username)) {
+                            Text("@\(video.author.username)").font(.headline)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("video.author")
                         if let description = video.description, !description.isEmpty {
                             Text(description).font(.subheadline).lineLimit(3)
+                                .allowsHitTesting(false)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Lisible sur une vidéo claire.
                     .shadow(color: .black.opacity(0.6), radius: 3)
-                    .allowsHitTesting(false)
                     FeedActionColumn(video: video, showsFollowButton: showsFollowButton, actions: actions)
                 }
                 .padding(.horizontal, 16)
@@ -235,8 +266,12 @@ struct FeedActionColumn: View {
     var body: some View {
         let viewer = video.viewer ?? .empty
         VStack(spacing: 18) {
-            AvatarView(url: video.author.avatarURL, name: video.author.displayName, size: 48)
-                .overlay(Circle().stroke(.white, lineWidth: 2))
+            NavigationLink(value: ProfileRoute(username: video.author.username)) {
+                AvatarView(url: video.author.avatarURL, name: video.author.displayName, size: 48)
+                    .overlay(Circle().stroke(.white, lineWidth: 2))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Profil de @\(video.author.username)")
                 .overlay(alignment: .bottom) {
                     if showsFollowButton && !viewer.followingAuthor {
                         Button(action: actions.follow) {
@@ -265,6 +300,18 @@ struct FeedActionColumn: View {
                 .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
+            if !showsFollowButton {
+                Button(action: actions.manage) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 24, weight: .bold))
+                        .shadow(radius: 4)
+                        .frame(width: 56, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Gérer la vidéo")
+                .accessibilityIdentifier("video.manage")
+            }
         }
     }
 }

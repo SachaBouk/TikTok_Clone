@@ -25,6 +25,7 @@ struct CommentsView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom) { composer }
+                .appDestinations(container)
         }
         .task { await viewModel.start() }
         .sheet(isPresented: $isPresentingSignIn) {
@@ -63,7 +64,10 @@ struct CommentsView: View {
         } else {
             List {
                 ForEach(viewModel.comments) { comment in
-                    CommentRow(comment: comment)
+                    // Toucher un commentaire ouvre le profil de son auteur, dans la feuille.
+                    NavigationLink(value: ProfileRoute(username: comment.author.username)) {
+                        CommentRow(comment: comment)
+                    }
                         .swipeActions(edge: .trailing) {
                             if viewModel.isOwn(comment) {
                                 Button("Supprimer", systemImage: "trash", role: .destructive) {

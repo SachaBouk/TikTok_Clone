@@ -121,6 +121,17 @@ struct RemoteInteractionRepository: InteractionRepository {
         }
     }
 
+    func myComments(cursor: String?) async throws -> CommentHistoryPage {
+        switch try await call({ try await client.listMyComments(query: .init(cursor: cursor, limit: Self.commentsPageSize)) }) {
+        case .ok(let ok):
+            let page = try ok.body.json
+            return CommentHistoryPage(entries: page.items.map(CommentHistoryEntry.init), nextCursor: page.nextCursor)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     private func call<T>(_ operation: () async throws -> T) async throws -> T {
         try await mappingErrors(operation)
     }
@@ -135,5 +146,16 @@ extension InteractionState {
 extension VideoComment {
     init(_ dto: Components.Schemas.CommentResponse) {
         self.init(id: dto.id, videoID: dto.videoId, content: dto.content, createdAt: dto.createdAt, author: UserSummary(dto.author))
+    }
+}
+
+extension CommentHistoryEntry {
+    init(_ dto: Components.Schemas.CommentHistoryItemResponse) {
+        self.init(
+            id: dto.id,
+            content: dto.content,
+            createdAt: dto.createdAt,
+            video: Video(id: dto.video.id, thumbnailURL: URL(string: dto.video.thumbnailUrl), author: UserSummary(dto.video.author))
+        )
     }
 }

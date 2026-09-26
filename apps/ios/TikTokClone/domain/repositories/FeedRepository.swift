@@ -10,3 +10,8 @@ protocol FeedRepository: Sendable {
 protocol ViewHistoryRepository: Sendable {
     func recordView(videoID: String) async throws
 }
+
+// Source de pages de vidéos pour le lecteur vertical : le feed, ou une liste (grille d'un profil, historique).
+protocol VideoPageSource: Sendable {
+    func page(cursor: String?) async throws -> FeedPage
+}

@@ -61,28 +61,4 @@ struct SessionAndViewModelsTests {
         session.sessionExpired()
         #expect(session.notice == nil)
     }
-
-    @Test("déconnexion : session oubliée, retour en invité")
-    func signOut() async {
-        let auth = FakeAuthRepository(hasSession: true)
-        let session = makeSession(auth: auth)
-        await session.restore()
-        let viewModel = ProfileViewModel(getMyProfile: GetMyProfileUseCase(profiles: FakeProfileRepository()), session: session)
-        await viewModel.signOut()
-        #expect(session.state == .guest)
-        #expect(!auth.hasStoredSession())
-    }
-
-    @Test("profil : actualisation, et session expirée détectée")
-    func profileRefresh() async {
-        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
-        await session.restore()
-        let updated = UserProfile(id: UserProfile.alice.id, username: "alice", displayName: "Alice M.", avatarURL: nil, bio: nil,
-                                  followersCount: 4, followingCount: 1, createdAt: UserProfile.alice.createdAt)
-        await ProfileViewModel(getMyProfile: GetMyProfileUseCase(profiles: FakeProfileRepository(.success(updated))), session: session).refresh()
-        #expect(session.profile?.displayName == "Alice M.")
-
-        await ProfileViewModel(getMyProfile: GetMyProfileUseCase(profiles: FakeProfileRepository(.failure(.sessionExpired))), session: session).refresh()
-        #expect(session.state == .guest)
-    }
 }

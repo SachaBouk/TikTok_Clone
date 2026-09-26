@@ -182,3 +182,15 @@ struct DeleteVideoUseCase: Sendable {
         try await videos.deleteVideo(id: id)
     }
 }
+
+// Compte supprimé : ses envois enregistrés sur l'appareil sont oubliés, sans appel à l'API
+// (ses vidéos ont disparu avec lui).
+struct DiscardUploadsUseCase: Sendable {
+    let store: any UploadStore
+
+    func callAsFunction(userID: String) {
+        for upload in store.all() where upload.userID == userID {
+            store.remove(upload)
+        }
+    }
+}

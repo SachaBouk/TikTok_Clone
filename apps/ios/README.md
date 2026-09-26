@@ -102,6 +102,16 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Glisser une publication vers la gauche : annuler l'envoi, ou supprimer la vidéo (`deleteVideo`).
 - Pour tester en simulateur : `xcrun simctl addmedia booted video.mp4` ajoute une vidéo à la galerie.
 
+## Écran de profil
+
+- Son profil (onglet Profil) ou celui d'un autre compte, ouvert depuis le pseudo ou l'avatar d'une vidéo, un commentaire, une liste d'abonnés. Lisible en invité ; « Suivre » ouvre alors la connexion.
+- Grilles en 3 colonnes : vidéos et republications ; favoris et likes sur son seul profil. Toucher une vidéo ouvre le lecteur vertical sur elle, avec la suite de la liste. En tête de ses vidéos : ses publications en cours ou en échec.
+- « Modifier le profil » : nom, pseudo, bio, photo (recadrée en carré de 512 px, envoyée directement au stockage).
+- Abonnés et abonnements : listes avec bouton d'abonnement (« Suivre », « Suivre en retour », « Abonné(e) », « Ami(e)s »).
+- Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
+- Bloquer ou débloquer un compte : menu « … » de son profil.
+- Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
+
 ## Temps réel (ADR-011)
 
 Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Seul `videoProcessed` est traduit pour l'instant.

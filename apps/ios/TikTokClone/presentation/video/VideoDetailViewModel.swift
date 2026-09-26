@@ -70,7 +70,15 @@ final class VideoDetailViewModel {
         }
     }
 
-    // Écran fermé : le feed reprend la main sur les lecteurs.
+    // Retour sur la vidéo (après un profil ouvert par-dessus) : les lecteurs ont pu servir ailleurs.
+    func resume() {
+        guard let video, !isPaused else { return }
+        playback.keepLoaded([video])
+        playback.play(video.id)
+        scheduleView()
+    }
+
+    // Écran fermé, ou recouvert : le feed reprend la main sur les lecteurs.
     func stop() {
         viewTask?.cancel()
         playback.pauseAll()
