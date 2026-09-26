@@ -11,6 +11,9 @@ final class AppContainer {
     let router = AppRouter()
     // État des interactions partagé par tous les écrans vidéo (un like dans l'un se voit dans l'autre).
     let videoInteractions: VideoInteractionsModel
+    // Publications en cours, partagées par toute l'app (l'envoi continue hors de l'onglet « Publier »).
+    let publishing: PublishingModel
+    let realtime: RealtimeCoordinator
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -33,6 +36,8 @@ final class AppContainer {
         feed = RemoteFeedRepository(client: client)
         viewHistory = RemoteViewHistoryRepository(client: client)
         interactions = RemoteInteractionRepository(client: client)
+        let videos = RemoteVideoPublishingRepository(client: client)
+        let uploads = FileUploadStore()
         session = SessionStore(
             restoreSession: RestoreSessionUseCase(auth: auth, profiles: profiles),
             logout: LogoutUseCase(auth: auth)
@@ -44,6 +49,35 @@ final class AppContainer {
             recordShare: ShareVideoUseCase(interactions: interactions),
             session: session
         )
+        publishing = PublishingModel(
+            createPublication: CreatePublicationUseCase(store: uploads),
+            uploadVideo: UploadVideoUseCase(videos: videos, transport: URLSessionPartUploader(), store: uploads),
+            pendingUploads: PendingUploadsUseCase(store: uploads),
+            cancelUpload: CancelUploadUseCase(videos: videos, store: uploads),
+            loadPendingVideos: LoadPendingVideosUseCase(videos: videos),
+            loadVideo: LoadOwnVideoUseCase(videos: videos),
+            deleteVideo: DeleteVideoUseCase(videos: videos),
+            session: session
+        )
+        realtime = RealtimeCoordinator(
+            channel: WebSocketRealtimeChannel(
+                url: configuration.realtimeURL,
+                sockets: URLSessionWebSocketFactory(),
+                accessToken: { await refresher.validAccessToken() },
+                refreshToken: { await refresher.refreshTokens(replacing: $0)?.accessToken }
+            ),
+            publishing: publishing
+        )
+    }
+
+    // Connexion, déconnexion, passage au premier plan ou en arrière-plan.
+    func activityChanged(signedIn: Bool, active: Bool) {
+        realtime.update(signedIn: signedIn, active: active)
+        Task { await publishing.update(signedIn: signedIn, active: active) }
+    }
+
+    func makePublishDraftViewModel() -> PublishDraftViewModel {
+        PublishDraftViewModel(publishing: publishing)
     }
 
     func makeLoginViewModel() -> LoginViewModel {

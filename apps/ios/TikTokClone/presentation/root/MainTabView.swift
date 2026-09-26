@@ -27,9 +27,11 @@ struct MainTabView: View {
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
-                    ComingSoonView(title: "Publier", systemImage: "plus.app")
+                    PublishView(draft: container.makePublishDraftViewModel(), publishing: container.publishing, router: container.router)
                 }
             }
+            // Publications en cours d'envoi ou de traitement.
+            .badge(container.publishing.inProgressCount)
             Tab("Boîte de réception", systemImage: "tray", value: .inbox) {
                 SignedInOnly(title: "Boîte de réception", systemImage: "tray", reason: "Connecte-toi pour voir ton activité et tes messages.") {
                     ComingSoonView(title: "Boîte de réception", systemImage: "tray")

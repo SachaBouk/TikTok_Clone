@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     let container: AppContainer
     @Environment(SessionStore.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -24,6 +25,10 @@ struct RootView: View {
             }
         }
         .task { await session.restore() }
+        // Temps réel et reprise des publications : compte connecté et app au premier plan.
+        .onChange(of: [session.isSignedIn, scenePhase == .active], initial: true) { _, state in
+            container.activityChanged(signedIn: state[0], active: state[1])
+        }
         .onOpenURL { container.router.open($0) }
     }
 }

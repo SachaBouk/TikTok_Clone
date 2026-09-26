@@ -43,6 +43,7 @@ TikTokClone/
     local/                  TokenStore, KeychainTokenStore
     remote/                 client, AuthMiddleware, TokenRefresher, traduction des erreurs
     repositories/           implémentations des protocoles du domaine (mapping DTO → entité, champ par champ)
+    realtime/               WebSocket temps réel (connexion, reconnexion, décodage des événements)
   presentation/             vues SwiftUI et ViewModels (@Observable), par écran ; SessionStore (état de connexion)
 TikTokCloneTests/           Swift Testing : fakes en mémoire, transport HTTP simulé
 ```
@@ -90,7 +91,20 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Commentaires : feuille native à mi-hauteur, glisser vers la gauche pour supprimer le sien.
 - Partage : feuille de partage système avec le lien `tiktokclone://videos/<id>` ; compté seulement s'il est réellement envoyé. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
 
+## Publication
+
+Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d'origine sans conversion), description facultative (2 200 caractères), puis envoi direct au stockage (ADR-007).
+
+- L'envoi continue quand on change d'onglet (`PublishingModel`, partagé) ; les publications passent une par une. Badge de l'onglet : publications en cours.
+- **Reprise** : le fichier et l'état de l'envoi (URLs signées, ETag de chaque partie reçue) sont enregistrés dans `Application Support/Uploads` après chaque partie de 10 Mio. Après une coupure, un passage en arrière-plan ou une relance de l'app, l'envoi reprend à la première partie non reçue.
+- URLs expirées (2 h) ou refusées : l'envoi repart de zéro sur une nouvelle vidéo, à partir du fichier local.
+- Suivi : « Envoi… 42 % », « Traitement en cours… », puis « Publiée » (bouton « Voir ») ou « Échec du traitement », par l'événement `videoProcessed` ; l'état est relu par l'API à chaque reconnexion et au retour au premier plan.
+- Glisser une publication vers la gauche : annuler l'envoi, ou supprimer la vidéo (`deleteVideo`).
+- Pour tester en simulateur : `xcrun simctl addmedia booted video.mp4` ajoute une vidéo à la galerie.
+
 ## Temps réel (ADR-011)
+
+Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Seul `videoProcessed` est traduit pour l'instant.
 
 WebSocket `ws://<hôte>:3000/realtime`, ouvert avec `URLSessionWebSocketTask` et l'access token dans l'en-tête :
 

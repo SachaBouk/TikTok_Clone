@@ -1,0 +1,176 @@
+import Foundation
+import Synchronization
+@testable import TikTokClone
+
+// API des vidéos en mémoire : parties de `partSize` octets, vidéos `vid-1`, `vid-2`…
+final class FakeVideoPublishingRepository: VideoPublishingRepository {
+    struct State {
+        var partSize = 4
+        var created: [String] = []
+        var completed: [String: [UploadedPart]] = [:]
+        var deleted: [String] = []
+        var videos: [String: OwnVideo] = [:]
+        var pending: [OwnVideo] = []
+        // Erreurs à lever, dans l'ordre, par la prochaine confirmation.
+        var completeErrors: [any Error] = []
+        var createError: AppError?
+        var expiresAt = Date(timeIntervalSince1970: 1_900_000_000)
+    }
+
+    let state = Mutex(State())
+
+    var created: [String] { state.withLock { $0.created } }
+    var deleted: [String] { state.withLock { $0.deleted } }
+    func completed(_ id: String) -> [UploadedPart]? { state.withLock { $0.completed[id] } }
+
+    func createUpload(contentType: VideoContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
+        try state.withLock { state in
+            if let error = state.createError { throw error }
+            let id = "vid-\(state.created.count + 1)"
+            state.created.append(id)
+            state.videos[id] = OwnVideo(id: id, description: description, status: .uploading, thumbnailURL: nil, createdAt: .now)
+            let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
+            let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }
+            return UploadTicket(videoID: id, partSize: state.partSize, parts: parts, expiresAt: state.expiresAt)
+        }
+    }
+
+    func completeUpload(videoID: String, parts: [UploadedPart]) async throws -> OwnVideo {
+        try state.withLock { state in
+            if !state.completeErrors.isEmpty { throw state.completeErrors.removeFirst() }
+            state.completed[videoID] = parts
+            let video = OwnVideo(id: videoID, description: state.videos[videoID]?.description, status: .processing, thumbnailURL: nil, createdAt: .now)
+            state.videos[videoID] = video
+            return video
+        }
+    }
+
+    func video(id: String) async throws -> OwnVideo {
+        try state.withLock { state in
+            guard let video = state.videos[id] else { throw AppError.notFound }
+            return video
+        }
+    }
+
+    func pendingVideos() async throws -> [OwnVideo] {
+        state.withLock { $0.pending }
+    }
+
+    func deleteVideo(id: String) async throws {
+        state.withLock { state in
+            state.deleted.append(id)
+            state.videos[id] = nil
+            state.pending.removeAll { $0.id == id }
+        }
+    }
+}
+
+// Stockage objet en mémoire : garde les parties reçues ; ETag = "etag-<URL>".
+final class FakePartTransport: UploadPartTransport {
+    struct State {
+        var received: [URL: Data] = [:]
+        var calls: [URL] = []
+        // Erreurs à lever, dans l'ordre, par les prochains envois.
+        var errors: [any Error] = []
+        var delay: Duration = .zero
+    }
+
+    let state = Mutex(State())
+
+    var calls: [URL] { state.withLock { $0.calls } }
+    func received(_ url: String) -> Data? { state.withLock { $0.received[URL(string: url)!] } }
+    func fail(_ errors: [any Error]) { state.withLock { $0.errors = errors } }
+
+    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
+        let delay = state.withLock { $0.delay }
+        if delay > .zero { try await Task.sleep(for: delay) }
+        return try state.withLock { state in
+            state.calls.append(url)
+            if !state.errors.isEmpty { throw state.errors.removeFirst() }
+            sent(data.count)
+            state.received[url] = data
+            return "\"etag-\(url.absoluteString)\""
+        }
+    }
+}
+
+// Stockage local des envois en mémoire. Les fichiers « choisis » sont déclarés par `addPickedFile`.
+final class InMemoryUploadStore: UploadStore {
+    struct State {
+        var uploads: [String: PendingUpload] = [:]
+        var files: [String: Data] = [:]
+        var picked: [URL: Data] = [:]
+        var saves = 0
+    }
+
+    let state = Mutex(State())
+
+    var uploads: [PendingUpload] { state.withLock { Array($0.uploads.values) } }
+    var fileNames: [String] { state.withLock { Array($0.files.keys) } }
+    var saves: Int { state.withLock { $0.saves } }
+
+    func addPickedFile(_ name: String, _ data: Data) -> URL {
+        let url = URL(filePath: "/tmp/Picked/\(name)")
+        state.withLock { $0.picked[url] = data }
+        return url
+    }
+
+    func all() -> [PendingUpload] { uploads }
+
+    func save(_ upload: PendingUpload) throws {
+        state.withLock {
+            $0.uploads[upload.id] = upload
+            $0.saves += 1
+        }
+    }
+
+    func remove(_ upload: PendingUpload) {
+        state.withLock {
+            $0.uploads[upload.id] = nil
+            $0.files[upload.fileName] = nil
+        }
+    }
+
+    func size(ofFileAt url: URL) throws -> Int {
+        try state.withLock {
+            guard let data = $0.picked[url] else { throw AppError.unexpected }
+            return data.count
+        }
+    }
+
+    func adoptFile(at url: URL, id: String) throws -> String {
+        try state.withLock {
+            guard let data = $0.picked.removeValue(forKey: url) else { throw AppError.unexpected }
+            let name = "\(id).\(url.pathExtension)"
+            $0.files[name] = data
+            return name
+        }
+    }
+
+    func fileURL(named fileName: String) -> URL {
+        URL(filePath: "/tmp/Uploads/\(fileName)")
+    }
+
+    func read(fileName: String, range: Range<Int>) throws -> Data {
+        try state.withLock {
+            guard let data = $0.files[fileName] else { throw AppError.rejected("fichier absent") }
+            return data.subdata(in: range)
+        }
+    }
+}
+
+extension PendingUpload {
+    static func sample(id: String = "u1", size: Int = 10, createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000), userID: String = UserProfile.alice.id) -> PendingUpload {
+        PendingUpload(id: id, userID: userID, fileName: "\(id).mov", contentType: .quickTime, fileSize: size, description: "Ma vidéo", createdAt: createdAt)
+    }
+}
+
+// Attend qu'une condition devienne vraie (tâches de fond du modèle), 2 s au plus.
+@MainActor
+func eventually(_ condition: () -> Bool) async -> Bool {
+    for _ in 0..<200 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
+}
