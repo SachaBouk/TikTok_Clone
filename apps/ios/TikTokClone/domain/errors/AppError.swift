@@ -10,6 +10,8 @@ enum AppError: Error, Equatable, Sendable {
     case blocked
     // Vidéo, commentaire ou compte disparu entre-temps (404).
     case notFound
+    // Trop de requêtes (limite d'envoi des messages) : réessayer après ce nombre de secondes.
+    case rateLimited(retryAfter: Int)
     // API injoignable (réseau, serveur arrêté).
     case network
     // Réponse inattendue.
@@ -23,6 +25,7 @@ enum AppError: Error, Equatable, Sendable {
         case .sessionExpired: "Ta session a expiré. Reconnecte-toi."
         case .blocked: "Action impossible : l’un de vous a bloqué l’autre."
         case .notFound: "Ce contenu n’est plus disponible."
+        case .rateLimited(let seconds): "Trop de messages envoyés. Réessaie dans \(seconds) s."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
         }

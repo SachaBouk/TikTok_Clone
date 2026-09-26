@@ -30,6 +30,7 @@ struct MainTabView: View {
                     .toolbar(.hidden, for: .navigationBar)
                     .appDestinations(container)
                 }
+                .environment(\.isTabActive, selection == .home && router.presentedVideo == nil)
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
@@ -41,19 +42,21 @@ struct MainTabView: View {
             Tab("Boîte de réception", systemImage: "tray", value: .inbox) {
                 SignedInOnly(title: "Boîte de réception", systemImage: "tray", reason: "Connecte-toi pour voir ton activité et tes messages.") {
                     NavigationStack {
-                        InboxView(container: container, isTabActive: selection == .inbox)
+                        InboxView(container: container)
                             .appDestinations(container)
                     }
+                    .environment(\.isTabActive, selection == .inbox && router.presentedVideo == nil)
                 }
             }
-            // Notifications non lues.
-            .badge(container.activity.unreadCount)
+            // Notifications non lues, conversations non lues et demandes reçues.
+            .badge(container.inboxBadgeCount)
             Tab("Profil", systemImage: "person", value: .profile) {
                 SignedInOnly(title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.") {
                     NavigationStack {
                         ProfileView(viewModel: container.makeProfileViewModel(username: nil), container: container)
                             .appDestinations(container)
                     }
+                    .environment(\.isTabActive, selection == .profile && router.presentedVideo == nil)
                 }
             }
         }

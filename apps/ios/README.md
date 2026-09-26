@@ -112,9 +112,19 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Bloquer ou débloquer un compte : menu « … » de son profil.
 - Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
 
+## Boîte de réception et messagerie
+
+- Onglet « Boîte de réception », comme TikTok : lignes « Activité » et « Demandes de message » (s'il y en a) en tête, puis les conversations, de la plus récemment active à la plus ancienne. Glisser une conversation : la supprimer pour soi. Bouton ✎ : écrire à un de ses abonnements.
+- Badge de l'onglet : notifications non lues, conversations non lues et demandes reçues, suivis en direct.
+- Conversation : messages texte et vidéos partagées (toucher : la vidéo en plein écran), « Vu » sous son dernier message lu, « … » quand l'autre écrit. Appui long : copier, retirer son message (pour les deux). Menu « … » : profil, supprimer la conversation.
+- Demande reçue : « Accepter », « Refuser », ou répondre (ce qui l'accepte). Demande envoyée : quelques messages avant acceptation, indiqués sous le champ. Blocage : le champ laisse place à une explication.
+- Limite d'envoi atteinte : le texte reste dans le champ et l'envoi est bloqué, avec un compte à rebours.
+- Écrire à un compte : bouton « Message » de son profil.
+- Partager une vidéo par message : « Partager », puis « Envoyer par message » dans la feuille système, et « Envoyer » à côté de chaque destinataire (conversations récentes, puis abonnements).
+
 ## Centre d'activité
 
-- Onglet « Boîte de réception » : activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
+- Ligne « Activité » de la boîte de réception : activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
 - Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
 - Une notification reçue en direct rejoint son groupe, qui remonte en tête.
 - Badge de l'onglet : notifications non lues, mis à jour en direct par le WebSocket (`notificationCreated`, `unreadNotificationsChanged`) et relu à chaque reconnexion.
@@ -122,7 +132,7 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 
 ## Temps réel (ADR-011)
 
-Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Événements traduits : `videoProcessed`, `notificationCreated`, `unreadNotificationsChanged` ; ceux de la messagerie viendront avec son écran.
+Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Tous les événements sont traduits (publication, activité, messagerie) ; l'app envoie « en train d'écrire » sur la connexion établie.
 
 WebSocket `ws://<hôte>:3000/realtime`, ouvert avec `URLSessionWebSocketTask` et l'access token dans l'en-tête :
 
@@ -198,7 +208,7 @@ case .data: break
 
 - `ConversationDto.status` : `.direct` (envoi libre), `.requestSent` (demande envoyée : `remainingRequestMessages` messages avant acceptation), `.requestReceived` (onglet « Demandes » : `acceptMessageRequest`, `declineMessageRequest`, ou répondre).
 - `canSend` faux : blocage (`blockedByMe` indique si c'est le compte connecté qui bloque) ou demande épuisée.
-- `sendMessage` peut renvoyer `.tooManyRequests` (limite d'envoi) : attendre le délai de l'en-tête `Retry-After`.
+- `sendMessage` peut renvoyer `.tooManyRequests` (limite d'envoi) : attendre le délai de l'en-tête `Retry-After` (`error.headers.retryAfter`, en secondes).
 - Partage d'une vidéo du feed : `sendMessage(body: .json(.init(videoId: …)))` ; `sharedVideo.available` faux si elle a été supprimée depuis.
 
 ## Notifications push

@@ -135,7 +135,12 @@ export class MessagingController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiForbiddenResponse({ type: ErrorResponse, description: 'Blocage entre les deux comptes, ou demande en attente ayant atteint sa limite.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Conversation inconnue (ou non participant), ou vidéo introuvable.' })
-  @ApiTooManyRequestsResponse({ type: ErrorResponse, description: 'Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).' })
+  @ApiTooManyRequestsResponse({
+    type: ErrorResponse,
+    description: 'Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).',
+    // Documenté pour que le client Swift généré l'expose (`headers.retryAfter`).
+    headers: { 'Retry-After': { description: 'Secondes à attendre avant de réessayer.', schema: { type: 'integer', minimum: 1 } } },
+  })
   async sendMessage(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string, @Body() body: SendMessageRequest): Promise<MessageDto> {
     return toMessageDto(await this.messaging.sendMessage(user.userId, id, { content: body.content, videoId: body.videoId }));
   }

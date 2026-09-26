@@ -1,5 +1,4 @@
 // Temps réel (ADR-011) vu par le domaine : événements poussés par l'API au compte connecté.
-// Seuls ceux utilisés par l'app sont traduits ; ceux de la messagerie viendront avec son écran.
 enum RealtimeUpdate: Equatable, Sendable {
     // Connexion (re)établie. Rien n'est rejoué après une coupure : relire l'état par l'API REST.
     case connected
@@ -9,6 +8,18 @@ enum RealtimeUpdate: Equatable, Sendable {
     case notificationCreated(ActivityNotification, unreadCount: Int)
     // Badge seul (retrait d'une réaction, notifications lues sur un autre appareil).
     case unreadNotificationsChanged(Int)
+    // Messagerie, avec les badges du compte connecté. Nouveau message (y compris envoyé depuis un autre appareil).
+    case messageCreated(DirectMessage, MessagingBadges)
+    // Message retiré par son expéditeur.
+    case messageDeleted(conversationID: String, messageID: String, MessagingBadges)
+    // Lecture : par l'autre (« Vu »), ou par le compte connecté sur un autre appareil.
+    case conversationRead(conversationID: String, readerID: String, lastReadMessageID: String, MessagingBadges)
+    // Demande acceptée : la conversation devient libre.
+    case conversationAccepted(conversationID: String, MessagingBadges)
+    // Conversation supprimée pour le compte connecté, ou demande refusée (sur cet appareil ou un autre).
+    case conversationDeleted(conversationID: String, MessagingBadges)
+    // L'autre participant est en train d'écrire.
+    case typing(conversationID: String, userID: String)
 }
 
 // Port de la connexion temps réel. L'implémentation gère l'authentification, la détection des connexions
@@ -18,4 +29,6 @@ protocol RealtimeChannel: Sendable {
     var updates: AsyncStream<RealtimeUpdate> { get }
     func connect() async
     func disconnect() async
+    // « En train d'écrire » : sans effet si la connexion n'est pas établie (rien n'est mis en attente).
+    func sendTyping(conversationID: String) async
 }

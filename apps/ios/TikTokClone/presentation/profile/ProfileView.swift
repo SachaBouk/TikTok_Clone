@@ -9,6 +9,8 @@ struct ProfileView: View {
     @State private var isConfirmingBlock = false
     @State private var failedPublication: PublishingModel.Publication?
     @State private var alertMessage: String?
+    // « Message » : ouvert par un bouton, le profil pouvant lui-même être poussé par `navigationDestination(item:)`.
+    @State private var openedConversation: ConversationRoute?
 
     init(viewModel: ProfileViewModel, container: AppContainer) {
         _viewModel = State(initialValue: viewModel)
@@ -23,6 +25,9 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .task { await viewModel.load() }
+            .navigationDestination(item: $openedConversation) { route in
+                ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
+            }
             .sheet(isPresented: $isEditing) {
                 EditProfileView(viewModel: container.makeEditProfileViewModel())
             }
@@ -123,15 +128,34 @@ struct ProfileView: View {
             Button("Débloquer") { isConfirmingBlock = true }
                 .buttonStyle(.bordered)
         } else if let status = viewModel.followStatus {
-            Group {
-                if status.isFollowing {
-                    Button(status.title) { follow() }.buttonStyle(.bordered)
+            HStack(spacing: 8) {
+                Group {
+                    if status.isFollowing {
+                        Button(status.title) { follow() }.buttonStyle(.bordered)
+                    } else {
+                        Button(status.title) { follow() }.buttonStyle(.borderedProminent)
+                    }
+                }
+                .frame(minWidth: 140)
+                .accessibilityIdentifier("profile.follow")
+                messageButton
+            }
+        }
+    }
+
+    // Écrire à ce compte : sa conversation, ouverte ou créée. En invité : la connexion.
+    @ViewBuilder
+    private var messageButton: some View {
+        if let username = viewModel.profile?.username {
+            Button("Message") {
+                if container.session.isSignedIn {
+                    openedConversation = ConversationRoute(username: username)
                 } else {
-                    Button(status.title) { follow() }.buttonStyle(.borderedProminent)
+                    container.session.requestSignIn()
                 }
             }
-            .frame(minWidth: 160)
-            .accessibilityIdentifier("profile.follow")
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("profile.message")
         }
     }
 

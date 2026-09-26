@@ -6,6 +6,7 @@ import Foundation
 // - Coupure, fermeture 1001 (arrêt d'une instance), ping sans réponse : reconnexion avec un délai croissant.
 // - L'app envoie ses propres pings pour détecter une connexion morte de son côté.
 // - À chaque connexion, `.connected` : rien n'est rejoué, les écrans relisent l'état par l'API REST.
+// - L'app n'envoie qu'un message, « en train d'écrire », sur la connexion établie (perdu sinon).
 actor WebSocketRealtimeChannel: RealtimeChannel {
     static let tokenExpiredCloseCode = 4001
 
@@ -23,6 +24,8 @@ actor WebSocketRealtimeChannel: RealtimeChannel {
     // Attente avant une reconnexion (remplacée dans les tests).
     private let pause: @Sendable (Duration) async throws -> Void
     private var loop: Task<Void, Never>?
+    // Connexion établie en cours, pour les messages de l'app.
+    private var current: (any WebSocketConnection)?
 
     init(
         url: URL,
@@ -53,6 +56,13 @@ actor WebSocketRealtimeChannel: RealtimeChannel {
     func disconnect() {
         loop?.cancel()
         loop = nil
+        current = nil
+    }
+
+    func sendTyping(conversationID: String) async {
+        guard let current, let text = RealtimeClientMessageEncoder.typing(conversationID: conversationID) else { return }
+        // Au mieux : une connexion qui vient de tomber sera détectée par la boucle de réception.
+        try? await current.send(text)
     }
 
     private func run() async {
@@ -98,7 +108,9 @@ actor WebSocketRealtimeChannel: RealtimeChannel {
             socket.close()
             return false
         }
+        current = socket
         continuation.yield(.connected)
+        defer { if current === socket { current = nil } }
 
         await withTaskGroup(of: Void.self) { [continuation, pingInterval, pingTimeout] group in
             group.addTask {

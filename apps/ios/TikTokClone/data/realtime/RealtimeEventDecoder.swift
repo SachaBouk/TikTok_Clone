@@ -4,7 +4,7 @@ import TikTokAPI
 // Messages du serveur (`{ event, data }`), décodés avec les types générés depuis la spec (schéma `RealtimeEvent`),
 // puis traduits en événements du domaine.
 struct RealtimeEventDecoder: Sendable {
-    // Nil pour un message illisible, inconnu, ou pas encore utilisé par l'app.
+    // Nil pour un message illisible ou inconnu.
     func decode(_ text: String) -> RealtimeUpdate? {
         let decoder = JSONDecoder()
         // Dates ISO 8601 avec millisecondes, comme le client généré.
@@ -20,9 +20,41 @@ struct RealtimeEventDecoder: Sendable {
             return .notificationCreated(ActivityNotification(event.data.notification), unreadCount: event.data.unreadCount)
         case .unreadNotificationsChanged(let event):
             return .unreadNotificationsChanged(event.data.unreadCount)
-        // Messagerie : traduite avec son écran.
-        case .messageCreated, .messageDeleted, .conversationRead, .conversationAccepted, .conversationDeleted, .typing:
-            return nil
+        case .messageCreated(let event):
+            let data = event.data
+            return .messageCreated(DirectMessage(data.message), badges(data.unreadConversations, data.pendingRequests))
+        case .messageDeleted(let event):
+            let data = event.data
+            return .messageDeleted(conversationID: data.conversationId, messageID: data.messageId, badges(data.unreadConversations, data.pendingRequests))
+        case .conversationRead(let event):
+            let data = event.data
+            return .conversationRead(
+                conversationID: data.conversationId,
+                readerID: data.readerId,
+                lastReadMessageID: data.lastReadMessageId,
+                badges(data.unreadConversations, data.pendingRequests)
+            )
+        case .conversationAccepted(let event):
+            let data = event.data
+            return .conversationAccepted(conversationID: data.conversationId, badges(data.unreadConversations, data.pendingRequests))
+        case .conversationDeleted(let event):
+            let data = event.data
+            return .conversationDeleted(conversationID: data.conversationId, badges(data.unreadConversations, data.pendingRequests))
+        case .typing(let event):
+            return .typing(conversationID: event.data.conversationId, userID: event.data.userId)
         }
+    }
+
+    private func badges(_ unreadConversations: Int, _ pendingRequests: Int) -> MessagingBadges {
+        MessagingBadges(unreadConversations: unreadConversations, pendingRequests: pendingRequests)
+    }
+}
+
+// Messages de l'app (schéma `RealtimeClientMessage`), encodés avec les types générés.
+enum RealtimeClientMessageEncoder {
+    static func typing(conversationID: String) -> String? {
+        let message = Components.Schemas.RealtimeClientMessage.typing(.init(event: .typing, data: .init(conversationId: conversationID)))
+        guard let data = try? JSONEncoder().encode(message) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 }

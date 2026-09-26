@@ -1,11 +1,13 @@
 import Foundation
 
 // Une connexion WebSocket, abstraite pour tester la reconnexion sans serveur.
-protocol WebSocketConnection: Sendable {
+protocol WebSocketConnection: AnyObject, Sendable {
     // Attend le pong. Lève une erreur si la connexion est fermée ou le handshake refusé.
     func ping() async throws
     // Prochain message texte (nil pour un message binaire). Lève une erreur à la fermeture.
     func receive() async throws -> String?
+    // Envoie un message texte. Lève une erreur si la connexion est fermée.
+    func send(_ text: String) async throws
     func close()
     // Une fois la connexion terminée : code de fermeture envoyé par le serveur (4001, 1001…), 0 sinon.
     var closeCode: Int { get }
@@ -67,6 +69,10 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
         } onCancel: {
             task.cancel(with: .goingAway, reason: nil)
         }
+    }
+
+    func send(_ text: String) async throws {
+        try await task.send(.string(text))
     }
 
     func close() {

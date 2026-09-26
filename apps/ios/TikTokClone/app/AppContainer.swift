@@ -15,6 +15,8 @@ final class AppContainer {
     let publishing: PublishingModel
     // Centre d'activité : badge et notifications, suivis en direct.
     let activity: ActivityModel
+    // Messagerie : badges, conversations et demandes, suivis en direct.
+    let messaging: MessagingModel
     let realtime: RealtimeCoordinator
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
@@ -25,6 +27,7 @@ final class AppContainer {
     private let videoLists: any VideoListRepository
     private let uploads: any UploadStore
     private let activityRepository: any ActivityRepository
+    private let messagingRepository: any MessagingRepository
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -77,23 +80,78 @@ final class AppContainer {
             markRead: MarkActivityReadUseCase(activity: activityRepository),
             session: session
         )
-        realtime = RealtimeCoordinator(
-            channel: WebSocketRealtimeChannel(
-                url: configuration.realtimeURL,
-                sockets: URLSessionWebSocketFactory(),
-                accessToken: { await refresher.validAccessToken() },
-                refreshToken: { await refresher.refreshTokens(replacing: $0)?.accessToken }
-            ),
-            publishing: publishing,
-            activity: activity
+        let channel = WebSocketRealtimeChannel(
+            url: configuration.realtimeURL,
+            sockets: URLSessionWebSocketFactory(),
+            accessToken: { await refresher.validAccessToken() },
+            refreshToken: { await refresher.refreshTokens(replacing: $0)?.accessToken }
         )
+        let messagingRepository = RemoteMessagingRepository(client: client)
+        self.messagingRepository = messagingRepository
+        messaging = MessagingModel(
+            loadConversations: LoadConversationsUseCase(messaging: messagingRepository),
+            loadRequests: LoadMessageRequestsUseCase(messaging: messagingRepository),
+            loadConversation: LoadConversationUseCase(messaging: messagingRepository),
+            countUnread: CountUnreadMessagesUseCase(messaging: messagingRepository),
+            answerRequest: AnswerMessageRequestUseCase(messaging: messagingRepository),
+            deleteConversation: DeleteConversationUseCase(messaging: messagingRepository),
+            sendTyping: SendTypingUseCase(channel: channel),
+            session: session
+        )
+        realtime = RealtimeCoordinator(channel: channel, publishing: publishing, activity: activity, messaging: messaging)
     }
 
     // Connexion, déconnexion, passage au premier plan ou en arrière-plan.
     func activityChanged(signedIn: Bool, active: Bool) {
         realtime.update(signedIn: signedIn, active: active)
         Task { await publishing.update(signedIn: signedIn, active: active) }
-        if !signedIn { activity.reset() }
+        if !signedIn {
+            activity.reset()
+            messaging.reset()
+        }
+    }
+
+    // Badge de l'onglet « Boîte de réception » : activité, conversations non lues et demandes reçues.
+    var inboxBadgeCount: Int {
+        activity.unreadCount + messaging.badgeCount
+    }
+
+    func makeConversationViewModel(_ route: ConversationRoute) -> ConversationViewModel {
+        ConversationViewModel(
+            route: route,
+            loadConversation: LoadConversationUseCase(messaging: messagingRepository),
+            loadMessages: LoadMessagesUseCase(messaging: messagingRepository),
+            sendMessage: SendMessageUseCase(messaging: messagingRepository),
+            markRead: MarkConversationReadUseCase(messaging: messagingRepository),
+            answerRequest: AnswerMessageRequestUseCase(messaging: messagingRepository),
+            deleteConversation: DeleteConversationUseCase(messaging: messagingRepository),
+            deleteMessage: DeleteMessageUseCase(messaging: messagingRepository),
+            messaging: messaging,
+            session: session
+        )
+    }
+
+    // Abonnements du compte connecté (« Nouveau message »).
+    func makeFollowingList() -> PagedList<FollowEntry> {
+        let load = LoadFollowsUseCase(relationships: relationships)
+        let username = session.profile?.username
+        return PagedList(session: session) { cursor in
+            guard let username else { return ([], nil) }
+            let page = try await load(.following, username: username, cursor: cursor)
+            return (page.entries, page.nextCursor)
+        }
+    }
+
+    // « Envoyer par message » depuis la feuille de partage d'une vidéo.
+    func makeSendVideoViewModel(video: FeedVideo) -> SendVideoViewModel {
+        SendVideoViewModel(
+            video: video,
+            messaging: messaging,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            share: ShareVideoByMessageUseCase(messaging: messagingRepository),
+            interactions: videoInteractions,
+            session: session
+        )
     }
 
     // Liste complète d'un groupe du centre d'activité.

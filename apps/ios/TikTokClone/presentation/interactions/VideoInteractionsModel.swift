@@ -136,6 +136,12 @@ final class VideoInteractionsModel {
         overrides[video.id] = Override(stats: current.stats.with(shares: shares), viewer: current.viewer)
     }
 
+    // Vidéo envoyée par message : l'API l'a déjà comptée comme un partage (+1 à l'écran).
+    func sharedByMessage(_ video: FeedVideo) {
+        let current = display(video)
+        overrides[video.id] = Override(stats: current.stats.with(shares: current.stats.shares + 1), viewer: current.viewer)
+    }
+
     // Commentaire ajouté (+1) ou supprimé (-1) depuis la feuille de commentaires.
     func commentsChanged(on video: FeedVideo, by delta: Int) {
         let current = display(video)

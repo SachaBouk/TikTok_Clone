@@ -99,13 +99,15 @@ final class FakeSocketFactory: WebSocketFactory {
         case accepted(messages: [String], closeCode: Int)
     }
 
-    private let state: Mutex<(scripts: [Script], tokens: [String])>
+    private let state: Mutex<(scripts: [Script], tokens: [String], sockets: [FakeSocket])>
 
     init(_ scripts: [Script]) {
-        state = Mutex((scripts, []))
+        state = Mutex((scripts, [], []))
     }
 
     var tokens: [String] { state.withLock { $0.tokens } }
+    // Messages envoyés par l'app, toutes connexions confondues.
+    var sent: [String] { state.withLock { $0.sockets.flatMap(\.sent) } }
 
     // Une fois les scénarios épuisés : connexion acceptée qui reste ouverte.
     func connect(url: URL, accessToken: String) -> any WebSocketConnection {
@@ -113,21 +115,29 @@ final class FakeSocketFactory: WebSocketFactory {
             state.tokens.append(accessToken)
             return state.scripts.isEmpty ? nil : state.scripts.removeFirst()
         }
-        return FakeSocket(script)
+        let socket = FakeSocket(script)
+        state.withLock { $0.sockets.append(socket) }
+        return socket
     }
 }
 
 final class FakeSocket: WebSocketConnection {
     private let script: FakeSocketFactory.Script?
-    private let state: Mutex<(messages: [String], closeCode: Int)>
+    private let state: Mutex<(messages: [String], closeCode: Int, sent: [String])>
 
     init(_ script: FakeSocketFactory.Script?) {
         self.script = script
         if case .accepted(let messages, _) = script {
-            state = Mutex((messages, 0))
+            state = Mutex((messages, 0, []))
         } else {
-            state = Mutex(([], 0))
+            state = Mutex(([], 0, []))
         }
+    }
+
+    var sent: [String] { state.withLock { $0.sent } }
+
+    func send(_ text: String) async throws {
+        state.withLock { $0.sent.append(text) }
     }
 
     func ping() async throws {

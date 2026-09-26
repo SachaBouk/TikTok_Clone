@@ -35,8 +35,26 @@ extension View {
         interactions: VideoInteractionsModel,
         container: AppContainer
     ) -> some View {
-        self
-            .sheet(item: comments) { video in
+        modifier(VideoInteractionSheets(
+            comments: comments, share: share, manage: manage, alert: alert, interactions: interactions, container: container
+        ))
+    }
+}
+
+private struct VideoInteractionSheets: ViewModifier {
+    @Binding var comments: FeedVideo?
+    @Binding var share: FeedVideo?
+    @Binding var manage: FeedVideo?
+    @Binding var alert: String?
+    let interactions: VideoInteractionsModel
+    let container: AppContainer
+    // « Envoyer par message » choisi : la feuille des destinataires s'ouvre une fois celle du partage fermée.
+    @State private var chosenForMessage: FeedVideo?
+    @State private var sendByMessage: FeedVideo?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $comments) { video in
                 CommentsView(
                     viewModel: container.makeCommentsViewModel(video: video) { delta in
                         interactions.commentsChanged(on: video, by: delta)
@@ -46,32 +64,47 @@ extension View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(item: share) { video in
-                ActivityShareSheet(items: video.shareItems) { completed in
-                    if completed { Task { await interactions.shareCompleted(video) } }
-                    share.wrappedValue = nil
+            .sheet(item: $share, onDismiss: {
+                sendByMessage = chosenForMessage
+                chosenForMessage = nil
+            }) { video in
+                ActivityShareSheet(items: video.shareItems, allowsSendByMessage: container.session.isSignedIn) { outcome in
+                    switch outcome {
+                    case .shared: Task { await interactions.shareCompleted(video) }
+                    // UIKit ferme parfois la feuille avant d'appeler ce gestionnaire : la feuille des
+                    // destinataires s'ouvre alors tout de suite, sinon à sa fermeture.
+                    case .sendByMessage:
+                        if share == nil { sendByMessage = video } else { chosenForMessage = video }
+                    case .cancelled: break
+                    }
+                    share = nil
                 }
                 .presentationDetents([.medium, .large])
                 .ignoresSafeArea()
             }
+            .sheet(item: $sendByMessage) { video in
+                SendVideoView(viewModel: container.makeSendVideoViewModel(video: video))
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             // Sa propre vidéo : suppression, quel que soit son statut (les autres écrans la retirent ensuite).
             .confirmationDialog("Supprimer cette vidéo ?", isPresented: Binding(
-                get: { manage.wrappedValue != nil },
-                set: { if !$0 { manage.wrappedValue = nil } }
-            ), titleVisibility: .visible, presenting: manage.wrappedValue) { video in
+                get: { manage != nil },
+                set: { if !$0 { manage = nil } }
+            ), titleVisibility: .visible, presenting: manage) { video in
                 Button("Supprimer", role: .destructive) {
-                    Task { if let message = await interactions.delete(video) { alert.wrappedValue = message } }
+                    Task { if let message = await interactions.delete(video) { alert = message } }
                 }
             } message: { _ in
                 Text("Ses likes, commentaires et republications disparaîtront aussi.")
             }
             .alert("Action impossible", isPresented: Binding(
-                get: { alert.wrappedValue != nil },
-                set: { if !$0 { alert.wrappedValue = nil } }
+                get: { alert != nil },
+                set: { if !$0 { alert = nil } }
             )) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(alert.wrappedValue ?? "")
+                Text(alert ?? "")
             }
     }
 }
