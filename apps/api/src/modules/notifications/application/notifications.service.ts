@@ -1,6 +1,14 @@
 import type { UsersService } from '../../users/application/users.service';
 import type { VideosService } from '../../videos/application/videos.service';
-import type { ActivityEvent, Notification, NotificationWithContext, RetractableActivity } from '../domain/notification';
+import type {
+  ActivityEvent,
+  Notification,
+  NotificationFilter,
+  NotificationGroup,
+  NotificationGroupWithContext,
+  NotificationWithContext,
+  RetractableActivity,
+} from '../domain/notification';
 import type { NotificationPublisher } from '../domain/notification-publisher';
 import type { NotificationRepository } from '../domain/notification.repository';
 
@@ -9,10 +17,15 @@ export interface NotificationPage {
   nextCursor: string | null;
 }
 
+export interface NotificationGroupPage {
+  items: NotificationGroupWithContext[];
+  nextCursor: string | null;
+}
+
 // Service applicatif du centre d'activité (ADR-016, ADR-003).
 // - Écriture : appelé par le module interactions après chaque interaction (notify) ou son annulation (retract).
 // - Lecture : notifications du compte connecté, avec leurs auteurs et vidéos lus via `users` et `videos`.
-// Pas de regroupement (« X et 12 autres ») : une ligne par action.
+// Stockage : une ligne par action. Le regroupement (« X et 12 autres ») est calculé à la lecture (`listGroups`).
 // Chaque changement est poussé aux appareils connectés du destinataire (WebSocket, ADR-011) :
 // nouvelle notification avec le badge, ou badge seul.
 export class NotificationsService {
@@ -49,12 +62,25 @@ export class NotificationsService {
 
   // Du plus récent au plus ancien. Le curseur est l'identifiant de la dernière notification reçue
   // (UUID v7, ordonné dans le temps) : stable même si d'autres arrivent pendant le scroll.
-  async list(recipientId: string, cursor: string | null, limit: number): Promise<NotificationPage> {
-    const rows = await this.notifications.listForRecipient(recipientId, cursor, limit + 1);
+  // `filter` : les notifications d'un groupe (sa liste complète).
+  async list(recipientId: string, cursor: string | null, limit: number, filter: NotificationFilter = {}): Promise<NotificationPage> {
+    const rows = await this.notifications.listForRecipient(recipientId, filter, cursor, limit + 1);
     const page = rows.slice(0, limit);
     return {
       items: await this.withContext(page),
       nextCursor: rows.length > limit ? page.at(-1)!.id : null,
+    };
+  }
+
+  // Groupes du plus récemment actif au plus ancien. Curseur : notification la plus récente du dernier groupe
+  // reçu. Un groupe qui reçoit une nouvelle notification pendant le scroll remonte en tête : il peut alors
+  // manquer dans les pages suivantes (l'app recharge la première page à chaque nouvelle notification).
+  async listGroups(recipientId: string, cursor: string | null, limit: number): Promise<NotificationGroupPage> {
+    const rows = await this.notifications.listGroups(recipientId, cursor, limit + 1);
+    const page = rows.slice(0, limit);
+    return {
+      items: await this.groupsWithContext(page),
+      nextCursor: rows.length > limit ? page.at(-1)!.latest.id : null,
     };
   }
 
@@ -74,6 +100,19 @@ export class NotificationsService {
     const unreadCount = await this.notifications.countUnread(recipientId);
     await this.publisher.unreadCountChanged(recipientId, unreadCount);
     return unreadCount;
+  }
+
+  // Comme `withContext`. Un groupe dont la vidéo ou tous les auteurs affichés ont disparu est sauté.
+  private async groupsWithContext(groups: NotificationGroup[]): Promise<NotificationGroupWithContext[]> {
+    const actors = new Map((await this.users.getByIds([...new Set(groups.flatMap((g) => g.recentActorIds))])).map((u) => [u.id, u]));
+    const videoIds = [...new Set(groups.flatMap((g) => (g.latest.videoId ? [g.latest.videoId] : [])))];
+    const videos = new Map((await this.videos.getPublishedVideos(videoIds)).map((v) => [v.id, v]));
+    return groups.flatMap((group) => {
+      const groupActors = group.recentActorIds.flatMap((id) => actors.get(id) ?? []);
+      const video = group.latest.videoId ? videos.get(group.latest.videoId) : null;
+      if (groupActors.length === 0 || video === undefined) return [];
+      return [{ group, actors: groupActors, video }];
+    });
   }
 
   // Auteurs et vidéos, lus via les modules users et videos (ADR-003). Compte ou vidéo supprimés

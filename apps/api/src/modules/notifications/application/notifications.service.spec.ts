@@ -41,7 +41,7 @@ describe('NotificationsService', () => {
 
   beforeEach(async () => {
     videoRepository = new InMemoryVideoRepository();
-    userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol')]);
+    userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol'), user('dave')]);
     repository = new InMemoryNotificationRepository();
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     publisher = new InMemoryNotificationPublisher();
@@ -143,6 +143,71 @@ describe('NotificationsService', () => {
       await userRepository.delete('carol');
       await videoRepository.delete(video);
       expect((await service.list('bob', null, 10)).items).toEqual([]);
+    });
+  });
+
+  describe('regroupement', () => {
+    const comment = (actorId: string, commentId: string) =>
+      ({ type: 'comment', actorId, recipientId: 'bob', videoId: video, commentId, commentText: `Bravo ${commentId}` }) as const;
+
+    it('regroupe likes et republications par vidéo et tous les follows ; chaque commentaire reste seul', async () => {
+      await service.notify(like('alice'));
+      await service.notify(like('carol'));
+      await service.notify(like('dave'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      await service.notify(comment('carol', 'c1'));
+      await service.notify(comment('carol', 'c2'));
+      await service.notify({ type: 'repost', actorId: 'alice', recipientId: 'bob', videoId: video });
+
+      const { items } = await service.listGroups('bob', null, 20);
+      expect(items.map((i) => `${i.group.latest.type}:${i.group.count}`)).toEqual(['repost:1', 'comment:1', 'comment:1', 'follow:1', 'like:3']);
+      const likes = items.at(-1)!;
+      // Les deux auteurs les plus récents, du plus récent au plus ancien.
+      expect(likes.actors.map((a) => a.id)).toEqual(['dave', 'carol']);
+      expect(likes.video?.thumbnailUrl).toBe('miniature.jpg');
+      expect(items[1].group.latest.commentText).toBe('Bravo c2');
+    });
+
+    it('un groupe remonte en tête avec sa notification la plus récente ; non lu si l’une ne l’est pas', async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      await service.markRead('bob', null);
+      await service.notify(like('carol'));
+      const { items } = await service.listGroups('bob', null, 20);
+      expect(items.map((i) => [i.group.latest.type, i.group.unread])).toEqual([
+        ['like', true],
+        ['follow', false],
+      ]);
+    });
+
+    it('pagine par groupe, sans doublon ni oubli', async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      await service.notify(comment('carol', 'c1'));
+      const first = await service.listGroups('bob', null, 2);
+      expect(first.items.map((i) => i.group.latest.type)).toEqual(['comment', 'follow']);
+      const second = await service.listGroups('bob', first.nextCursor, 2);
+      expect(second.items.map((i) => i.group.latest.type)).toEqual(['like']);
+      expect(second.nextCursor).toBeNull();
+    });
+
+    it("saute un groupe dont la vidéo a disparu", async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
+      await videoRepository.delete(video);
+      expect((await service.listGroups('bob', null, 20)).items.map((i) => i.group.latest.type)).toEqual(['follow']);
+    });
+
+    it('liste complète d’un groupe : filtrée par type et par vidéo', async () => {
+      const other = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k2', uploadId: 'u2', rawSize: 1 });
+      Object.assign(videoRepository.videos.get(other.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 't2' });
+      await service.notify(like('alice'));
+      await service.notify({ type: 'like', actorId: 'carol', recipientId: 'bob', videoId: other.id });
+      await service.notify(like('carol'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      const page = await service.list('bob', null, 20, { type: 'like', videoId: video });
+      expect(page.items.map((i) => i.actor.id)).toEqual(['carol', 'alice']);
+      expect((await service.list('bob', null, 20, { type: 'follow' })).items).toHaveLength(1);
     });
   });
 

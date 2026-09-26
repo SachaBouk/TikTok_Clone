@@ -1,11 +1,17 @@
 import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import type { NotificationPageDto, UnreadNotificationsDto } from '@repo/shared';
+import type { NotificationGroupPageDto, NotificationPageDto, UnreadNotificationsDto } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { NotificationsService } from '../application/notifications.service';
-import { MarkNotificationsReadRequest, NotificationsQuery } from './notifications.requests';
-import { NotificationPageResponse, toNotificationDto, UnreadNotificationsResponse } from './notifications.responses';
+import { MarkNotificationsReadRequest, NotificationListQuery, NotificationsQuery } from './notifications.requests';
+import {
+  NotificationGroupPageResponse,
+  NotificationPageResponse,
+  toNotificationDto,
+  toNotificationGroupDto,
+  UnreadNotificationsResponse,
+} from './notifications.responses';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 
@@ -15,13 +21,25 @@ const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, i
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
+  // Une ligne par action. Avec `kind` (et `videoId`) : la liste complète d'un groupe.
   @Get()
   @ApiOkResponse({ type: NotificationPageResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur, taille de page ou filtre invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  async listNotifications(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationListQuery): Promise<NotificationPageDto> {
+    const page = await this.notifications.list(user.userId, query.cursor ?? null, query.limit, { type: query.kind, videoId: query.videoId });
+    return { items: page.items.map(toNotificationDto), nextCursor: page.nextCursor };
+  }
+
+  // Boîte de réception : groupes (« Inès, Nathan et 3 autres ont aimé ta vidéo »). Like et republication par
+  // vidéo, tous les follows ensemble, chaque commentaire seul.
+  @Get('groups')
+  @ApiOkResponse({ type: NotificationGroupPageResponse })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
-  async listNotifications(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationsQuery): Promise<NotificationPageDto> {
-    const page = await this.notifications.list(user.userId, query.cursor ?? null, query.limit);
-    return { items: page.items.map(toNotificationDto), nextCursor: page.nextCursor };
+  async listNotificationGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationsQuery): Promise<NotificationGroupPageDto> {
+    const page = await this.notifications.listGroups(user.userId, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toNotificationGroupDto), nextCursor: page.nextCursor };
   }
 
   @Get('unread-count')

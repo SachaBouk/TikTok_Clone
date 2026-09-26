@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import type { ActivityEvent, Notification, RetractableActivity } from '../domain/notification';
+import { GROUP_ACTORS_SHOWN, type ActivityEvent, type Notification, type NotificationFilter, type NotificationGroup, type RetractableActivity } from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
 const notificationSelect = {
@@ -60,14 +61,53 @@ export class PrismaNotificationRepository extends NotificationRepository {
     return recipients.map((r) => r.userId);
   }
 
-  async listForRecipient(recipientId: string, beforeId: string | null, limit: number): Promise<Notification[]> {
+  async listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]> {
     const rows = await this.prisma.notification.findMany({
-      where: { userId: recipientId, ...(beforeId ? { id: { lt: beforeId } } : {}) },
+      where: {
+        userId: recipientId,
+        ...(filter.type ? { type: filter.type } : {}),
+        ...(filter.videoId ? { videoId: filter.videoId } : {}),
+        ...(beforeId ? { id: { lt: beforeId } } : {}),
+      },
       orderBy: { id: 'desc' },
       take: limit,
       select: notificationSelect,
     });
     return rows.map(toNotification);
+  }
+
+  // Regroupement en SQL, sur les seules notifications du compte (index `user_id`) : une ligne par groupe, avec
+  // la notification la plus récente (UUID v7 : l'ordre du texte est l'ordre du temps), le nombre, l'état de
+  // lecture et les auteurs les plus récents. Les notifications les plus récentes sont ensuite relues par Prisma.
+  async listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]> {
+    const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
+    const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] }[]>`
+      WITH grouped AS (
+        SELECT max(notification_id::text)::uuid AS latest_id,
+               count(*)::int AS count,
+               bool_or(read_at IS NULL) AS unread,
+               (array_agg(actor_id::text ORDER BY notification_id DESC))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
+        FROM notifications
+        WHERE user_id = ${recipientId}::uuid
+        GROUP BY type,
+                 CASE WHEN type IN ('like', 'repost') THEN video_id END,
+                 CASE WHEN type = 'comment' THEN notification_id END
+      )
+      SELECT latest_id::text AS latest_id, count, unread, actor_ids FROM grouped
+      ${before}
+      ORDER BY latest_id DESC
+      LIMIT ${limit}`;
+    if (rows.length === 0) return [];
+    const latest = new Map(
+      (await this.prisma.notification.findMany({ where: { id: { in: rows.map((r) => r.latest_id) } }, select: notificationSelect })).map((n) => [
+        n.id,
+        toNotification(n),
+      ]),
+    );
+    return rows.flatMap((row) => {
+      const notification = latest.get(row.latest_id);
+      return notification ? [{ latest: notification, count: row.count, unread: row.unread, recentActorIds: row.actor_ids }] : [];
+    });
   }
 
   countUnread(recipientId: string): Promise<number> {

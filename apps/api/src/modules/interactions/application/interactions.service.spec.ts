@@ -52,7 +52,7 @@ describe('InteractionsService', () => {
 
   // Notifications reçues, résumées en « type:acteur ».
   const received = async (recipientId: string) =>
-    (await notificationRepository.listForRecipient(recipientId, null, 100)).map((n) => `${n.type}:${n.actorId}`);
+    (await notificationRepository.listForRecipient(recipientId, {}, null, 100)).map((n) => `${n.type}:${n.actorId}`);
 
   async function createVideo(status: 'ready' | 'processing' = 'ready') {
     const created = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });

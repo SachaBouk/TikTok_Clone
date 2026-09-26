@@ -112,9 +112,17 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Bloquer ou débloquer un compte : menu « … » de son profil.
 - Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
 
+## Centre d'activité
+
+- Onglet « Boîte de réception » : activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
+- Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
+- Une notification reçue en direct rejoint son groupe, qui remonte en tête.
+- Badge de l'onglet : notifications non lues, mis à jour en direct par le WebSocket (`notificationCreated`, `unreadNotificationsChanged`) et relu à chaque reconnexion.
+- Afficher le centre d'activité marque lu ce qui y apparaît (`markNotificationsRead` avec la plus récente affichée) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché. Les nouvelles lignes restent mises en avant jusqu'au prochain chargement.
+
 ## Temps réel (ADR-011)
 
-Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Seul `videoProcessed` est traduit pour l'instant.
+Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Événements traduits : `videoProcessed`, `notificationCreated`, `unreadNotificationsChanged` ; ceux de la messagerie viendront avec son écran.
 
 WebSocket `ws://<hôte>:3000/realtime`, ouvert avec `URLSessionWebSocketTask` et l'access token dans l'en-tête :
 

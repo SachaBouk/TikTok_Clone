@@ -13,6 +13,8 @@ final class AppContainer {
     let videoInteractions: VideoInteractionsModel
     // Publications en cours, partagées par toute l'app (l'envoi continue hors de l'onglet « Publier »).
     let publishing: PublishingModel
+    // Centre d'activité : badge et notifications, suivis en direct.
+    let activity: ActivityModel
     let realtime: RealtimeCoordinator
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
@@ -22,6 +24,7 @@ final class AppContainer {
     private let relationships: any RelationshipRepository
     private let videoLists: any VideoListRepository
     private let uploads: any UploadStore
+    private let activityRepository: any ActivityRepository
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -66,6 +69,14 @@ final class AppContainer {
             deleteVideo: DeleteVideoUseCase(videos: videos),
             session: session
         )
+        let activityRepository = RemoteActivityRepository(client: client)
+        self.activityRepository = activityRepository
+        activity = ActivityModel(
+            loadGroups: LoadActivityGroupsUseCase(activity: activityRepository),
+            countUnread: CountUnreadActivityUseCase(activity: activityRepository),
+            markRead: MarkActivityReadUseCase(activity: activityRepository),
+            session: session
+        )
         realtime = RealtimeCoordinator(
             channel: WebSocketRealtimeChannel(
                 url: configuration.realtimeURL,
@@ -73,7 +84,8 @@ final class AppContainer {
                 accessToken: { await refresher.validAccessToken() },
                 refreshToken: { await refresher.refreshTokens(replacing: $0)?.accessToken }
             ),
-            publishing: publishing
+            publishing: publishing,
+            activity: activity
         )
     }
 
@@ -81,6 +93,16 @@ final class AppContainer {
     func activityChanged(signedIn: Bool, active: Bool) {
         realtime.update(signedIn: signedIn, active: active)
         Task { await publishing.update(signedIn: signedIn, active: active) }
+        if !signedIn { activity.reset() }
+    }
+
+    // Liste complète d'un groupe du centre d'activité.
+    func makeActivityGroupList(_ filter: ActivityFilter) -> PagedList<ActivityNotification> {
+        let load = LoadActivityGroupUseCase(activity: activityRepository)
+        return PagedList(session: session) { cursor in
+            let page = try await load(filter, cursor: cursor)
+            return (page.notifications, page.nextCursor)
+        }
     }
 
     func makePublishDraftViewModel() -> PublishDraftViewModel {

@@ -38,5 +38,43 @@ export interface NotificationWithContext {
   video: PublishedVideo | null;
 }
 
+// Regroupement à la lecture (choix du développeur, comme TikTok) : like et republication par vidéo,
+// tous les follows ensemble, chaque commentaire seul (son texte compte). Le stockage ne change pas.
+export interface NotificationGroup {
+  // Notification la plus récente du groupe : type, vidéo, commentaire ; son identifiant sert de curseur.
+  latest: Notification;
+  count: number;
+  unread: boolean;
+  // Auteurs des notifications les plus récentes, du plus récent au plus ancien.
+  recentActorIds: string[];
+}
+
+export interface NotificationGroupWithContext {
+  group: NotificationGroup;
+  actors: User[];
+  video: PublishedVideo | null;
+}
+
+// Nombre d'auteurs affichés par groupe (« Inès, Nathan et 3 autres »).
+export const GROUP_ACTORS_SHOWN = 2;
+
+export function groupKey(notification: Notification): string {
+  switch (notification.type) {
+    case 'like':
+    case 'repost':
+      return `${notification.type}:${notification.videoId}`;
+    case 'follow':
+      return 'follow';
+    case 'comment':
+      return `comment:${notification.id}`;
+  }
+}
+
+// Notifications d'un groupe, pour sa liste complète : `type`, et la vidéo pour un like ou une republication.
+export interface NotificationFilter {
+  type?: NotificationType;
+  videoId?: string;
+}
+
 export const DEFAULT_NOTIFICATIONS_PAGE_SIZE = 20;
 export const MAX_NOTIFICATIONS_PAGE_SIZE = 50;

@@ -108,7 +108,7 @@ struct RealtimeDataTests {
         }
         #expect(video.status == .ready)
         #expect(video.thumbnailURL?.absoluteString == "http://cdn.test/a/thumbnail.jpg")
-        #expect(decoder.decode(#"{"event":"unreadNotificationsChanged","data":{"unreadCount":3}}"#) == nil)
+        #expect(decoder.decode(#"{"event":"typing","data":{"conversationId":"c1","userId":"u2"}}"#) == nil)
         #expect(decoder.decode(#"{"event":"inconnu","data":{}}"#) == nil)
         #expect(decoder.decode("pas du json") == nil)
     }

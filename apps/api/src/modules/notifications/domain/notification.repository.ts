@@ -1,4 +1,4 @@
-import type { ActivityEvent, Notification, RetractableActivity } from './notification';
+import type { ActivityEvent, Notification, NotificationFilter, NotificationGroup, RetractableActivity } from './notification';
 
 // Port de la table notifications (ADR-006).
 export abstract class NotificationRepository {
@@ -12,7 +12,10 @@ export abstract class NotificationRepository {
   abstract removeBetween(userId: string, otherId: string): Promise<string[]>;
 
   // Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné (identifiants UUID v7, ordonnés).
-  abstract listForRecipient(recipientId: string, beforeId: string | null, limit: number): Promise<Notification[]>;
+  abstract listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]>;
+  // Groupes (voir `groupKey`), du plus récemment actif au plus ancien : ceux dont la notification la plus récente
+  // est strictement avant `beforeId`. `recentActorIds` : `GROUP_ACTORS_SHOWN` au plus.
+  abstract listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]>;
   abstract countUnread(recipientId: string): Promise<number>;
   // Marque lues les notifications non lues de `recipientId` jusqu'à `upToId` inclus (toutes s'il est null).
   abstract markRead(recipientId: string, upToId: string | null, readAt: Date): Promise<void>;

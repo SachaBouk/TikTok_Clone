@@ -2201,6 +2201,23 @@
               "default": 20,
               "type": "integer"
             }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/NotificationType"
+            }
+          },
+          {
+            "name": "videoId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2210,6 +2227,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotificationPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur, taille de page ou filtre invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/notifications/groups": {
+      "get": {
+        "operationId": "listNotificationGroups",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationGroupPageResponse"
                 }
               }
             }
@@ -4343,6 +4423,81 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/NotificationResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "NotificationGroupResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "actors": {
+            "description": "Auteurs des notifications les plus récentes, 2 au plus, du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSummaryResponse"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Nombre de notifications du groupe."
+          },
+          "video": {
+            "$ref": "#/components/schemas/NotificationVideoResponse"
+          },
+          "comment": {
+            "$ref": "#/components/schemas/NotificationCommentResponse"
+          },
+          "read": {
+            "type": "boolean",
+            "description": "Faux si au moins une notification du groupe n’est pas lue."
+          },
+          "latestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Notification la plus récente du groupe : à envoyer à `markNotificationsRead`."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date de la notification la plus récente."
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "actors",
+          "count",
+          "read",
+          "latestId",
+          "createdAt"
+        ]
+      },
+      "NotificationGroupPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du groupe le plus récemment actif au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationGroupResponse"
             }
           },
           "nextCursor": {

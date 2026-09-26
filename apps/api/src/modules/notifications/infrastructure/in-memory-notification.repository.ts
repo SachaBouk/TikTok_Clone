@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ActivityEvent, Notification, RetractableActivity } from '../domain/notification';
+import { GROUP_ACTORS_SHOWN, groupKey, type ActivityEvent, type Notification, type NotificationFilter, type NotificationGroup, type RetractableActivity } from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
 // Adaptateur en mémoire pour les tests. Reproduit les index uniques partiels de la base :
@@ -43,11 +43,30 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return [...recipients];
   }
 
-  async listForRecipient(recipientId: string, beforeId: string | null, limit: number): Promise<Notification[]> {
-    return [...this.notifications.values()]
-      .filter((n) => n.recipientId === recipientId && (!beforeId || n.id < beforeId))
-      .sort((a, b) => (a.id < b.id ? 1 : -1))
+  async listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]> {
+    return this.newestFirst(recipientId)
+      .filter((n) => (!filter.type || n.type === filter.type) && (!filter.videoId || n.videoId === filter.videoId))
+      .filter((n) => !beforeId || n.id < beforeId)
       .slice(0, limit);
+  }
+
+  async listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]> {
+    const groups = new Map<string, NotificationGroup>();
+    for (const n of this.newestFirst(recipientId)) {
+      const group = groups.get(groupKey(n));
+      if (!group) {
+        groups.set(groupKey(n), { latest: n, count: 1, unread: !n.readAt, recentActorIds: [n.actorId] });
+        continue;
+      }
+      group.count += 1;
+      group.unread ||= !n.readAt;
+      if (group.recentActorIds.length < GROUP_ACTORS_SHOWN) group.recentActorIds.push(n.actorId);
+    }
+    return [...groups.values()].filter((g) => !beforeId || g.latest.id < beforeId).slice(0, limit);
+  }
+
+  private newestFirst(recipientId: string): Notification[] {
+    return [...this.notifications.values()].filter((n) => n.recipientId === recipientId).sort((a, b) => (a.id < b.id ? 1 : -1));
   }
 
   async countUnread(recipientId: string): Promise<number> {

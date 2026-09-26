@@ -78,6 +78,19 @@ final class PagedList<Item: Identifiable & Equatable> {
         }
     }
 
+    // Élément arrivé en direct (temps réel), en tête de liste.
+    func prepend(_ item: Item) {
+        items.insert(item, at: 0)
+    }
+
+    // Retour à l'état initial (déconnexion) ; un chargement en cours est ignoré.
+    func reset() {
+        generation += 1
+        items = []
+        nextCursor = nil
+        state = .idle
+    }
+
     func remove(where shouldRemove: (Item) -> Bool) {
         items.removeAll(where: shouldRemove)
     }

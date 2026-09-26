@@ -16,9 +16,12 @@ struct RealtimeEventDecoder: Sendable {
         switch event {
         case .videoProcessed(let event):
             return .videoProcessed(OwnVideo(event.data))
-        // Activité et messagerie : traduites avec leurs écrans.
-        case .notificationCreated, .unreadNotificationsChanged, .messageCreated, .messageDeleted,
-             .conversationRead, .conversationAccepted, .conversationDeleted, .typing:
+        case .notificationCreated(let event):
+            return .notificationCreated(ActivityNotification(event.data.notification), unreadCount: event.data.unreadCount)
+        case .unreadNotificationsChanged(let event):
+            return .unreadNotificationsChanged(event.data.unreadCount)
+        // Messagerie : traduite avec son écran.
+        case .messageCreated, .messageDeleted, .conversationRead, .conversationAccepted, .conversationDeleted, .typing:
             return nil
         }
     }
