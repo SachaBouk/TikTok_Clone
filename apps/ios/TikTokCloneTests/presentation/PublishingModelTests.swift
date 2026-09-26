@@ -22,6 +22,7 @@ struct PublishingModelTests {
             loadVideo: LoadOwnVideoUseCase(videos: videos),
             deleteVideo: DeleteVideoUseCase(videos: videos),
             session: session,
+            analytics: makeAnalytics(),
             makePreview: { _ in nil },
             beginBackgroundWork: { {} }
         )

@@ -11,11 +11,16 @@ final class LoginViewModel {
 
     private let login: LoginUseCase
     private let session: SessionStore
+    private let analytics: AnalyticsModel
 
-    init(login: LoginUseCase, session: SessionStore) {
+    init(login: LoginUseCase, session: SessionStore, analytics: AnalyticsModel) {
         self.login = login
         self.session = session
+        self.analytics = analytics
     }
+
+    // Invitation de l'expérience « invitation invité » (ADR-013), en tête du formulaire.
+    var invitation: String? { session.signInMessage }
 
     var canSubmit: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty && !password.isEmpty && !isSubmitting
@@ -27,7 +32,10 @@ final class LoginViewModel {
         errorMessage = nil
         defer { isSubmitting = false }
         do {
-            session.signedIn(try await login(email: email, password: password))
+            let profile = try await login(email: email, password: password)
+            // Avant l'identification (connexion) : l'événement est rattaché au parcours d'invité.
+            analytics.track(.loginCompleted)
+            session.signedIn(profile)
         } catch {
             errorMessage = AppError.from(error).message
         }

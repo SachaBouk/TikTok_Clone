@@ -15,7 +15,11 @@ final class SessionStore {
 
     private(set) var state: State = .restoring
     // Feuille de connexion affichée.
-    var isPresentingSignIn = false
+    var isPresentingSignIn = false {
+        didSet { if !isPresentingSignIn { signInMessage = nil } }
+    }
+    // Invitation affichée en tête de la feuille de connexion (expérience « invitation invité », ADR-013).
+    private(set) var signInMessage: String?
     // Message à afficher une fois (session expirée).
     var notice: String?
 
@@ -74,7 +78,8 @@ final class SessionStore {
         notice = AppError.sessionExpired.message
     }
 
-    func requestSignIn() {
+    func requestSignIn(message: String? = nil) {
+        signInMessage = message
         isPresentingSignIn = true
     }
 }

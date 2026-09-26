@@ -65,11 +65,16 @@ struct AccountSettingsView: View {
                 }
                 .accessibilityIdentifier("settings.commentHistory")
             }
-            Section("Confidentialité") {
+            Section {
                 NavigationLink(value: AccountRoute.blockedAccounts) {
                     Label("Comptes bloqués", systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("settings.blocked")
+                AnalyticsConsentToggle()
+            } header: {
+                Text("Confidentialité")
+            } footer: {
+                Text("Mesure d’audience : vidéos regardées, réactions et inscription, avec PostHog (Union européenne), sous le seul identifiant de ton compte.")
             }
             Section {
                 Button("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right") { isConfirmingSignOut = true }

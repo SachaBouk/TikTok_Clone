@@ -13,10 +13,12 @@ final class RegisterViewModel {
 
     private let register: RegisterUseCase
     private let session: SessionStore
+    private let analytics: AnalyticsModel
 
-    init(register: RegisterUseCase, session: SessionStore) {
+    init(register: RegisterUseCase, session: SessionStore, analytics: AnalyticsModel) {
         self.register = register
         self.session = session
+        self.analytics = analytics
     }
 
     var canSubmit: Bool {
@@ -36,7 +38,10 @@ final class RegisterViewModel {
         defer { isSubmitting = false }
         do {
             let registration = Registration(email: email, password: password, username: username, displayName: displayName)
-            session.signedIn(try await register(registration))
+            let profile = try await register(registration)
+            // Avant l'identification (connexion) : l'événement est rattaché au parcours d'invité.
+            analytics.track(.signupCompleted)
+            session.signedIn(profile)
         } catch {
             errorMessage = AppError.from(error).message
         }

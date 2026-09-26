@@ -48,10 +48,13 @@ final class FakePlayback: VideoPlayback {
     private(set) var loaded: [[String]] = []
     private(set) var played: [String] = []
     private(set) var pauseCount = 0
+    // Position et durée renvoyées pour chaque vidéo (mesure du visionnage).
+    var progress: [String: PlaybackProgress] = [:]
 
     func keepLoaded(_ videos: [FeedVideo]) { loaded.append(videos.map(\.id)) }
     func play(_ videoID: String) { played.append(videoID) }
     func pauseAll() { pauseCount += 1 }
+    func progress(of videoID: String) -> PlaybackProgress? { progress[videoID] }
 }
 
 extension FeedVideo {

@@ -2,7 +2,15 @@ import Foundation
 
 // Configuration lue dans Info.plist, renseigné par Config/Debug.xcconfig ou Release.xcconfig.
 struct AppConfiguration: Sendable {
+    // PostHog (ADR-013) : jeton du projet et hôte d'ingestion.
+    struct Analytics: Equatable, Sendable {
+        let projectToken: String
+        let host: String
+    }
+
     let apiBaseURL: URL
+    // Nil sans jeton : les événements sont seulement journalisés.
+    var analytics: Analytics?
 
     // WebSocket du temps réel (ADR-011), sur le même hôte que l'API : ws:// en HTTP, wss:// en HTTPS.
     var realtimeURL: URL {
@@ -17,6 +25,8 @@ struct AppConfiguration: Sendable {
         guard let value = bundle.object(forInfoDictionaryKey: "APIBaseURL") as? String, let url = URL(string: value) else {
             fatalError("APIBaseURL manquant ou invalide dans Info.plist : voir Config/*.xcconfig.")
         }
-        return AppConfiguration(apiBaseURL: url)
+        let token = (bundle.object(forInfoDictionaryKey: "PostHogProjectToken") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let host = (bundle.object(forInfoDictionaryKey: "PostHogHost") as? String) ?? ""
+        return AppConfiguration(apiBaseURL: url, analytics: token.isEmpty ? nil : Analytics(projectToken: token, host: host))
     }
 }

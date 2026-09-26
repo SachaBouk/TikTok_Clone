@@ -9,7 +9,7 @@ struct SessionAndViewModelsTests {
         let auth = FakeAuthRepository()
         let session = makeSession(auth: auth)
         session.requestSignIn()
-        let viewModel = LoginViewModel(login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session)
+        let viewModel = LoginViewModel(login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
         #expect(!viewModel.canSubmit)
         viewModel.email = " alice@example.com "
         viewModel.password = "motdepasse"
@@ -25,7 +25,7 @@ struct SessionAndViewModelsTests {
     func loginFailure() async {
         let auth = FakeAuthRepository(loginError: .invalidCredentials)
         let session = makeSession(auth: auth)
-        let viewModel = LoginViewModel(login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session)
+        let viewModel = LoginViewModel(login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
         viewModel.email = "alice@example.com"
         viewModel.password = "mauvais"
         await viewModel.submit()
@@ -38,7 +38,7 @@ struct SessionAndViewModelsTests {
     func register() async {
         let auth = FakeAuthRepository(registerError: .rejected("Le pseudo @alice est déjà pris"))
         let session = makeSession(auth: auth)
-        let viewModel = RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: FakeProfileRepository()), session: session)
+        let viewModel = RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
         viewModel.username = "Alice"
         viewModel.normalizeUsername()
         #expect(viewModel.username == "alice")

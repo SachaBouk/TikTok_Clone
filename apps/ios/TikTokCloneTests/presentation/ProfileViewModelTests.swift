@@ -23,7 +23,8 @@ struct ProfileViewModelTests {
             setFollow: SetFollowUseCase(interactions: interactionRepository),
             recordShare: ShareVideoUseCase(interactions: interactionRepository),
             deleteVideo: DeleteVideoUseCase(videos: publishingRepository),
-            session: session
+            session: session,
+            analytics: makeAnalytics()
         )
     }
 
@@ -283,6 +284,7 @@ struct ProfileViewModelTests {
             recordView: RecordViewUseCase(history: FakeViewHistoryRepository()),
             playback: playback,
             session: session,
+            analytics: makeAnalytics(),
             mode: .list(page(["v1", "v2", "v3"], next: nil), startIndex: 1)
         )
         await viewModel.start()

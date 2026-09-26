@@ -9,6 +9,7 @@ import Observation
 // - Mode invité : toute action ouvre la connexion (ADR-010).
 // Les actions renvoient un message d'erreur à afficher (nil si tout va bien) : chaque écran l'affiche lui-même.
 // Le suivi d'un compte est partagé de la même façon avec les profils et les listes d'abonnés.
+// Mesure d'audience (ADR-013) : chaque réaction, follow et partage réussi est envoyé (engagement).
 @MainActor
 @Observable
 final class VideoInteractionsModel {
@@ -38,13 +39,22 @@ final class VideoInteractionsModel {
     private let recordShare: ShareVideoUseCase
     private let deleteVideo: DeleteVideoUseCase
     private let session: SessionStore
+    private let analytics: AnalyticsModel
 
-    init(setReaction: SetReactionUseCase, setFollow: SetFollowUseCase, recordShare: ShareVideoUseCase, deleteVideo: DeleteVideoUseCase, session: SessionStore) {
+    init(
+        setReaction: SetReactionUseCase,
+        setFollow: SetFollowUseCase,
+        recordShare: ShareVideoUseCase,
+        deleteVideo: DeleteVideoUseCase,
+        session: SessionStore,
+        analytics: AnalyticsModel
+    ) {
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
         self.deleteVideo = deleteVideo
         self.session = session
+        self.analytics = analytics
     }
 
     // La vidéo telle qu'à afficher : données chargées + changements faits depuis.
@@ -79,7 +89,7 @@ final class VideoInteractionsModel {
     func likeFromDoubleTap(_ video: FeedVideo) async -> String? {
         guard session.isSignedIn else { session.requestSignIn(); return nil }
         guard display(video).viewer?.liked != true else { return nil }
-        return await apply(.like, active: true, on: video)
+        return await apply(.like, active: true, on: video, doubleTap: true)
     }
 
     func toggleFollow(authorOf video: FeedVideo) async -> String? {
@@ -105,6 +115,7 @@ final class VideoInteractionsModel {
         do {
             let state = try await setFollow(username: user.username, active: active)
             followOverrides[user.id] = state.active
+            analytics.track(.followChanged(userID: user.id, active: state.active))
             return .done(followers: state.count)
         } catch {
             followOverrides[user.id] = wasFollowing
@@ -132,12 +143,14 @@ final class VideoInteractionsModel {
     // Partage réellement envoyé depuis la feuille de partage : compté, avec le total renvoyé par l'API.
     func shareCompleted(_ video: FeedVideo) async {
         guard let shares = try? await recordShare(videoID: video.id) else { return }
+        analytics.track(.videoShared(videoID: video.id, byMessage: false))
         let current = display(video)
         overrides[video.id] = Override(stats: current.stats.with(shares: shares), viewer: current.viewer)
     }
 
     // Vidéo envoyée par message : l'API l'a déjà comptée comme un partage (+1 à l'écran).
     func sharedByMessage(_ video: FeedVideo) {
+        analytics.track(.videoShared(videoID: video.id, byMessage: true))
         let current = display(video)
         overrides[video.id] = Override(stats: current.stats.with(shares: current.stats.shares + 1), viewer: current.viewer)
     }
@@ -148,7 +161,7 @@ final class VideoInteractionsModel {
         overrides[video.id] = Override(stats: current.stats.with(comments: max(0, current.stats.comments + delta)), viewer: current.viewer)
     }
 
-    private func apply(_ kind: ReactionKind, active: Bool, on video: FeedVideo) async -> String? {
+    private func apply(_ kind: ReactionKind, active: Bool, on video: FeedVideo, doubleTap: Bool = false) async -> String? {
         let key = "\(kind)-\(video.id)"
         guard pending.insert(key).inserted else { return nil }
         defer { pending.remove(key) }
@@ -161,6 +174,7 @@ final class VideoInteractionsModel {
             let state = try await setReaction(kind, videoID: video.id, active: active)
             let current = display(video)
             overrides[video.id] = Override(stats: current.stats.with(kind, count: state.count), viewer: (current.viewer ?? .empty).with(kind, active: state.active))
+            analytics.track(.videoReaction(kind, active: state.active, videoID: video.id, doubleTap: doubleTap))
             return nil
         } catch {
             overrides[video.id] = Override(stats: before.stats, viewer: before.viewer)

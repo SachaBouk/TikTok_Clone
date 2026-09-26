@@ -21,6 +21,8 @@ final class VideoDetailViewModel {
     private let playback: any VideoPlayback
     private let session: SessionStore
     private let viewDelay: Duration
+    // Mesure du visionnage (ADR-013).
+    private let watch: WatchReporter
     private var viewTask: Task<Void, Never>?
     private var viewRecorded = false
 
@@ -30,7 +32,9 @@ final class VideoDetailViewModel {
         recordView: RecordViewUseCase,
         playback: any VideoPlayback,
         session: SessionStore,
-        viewDelay: Duration = ViewTracker.minimumWatchTime
+        analytics: AnalyticsModel,
+        viewDelay: Duration = ViewTracker.minimumWatchTime,
+        now: @escaping () -> Date = Date.init
     ) {
         self.videoID = videoID
         self.loadVideo = loadVideo
@@ -38,6 +42,7 @@ final class VideoDetailViewModel {
         self.playback = playback
         self.session = session
         self.viewDelay = viewDelay
+        watch = WatchReporter(source: .detail, playback: playback, analytics: analytics, now: now)
     }
 
     var video: FeedVideo? {
@@ -52,6 +57,7 @@ final class VideoDetailViewModel {
             state = .loaded(video)
             playback.keepLoaded([video])
             playback.play(video.id)
+            watch.play(video)
             scheduleView()
         } catch {
             state = .failed(AppError.from(error).message)
@@ -63,9 +69,11 @@ final class VideoDetailViewModel {
         isPaused.toggle()
         if isPaused {
             viewTask?.cancel()
+            watch.pause()
             playback.pauseAll()
         } else {
             playback.play(video.id)
+            watch.play(video)
             scheduleView()
         }
     }
@@ -75,12 +83,14 @@ final class VideoDetailViewModel {
         guard let video, !isPaused else { return }
         playback.keepLoaded([video])
         playback.play(video.id)
+        watch.play(video)
         scheduleView()
     }
 
     // Écran fermé, ou recouvert : le feed reprend la main sur les lecteurs.
     func stop() {
         viewTask?.cancel()
+        watch.finish(.leave)
         playback.pauseAll()
     }
 

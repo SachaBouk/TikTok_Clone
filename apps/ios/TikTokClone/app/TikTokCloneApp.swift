@@ -8,6 +8,7 @@ struct TikTokCloneApp: App {
         WindowGroup {
             RootView(container: container)
                 .environment(container.session)
+                .environment(container.analytics)
         }
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     let container: AppContainer
     @Environment(SessionStore.self) private var session
+    @Environment(AnalyticsModel.self) private var analytics
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -30,5 +31,18 @@ struct RootView: View {
             container.activityChanged(signedIn: state[0], active: state[1])
         }
         .onOpenURL { container.router.open($0) }
+        // Mesure d'audience (ADR-013) : consentement demandé une fois la session reprise, compte identifié.
+        .onChange(of: session.state == .restoring) { _, restoring in
+            if !restoring { analytics.askConsentIfNeeded() }
+        }
+        .onChange(of: session.profile?.id, initial: true) { _, userID in
+            analytics.sessionChanged(userID: userID)
+        }
+        .sheet(isPresented: Binding(
+            get: { analytics.isAskingConsent },
+            set: { analytics.isAskingConsent = $0 }
+        )) {
+            AnalyticsConsentView()
+        }
     }
 }

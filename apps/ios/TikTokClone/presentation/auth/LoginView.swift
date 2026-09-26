@@ -14,6 +14,12 @@ struct LoginView: View {
 
     var body: some View {
         Form {
+            if let message = viewModel.invitation {
+                Section {
+                    Label(message, systemImage: "person.crop.circle.badge.plus")
+                        .accessibilityIdentifier("login.invitation")
+                }
+            }
             Section {
                 TextField("Email", text: $viewModel.email)
                     .textContentType(.username)

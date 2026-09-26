@@ -17,6 +17,7 @@ struct FeedViewModelTests {
             recordView: RecordViewUseCase(history: history),
             playback: playback,
             session: session,
+            analytics: makeAnalytics(),
             viewDelay: .milliseconds(20)
         )
         return (viewModel, feed)
@@ -130,7 +131,7 @@ struct FeedViewModelTests {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))
         await session.restore()
         let viewModel = FeedViewModel(loadPage: LoadFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                      playback: playback, session: session, viewDelay: .milliseconds(20))
+                                      playback: playback, session: session, analytics: makeAnalytics(), viewDelay: .milliseconds(20))
         await viewModel.start()
         try await waitForViewDelay()
         #expect(!session.isSignedIn)

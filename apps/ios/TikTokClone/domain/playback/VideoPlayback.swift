@@ -8,4 +8,13 @@ protocol VideoPlayback: AnyObject {
     // la vidéo déjà courante reprend là où elle s'était arrêtée.
     func play(_ videoID: String)
     func pauseAll()
+    // Position de lecture et durée d'une vidéo chargée (mesure du visionnage, ADR-013) ; nil si elle ne l'est pas.
+    func progress(of videoID: String) -> PlaybackProgress?
+}
+
+struct PlaybackProgress: Equatable, Sendable {
+    // Position dans la boucle en cours.
+    let position: Duration
+    // Nil tant que le lecteur ne la connaît pas.
+    let duration: Duration?
 }

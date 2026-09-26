@@ -1,2 +1,7 @@
 // URL de l'API en production : à définir avec l'hébergement (ADR-015).
 API_BASE_URL = https:/$()/api.example.com
+
+// Mesure d'audience (ADR-013) : hôte et jeton du projet PostHog de production, à définir avec l'hébergement (ADR-015).
+POSTHOG_HOST = https:/$()/eu.i.posthog.com
+POSTHOG_PROJECT_TOKEN =
+#include? "Local.xcconfig"

@@ -18,6 +18,8 @@ final class AppContainer {
     // Messagerie : badges, conversations et demandes, suivis en direct.
     let messaging: MessagingModel
     let realtime: RealtimeCoordinator
+    // Mesure d'audience et tests A/B (ADR-013), après consentement.
+    let analytics: AnalyticsModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -55,12 +57,16 @@ final class AppContainer {
             logout: LogoutUseCase(auth: auth)
         )
         expiry.session = session
+        let analyticsService: any AnalyticsService = configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
+            ?? LoggingAnalyticsService()
+        analytics = AnalyticsModel(service: analyticsService, preferences: UserDefaultsPreferencesStore())
         videoInteractions = VideoInteractionsModel(
             setReaction: SetReactionUseCase(interactions: interactions),
             setFollow: SetFollowUseCase(interactions: interactions),
             recordShare: ShareVideoUseCase(interactions: interactions),
             deleteVideo: DeleteVideoUseCase(videos: videos),
-            session: session
+            session: session,
+            analytics: analytics
         )
         publishing = PublishingModel(
             createPublication: CreatePublicationUseCase(store: uploads),
@@ -70,7 +76,8 @@ final class AppContainer {
             loadPendingVideos: LoadPendingVideosUseCase(videos: videos),
             loadVideo: LoadOwnVideoUseCase(videos: videos),
             deleteVideo: DeleteVideoUseCase(videos: videos),
-            session: session
+            session: session,
+            analytics: analytics
         )
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
@@ -127,7 +134,8 @@ final class AppContainer {
             deleteConversation: DeleteConversationUseCase(messaging: messagingRepository),
             deleteMessage: DeleteMessageUseCase(messaging: messagingRepository),
             messaging: messaging,
-            session: session
+            session: session,
+            analytics: analytics
         )
     }
 
@@ -168,11 +176,11 @@ final class AppContainer {
     }
 
     func makeLoginViewModel() -> LoginViewModel {
-        LoginViewModel(login: LoginUseCase(auth: auth, profiles: profiles), session: session)
+        LoginViewModel(login: LoginUseCase(auth: auth, profiles: profiles), session: session, analytics: analytics)
     }
 
     func makeRegisterViewModel() -> RegisterViewModel {
-        RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: profiles), session: session)
+        RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: profiles), session: session, analytics: analytics)
     }
 
     func makeFeedViewModel() -> FeedViewModel {
@@ -180,7 +188,8 @@ final class AppContainer {
             loadPage: LoadFeedPageUseCase(feed: feed),
             recordView: RecordViewUseCase(history: viewHistory),
             playback: playerPool,
-            session: session
+            session: session,
+            analytics: analytics
         )
     }
 
@@ -191,6 +200,7 @@ final class AppContainer {
             addComment: AddCommentUseCase(interactions: interactions),
             deleteComment: DeleteCommentUseCase(interactions: interactions),
             session: session,
+            analytics: analytics,
             onCountChange: onCountChange
         )
     }
@@ -201,7 +211,8 @@ final class AppContainer {
             loadVideo: LoadVideoUseCase(feed: feed),
             recordView: RecordViewUseCase(history: viewHistory),
             playback: playerPool,
-            session: session
+            session: session,
+            analytics: analytics
         )
     }
 
@@ -278,6 +289,7 @@ final class AppContainer {
             recordView: RecordViewUseCase(history: viewHistory),
             playback: playerPool,
             session: session,
+            analytics: analytics,
             mode: .list(route.page, startIndex: route.startIndex)
         )
     }

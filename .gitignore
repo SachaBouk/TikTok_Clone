@@ -42,3 +42,5 @@ seed/videos/*
 # Généré par XcodeGen (apps/ios/project.yml)
 apps/ios/*.xcodeproj/
 apps/ios/TikTokClone/Info.plist
+# Réglages locaux de l'app (jeton du projet PostHog, ADR-013)
+apps/ios/Config/Local.xcconfig

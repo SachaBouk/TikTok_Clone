@@ -62,4 +62,14 @@ final class AVPlayerPool: VideoPlayback {
             entry.player.pause()
         }
     }
+
+    func progress(of videoID: String) -> PlaybackProgress? {
+        guard let player = entries[videoID]?.player else { return nil }
+        let position = player.currentTime().seconds
+        let duration = player.currentItem?.duration.seconds
+        return PlaybackProgress(
+            position: .seconds(position.isFinite ? max(0, position) : 0),
+            duration: duration.flatMap { $0.isFinite && $0 > 0 ? .seconds($0) : nil }
+        )
+    }
 }

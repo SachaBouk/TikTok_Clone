@@ -51,7 +51,7 @@ struct MainTabView: View {
             // Notifications non lues, conversations non lues et demandes reçues.
             .badge(container.inboxBadgeCount)
             Tab("Profil", systemImage: "person", value: .profile) {
-                SignedInOnly(title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.") {
+                SignedInOnly(title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.", showsPrivacy: true) {
                     NavigationStack {
                         ProfileView(viewModel: container.makeProfileViewModel(username: nil), container: container)
                             .appDestinations(container)

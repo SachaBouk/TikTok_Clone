@@ -27,6 +27,10 @@ packages:
   # Client généré depuis apps/api/openapi.json (ADR-005).
   TikTokAPI:
     path: Packages/TikTokAPI
+  # Mesure d'audience et tests A/B (ADR-013). Version figée : le Package.resolved du .xcodeproj n'est pas versionné.
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    exactVersion: 3.85.0
 
 targets:
   TikTokClone:
@@ -36,6 +40,7 @@ targets:
       - path: TikTokClone
     dependencies:
       - package: TikTokAPI
+      - package: PostHog
     info:
       path: TikTokClone/Info.plist
       properties:
@@ -43,6 +48,9 @@ targets:
         CFBundleDevelopmentRegion: fr
         # Lue par AppConfiguration ; valeur par configuration dans Config/*.xcconfig.
         APIBaseURL: $(API_BASE_URL)
+        # Mesure d'audience (ADR-013) : jeton du projet PostHog (vide : événements journalisés seulement) et hôte.
+        PostHogProjectToken: $(POSTHOG_PROJECT_TOKEN)
+        PostHogHost: $(POSTHOG_HOST)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

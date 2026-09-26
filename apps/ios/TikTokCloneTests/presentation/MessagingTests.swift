@@ -151,6 +151,7 @@ struct ConversationViewModelTests {
             deleteMessage: DeleteMessageUseCase(messaging: repository),
             messaging: messaging,
             session: session,
+            analytics: makeAnalytics(),
             now: { [clock] in clock.now }
         )
         return (viewModel, messaging)
@@ -317,7 +318,8 @@ struct SendVideoTests {
             setFollow: SetFollowUseCase(interactions: interactionRepository),
             recordShare: ShareVideoUseCase(interactions: interactionRepository),
             deleteVideo: DeleteVideoUseCase(videos: FakeVideoPublishingRepository()),
-            session: session
+            session: session,
+            analytics: makeAnalytics()
         )
         let video = FeedVideo.sample("v1")
         let viewModel = SendVideoViewModel(

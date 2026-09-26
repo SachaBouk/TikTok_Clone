@@ -2,3 +2,9 @@
 // (ex. http:/$()/192.168.1.20:3000), comme S3_PUBLIC_ENDPOINT et HLS_PUBLIC_BASE_URL côté API.
 // `/$()/` : `//` commencerait un commentaire dans un .xcconfig.
 API_BASE_URL = http:/$()/localhost:3000
+
+// Mesure d'audience et tests A/B (ADR-013) : PostHog Cloud UE. Jeton du projet dans Config/Local.xcconfig
+// (non versionné), par exemple : POSTHOG_PROJECT_TOKEN = phc_… ; sans jeton, les événements sont journalisés.
+POSTHOG_HOST = https:/$()/eu.i.posthog.com
+POSTHOG_PROJECT_TOKEN =
+#include? "Local.xcconfig"

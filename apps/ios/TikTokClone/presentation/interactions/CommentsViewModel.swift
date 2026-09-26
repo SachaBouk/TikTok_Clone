@@ -18,6 +18,7 @@ final class CommentsViewModel {
     private let addComment: AddCommentUseCase
     private let deleteComment: DeleteCommentUseCase
     private let session: SessionStore
+    private let analytics: AnalyticsModel
     // Prévient les autres écrans du nouveau nombre de commentaires (+1 / -1).
     private let onCountChange: (Int) -> Void
     private var nextCursor: String?
@@ -29,6 +30,7 @@ final class CommentsViewModel {
         addComment: AddCommentUseCase,
         deleteComment: DeleteCommentUseCase,
         session: SessionStore,
+        analytics: AnalyticsModel,
         onCountChange: @escaping (Int) -> Void
     ) {
         self.video = video
@@ -37,6 +39,7 @@ final class CommentsViewModel {
         self.addComment = addComment
         self.deleteComment = deleteComment
         self.session = session
+        self.analytics = analytics
         self.onCountChange = onCountChange
     }
 
@@ -69,6 +72,7 @@ final class CommentsViewModel {
             draft = ""
             count += 1
             onCountChange(1)
+            analytics.track(.commentPosted(videoID: video.id))
         } catch {
             report(error)
         }

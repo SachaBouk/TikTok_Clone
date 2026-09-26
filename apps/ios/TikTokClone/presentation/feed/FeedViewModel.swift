@@ -5,6 +5,8 @@ import Observation
 // après 1 s. Deux usages :
 // - le feed principal (ADR-016) : à la fin d'une session, il repart sur un nouvel ordre, il ne s'arrête jamais ;
 // - une liste (grille d'un profil, historique) : ouverte sur la vidéo touchée, elle s'arrête à la fin.
+// Mesure d'audience (ADR-013) : visionnage de chaque vidéo, et expérience « invitation invité » (quelques vidéos
+// regardées sans compte ouvrent la connexion, pour la variante).
 @MainActor
 @Observable
 final class FeedViewModel {
@@ -41,7 +43,9 @@ final class FeedViewModel {
     private let recordView: RecordViewUseCase
     private let playback: any VideoPlayback
     private let session: SessionStore
+    private let analytics: AnalyticsModel
     private let viewDelay: Duration
+    private let watch: WatchReporter
 
     private var nextCursor: String?
     private var generation = 0
@@ -50,21 +54,30 @@ final class FeedViewModel {
     private var isActive = true
     private var viewTracker = ViewTracker()
     private var viewTask: Task<Void, Never>?
+    private var guestWatches = GuestWatchCounter()
 
     init(
         loadPage: any VideoPageSource,
         recordView: RecordViewUseCase,
         playback: any VideoPlayback,
         session: SessionStore,
+        analytics: AnalyticsModel,
         mode: Mode = .endlessFeed,
-        viewDelay: Duration = ViewTracker.minimumWatchTime
+        viewDelay: Duration = ViewTracker.minimumWatchTime,
+        now: @escaping () -> Date = Date.init
     ) {
         self.loadPage = loadPage
         self.mode = mode
         self.recordView = recordView
         self.playback = playback
         self.session = session
+        self.analytics = analytics
         self.viewDelay = viewDelay
+        if case .list = mode {
+            watch = WatchReporter(source: .list, playback: playback, analytics: analytics, now: now)
+        } else {
+            watch = WatchReporter(source: .feed, playback: playback, analytics: analytics, now: now)
+        }
     }
 
     var currentVideo: FeedVideo? {
@@ -92,6 +105,7 @@ final class FeedViewModel {
         guard wasCurrentRemoved else { return }
         currentEntryID = nil
         viewTask?.cancel()
+        watch.discard()
         if let currentIndex, !entries.isEmpty {
             show(entries[min(currentIndex, entries.count - 1)].id)
         } else {
@@ -102,6 +116,7 @@ final class FeedViewModel {
     // Nouvelle session (tirer pour actualiser, connexion ou déconnexion : l'état des boutons change).
     func reload() async {
         viewTask?.cancel()
+        watch.finish(.leave)
         playback.pauseAll()
         entries = []
         currentEntryID = nil
@@ -118,9 +133,12 @@ final class FeedViewModel {
         currentEntryID = entryID
         isPaused = false
         let video = entries[index].video
+        // Avant de changer de lecteur : la position de la vidéo quittée est lue ici (moment du swipe).
+        watch.finish(.swipe)
         playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
         if isActive {
             playback.play(video.id)
+            watch.play(video)
             scheduleView(of: video)
         }
         if PreloadPolicy.shouldLoadMore(currentIndex: index, count: entries.count) {
@@ -134,9 +152,11 @@ final class FeedViewModel {
         isPaused.toggle()
         if isPaused {
             viewTask?.cancel()
+            watch.pause()
             playback.pauseAll()
         } else if isActive {
             playback.play(video.id)
+            watch.play(video)
             scheduleView(of: video)
         }
     }
@@ -147,6 +167,7 @@ final class FeedViewModel {
         isActive = active
         if !active {
             viewTask?.cancel()
+            watch.finish(.leave)
             playback.pauseAll()
         } else if let video = currentVideo, !isPaused {
             // Une vidéo seule a pu occuper les lecteurs entre-temps : on recharge la fenêtre.
@@ -154,6 +175,7 @@ final class FeedViewModel {
                 playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
             }
             playback.play(video.id)
+            watch.play(video)
             scheduleView(of: video)
         }
     }
@@ -195,9 +217,14 @@ final class FeedViewModel {
     }
 
     // Vue comptée après `viewDelay` de lecture continue, pour un compte connecté, une fois par session du feed.
+    // En invité : vidéo comptée pour l'expérience « invitation invité ».
     private func scheduleView(of video: FeedVideo) {
         viewTask?.cancel()
-        guard session.isSignedIn, viewTracker.needsRecording(video.id) else { return }
+        guard session.isSignedIn else {
+            scheduleGuestWatch(of: video)
+            return
+        }
+        guard viewTracker.needsRecording(video.id) else { return }
         viewTask = Task { [viewDelay] in
             try? await Task.sleep(for: viewDelay)
             guard !Task.isCancelled, currentVideo?.id == video.id, !isPaused else { return }
@@ -208,6 +235,16 @@ final class FeedViewModel {
                 session.sessionExpired()
             } catch {
                 // Réseau : la vue sera retentée au prochain affichage.
+            }
+        }
+    }
+
+    private func scheduleGuestWatch(of video: FeedVideo) {
+        viewTask = Task { [viewDelay] in
+            try? await Task.sleep(for: viewDelay)
+            guard !Task.isCancelled, currentVideo?.id == video.id, !isPaused, !session.isSignedIn else { return }
+            if guestWatches.record(video.id), analytics.shouldPromptGuest() {
+                session.requestSignIn(message: GuestPromptExperiment.message)
             }
         }
     }

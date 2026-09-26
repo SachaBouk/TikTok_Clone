@@ -16,7 +16,9 @@ struct AuthFlowView: View {
             LoginView(viewModel: container.makeLoginViewModel())
                 .navigationDestination(for: Route.self) { route in
                     switch route {
-                    case .register: RegisterView(viewModel: container.makeRegisterViewModel())
+                    case .register:
+                        RegisterView(viewModel: container.makeRegisterViewModel())
+                            .onAppear { container.analytics.track(.signupStarted) }
                     }
                 }
                 .toolbar {
@@ -25,6 +27,8 @@ struct AuthFlowView: View {
                     }
                 }
         }
+        // Parcours d'onboarding (ADR-013).
+        .onAppear { container.analytics.track(.authSheetShown) }
         // Présentée aussi depuis d'autres feuilles (commentaires) : se ferme d'elle-même une fois connecté.
         .onChange(of: session.isSignedIn) { _, signedIn in
             if signedIn { dismiss() }

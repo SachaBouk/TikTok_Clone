@@ -55,6 +55,7 @@ final class ConversationViewModel: ConversationObserver {
     private let deleteMessage: DeleteMessageUseCase
     private let messaging: MessagingModel
     private let session: SessionStore
+    private let analytics: AnalyticsModel
     private let now: () -> Date
 
     init(
@@ -68,6 +69,7 @@ final class ConversationViewModel: ConversationObserver {
         deleteMessage: DeleteMessageUseCase,
         messaging: MessagingModel,
         session: SessionStore,
+        analytics: AnalyticsModel,
         now: @escaping () -> Date = Date.init
     ) {
         username = route.username
@@ -81,6 +83,7 @@ final class ConversationViewModel: ConversationObserver {
         self.deleteMessage = deleteMessage
         self.messaging = messaging
         self.session = session
+        self.analytics = analytics
         self.now = now
     }
 
@@ -175,6 +178,7 @@ final class ConversationViewModel: ConversationObserver {
         lastTypingSent = nil
         do {
             let message = try await sendMessage(conversationID: conversation.id, text: text)
+            analytics.track(.messageSent(conversationID: conversation.id, status: conversation.status))
             pending.removeAll { $0.id == pendingMessage.id }
             insert(message)
             let updated = (self.conversation ?? conversation).afterSending(message)

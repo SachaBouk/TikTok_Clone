@@ -59,6 +59,7 @@ final class PublishingModel {
     private let loadVideo: LoadOwnVideoUseCase
     private let deleteVideo: DeleteVideoUseCase
     private let session: SessionStore
+    private let analytics: AnalyticsModel
     private let makePreview: @Sendable (URL) async -> UIImage?
     private let beginBackgroundWork: @MainActor () -> (@MainActor () -> Void)
 
@@ -78,6 +79,7 @@ final class PublishingModel {
         loadVideo: LoadOwnVideoUseCase,
         deleteVideo: DeleteVideoUseCase,
         session: SessionStore,
+        analytics: AnalyticsModel,
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
         beginBackgroundWork: @escaping @MainActor () -> (@MainActor () -> Void) = PublishingModel.beginBackgroundTask
     ) {
@@ -89,6 +91,7 @@ final class PublishingModel {
         self.loadVideo = loadVideo
         self.deleteVideo = deleteVideo
         self.session = session
+        self.analytics = analytics
         self.makePreview = makePreview
         self.beginBackgroundWork = beginBackgroundWork
     }
@@ -110,6 +113,7 @@ final class PublishingModel {
             if let preview { previews[upload.id] = preview }
             insert(Publication(id: upload.id, videoID: nil, description: upload.description, thumbnailURL: nil, phase: .waiting, createdAt: upload.createdAt))
             startRunner()
+            analytics.track(.uploadStarted)
             return nil
         } catch {
             return AppError.from(error).message
@@ -167,6 +171,9 @@ final class PublishingModel {
 
     // Événement `videoProcessed` (WebSocket).
     func videoProcessed(_ video: OwnVideo) {
+        if video.status == .ready || video.status == .failed {
+            analytics.track(.uploadFinished(ready: video.status == .ready))
+        }
         apply(video)
     }
 

@@ -130,6 +130,18 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Badge de l'onglet : notifications non lues, mis à jour en direct par le WebSocket (`notificationCreated`, `unreadNotificationsChanged`) et relu à chaque reconnexion.
 - Afficher le centre d'activité marque lu ce qui y apparaît (`markNotificationsRead` avec la plus récente affichée) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché. Les nouvelles lignes restent mises en avant jusqu'au prochain chargement.
 
+## Mesure d'audience et tests A/B (ADR-013)
+
+- PostHog (SDK iOS), hébergé dans l'Union européenne (PostHog Cloud UE). Jeton du projet dans `Config/Local.xcconfig`, non versionné :
+  ```
+  POSTHOG_PROJECT_TOKEN = phc_…
+  ```
+  Sans jeton, les événements sont seulement journalisés (Console, catégorie `analytics`) ; forcer une variante : argument de lancement `-featureFlag.guest-signup-prompt prompt`.
+- Consentement demandé au premier lancement ; rien n'est envoyé avant l'accord. Réglage « Mesure d'audience » dans Paramètres (ou « Confidentialité » dans l'onglet Profil en invité).
+- Compte identifié par son seul identifiant, sans nom, pseudo ni email.
+- Événements : visionnage (durée, complétion, moment du swipe), réactions, commentaires, partages, abonnements, messages, parcours de connexion et d'inscription, publication ; ouverture de l'app (rétention).
+- Expérience `guest-signup-prompt` (variantes `control` et `prompt`, à créer dans PostHog) : en variante, la connexion s'ouvre avec une invitation après 5 vidéos regardées sans compte.
+
 ## Temps réel (ADR-011)
 
 Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Tous les événements sont traduits (publication, activité, messagerie) ; l'app envoie « en train d'écrire » sur la connexion établie.

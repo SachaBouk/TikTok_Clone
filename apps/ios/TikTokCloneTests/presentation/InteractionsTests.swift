@@ -7,6 +7,9 @@ import Testing
 struct InteractionsTests {
     let repository = FakeInteractionRepository()
     let videos = FakeVideoPublishingRepository()
+    // Événements envoyés (mesure d'audience acceptée).
+    let analyticsService = FakeAnalyticsService()
+    var analytics: AnalyticsModel { makeAnalytics(analyticsService) }
 
     func makeModel(signedIn: Bool = true) async -> (VideoInteractionsModel, SessionStore) {
         let session = makeSession(auth: FakeAuthRepository(hasSession: signedIn))
@@ -16,7 +19,8 @@ struct InteractionsTests {
             setFollow: SetFollowUseCase(interactions: repository),
             recordShare: ShareVideoUseCase(interactions: repository),
             deleteVideo: DeleteVideoUseCase(videos: videos),
-            session: session
+            session: session,
+            analytics: analytics
         )
         return (model, session)
     }
@@ -132,6 +136,7 @@ struct InteractionsTests {
             addComment: AddCommentUseCase(interactions: repository),
             deleteComment: DeleteCommentUseCase(interactions: repository),
             session: session,
+            analytics: analytics,
             onCountChange: { deltas.append($0) }
         )
         await viewModel.start()
@@ -164,7 +169,7 @@ struct InteractionsTests {
         repository.state.withLock { $0.comments["v1"] = [.sample("c1", author: .alice)] }
         let viewModel = CommentsViewModel(video: video, loadComments: LoadCommentsUseCase(interactions: repository),
                                           addComment: AddCommentUseCase(interactions: repository),
-                                          deleteComment: DeleteCommentUseCase(interactions: repository), session: session, onCountChange: { _ in })
+                                          deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
         await viewModel.start()
         repository.fail(with: .network)
         await viewModel.delete(viewModel.comments[0])
@@ -181,7 +186,7 @@ struct InteractionsTests {
         let feed = FakeFeedRepository([])
         feed.videos["v1"] = video
         let viewModel = VideoDetailViewModel(videoID: "v1", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                             playback: playback, session: session, viewDelay: .milliseconds(20))
+                                             playback: playback, session: session, analytics: analytics, viewDelay: .milliseconds(20))
         await viewModel.start()
         #expect(viewModel.video == video)
         #expect(playback.loaded == [["v1"]])
@@ -190,7 +195,7 @@ struct InteractionsTests {
         #expect(history.recorded == ["v1"])
 
         let missing = VideoDetailViewModel(videoID: "absente", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                           playback: playback, session: session)
+                                           playback: playback, session: session, analytics: analytics)
         await missing.start()
         #expect(missing.state == .failed(AppError.notFound.message))
     }
