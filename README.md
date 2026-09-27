@@ -89,6 +89,21 @@ Documentation interactive, API lancée : http://localhost:3000/docs. Intégratio
 
 Temps réel (ADR-011) : WebSocket `ws://localhost:3000/realtime`, authentifié par le même en-tête `Authorization: Bearer …`. Le serveur y pousse la fin du transcodage, l'activité, les messages privés et « en train d'écrire » ; les messages sont décrits par le schéma `RealtimeEvent` de la spec.
 
+## Backoffice (ADR-004)
+
+Application d'administration Next.js sur http://localhost:3001, lancée par `pnpm dev`. Elle ne parle qu'à l'API REST (routes `/admin`),
+réservées aux comptes au rôle `admin`. Aucune route ne donne ce rôle : il s'attribue en ligne de commande, sur un compte existant.
+
+```bash
+pnpm admin:grant lea.martin@demo.local   # ou @lea.martin
+pnpm admin:revoke @lea.martin            # effet immédiat, même sur une session ouverte
+pnpm admin:list
+```
+
+Écrans : tableau de bord (comptes, vidéos par statut, commentaires), comptes (recherche, fiche), vidéos (filtre par statut
+ou par auteur, lecture HLS, suppression) et commentaires (suppression). Les analyses d'usage et l'expérience A/B restent dans
+PostHog : renseigner `POSTHOG_PROJECT_URL` dans `.env` pour afficher les liens. Détails : [apps/backoffice/README.md](apps/backoffice/README.md).
+
 ## Notifications push (APNs)
 
 Facultatives en local : sans clé APNs, l'API journalise les notifications au lieu de les envoyer (`[Push] (APNs non configuré) …`).

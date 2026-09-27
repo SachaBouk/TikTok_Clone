@@ -4,6 +4,7 @@ import type { InMemoryVideoRepository } from '../../videos/infrastructure/in-mem
 import type {
   BlockRelations,
   Comment,
+  CommentFilter,
   FollowDirection,
   FollowPosition,
   FollowRelations,
@@ -152,6 +153,18 @@ export class InMemoryInteractionRepository extends InteractionRepository {
       .filter((c) => c.userId === userId && (!beforeId || c.id < beforeId))
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .slice(0, limit);
+  }
+
+  async findComments(filter: CommentFilter, beforeId: string | null, limit: number): Promise<Comment[]> {
+    return [...this.comments.values()]
+      .filter((c) => (!filter.videoId || c.videoId === filter.videoId) && (!filter.userId || c.userId === filter.userId))
+      .filter((c) => !beforeId || c.id < beforeId)
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .slice(0, limit);
+  }
+
+  async countComments(createdSince: Date | null): Promise<number> {
+    return [...this.comments.values()].filter((c) => !createdSince || c.createdAt >= createdSince).length;
   }
 
   async block(blockerId: string, blockedId: string): Promise<void> {

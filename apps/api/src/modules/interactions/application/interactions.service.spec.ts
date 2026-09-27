@@ -428,4 +428,28 @@ describe('InteractionsService', () => {
     expect([...seen.followedUserIds]).toEqual(['bob']);
     expect(seen.repostedVideoIds.size).toBe(0);
   });
+
+  describe('backoffice (ADR-004)', () => {
+    // La notification du commentaire disparaît par la cascade de la base, que les adaptateurs en mémoire ne reproduisent pas.
+    it("retire le commentaire de n'importe quel auteur", async () => {
+      const { comment } = await service.addComment('alice', video, 'Hors sujet');
+      await service.removeComment(comment.id);
+      await expect(service.listComments(video, null, 10)).resolves.toMatchObject({ items: [] });
+      await expect(service.removeComment(comment.id)).rejects.toBeInstanceOf(CommentNotFoundError);
+    });
+
+    it('liste tous les commentaires, filtrés par vidéo et par auteur, et les compte', async () => {
+      const other = await createVideo();
+      const first = await service.addComment('alice', video, 'Un');
+      const second = await service.addComment('carol', other, 'Deux');
+      const third = await service.addComment('alice', other, 'Trois');
+
+      expect((await service.listAllComments({}, null, 10)).map((c) => c.content)).toEqual(['Trois', 'Deux', 'Un']);
+      expect((await service.listAllComments({}, third.comment.id, 1)).map((c) => c.id)).toEqual([second.comment.id]);
+      expect((await service.listAllComments({ userId: 'alice' }, null, 10)).map((c) => c.id)).toEqual([third.comment.id, first.comment.id]);
+      expect((await service.listAllComments({ videoId: other, userId: 'carol' }, null, 10)).map((c) => c.id)).toEqual([second.comment.id]);
+      await expect(service.countComments()).resolves.toBe(3);
+      await expect(service.countComments(new Date(Date.now() + 60_000))).resolves.toBe(0);
+    });
+  });
 });

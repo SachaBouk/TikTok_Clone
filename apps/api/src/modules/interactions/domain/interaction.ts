@@ -12,6 +12,12 @@ export interface Comment {
   createdAt: Date;
 }
 
+// Filtres de la liste des commentaires du backoffice (ADR-004).
+export interface CommentFilter {
+  videoId?: string;
+  userId?: string;
+}
+
 // Ce que l'utilisateur connecté a fait sur un ensemble de vidéos et d'auteurs (état des boutons du feed).
 export interface ViewerInteractions {
   likedVideoIds: Set<string>;

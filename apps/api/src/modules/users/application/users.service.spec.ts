@@ -199,4 +199,30 @@ describe('UsersService', () => {
       await expect(service.deleteAccount(alice.id)).rejects.toBeInstanceOf(UserNotFoundError);
     });
   });
+
+  describe('backoffice (ADR-004)', () => {
+    const carol: User = { ...alice, id: '0192f3a0-0000-7000-8000-000000000003', username: 'carol.b', displayName: 'Carole Bernard', createdAt: NOW };
+
+    beforeEach(() => {
+      service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }, { ...carol }]), avatars, contentCleanup, () => NOW);
+    });
+
+    it('liste tous les comptes du plus récent au plus ancien, par pages', async () => {
+      await expect(service.searchAccounts(null, null, 2)).resolves.toMatchObject([{ id: carol.id }, { id: bob.id }]);
+      await expect(service.searchAccounts('  ', bob.id, 2)).resolves.toMatchObject([{ id: alice.id }]);
+    });
+
+    it('cherche dans le pseudo (avec ou sans @), le nom, sans casse, et par identifiant', async () => {
+      await expect(service.searchAccounts('@CAROL', null, 10)).resolves.toMatchObject([{ id: carol.id }]);
+      await expect(service.searchAccounts('bernard', null, 10)).resolves.toMatchObject([{ id: carol.id }]);
+      await expect(service.searchAccounts('b', null, 10)).resolves.toMatchObject([{ id: carol.id }, { id: bob.id }]);
+      await expect(service.searchAccounts(alice.id, null, 10)).resolves.toMatchObject([{ id: alice.id }]);
+      await expect(service.searchAccounts('personne', null, 10)).resolves.toEqual([]);
+    });
+
+    it('compte les comptes, et ceux créés depuis une date', async () => {
+      await expect(service.countAccounts()).resolves.toBe(3);
+      await expect(service.countAccounts(new Date('2026-09-01T00:00:00Z'))).resolves.toBe(1);
+    });
+  });
 });

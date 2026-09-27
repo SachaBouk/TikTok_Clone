@@ -366,4 +366,50 @@ describe('VideosService', () => {
       await expect(service.getVideo(video.id, null)).resolves.toMatchObject({ status: 'ready' });
     });
   });
+
+  describe('backoffice (ADR-004)', () => {
+    async function videoOf(userId: string, status: 'uploading' | 'processing' | 'ready' | 'failed') {
+      const { video } = await service.createUpload(userId, { contentType: 'video/mp4', fileSize: 1000 });
+      Object.assign(videos.videos.get(video.id)!, { status });
+      return video;
+    }
+
+    it("retire la vidéo de n'importe quel auteur, avec le même nettoyage que l'auteur", async () => {
+      const video = await videoOf(BOB, 'processing');
+      await service.removeVideo(video.id);
+      expect(videos.videos.has(video.id)).toBe(false);
+      expect(cleanup.scheduled).toEqual([
+        { cleanup: { videoId: video.id, rawKey: video.rawKey, uploadId: video.uploadId }, delayMs: CLEANUP_DELAY_MS },
+      ]);
+      expect(queue.cancelled).toEqual([video.id]);
+      await expect(service.removeVideo(video.id)).rejects.toBeInstanceOf(VideoNotFoundError);
+    });
+
+    it('liste toutes les vidéos, filtrées par statut et par auteur, de la plus récente à la plus ancienne', async () => {
+      const ready = await videoOf(ALICE, 'ready');
+      const failed = await videoOf(ALICE, 'failed');
+      const other = await videoOf(BOB, 'ready');
+      const all = [ready, failed, other].map((v) => v.id).sort().reverse();
+
+      expect((await service.listVideoDetails({}, null, 10)).map((v) => v.id)).toEqual(all);
+      expect((await service.listVideoDetails({}, all[0]!, 10)).map((v) => v.id)).toEqual(all.slice(1));
+      expect((await service.listVideoDetails({ status: 'ready' }, null, 10)).map((v) => v.id).sort()).toEqual([ready.id, other.id].sort());
+      expect(await service.listVideoDetails({ status: 'ready', userId: ALICE }, null, 10)).toMatchObject([
+        { id: ready.id, status: 'ready', likesCount: 0 },
+      ]);
+      expect(await service.getVideoDetails([failed.id, 'inconnue', failed.id])).toMatchObject([{ id: failed.id, status: 'failed' }]);
+    });
+
+    it('compte les vidéos par statut et par auteur', async () => {
+      await videoOf(ALICE, 'ready');
+      await videoOf(ALICE, 'failed');
+      await videoOf(BOB, 'ready');
+      await expect(service.countVideos(new Date('2025-12-31T00:00:00Z'))).resolves.toEqual({
+        byStatus: { uploading: 0, processing: 0, ready: 2, failed: 1 },
+        createdSince: 3,
+      });
+      await expect(service.countVideos(new Date(Date.now() + 60_000))).resolves.toMatchObject({ createdSince: 0 });
+      await expect(service.countVideosByAuthors([ALICE, BOB, 'personne'])).resolves.toEqual(new Map([[ALICE, 2], [BOB, 1]]));
+    });
+  });
 });

@@ -193,4 +193,27 @@ describe('AuthService', () => {
       await expect(service.login('x@y.fr', 'nimportequoi')).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
   });
+
+  describe('rôle administrateur (ADR-004)', () => {
+    it('ne reconnaît que les comptes au rôle admin', async () => {
+      await service.register(registration);
+      await service.register({ ...registration, email: 'bob@example.com', username: 'bob' });
+      const [alice, bob] = accounts.accounts;
+      accounts.adminIds.add(alice!.id);
+
+      await expect(service.isAdmin(alice!.id)).resolves.toBe(true);
+      await expect(service.isAdmin(bob!.id)).resolves.toBe(false);
+      await expect(service.isAdmin('inconnu')).resolves.toBe(false);
+      await expect(service.findAdminIds([alice!.id, bob!.id, alice!.id])).resolves.toEqual(new Set([alice!.id]));
+    });
+
+    it('prend en compte un rôle retiré aussitôt', async () => {
+      await service.register(registration);
+      const id = accounts.accounts[0]!.id;
+      accounts.adminIds.add(id);
+      await expect(service.isAdmin(id)).resolves.toBe(true);
+      accounts.adminIds.delete(id);
+      await expect(service.isAdmin(id)).resolves.toBe(false);
+    });
+  });
 });

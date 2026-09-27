@@ -6,6 +6,8 @@ import { EmailAlreadyUsedError, UsernameAlreadyUsedError } from '../domain/auth.
 // Adaptateur en mémoire pour les tests : reproduit les contraintes d'unicité de la base.
 export class InMemoryAuthAccountRepository extends AuthAccountRepository {
   readonly accounts: (NewAccount & { id: string })[] = [];
+  // Rôle `admin`, attribué hors de l'API (script `admin:grant`).
+  readonly adminIds = new Set<string>();
 
   async findByEmail(email: string): Promise<AuthAccount | null> {
     return toAuthAccount(this.accounts.find((a) => a.email === email));
@@ -21,6 +23,10 @@ export class InMemoryAuthAccountRepository extends AuthAccountRepository {
     const created = { ...account, id: randomUUID() };
     this.accounts.push(created);
     return { id: created.id, passwordHash: created.passwordHash };
+  }
+
+  async findAdminIds(ids: string[]): Promise<Set<string>> {
+    return new Set(ids.filter((id) => this.adminIds.has(id)));
   }
 }
 

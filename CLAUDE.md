@@ -12,7 +12,7 @@ Une application type TikTok, développée par une seule personne. Elle comprend 
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer. Ne jamais marquer comme accepté un ADR que l'on rédige ou modifie.
 
-Le projet est en construction, ADR par ADR. Sont en place : l'infrastructure Docker locale (ADR-015), le schéma Prisma (ADR-006), l'architecture backend (ADR-003) avec le module de référence `users`, l'authentification (ADR-010, module `auth`), le contrat OpenAPI (ADR-005), l'upload direct des vidéos (ADR-007, module `videos`), le traitement asynchrone BullMQ (ADR-012), le transcodage HLS du worker (ADR-008), le seed de démo, le feed aléatoire (ADR-016, module `feed`, cache Redis de l'ADR-014), les interactions sociales (module `interactions`), le centre d'activité (module `notifications`), le temps réel (ADR-011, module `realtime` : fin du transcodage, activité et badge en direct), la messagerie directe (module `messaging` : demandes, blocage, suppression, partage de vidéo, « en train d'écrire », limites d'envoi) les notifications push (module `push`, APNs) et le profil (module `users` : modification, photo de profil ; listes d'abonnés, relation, grilles, vues, historiques de visionnage et de commentaires dans `interactions` et `feed`), et l'app iOS (ADR-002) : socle (projet XcodeGen, client généré, authentification et Keychain, navigation native, mode invité), feed avec lecteur HLS, interactions (like, favori, republication, partage par lien d'app, follow, commentaires, vidéo seule), publication (galerie, envoi par parties avec reprise après relance, suivi du traitement), client WebSocket temps réel (reconnexion, 4001, relecture REST) profil (son profil et celui des autres, grilles, modification et photo, abonnés et abonnements, historiques, blocage, suppression du compte), centre d'activité (notifications, badge et arrivées en direct) messagerie (conversations, demandes, « Vu », « en train d'écrire », partage de vidéo, limites d'envoi) et mesure d'audience (ADR-013, PostHog : consentement, visionnage, engagement, onboarding, expérience A/B « invitation invité »). Restent notamment les notifications push de l'app iOS, le portefeuille (ADR-009) et le backoffice (ADR-004). La documentation, les commentaires de code et les textes d'interface sont en français et doivent le rester.
+Le projet est en construction, ADR par ADR. Sont en place : l'infrastructure Docker locale (ADR-015), le schéma Prisma (ADR-006), l'architecture backend (ADR-003) avec le module de référence `users`, l'authentification (ADR-010, module `auth`), le contrat OpenAPI (ADR-005), l'upload direct des vidéos (ADR-007, module `videos`), le traitement asynchrone BullMQ (ADR-012), le transcodage HLS du worker (ADR-008), le seed de démo, le feed aléatoire (ADR-016, module `feed`, cache Redis de l'ADR-014), les interactions sociales (module `interactions`), le centre d'activité (module `notifications`), le temps réel (ADR-011, module `realtime` : fin du transcodage, activité et badge en direct), la messagerie directe (module `messaging` : demandes, blocage, suppression, partage de vidéo, « en train d'écrire », limites d'envoi) les notifications push (module `push`, APNs) et le profil (module `users` : modification, photo de profil ; listes d'abonnés, relation, grilles, vues, historiques de visionnage et de commentaires dans `interactions` et `feed`), et l'app iOS (ADR-002) : socle (projet XcodeGen, client généré, authentification et Keychain, navigation native, mode invité), feed avec lecteur HLS, interactions (like, favori, republication, partage par lien d'app, follow, commentaires, vidéo seule), publication (galerie, envoi par parties avec reprise après relance, suivi du traitement), client WebSocket temps réel (reconnexion, 4001, relecture REST) profil (son profil et celui des autres, grilles, modification et photo, abonnés et abonnements, historiques, blocage, suppression du compte), centre d'activité (notifications, badge et arrivées en direct) messagerie (conversations, demandes, « Vu », « en train d'écrire », partage de vidéo, limites d'envoi) et mesure d'audience (ADR-013, PostHog : consentement, visionnage, engagement, onboarding, expérience A/B « invitation invité »), et le backoffice (ADR-004 : rôle administrateur, module `admin` de l'API, app Next.js avec tableau de bord, comptes, vidéos et commentaires). Restent notamment les notifications push de l'app iOS et le portefeuille (ADR-009). La documentation, les commentaires de code et les textes d'interface sont en français et doivent le rester.
 
 ## Commandes
 
@@ -51,6 +51,7 @@ pnpm db:deploy     # applique les migrations existantes sans en créer
 pnpm db:reset      # supprime toutes les données et rejoue les migrations
 pnpm db:studio
 pnpm seed          # comptes et vidéos de démo, via l'API (ADR-016) ; API et worker lancés
+pnpm admin:grant <email | @pseudo>   # rôle administrateur du backoffice (ADR-004) ; admin:revoke, admin:list
 ```
 
 - Prisma 7 fonctionne différemment des versions précédentes :
@@ -70,7 +71,7 @@ pnpm seed          # comptes et vidéos de démo, via l'API (ADR-016) ; API et w
   - Clés composites pour les tables de liaison.
   - Suppression d'un compte en cascade, sauf `gifts_sent` (passage à `NULL`, l'historique est conservé).
 
-Tests : Vitest dans `apps/api` et `apps/worker` (fichiers `*.spec.ts`, exclus du build par `tsconfig.build.json`). Les tests du worker (`media/ffmpeg.spec.ts`) lancent le vrai FFmpeg sur des vidéos générées : FFmpeg et ffprobe doivent être installés. Pas encore de linter.
+Tests : Vitest dans `apps/api`, `apps/worker` et `apps/backoffice` (fichiers `*.spec.ts`, exclus du build de l'api et du worker par `tsconfig.build.json`). Les tests du worker (`media/ffmpeg.spec.ts`) lancent le vrai FFmpeg sur des vidéos générées : FFmpeg et ffprobe doivent être installés. Pas encore de linter.
 
 ```bash
 pnpm test                                        # tous les tests (turbo)
@@ -108,7 +109,7 @@ Vérifier ce qui est indexé avant de committer.
 - `apps/worker` : Node + FFmpeg (`execFile`).
   - En dev, il tourne via `tsx watch`. Comme l'api, il charge le `.env` racine (`--env-file-if-exists`).
   - Il consomme la queue BullMQ `video-transcode`. Il n'accède jamais à PostgreSQL : il n'a besoin que de Redis et du stockage.
-- `apps/backoffice` : Next.js 16 (App Router) et React 19. Lit `API_URL` (par défaut `http://localhost:3000`).
+- `apps/backoffice` : Next.js 16 (App Router), React 19, Tailwind v4 et shadcn/ui. Lit le `.env` racine (`next.config.ts`) : `API_URL` (par défaut `http://localhost:3000`), `POSTHOG_PROJECT_URL` (facultatif). Voir « Backoffice » et `apps/backoffice/README.md`.
 - `packages/shared` (`@repo/shared`) : DTOs TypeScript partagés entre l'api et le backoffice, plus le contrat des files BullMQ entre l'api et le worker (`transcoding.ts`).
   - Les consommateurs importent le `dist/` compilé, jamais les sources. C'est pourquoi toutes les tâches de `turbo.json` ont `dependsOn: ["^build"]`.
   - Si un consommateur ne voit pas un nouveau type partagé, rebuilder shared.
@@ -139,7 +140,7 @@ L'app iOS n'utilise **pas** `@repo/shared`. Son client d'API est généré depui
 
 ### Backend : monolithe modulaire en hexagonale allégée (ADR-003)
 
-Il est découpé en modules par feature : `auth`, `users`, `videos`, `feed`, `interactions`, `wallet`, `notifications`, `realtime`, plus `messaging` et `push`. Ces deux derniers ont été ajoutés avec le développeur, hors de la liste de l'ADR-003 (à y reporter). Chaque module compte quatre couches :
+Il est découpé en modules par feature : `auth`, `users`, `videos`, `feed`, `interactions`, `wallet`, `notifications`, `realtime`, plus `messaging`, `push` et `admin`. Ces trois derniers ont été ajoutés avec le développeur, hors de la liste de l'ADR-003 (à y reporter). `admin` n'a ni données propres ni couche `infrastructure/` : il assemble ce que les autres modules exposent. Chaque module compte quatre couches :
 - `domain/` : types TS simples et ports (interfaces), par exemple `VideoRepository` ou le port du stockage objet.
 - `application/` : **un seul** service par module, qui porte toute la logique métier (par exemple `VideosService.like()`).
 - `infrastructure/` : adaptateurs qui implémentent les ports (Prisma, stockage compatible S3).
@@ -189,7 +190,7 @@ Traitement asynchrone (ADR-012), implémenté :
 - **Piège BullMQ** : une `Queue` ou un `Worker` ouvre la connexion Redis dès sa construction, même avec `lazyConnect`. Ne les créer que dans `onModuleInit` ou au premier usage, jamais dans un constructeur ou une factory de provider. Sinon l'export OpenAPI, qui construit les modules sans les initialiser, reste bloqué à retenter Redis.
 
 Suppression d'une vidéo, implémentée (choix du développeur, pas dans les ADR) :
-- **Route** : `DELETE /videos/:id` (204), par son auteur seulement, **quel que soit le statut** (`uploading` compris). 404 pour la vidéo d'un autre, comme `completeUpload`.
+- **Route** : `DELETE /videos/:id` (204), par son auteur seulement (un administrateur passe par `DELETE /admin/videos/:id`, même suppression), **quel que soit le statut** (`uploading` compris). 404 pour la vidéo d'un autre, comme `completeUpload`.
 - **En base** : suppression réelle, pas de statut « supprimée ». La cascade emporte likes, favoris, republications, commentaires, historique de visionnage et notifications. Les compteurs des comptes restent justes (triggers). Un message qui partageait la vidéo la montre indisponible (`sharedVideo.available` faux). Le feed saute la vidéo.
 - **Fichiers** : file BullMQ `video-cleanup`, produite et consommée par l'API (`BullmqVideoCleanupQueue`, `VideoCleanupConsumer`). 5 tentatives, backoff exponentiel depuis 10 s. Le nettoyage annule l'upload multipart en cours, supprime le brut, puis tout `<videoId>/` du bucket HLS (manifestes, segments, miniature). L'API a donc aussi besoin de `S3_BUCKET_HLS`.
 - **Ordre, pour ne perdre ni fichiers ni vidéo** : le nettoyage est programmé **avant** la suppression en base, avec un délai de 30 s (`CLEANUP_DELAY_MS`). À l'exécution, **si la vidéo existe encore** (suppression échouée), rien n'est supprimé. Si la programmation échoue (Redis indisponible), la requête échoue et rien n'est supprimé.
@@ -244,11 +245,28 @@ Seed de démo (ADR-016), `apps/api/scripts/seed.ts` :
 - **Jetons et paywall** : RevenueCat, jetons crédités sur le `WALLET` (ADR-009).
 - **Analytics** : PostHog (ADR-013), dans l'app iOS seulement (un seul SDK, pas d'événement côté API) : voir « Mesure d'audience » dans « App iOS ».
 - **Hébergement** : pas encore choisi (ADR-015). Tout reste dockerisé et indépendant de l'hébergeur. Le stockage passe par une interface compatible S3 (MinIO en local).
-- **Backoffice** (ADR-004) :
-  - Tailwind + shadcn/ui, architecture MVC.
-  - Les Server Actions servent de controllers ; les models appellent l'API via un `apiClient`.
-  - **Le backoffice ne contacte jamais PostgreSQL ni Redis directement**, uniquement l'API REST.
+- **Backoffice** (ADR-004) : voir « Backoffice » ci-dessous.
 - **iOS** (ADR-002) : voir « App iOS » ci-dessous.
+
+### Backoffice (ADR-004, module `admin` et `apps/backoffice`)
+
+- **Rôle administrateur** (choix du développeur) : colonne `users.role` (enum `user_role` : `user` | `admin`, migration `user_role`), propriété du module `auth` (`AuthAccountRepository.findAdminIds`, `AuthService.isAdmin`). **Aucune route ne l'attribue** : script `apps/api/scripts/admin-role.ts` (`pnpm admin:grant <email | @pseudo>`, `admin:revoke`, `admin:list`), seul script qui écrit directement en base.
+- **Garde** : `@AdminOnly()` (`auth/interfaces/admin-only.decorator.ts`) pose une métadonnée lue par la garde globale `JwtAuthGuard` : access token exigé, puis **rôle relu en base à chaque requête** (403 sinon). Un rôle retiré prend effet aussitôt, sans attendre l'expiration du JWT. Le décorateur documente aussi le 403 dans la spec.
+- **Module `admin`** (`AdminService`, `AdminController`) : sans données propres. Il lit et modère via `UsersService` (`searchAccounts`, `countAccounts`), `VideosService` (`listVideoDetails`, `getVideoDetails`, `countVideos`, `countVideosByAuthors`, `removeVideo`), `InteractionsService` (`listAllComments`, `countComments`, `removeComment`) et `AuthService.findAdminIds`. Les erreurs des autres modules sont traduites en `AdminTargetNotFoundError` (404). Aucun module ne dépend d'`admin`.
+- **Routes** (toutes `@AdminOnly`, tag `admin`, dans la spec comme le reste : le client Swift les génère sans les utiliser) :
+  - `GET /admin/me` (vérification du rôle à la connexion), `GET /admin/stats` (comptes, vidéos par statut, commentaires : totaux et 7 derniers jours) ;
+  - `GET /admin/users?q=&cursor=&limit=` : recherche partielle sans casse dans le pseudo (avec ou sans `@`) et le nom, ou identifiant exact ; `GET /admin/users/:id` (rôle, nombre de vidéos tous statuts) ;
+  - `GET /admin/videos?status=&userId=&cursor=&limit=`, `GET /admin/videos/:id` (tous statuts, compteurs, auteur), `DELETE /admin/videos/:id` (204) ;
+  - `GET /admin/comments?videoId=&userId=&cursor=&limit=`, `DELETE /admin/comments/:id` (204).
+  Pages de 20 par défaut, 100 au maximum, du plus récent au plus ancien ; curseur = identifiant du dernier élément lu (UUID v7), même quand il a été sauté faute d'auteur.
+- **Modération** : `VideosService.removeVideo` fait la même suppression que l'auteur (nettoyage programmé, job retiré, cascade). `InteractionsService.removeComment` supprime le commentaire de n'importe quel auteur ; sa notification part par la cascade. **L'auteur n'est pas prévenu.**
+- **App** (`apps/backoffice`, MVC) : vues dans `app/` (`(admin)/` protégé, `login/`, `auth/fin/`), controllers = Server Actions dans `controllers/`, models dans `models/` (types de `@repo/shared`), client `lib/api-client.ts` (`server-only`). **Le backoffice ne contacte jamais PostgreSQL ni Redis**, uniquement l'API, et seulement depuis le serveur Next.
+- **Session** : jetons de l'API dans des cookies `httpOnly` (`bo_access`, `bo_refresh`), jamais visibles du navigateur. Connexion : `/auth/login` puis `/admin/me` ; un compte sans rôle est refusé et sa session API révoquée. Déconnexion : `/auth/logout`.
+- **Piège Next 16** : une page ne peut pas écrire de cookie pendant son rendu. Le rafraîchissement se fait donc dans `proxy.ts` (ex-middleware), qui passe les nouveaux jetons à la requête en cours (`request.cookies.set` puis `NextResponse.next({ request: { headers } })`) et au navigateur. Une page qui reçoit 401 ou 403 redirige vers le Route Handler `/auth/fin`, qui efface les cookies.
+- **Piège de la rotation** : l'API révoque toute la famille si un refresh token déjà utilisé revient (ADR-010), or le navigateur envoie plusieurs requêtes simultanées avec le même cookie. `lib/token-refresh.ts` fait **un seul appel par refresh token** et ressert le résultat pendant 30 s. Vérifié : 5 requêtes simultanées, une seule rotation ; le même token rejoué après 30 s révoque la session (détection de vol). Limite : état propre au processus (une seule instance du backoffice).
+- **Écrans** : tableau de bord (liens vers PostHog si `POSTHOG_PROJECT_URL`), comptes, vidéos (lecture HLS native dans Safari, hls.js ailleurs ; MinIO renvoie les en-têtes CORS), commentaires. Suppressions confirmées dans une `AlertDialog`.
+- **shadcn/ui** : `components.json` (style `radix-nova`), composants générés dans `components/ui/` (`pnpm dlx shadcn@latest add <nom>`). Utilitaire `cn` du paquet `cn` (shadcn). Police système : `next/font/google` exigerait le réseau au build.
+- **Pas encore** : suspension de compte, signalements (pas de file de modération), journal des actions de modération, copie des données PostHog (liens seulement), limitation de débit de la connexion.
 
 ### App iOS (ADR-002, `apps/ios`)
 
@@ -493,7 +511,7 @@ Socle implémenté ; détails et commandes dans `apps/ios/README.md`.
   - vidéos partagées via `VideosService` ;
   - événements via `MessagingEventPublisher` (WebSocket et push), et « en train d'écrire » reçu via `MessagingRealtimeHandlers` ;
   - vues de conversation en SQL brut (`$queryRaw`, `LATERAL`), une requête par page ; index `messages(conversation_id, message_id)`.
-- **À reporter dans les ADR** : ADR-006, pour les index `follows(following_id, created_at)`, `follows(follower_id, created_at)`, `favorites(user_id, created_at)`, `reposts(user_id, created_at)` et `likes(user_id, created_at)`, le trigger `views_count` (comptes distincts, jamais décrémenté), les colonnes `last_read_message_id`, `cleared_up_to_message_id`, `request_sender_id`, `accepted_at`, `declined_at`, `shared_video_id`, les tables `blocks` et `push_devices`, et les triggers. ADR-013, pour le consentement opt-in, l'identification par le seul identifiant du compte, PostHog Cloud UE et l'expérience « invitation invité ». ADR-016, pour les demandes, le blocage, les limites et les règles du profil (pseudo modifiable sans délai, bio de 80 caractères, listes publiques, favoris et likes privés, vidéos en attente visibles de leur seul auteur, suppression d'une vidéo par son auteur, vues par comptes distincts, historique effaçable à la main, historique des commentaires privé). ADR-012, pour la file `video-cleanup`. ADR-015 (ou ADR-007), pour le bucket `avatars` et l'envoi signé de la photo de profil.
+- **À reporter dans les ADR** : ADR-004, pour le rôle administrateur (colonne `users.role`, script `admin:grant`, pas de route d'attribution), le périmètre de la première version et la session du backoffice (cookies httpOnly, rafraîchissement dans le proxy). ADR-006, pour la colonne `role`, les index `follows(following_id, created_at)`, `follows(follower_id, created_at)`, `favorites(user_id, created_at)`, `reposts(user_id, created_at)` et `likes(user_id, created_at)`, le trigger `views_count` (comptes distincts, jamais décrémenté), les colonnes `last_read_message_id`, `cleared_up_to_message_id`, `request_sender_id`, `accepted_at`, `declined_at`, `shared_video_id`, les tables `blocks` et `push_devices`, et les triggers. ADR-013, pour le consentement opt-in, l'identification par le seul identifiant du compte, PostHog Cloud UE et l'expérience « invitation invité ». ADR-016, pour les demandes, le blocage, les limites et les règles du profil (pseudo modifiable sans délai, bio de 80 caractères, listes publiques, favoris et likes privés, vidéos en attente visibles de leur seul auteur, suppression d'une vidéo par son auteur, vues par comptes distincts, historique effaçable à la main, historique des commentaires privé). ADR-012, pour la file `video-cleanup`. ADR-015 (ou ADR-007), pour le bucket `avatars` et l'envoi signé de la photo de profil.
 - **Pas encore** :
   - conversations à plusieurs ;
   - pièces jointes autres que des vidéos du feed ;

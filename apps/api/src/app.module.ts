@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './database/prisma.module';
 import { HealthController } from './health/health.controller';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { InteractionsModule } from './modules/interactions/interactions.module';
@@ -13,7 +14,7 @@ import { VideosModule } from './modules/videos/videos.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule],
+  imports: [PrismaModule, RedisModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, AdminModule],
   controllers: [HealthController],
 })
 export class AppModule {}

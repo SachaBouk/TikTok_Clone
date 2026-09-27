@@ -98,6 +98,17 @@ export class AuthService {
     return this.accessTokens.verify(accessToken);
   }
 
+  // Rôle administrateur (ADR-004), relu en base à chaque requête d'administration : un rôle retiré
+  // prend effet aussitôt, sans attendre l'expiration de l'access token.
+  async isAdmin(userId: string): Promise<boolean> {
+    return (await this.accounts.findAdminIds([userId])).has(userId);
+  }
+
+  // Administrateurs parmi `ids` (liste des comptes du backoffice).
+  findAdminIds(ids: string[]): Promise<Set<string>> {
+    return this.accounts.findAdminIds([...new Set(ids)]);
+  }
+
   // Déconnexion de l'appareil : révoque la session. Idempotent, ne révèle rien si le token est inconnu.
   async logout(refreshToken: string): Promise<void> {
     const token = await this.refreshTokens.findByHash(hashToken(refreshToken));

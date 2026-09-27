@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoPosition } from '../domain/video';
+import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
 const videoSelect = {
@@ -128,7 +128,54 @@ export class PrismaVideoRepository extends VideoRepository {
       select: videoSelect,
     });
   }
+
+  findDetails(filter: VideoFilter, beforeId: string | null, limit: number): Promise<VideoDetails[]> {
+    return this.prisma.video.findMany({
+      where: { status: filter.status, userId: filter.userId, id: beforeId ? { lt: beforeId } : undefined },
+      orderBy: { id: 'desc' },
+      take: limit,
+      select: detailsSelect,
+    });
+  }
+
+  findDetailsByIds(ids: string[]): Promise<VideoDetails[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.prisma.video.findMany({ where: { id: { in: ids } }, select: detailsSelect });
+  }
+
+  async countByStatus(): Promise<Record<VideoStatus, number>> {
+    const counts: Record<VideoStatus, number> = { uploading: 0, processing: 0, ready: 0, failed: 0 };
+    const rows = await this.prisma.video.groupBy({ by: ['status'], _count: { _all: true } });
+    for (const row of rows) counts[row.status] = row._count._all;
+    return counts;
+  }
+
+  countCreatedSince(since: Date): Promise<number> {
+    return this.prisma.video.count({ where: { createdAt: { gte: since } } });
+  }
+
+  async countByAuthors(userIds: string[]): Promise<Map<string, number>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.prisma.video.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _count: { _all: true } });
+    return new Map(rows.map((row) => [row.userId, row._count._all]));
+  }
 }
+
+const detailsSelect = {
+  id: true,
+  userId: true,
+  description: true,
+  status: true,
+  hlsUrl: true,
+  thumbnailUrl: true,
+  viewsCount: true,
+  likesCount: true,
+  commentsCount: true,
+  favoritesCount: true,
+  sharesCount: true,
+  repostsCount: true,
+  createdAt: true,
+} as const;
 
 const publishedSelect = {
   id: true,

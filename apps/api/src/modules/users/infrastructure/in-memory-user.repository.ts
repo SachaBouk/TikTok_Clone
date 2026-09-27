@@ -45,6 +45,25 @@ export class InMemoryUserRepository extends UserRepository {
     return this.users.delete(id);
   }
 
+  async search(query: string | null, beforeId: string | null, limit: number): Promise<User[]> {
+    const needle = query?.toLowerCase();
+    return [...this.users.values()]
+      .filter((user) => !beforeId || user.id < beforeId)
+      .filter(
+        (user) =>
+          !needle ||
+          user.username.toLowerCase().includes(needle) ||
+          user.displayName.toLowerCase().includes(needle) ||
+          user.id === needle,
+      )
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .slice(0, limit);
+  }
+
+  async count(createdSince: Date | null): Promise<number> {
+    return [...this.users.values()].filter((user) => !createdSince || user.createdAt >= createdSince).length;
+  }
+
   // Reproduit le trigger des compteurs de follow de la base (migration interaction_counters), pour les tests.
   adjustCounter(id: string, counter: 'followersCount' | 'followingCount', delta: number) {
     const user = this.users.get(id);

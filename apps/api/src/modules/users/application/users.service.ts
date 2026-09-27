@@ -69,6 +69,18 @@ export class UsersService {
     return this.users.findByIds([...new Set(ids)]);
   }
 
+  // Backoffice (ADR-004) : recherche par pseudo (avec ou sans « @ »), nom ou identifiant ; sans recherche,
+  // tous les comptes. Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné.
+  searchAccounts(query: string | null, beforeId: string | null, limit: number): Promise<User[]> {
+    const needle = query?.trim().replace(/^@/, '') || null;
+    return this.users.search(needle, beforeId, limit);
+  }
+
+  // Backoffice : nombre de comptes, créés depuis `createdSince` s'il est donné.
+  countAccounts(createdSince: Date | null = null): Promise<number> {
+    return this.users.count(createdSince);
+  }
+
   // Modification du profil par son titulaire (ADR-016) : pseudo, nom, bio. Seuls les champs présents changent.
   // Le pseudo peut changer sans délai ; l'ancien est libéré aussitôt.
   async updateProfile(userId: string, update: ProfileUpdate): Promise<User> {

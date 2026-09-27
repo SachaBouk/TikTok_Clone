@@ -22,6 +22,15 @@ datasource db {
 
 // ─── Compte (ADR-010, ADR-016) ───────────────────────────────────────────────
 
+// Rôle du compte (ADR-004) : `admin` ouvre les routes /admin du backoffice. Attribué uniquement par le
+// script `pnpm admin:grant`, jamais par une route de l'API.
+enum UserRole {
+  user
+  admin
+
+  @@map("user_role")
+}
+
 model User {
   id             String   @id @default(uuid(7)) @map("user_id") @db.Uuid
   // Nul pour un compte Apple dont l'email n'a pas été partagé.
@@ -36,6 +45,7 @@ model User {
   displayName    String   @map("display_name")
   avatarUrl      String?  @map("avatar_url")
   bio            String?
+  role           UserRole @default(user)
   // Compteurs dénormalisés, maintenus par les services applicatifs.
   followersCount Int      @default(0) @map("followers_count")
   followingCount Int      @default(0) @map("following_count")

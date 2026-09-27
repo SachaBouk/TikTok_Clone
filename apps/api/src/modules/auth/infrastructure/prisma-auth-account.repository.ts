@@ -31,4 +31,10 @@ export class PrismaAuthAccountRepository extends AuthAccountRepository {
       throw error;
     }
   }
+
+  async findAdminIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const admins = await this.prisma.user.findMany({ where: { id: { in: ids }, role: 'admin' }, select: { id: true } });
+    return new Set(admins.map((admin) => admin.id));
+  }
 }

@@ -5,4 +5,6 @@ export abstract class AuthAccountRepository {
   abstract findByAppleSub(appleSub: string): Promise<AuthAccount | null>;
   // Lève EmailAlreadyUsedError ou UsernameAlreadyUsedError en cas de doublon.
   abstract create(account: NewAccount): Promise<AuthAccount>;
+  // Administrateurs (ADR-004) parmi `ids`.
+  abstract findAdminIds(ids: string[]): Promise<Set<string>>;
 }

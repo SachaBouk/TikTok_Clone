@@ -11,7 +11,16 @@ import {
   UPLOAD_PART_SIZE_BYTES,
   UPLOAD_URL_TTL_SECONDS,
 } from '../domain/upload-rules';
-import { MAX_UNPUBLISHED_VIDEOS, type PublishedVideo, type TranscodeOutcome, type Video, type VideoPosition } from '../domain/video';
+import {
+  MAX_UNPUBLISHED_VIDEOS,
+  type PublishedVideo,
+  type TranscodeOutcome,
+  type Video,
+  type VideoDetails,
+  type VideoFilter,
+  type VideoPosition,
+  type VideoStatus,
+} from '../domain/video';
 import {
   UnsupportedVideoTypeError,
   UploadIncompleteError,
@@ -138,9 +147,15 @@ export class VideosService {
   async deleteVideo(userId: string, videoId: string): Promise<void> {
     const video = await this.videos.findById(videoId);
     if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
-    await this.cleanup.schedule([filesOf(video)], CLEANUP_DELAY_MS);
-    if (video.status === 'processing') await this.transcoding.cancel(video.id);
-    await this.videos.delete(video.id);
+    await this.remove(video);
+  }
+
+  // Retrait d'une vidéo par un administrateur (backoffice, ADR-004) : même suppression que par son auteur,
+  // quel que soit son statut. L'auteur n'est pas prévenu.
+  async removeVideo(videoId: string): Promise<void> {
+    const video = await this.videos.findById(videoId);
+    if (!video) throw new VideoNotFoundError(videoId);
+    await this.remove(video);
   }
 
   // Avant la suppression d'un compte (module users) : programme le nettoyage des fichiers de toutes ses
@@ -213,11 +228,41 @@ export class VideosService {
     return this.videos.incrementShares(videoId);
   }
 
+  // Backoffice (ADR-004) : vidéos de tous statuts, filtrées, de la plus récente à la plus ancienne,
+  // strictement avant `beforeId` s'il est donné.
+  listVideoDetails(filter: VideoFilter, beforeId: string | null, limit: number): Promise<VideoDetails[]> {
+    return this.videos.findDetails(filter, beforeId, limit);
+  }
+
+  // Backoffice : vidéos existantes parmi `ids` (tous statuts), dans un ordre quelconque.
+  getVideoDetails(ids: string[]): Promise<VideoDetails[]> {
+    return this.videos.findDetailsByIds([...new Set(ids)]);
+  }
+
+  // Backoffice : nombre de vidéos par statut, et de vidéos créées depuis `since`.
+  async countVideos(since: Date): Promise<{ byStatus: Record<VideoStatus, number>; createdSince: number }> {
+    const [byStatus, createdSince] = await Promise.all([this.videos.countByStatus(), this.videos.countCreatedSince(since)]);
+    return { byStatus, createdSince };
+  }
+
+  // Backoffice : nombre de vidéos (tous statuts) de chaque compte ; un compte sans vidéo est absent.
+  countVideosByAuthors(userIds: string[]): Promise<Map<string, number>> {
+    return this.videos.countByAuthors([...new Set(userIds)]);
+  }
+
   // Une vidéo pas encore `ready` n'est visible que par son auteur (suivi du traitement).
   async getVideo(videoId: string, viewerId: string | null): Promise<Video> {
     const video = await this.videos.findById(videoId);
     if (!video || (video.status !== 'ready' && video.userId !== viewerId)) throw new VideoNotFoundError(videoId);
     return video;
+  }
+
+  // Suppression réelle : nettoyage des fichiers programmé d'abord (sans effet tant que la vidéo existe),
+  // job de transcodage retiré s'il attend encore, puis suppression en base (cascade).
+  private async remove(video: Video): Promise<void> {
+    await this.cleanup.schedule([filesOf(video)], CLEANUP_DELAY_MS);
+    if (video.status === 'processing') await this.transcoding.cancel(video.id);
+    await this.videos.delete(video.id);
   }
 }
 

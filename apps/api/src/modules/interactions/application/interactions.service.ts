@@ -8,6 +8,7 @@ import { decodeFollowCursor, encodeFollowCursor } from '../domain/follow-cursor'
 import type {
   BlockRelations,
   Comment,
+  CommentFilter,
   FollowDirection,
   ReactionPosition,
   Relationship,
@@ -208,6 +209,24 @@ export class InteractionsService {
     if (!comment) throw new CommentNotFoundError(commentId);
     if (comment.userId !== userId) throw new NotCommentAuthorError();
     await this.interactions.deleteComment(commentId);
+  }
+
+  // Retrait d'un commentaire par un administrateur (backoffice, ADR-004), quel que soit son auteur.
+  // Sa notification disparaît avec lui (cascade de la base) ; l'auteur n'est pas prévenu.
+  async removeComment(commentId: string): Promise<void> {
+    if (!(await this.interactions.findComment(commentId))) throw new CommentNotFoundError(commentId);
+    await this.interactions.deleteComment(commentId);
+  }
+
+  // Backoffice : tous les commentaires (vidéos de tous statuts), filtrés par vidéo et par auteur, du plus récent
+  // au plus ancien, strictement avant `beforeId` s'il est donné. Comptes et vidéos sont assemblés par l'appelant.
+  listAllComments(filter: CommentFilter, beforeId: string | null, limit: number): Promise<Comment[]> {
+    return this.interactions.findComments(filter, beforeId, limit);
+  }
+
+  // Backoffice : nombre de commentaires, écrits depuis `createdSince` s'il est donné.
+  countComments(createdSince: Date | null = null): Promise<number> {
+    return this.interactions.countComments(createdSince);
   }
 
   // Commentaires d'une vidéo publiée, du plus récent au plus ancien. Le curseur est l'identifiant

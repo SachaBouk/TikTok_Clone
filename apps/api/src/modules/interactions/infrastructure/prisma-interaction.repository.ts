@@ -4,6 +4,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import type {
   BlockRelations,
   Comment,
+  CommentFilter,
   FollowDirection,
   FollowPosition,
   FollowRelations,
@@ -159,6 +160,19 @@ export class PrismaInteractionRepository extends InteractionRepository {
       take: limit,
       select: commentSelect,
     });
+  }
+
+  findComments(filter: CommentFilter, beforeId: string | null, limit: number): Promise<Comment[]> {
+    return this.prisma.comment.findMany({
+      where: { videoId: filter.videoId, userId: filter.userId, ...(beforeId ? { id: { lt: beforeId } } : {}) },
+      orderBy: { id: 'desc' },
+      take: limit,
+      select: commentSelect,
+    });
+  }
+
+  countComments(createdSince: Date | null): Promise<number> {
+    return this.prisma.comment.count({ where: createdSince ? { createdAt: { gte: createdSince } } : undefined });
   }
 
   async block(blockerId: string, blockedId: string): Promise<void> {

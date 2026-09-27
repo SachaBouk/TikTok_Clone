@@ -11,4 +11,10 @@ export abstract class UserRepository {
   abstract update(id: string, changes: ProfileChanges): Promise<User | null>;
   // Renvoie false si le compte n'existe pas.
   abstract delete(id: string): Promise<boolean>;
+  // Backoffice (ADR-004) : comptes dont le pseudo ou le nom contient `query` (sans tenir compte de la casse),
+  // ou dont l'identifiant vaut `query` ; tous si `query` est nul. Du plus récent au plus ancien (identifiants
+  // UUID v7, ordonnés dans le temps), strictement avant `beforeId` s'il est donné.
+  abstract search(query: string | null, beforeId: string | null, limit: number): Promise<User[]>;
+  // Nombre de comptes, créés depuis `createdSince` s'il est donné.
+  abstract count(createdSince: Date | null): Promise<number>;
 }

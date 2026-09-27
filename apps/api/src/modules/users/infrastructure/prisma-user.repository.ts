@@ -53,4 +53,27 @@ export class PrismaUserRepository extends UserRepository {
     const { count } = await this.prisma.user.deleteMany({ where: { id } });
     return count === 1;
   }
+
+  search(query: string | null, beforeId: string | null, limit: number): Promise<User[]> {
+    const matches = query
+      ? [
+          { username: { contains: query, mode: 'insensitive' as const } },
+          { displayName: { contains: query, mode: 'insensitive' as const } },
+          // Comparer une colonne uuid à autre chose qu'un UUID ferait échouer la requête.
+          ...(UUID_PATTERN.test(query) ? [{ id: query.toLowerCase() }] : []),
+        ]
+      : undefined;
+    return this.prisma.user.findMany({
+      where: { id: beforeId ? { lt: beforeId } : undefined, OR: matches },
+      orderBy: { id: 'desc' },
+      take: limit,
+      select: userSelect,
+    });
+  }
+
+  count(createdSince: Date | null): Promise<number> {
+    return this.prisma.user.count({ where: createdSince ? { createdAt: { gte: createdSince } } : undefined });
+  }
 }
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

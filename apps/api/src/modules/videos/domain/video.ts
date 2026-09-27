@@ -33,6 +33,29 @@ export interface PublishedVideo {
   createdAt: Date;
 }
 
+// Vidéo vue par le backoffice (ADR-004) : quel que soit son statut, avec ses compteurs.
+export interface VideoDetails {
+  id: string;
+  userId: string;
+  description: string | null;
+  status: VideoStatus;
+  hlsUrl: string | null;
+  thumbnailUrl: string | null;
+  viewsCount: number;
+  likesCount: number;
+  commentsCount: number;
+  favoritesCount: number;
+  sharesCount: number;
+  repostsCount: number;
+  createdAt: Date;
+}
+
+// Filtres de la liste des vidéos du backoffice.
+export interface VideoFilter {
+  status?: VideoStatus;
+  userId?: string;
+}
+
 // Vidéos non publiées (en traitement ou en échec) montrées à leur auteur : les plus récentes seulement.
 // Il n'y a pas encore de suppression de vidéo : les échecs s'accumulent.
 export const MAX_UNPUBLISHED_VIDEOS = 50;

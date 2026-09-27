@@ -1,4 +1,4 @@
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoPosition } from './video';
+import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from './video';
 
 export abstract class VideoRepository {
   abstract create(video: NewVideo): Promise<Video>;
@@ -28,4 +28,14 @@ export abstract class VideoRepository {
   abstract findUnpublishedByAuthor(userId: string, limit: number): Promise<Video[]>;
   // +1 partage sur une vidéo publiée ; renvoie le nouveau total, ou null si la vidéo n'est pas publiée.
   abstract incrementShares(id: string): Promise<number | null>;
+
+  // Backoffice (ADR-004), tous statuts confondus. Vidéos filtrées, de la plus récente à la plus ancienne
+  // (identifiants UUID v7, ordonnés dans le temps), strictement avant `beforeId` s'il est donné.
+  abstract findDetails(filter: VideoFilter, beforeId: string | null, limit: number): Promise<VideoDetails[]>;
+  // Vidéos existantes parmi `ids`, dans un ordre quelconque.
+  abstract findDetailsByIds(ids: string[]): Promise<VideoDetails[]>;
+  abstract countByStatus(): Promise<Record<VideoStatus, number>>;
+  abstract countCreatedSince(since: Date): Promise<number>;
+  // Nombre de vidéos (tous statuts) de chaque compte de `userIds` ; un compte sans vidéo est absent.
+  abstract countByAuthors(userIds: string[]): Promise<Map<string, number>>;
 }

@@ -1,6 +1,7 @@
 // Types partagés entre apps/api et apps/backoffice (ADR-001), et contrat des files entre api et worker (ADR-012).
 // Le client iOS n'utilise pas ces types : il est généré depuis la spec OpenAPI (ADR-005).
 
+export * from './admin.js';
 export * from './auth.js';
 export * from './feed.js';
 export * from './health.js';

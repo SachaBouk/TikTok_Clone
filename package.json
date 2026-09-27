@@ -22,7 +22,10 @@
     "db:deploy": "pnpm --filter api db:deploy",
     "db:reset": "pnpm --filter api db:reset",
     "db:studio": "pnpm --filter api db:studio",
-    "seed": "pnpm --filter api seed --"
+    "seed": "pnpm --filter api seed --",
+    "admin:grant": "pnpm --filter api admin:grant --",
+    "admin:revoke": "pnpm --filter api admin:revoke --",
+    "admin:list": "pnpm --filter api admin:list"
   },
   "devDependencies": {
     "turbo": "^2.11.3",

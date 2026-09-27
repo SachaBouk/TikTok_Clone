@@ -1,6 +1,7 @@
 import type {
   BlockRelations,
   Comment,
+  CommentFilter,
   FollowDirection,
   FollowPosition,
   FollowRelations,
@@ -45,6 +46,10 @@ export abstract class InteractionRepository {
   abstract listComments(videoId: string, beforeId: string | null, limit: number): Promise<Comment[]>;
   // Commentaires écrits par `userId`, même ordre et même curseur (historique du centre d'activités, ADR-006).
   abstract listUserComments(userId: string, beforeId: string | null, limit: number): Promise<Comment[]>;
+  // Backoffice (ADR-004) : tous les commentaires, filtrés par vidéo et par auteur s'ils sont donnés, même ordre et même curseur.
+  abstract findComments(filter: CommentFilter, beforeId: string | null, limit: number): Promise<Comment[]>;
+  // Nombre de commentaires, écrits depuis `createdSince` s'il est donné.
+  abstract countComments(createdSince: Date | null): Promise<number>;
 
   // Blocage : ajoute le blocage et supprime les follows dans les deux sens (les triggers ajustent les compteurs).
   abstract block(blockerId: string, blockedId: string): Promise<void>;

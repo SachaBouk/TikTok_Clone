@@ -1,0 +1,107 @@
+import { Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
+import { ApiBadRequestResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import type { AdminCommentPageDto, AdminStatsDto, AdminUserDto, AdminUserPageDto, AdminVideoDto, AdminVideoPageDto } from '@repo/shared';
+import { ErrorResponse } from '../../../openapi/error.response';
+import { AdminOnly } from '../../auth/interfaces/admin-only.decorator';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
+import { AdminService } from '../application/admin.service';
+import { AdminErrorFilter } from './admin-error.filter';
+import { AdminCommentsQuery, AdminUsersQuery, AdminVideosQuery } from './admin.requests';
+import {
+  AdminCommentPageResponse,
+  AdminStatsResponse,
+  AdminUserPageResponse,
+  AdminUserResponse,
+  AdminVideoPageResponse,
+  AdminVideoResponse,
+  toAdminCommentDto,
+  toAdminStatsDto,
+  toAdminUserDto,
+  toAdminVideoDto,
+} from './admin.responses';
+
+const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
+
+// Routes du backoffice (ADR-004), toutes réservées aux administrateurs (@AdminOnly : 403 sinon).
+// Couche `interfaces/` : traduit HTTP ↔ service applicatif, sans logique métier (ADR-003).
+@ApiTags('admin')
+@AdminOnly()
+@ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
+@UseFilters(AdminErrorFilter)
+@Controller('admin')
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  // Compte connecté : le backoffice l'appelle à la connexion pour vérifier le rôle.
+  @Get('me')
+  @ApiOkResponse({ type: AdminUserResponse })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte supprimé.' })
+  async getAdminSession(@CurrentUser() user: AuthenticatedUser): Promise<AdminUserDto> {
+    return toAdminUserDto(await this.adminService.getAccount(user.userId));
+  }
+
+  @Get('stats')
+  @ApiOkResponse({ type: AdminStatsResponse })
+  async getAdminStats(): Promise<AdminStatsDto> {
+    return toAdminStatsDto(await this.adminService.getStats());
+  }
+
+  @Get('users')
+  @ApiOkResponse({ type: AdminUserPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminUsers(@Query() query: AdminUsersQuery): Promise<AdminUserPageDto> {
+    const page = await this.adminService.listAccounts(query.q ?? null, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminUserDto), nextCursor: page.nextCursor };
+  }
+
+  @Get('users/:id')
+  @ApiOkResponse({ type: AdminUserResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte introuvable.' })
+  async getAdminUser(@Param('id', ParseUUIDPipe) id: string): Promise<AdminUserDto> {
+    return toAdminUserDto(await this.adminService.getAccount(id));
+  }
+
+  @Get('videos')
+  @ApiOkResponse({ type: AdminVideoPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminVideos(@Query() query: AdminVideosQuery): Promise<AdminVideoPageDto> {
+    const page = await this.adminService.listVideos({ status: query.status, userId: query.userId }, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminVideoDto), nextCursor: page.nextCursor };
+  }
+
+  @Get('videos/:id')
+  @ApiOkResponse({ type: AdminVideoResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo introuvable.' })
+  async getAdminVideo(@Param('id', ParseUUIDPipe) id: string): Promise<AdminVideoDto> {
+    return toAdminVideoDto(await this.adminService.getVideo(id));
+  }
+
+  // Retrait par modération, quel que soit le statut : suppression réelle, fichiers nettoyés ensuite.
+  @Delete('videos/:id')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Vidéo supprimée, avec ses likes, commentaires et notifications.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo introuvable ou déjà supprimée.' })
+  async deleteAdminVideo(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.adminService.removeVideo(id);
+  }
+
+  @Get('comments')
+  @ApiOkResponse({ type: AdminCommentPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminComments(@Query() query: AdminCommentsQuery): Promise<AdminCommentPageDto> {
+    const page = await this.adminService.listComments({ videoId: query.videoId, userId: query.userId }, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminCommentDto), nextCursor: page.nextCursor };
+  }
+
+  @Delete('comments/:id')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Commentaire supprimé, avec sa notification.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire introuvable ou déjà supprimé.' })
+  async deleteAdminComment(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.adminService.removeComment(id);
+  }
+}

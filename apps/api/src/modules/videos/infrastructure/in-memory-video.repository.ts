@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoPosition } from '../domain/video';
+import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
 type Counter = 'viewsCount' | 'likesCount' | 'commentsCount' | 'favoritesCount' | 'sharesCount' | 'repostsCount';
@@ -113,6 +113,40 @@ export class InMemoryVideoRepository extends VideoRepository {
     return ++video.counters.sharesCount;
   }
 
+  async findDetails(filter: VideoFilter, beforeId: string | null, limit: number): Promise<VideoDetails[]> {
+    return [...this.videos.values()]
+      .filter((v) => (!filter.status || v.status === filter.status) && (!filter.userId || v.userId === filter.userId))
+      .filter((v) => !beforeId || v.id < beforeId)
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .slice(0, limit)
+      .map(toDetails);
+  }
+
+  async findDetailsByIds(ids: string[]): Promise<VideoDetails[]> {
+    return ids.flatMap((id) => {
+      const video = this.videos.get(id);
+      return video ? [toDetails(video)] : [];
+    });
+  }
+
+  async countByStatus(): Promise<Record<VideoStatus, number>> {
+    const counts: Record<VideoStatus, number> = { uploading: 0, processing: 0, ready: 0, failed: 0 };
+    for (const video of this.videos.values()) counts[video.status]++;
+    return counts;
+  }
+
+  async countCreatedSince(since: Date): Promise<number> {
+    return [...this.videos.values()].filter((v) => v.createdAt >= since).length;
+  }
+
+  async countByAuthors(userIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    for (const video of this.videos.values()) {
+      if (userIds.includes(video.userId)) counts.set(video.userId, (counts.get(video.userId) ?? 0) + 1);
+    }
+    return counts;
+  }
+
   // Reproduit les triggers de compteurs de la base (migration interaction_counters), pour les tests.
   adjustCounter(id: string, counter: Counter, delta: number) {
     const video = this.videos.get(id);
@@ -122,6 +156,19 @@ export class InMemoryVideoRepository extends VideoRepository {
 
 function toVideo({ updatedAt: _updatedAt, counters: _counters, ...video }: StoredVideo): Video {
   return { ...video };
+}
+
+function toDetails(v: StoredVideo): VideoDetails {
+  return {
+    id: v.id,
+    userId: v.userId,
+    description: v.description,
+    status: v.status,
+    hlsUrl: v.hlsUrl,
+    thumbnailUrl: v.thumbnailUrl,
+    ...v.counters,
+    createdAt: v.createdAt,
+  };
 }
 
 function toPublished(v: StoredVideo): PublishedVideo | null {
