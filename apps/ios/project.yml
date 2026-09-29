@@ -31,6 +31,10 @@ packages:
   PostHog:
     url: https://github.com/PostHog/posthog-ios
     exactVersion: 3.85.0
+  # Achats de jetons (ADR-009). Dépôt SPM officiel de RevenueCat, plus rapide à résoudre que purchases-ios ; version figée.
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios-spm
+    exactVersion: 5.91.0
 
 targets:
   TikTokClone:
@@ -41,6 +45,7 @@ targets:
     dependencies:
       - package: TikTokAPI
       - package: PostHog
+      - package: RevenueCat
     info:
       path: TikTokClone/Info.plist
       properties:
@@ -51,6 +56,8 @@ targets:
         # Mesure d'audience (ADR-013) : jeton du projet PostHog (vide : événements journalisés seulement) et hôte.
         PostHogProjectToken: $(POSTHOG_PROJECT_TOKEN)
         PostHogHost: $(POSTHOG_HOST)
+        # Achats de jetons (ADR-009) : clé publique du SDK RevenueCat (vide : achats indisponibles).
+        RevenueCatAPIKey: $(REVENUECAT_API_KEY)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

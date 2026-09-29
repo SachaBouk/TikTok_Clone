@@ -20,6 +20,8 @@ enum RealtimeUpdate: Equatable, Sendable {
     case conversationDeleted(conversationID: String, MessagingBadges)
     // L'autre participant est en train d'écrire.
     case typing(conversationID: String, userID: String)
+    // Solde de jetons changé (achat crédité, remboursement).
+    case walletUpdated(balance: Int)
 }
 
 // Port de la connexion temps réel. L'implémentation gère l'authentification, la détection des connexions

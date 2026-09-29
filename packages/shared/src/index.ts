@@ -12,3 +12,4 @@ export * from './realtime.js';
 export * from './transcoding.js';
 export * from './users.js';
 export * from './videos.js';
+export * from './wallet.js';

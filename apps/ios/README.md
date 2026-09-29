@@ -142,6 +142,29 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Événements : visionnage (durée, complétion, moment du swipe), réactions, commentaires, partages, abonnements, messages, parcours de connexion et d'inscription, publication ; ouverture de l'app (rétention).
 - Expérience `guest-signup-prompt` (variantes `control` et `prompt`, à créer dans PostHog) : en variante, la connexion s'ouvre avec une invitation après 5 vidéos regardées sans compte.
 
+## Jetons et paywall (ADR-009)
+
+- Bouton « Jetons » (avec le solde) sur son profil, et ligne « Portefeuille » dans Paramètres : solde, packs en vente, historique.
+- Achats par le SDK RevenueCat. Clé publique dans `Config/Local.xcconfig`, non versionné :
+  ```
+  REVENUECAT_API_KEY = test_…
+  ```
+  Une clé `test_…` utilise le **Test Store** de RevenueCat : achats simulés dans le simulateur, sans compte App Store Connect.
+  Dans le tableau de bord RevenueCat : une monnaie virtuelle (code `TKN`, comme `REVENUECAT_CURRENCY_CODE` de l'API), des produits
+  consommables qui en accordent (ex. `tokens_100` → 100), une offre courante qui les contient, et le webhook
+  `https://<api>/webhooks/revenuecat` avec l'en-tête `Authorization` de `REVENUECAT_WEBHOOK_AUTHORIZATION`. En local, l'API doit être
+  joignable depuis internet (tunnel) pour recevoir le webhook.
+- Sans clé : solde et historique lisibles, achats indiqués comme indisponibles.
+- Le crédit arrive par le webhook, pas par l'app : après l'achat, l'écran attend le solde à jour (événement temps réel `walletUpdated`,
+  ou relecture du solde pendant 30 s).
+- **Développement sans RevenueCat** (Debug) : argument de lancement `-fakePurchases` (packs fictifs, achat accepté sans paiement), puis
+  simuler le webhook, API lancée avec `REVENUECAT_WEBHOOK_AUTHORIZATION` :
+  ```bash
+  curl -X POST localhost:3000/webhooks/revenuecat -H "Authorization: $REVENUECAT_WEBHOOK_AUTHORIZATION" -H 'Content-Type: application/json' \
+    -d '{"event":{"type":"VIRTUAL_CURRENCY_TRANSACTION","id":"test-1","app_user_id":"<UUID du compte>","environment":"SANDBOX",
+         "product_id":"tokens_500","adjustments":[{"amount":500,"currency":{"code":"TKN"}}]}}'
+  ```
+
 ## Temps réel (ADR-011)
 
 Client implémenté : `WebSocketRealtimeChannel` (`data/realtime`), ouvert quand un compte est connecté et l'app au premier plan. Il suit les règles ci-dessous (401 et 4001 : rafraîchissement puis reconnexion ; coupure : délai croissant de 1 à 30 s ; ping toutes les 25 s) et émet `.connected` à chaque connexion. Tous les événements sont traduits (publication, activité, messagerie) ; l'app envoie « en train d'écrire » sur la connexion établie.

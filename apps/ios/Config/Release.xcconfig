@@ -4,4 +4,7 @@ API_BASE_URL = https:/$()/api.example.com
 // Mesure d'audience (ADR-013) : hôte et jeton du projet PostHog de production, à définir avec l'hébergement (ADR-015).
 POSTHOG_HOST = https:/$()/eu.i.posthog.com
 POSTHOG_PROJECT_TOKEN =
+
+// Clé publique du SDK RevenueCat (ADR-009), dans Local.xcconfig (non versionné) ; vide : achats indisponibles.
+REVENUECAT_API_KEY =
 #include? "Local.xcconfig"

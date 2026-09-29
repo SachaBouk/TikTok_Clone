@@ -18,6 +18,8 @@ enum AccountRoute: Hashable {
     case viewHistory
     case commentHistory
     case blockedAccounts
+    // Paywall et portefeuille de jetons (ADR-009).
+    case wallet(PaywallSource)
 }
 
 // Lecteur vertical ouvert depuis une grille, sur la vidéo touchée.
@@ -45,10 +47,11 @@ extension View {
             }
             .navigationDestination(for: AccountRoute.self) { route in
                 switch route {
-                case .settings: AccountSettingsView(viewModel: container.makeAccountSettingsViewModel())
+                case .settings: AccountSettingsView(viewModel: container.makeAccountSettingsViewModel(), wallet: container.wallet)
                 case .viewHistory: ViewHistoryView(viewModel: container.makeViewHistoryViewModel(), container: container)
                 case .commentHistory: CommentHistoryView(viewModel: container.makeCommentHistoryViewModel(), router: container.router)
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())
+                case .wallet(let source): WalletView(source: source, container: container)
                 }
             }
     }

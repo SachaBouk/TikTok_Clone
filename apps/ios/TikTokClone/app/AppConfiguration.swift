@@ -11,6 +11,8 @@ struct AppConfiguration: Sendable {
     let apiBaseURL: URL
     // Nil sans jeton : les événements sont seulement journalisés.
     var analytics: Analytics?
+    // Clé publique du SDK RevenueCat (ADR-009) ; nil : achats indisponibles.
+    var revenueCatAPIKey: String?
 
     // WebSocket du temps réel (ADR-011), sur le même hôte que l'API : ws:// en HTTP, wss:// en HTTPS.
     var realtimeURL: URL {
@@ -27,6 +29,11 @@ struct AppConfiguration: Sendable {
         }
         let token = (bundle.object(forInfoDictionaryKey: "PostHogProjectToken") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
         let host = (bundle.object(forInfoDictionaryKey: "PostHogHost") as? String) ?? ""
-        return AppConfiguration(apiBaseURL: url, analytics: token.isEmpty ? nil : Analytics(projectToken: token, host: host))
+        let revenueCatKey = (bundle.object(forInfoDictionaryKey: "RevenueCatAPIKey") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return AppConfiguration(
+            apiBaseURL: url,
+            analytics: token.isEmpty ? nil : Analytics(projectToken: token, host: host),
+            revenueCatAPIKey: revenueCatKey.isEmpty ? nil : revenueCatKey
+        )
     }
 }

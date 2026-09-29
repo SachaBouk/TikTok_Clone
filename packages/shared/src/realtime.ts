@@ -1,6 +1,7 @@
 import type { MessageDto } from './messaging.js';
 import type { NotificationDto } from './notifications.js';
 import type { VideoDto } from './videos.js';
+import type { WalletDto } from './wallet.js';
 
 // Messages du WebSocket `/realtime` (ADR-011), surtout du serveur vers l'app (voir aussi RealtimeClientMessageDto).
 // Forme `{ event, data }` ; `event` distingue les types (discriminant du schéma OpenAPI `RealtimeEvent`).
@@ -69,6 +70,12 @@ export interface TypingEventDto {
   data: { conversationId: string; userId: string };
 }
 
+// Solde de jetons changé (achat crédité, remboursement), envoyé à tous les appareils du compte (ADR-009).
+export interface WalletUpdatedEventDto {
+  event: 'walletUpdated';
+  data: WalletDto;
+}
+
 export type RealtimeEventDto =
   | VideoProcessedEventDto
   | NotificationCreatedEventDto
@@ -78,7 +85,8 @@ export type RealtimeEventDto =
   | ConversationReadEventDto
   | ConversationAcceptedEventDto
   | ConversationDeletedEventDto
-  | TypingEventDto;
+  | TypingEventDto
+  | WalletUpdatedEventDto;
 
 // Messages de l'app vers le serveur, sur le même WebSocket. Les autres sont ignorés.
 // `typing` : à envoyer toutes les ~3 s pendant la saisie dans une conversation.

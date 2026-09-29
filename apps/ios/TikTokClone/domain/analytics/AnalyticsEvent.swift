@@ -24,6 +24,12 @@ enum VideoSource: String, Sendable {
     case detail
 }
 
+// Écran d'où le paywall est ouvert.
+enum PaywallSource: String, Hashable, Sendable {
+    case profile
+    case settings
+}
+
 // Comment la vidéo a cessé d'être regardée.
 enum WatchExit: String, Sendable {
     // Passage à une autre vidéo (moment du swipe).
@@ -97,6 +103,23 @@ extension AnalyticsEvent {
 
     // Expérience « invitation invité » : invitation affichée (variante seulement).
     static let guestPromptShown = AnalyticsEvent(name: "guest_prompt_shown", properties: [:])
+
+    // Paywall (ADR-009) : affiché (depuis le profil ou les paramètres), achat commencé, validé par le store ou annulé.
+    static func paywallViewed(source: PaywallSource) -> AnalyticsEvent {
+        AnalyticsEvent(name: "paywall_viewed", properties: ["source": .string(source.rawValue)])
+    }
+
+    static func tokenPurchaseStarted(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "token_purchase_started", properties: ["product_id": .string(productID)])
+    }
+
+    static func tokenPurchaseCompleted(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "token_purchase_completed", properties: ["product_id": .string(productID)])
+    }
+
+    static func tokenPurchaseCancelled(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "token_purchase_cancelled", properties: ["product_id": .string(productID)])
+    }
 
     // Publication : envoi commencé, vidéo publiée ou en échec.
     static let uploadStarted = AnalyticsEvent(name: "video_upload_started", properties: [:])

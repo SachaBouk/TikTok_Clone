@@ -11,10 +11,11 @@ import { PushModule } from './modules/push/push.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { UsersModule } from './modules/users/users.module';
 import { VideosModule } from './modules/videos/videos.module';
+import { WalletModule } from './modules/wallet/wallet.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, AdminModule],
+  imports: [PrismaModule, RedisModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, WalletModule, AdminModule],
   controllers: [HealthController],
 })
 export class AppModule {}

@@ -175,7 +175,7 @@ final class MessagingModel {
         case .typing(let conversationID, let userID):
             guard userID != session.profile?.id else { return }
             showTyping(in: conversationID)
-        case .connected, .videoProcessed, .notificationCreated, .unreadNotificationsChanged:
+        case .connected, .videoProcessed, .notificationCreated, .unreadNotificationsChanged, .walletUpdated:
             break
         }
     }

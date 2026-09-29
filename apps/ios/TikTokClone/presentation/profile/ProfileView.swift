@@ -121,9 +121,26 @@ struct ProfileView: View {
     @ViewBuilder
     private var actionButtons: some View {
         if viewModel.isOwn {
-            Button("Modifier le profil") { isEditing = true }
+            HStack(spacing: 8) {
+                Button("Modifier le profil") { isEditing = true }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("profile.edit")
+                // Paywall (ADR-009) : solde et achat de jetons.
+                NavigationLink(value: AccountRoute.wallet(.profile)) {
+                    Label {
+                        if let balance = container.wallet.balance {
+                            Text(balance, format: .number.notation(.compactName))
+                        } else {
+                            Text("Jetons")
+                        }
+                    } icon: {
+                        Image(systemName: "bitcoinsign.circle.fill").foregroundStyle(.yellow)
+                    }
+                }
                 .buttonStyle(.bordered)
-                .accessibilityIdentifier("profile.edit")
+                .accessibilityLabel("Jetons")
+                .accessibilityIdentifier("profile.wallet")
+            }
         } else if viewModel.isBlocked {
             Button("Débloquer") { isConfirmingBlock = true }
                 .buttonStyle(.bordered)

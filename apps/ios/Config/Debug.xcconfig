@@ -7,4 +7,7 @@ API_BASE_URL = http:/$()/localhost:3000
 // (non versionné), par exemple : POSTHOG_PROJECT_TOKEN = phc_… ; sans jeton, les événements sont journalisés.
 POSTHOG_HOST = https:/$()/eu.i.posthog.com
 POSTHOG_PROJECT_TOKEN =
+
+// Clé publique du SDK RevenueCat (ADR-009), dans Local.xcconfig (non versionné) ; vide : achats indisponibles.
+REVENUECAT_API_KEY =
 #include? "Local.xcconfig"

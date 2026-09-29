@@ -20,6 +20,8 @@ final class AppContainer {
     let realtime: RealtimeCoordinator
     // Mesure d'audience et tests A/B (ADR-013), après consentement.
     let analytics: AnalyticsModel
+    // Portefeuille de jetons et achats (ADR-009).
+    let wallet: WalletModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -30,6 +32,7 @@ final class AppContainer {
     private let uploads: any UploadStore
     private let activityRepository: any ActivityRepository
     private let messagingRepository: any MessagingRepository
+    private let walletRepository: any WalletRepository
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -105,7 +108,24 @@ final class AppContainer {
             sendTyping: SendTypingUseCase(channel: channel),
             session: session
         )
-        realtime = RealtimeCoordinator(channel: channel, publishing: publishing, activity: activity, messaging: messaging)
+        let walletRepository = RemoteWalletRepository(client: client)
+        self.walletRepository = walletRepository
+        wallet = WalletModel(
+            loadBalance: LoadWalletBalanceUseCase(wallet: walletRepository),
+            purchases: Self.makePurchaseService(configuration),
+            session: session,
+            analytics: analytics
+        )
+        realtime = RealtimeCoordinator(channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet)
+    }
+
+    // RevenueCat avec une clé (Config/Local.xcconfig) ; sinon achats indisponibles. En Debug, `-fakePurchases`
+    // simule des achats sans compte RevenueCat (rien n'est payé ni crédité).
+    private static func makePurchaseService(_ configuration: AppConfiguration) -> any PurchaseService {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-fakePurchases") { return DevelopmentPurchaseService() }
+        #endif
+        return configuration.revenueCatAPIKey.map { RevenueCatPurchaseService(apiKey: $0) } ?? UnavailablePurchaseService()
     }
 
     // Connexion, déconnexion, passage au premier plan ou en arrière-plan.
@@ -115,6 +135,7 @@ final class AppContainer {
         if !signedIn {
             activity.reset()
             messaging.reset()
+            wallet.reset()
         }
     }
 
@@ -160,6 +181,15 @@ final class AppContainer {
             interactions: videoInteractions,
             session: session
         )
+    }
+
+    // Historique des mouvements de jetons (paywall).
+    func makeWalletTransactionList() -> PagedList<WalletTransaction> {
+        let load = LoadWalletTransactionsUseCase(wallet: walletRepository)
+        return PagedList(session: session) { cursor in
+            let page = try await load(cursor: cursor)
+            return (page.transactions, page.nextCursor)
+        }
     }
 
     // Liste complète d'un groupe du centre d'activité.

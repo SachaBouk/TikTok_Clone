@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-// Paramètres du compte : historiques, comptes bloqués, déconnexion, suppression du compte (exigence Apple).
+// Paramètres du compte : portefeuille, historiques, comptes bloqués, déconnexion, suppression du compte (exigence Apple).
 @MainActor
 @Observable
 final class AccountSettingsViewModel {
@@ -45,16 +45,28 @@ final class AccountSettingsViewModel {
 }
 
 struct AccountSettingsView: View {
+    let wallet: WalletModel
     @State private var viewModel: AccountSettingsViewModel
     @State private var isConfirmingSignOut = false
     @State private var isConfirmingDeletion = false
 
-    init(viewModel: AccountSettingsViewModel) {
+    init(viewModel: AccountSettingsViewModel, wallet: WalletModel) {
         _viewModel = State(initialValue: viewModel)
+        self.wallet = wallet
     }
 
     var body: some View {
         List {
+            Section("Portefeuille") {
+                NavigationLink(value: AccountRoute.wallet(.settings)) {
+                    LabeledContent {
+                        if let balance = wallet.balance { Text(balance, format: .number) }
+                    } label: {
+                        Label("Jetons", systemImage: "bitcoinsign.circle")
+                    }
+                }
+                .accessibilityIdentifier("settings.wallet")
+            }
             Section("Activité") {
                 NavigationLink(value: AccountRoute.viewHistory) {
                     Label("Historique de visionnage", systemImage: "clock.arrow.circlepath")

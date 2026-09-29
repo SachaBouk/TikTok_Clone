@@ -72,6 +72,7 @@ model User {
   blocksReceived           Block[]                   @relation("Blocked")
   conversationRequests     Conversation[]            @relation("ConversationRequestSender")
   pushDevices              PushDevice[]
+  walletTransactions       WalletTransaction[]
 
   @@map("users")
 }
@@ -354,6 +355,47 @@ model Wallet {
 
 // Dépense de jetons (cadeaux) : reportée après le MVP (ADR-016), table prévue par l'ADR-006.
 // Émetteur et destinataire passent à NULL si un compte est supprimé : l'historique des transferts est conservé.
+// Journal des mouvements du solde (ADR-009) : une ligne par événement RevenueCat appliqué. L'identifiant de
+// l'événement est unique : un webhook rejoué ne crédite pas deux fois. À la suppression du compte, les lignes
+// restent, anonymisées (comme gifts_sent), pour le rapprochement avec RevenueCat.
+enum WalletTransactionKind {
+  purchase
+  refund
+  adjustment
+
+  @@map("wallet_transaction_kind")
+}
+
+model WalletTransaction {
+  id                 String                @id @default(uuid(7)) @map("wallet_transaction_id") @db.Uuid
+  // Nul : compte supprimé depuis, ou acheteur inconnu de l'API (à rapprocher à la main, via appUserId).
+  userId             String?               @map("user_id") @db.Uuid
+  kind               WalletTransactionKind
+  // Mouvement annoncé par RevenueCat (signé, jamais nul : CHECK de la migration).
+  amount             Int
+  // Mouvement réellement appliqué : un retrait ne fait pas passer le solde sous 0 ; 0 pour un acheteur inconnu.
+  appliedAmount      Int                   @map("applied_amount")
+  // Solde après le mouvement ; nul pour un acheteur inconnu (aucun portefeuille touché).
+  balanceAfter       Int?                  @map("balance_after")
+  revenuecatEventId  String                @unique @map("revenuecat_event_id")
+  // Identifiant du client chez RevenueCat (UUID du compte, ou identifiant anonyme).
+  appUserId          String                @map("app_user_id")
+  productId          String?               @map("product_id")
+  storeTransactionId String?               @map("store_transaction_id")
+  store              String?
+  // SANDBOX ou PRODUCTION.
+  environment        String
+  // Date de l'événement chez RevenueCat.
+  occurredAt         DateTime              @map("occurred_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Historique d'un compte, du plus récent au plus ancien (identifiant UUID v7).
+  @@index([userId, id])
+  @@map("wallet_transactions")
+}
+
 model GiftSent {
   id          String   @id @default(uuid(7)) @map("gift_id") @db.Uuid
   senderId    String?  @map("sender_id") @db.Uuid

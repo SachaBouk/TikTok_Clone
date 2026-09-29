@@ -3543,6 +3543,100 @@
         ]
       }
     },
+    "/wallet": {
+      "get": {
+        "operationId": "getWallet",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/wallet/transactions": {
+      "get": {
+        "operationId": "listWalletTransactions",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletTransactionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou limite invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
     "/admin/me": {
       "get": {
         "operationId": "getAdminSession",
@@ -5539,6 +5633,86 @@
           }
         }
       },
+      "WalletResponse": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Jetons disponibles."
+          }
+        },
+        "required": [
+          "balance"
+        ]
+      },
+      "WalletTransactionKind": {
+        "type": "string",
+        "enum": [
+          "purchase",
+          "refund",
+          "adjustment"
+        ]
+      },
+      "WalletTransactionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WalletTransactionKind"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Variation du solde : positive pour un crédit, négative pour un retrait."
+          },
+          "balanceAfter": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Solde juste après ce mouvement."
+          },
+          "productId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Produit acheté (pack de jetons)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "amount",
+          "balanceAfter",
+          "productId",
+          "createdAt"
+        ]
+      },
+      "WalletTransactionPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du mouvement le plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletTransactionResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
       "UserRole": {
         "type": "string",
         "enum": [
@@ -6181,6 +6355,24 @@
           "data"
         ]
       },
+      "WalletUpdatedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "walletUpdated"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/WalletResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "TypingClientData": {
         "type": "object",
         "properties": {
@@ -6240,6 +6432,9 @@
           },
           {
             "$ref": "#/components/schemas/TypingEvent"
+          },
+          {
+            "$ref": "#/components/schemas/WalletUpdatedEvent"
           }
         ],
         "discriminator": {
@@ -6253,7 +6448,8 @@
             "conversationRead": "#/components/schemas/ConversationReadEvent",
             "conversationAccepted": "#/components/schemas/ConversationAcceptedEvent",
             "conversationDeleted": "#/components/schemas/ConversationDeletedEvent",
-            "typing": "#/components/schemas/TypingEvent"
+            "typing": "#/components/schemas/TypingEvent",
+            "walletUpdated": "#/components/schemas/WalletUpdatedEvent"
           }
         }
       },

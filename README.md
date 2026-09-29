@@ -89,6 +89,14 @@ Documentation interactive, API lancée : http://localhost:3000/docs. Intégratio
 
 Temps réel (ADR-011) : WebSocket `ws://localhost:3000/realtime`, authentifié par le même en-tête `Authorization: Bearer …`. Le serveur y pousse la fin du transcodage, l'activité, les messages privés et « en train d'écrire » ; les messages sont décrits par le schéma `RealtimeEvent` de la spec.
 
+## Jetons (ADR-009, RevenueCat)
+
+Les achats de jetons passent par RevenueCat, qui prévient l'API par webhook (`POST /webhooks/revenuecat`) ; l'API crédite le
+portefeuille, une seule fois par événement, et pousse le solde à l'app. Facultatif en local : sans secret, le webhook répond 503.
+Variables (voir `.env.example`) : `REVENUECAT_WEBHOOK_AUTHORIZATION` (valeur exacte de l'en-tête `Authorization` configuré dans
+RevenueCat), `REVENUECAT_CURRENCY_CODE` (`TKN`), `REVENUECAT_REJECT_SANDBOX`. Côté app et test sans compte RevenueCat :
+[apps/ios/README.md](apps/ios/README.md).
+
 ## Backoffice (ADR-004)
 
 Application d'administration Next.js sur http://localhost:3001, lancée par `pnpm dev`. Elle ne parle qu'à l'API REST (routes `/admin`),

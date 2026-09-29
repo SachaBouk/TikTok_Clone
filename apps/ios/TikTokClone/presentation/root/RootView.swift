@@ -37,6 +37,8 @@ struct RootView: View {
         }
         .onChange(of: session.profile?.id, initial: true) { _, userID in
             analytics.sessionChanged(userID: userID)
+            // Achats rattachés au compte connecté (ADR-009).
+            Task { await container.wallet.sessionChanged(userID: userID) }
         }
         .sheet(isPresented: Binding(
             get: { analytics.isAskingConsent },
