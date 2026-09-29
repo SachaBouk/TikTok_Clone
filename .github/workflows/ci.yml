@@ -1,7 +1,8 @@
 # Intégration continue : à chaque push sur main et sur chaque pull request.
 # - verify : typecheck, tests (le worker lance le vrai FFmpeg), build, contrat OpenAPI à jour (ADR-005) ;
 # - migrations : les migrations (triggers et CHECK écrits à la main compris) s'appliquent sur une base vierge,
-#   et le schéma Prisma ne présente aucun écart avec elles.
+#   et le schéma Prisma ne présente aucun écart avec elles ;
+# - images : les images Docker de l'api, du worker et du backoffice se construisent (ADR-015), sans publication.
 # Aucun secret : l'export OpenAPI complète l'environnement avec .env.example, sans PostgreSQL ni Redis.
 name: CI
 
@@ -94,3 +95,26 @@ jobs:
           diff=$(pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script)
           echo "$diff"
           echo "$diff" | grep -q "This is an empty migration" || { echo "::error::Le schéma Prisma diffère des migrations : créer une migration."; exit 1; }
+
+  images:
+    name: Images Docker (${{ matrix.app }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, worker, backoffice]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Cache des couches par app dans le cache de GitHub Actions ; rien n'est poussé vers un registre.
+      - name: Construire l'image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}

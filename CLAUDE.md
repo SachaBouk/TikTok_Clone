@@ -33,9 +33,11 @@ Infrastructure locale via Docker (`docker-compose.yml`, ADR-015) : PostgreSQL 18
 pnpm infra:up      # attend que les services soient healthy, puis lance minio-init (buckets)
 pnpm infra:down    # arrête, garde les volumes
 pnpm infra:reset   # supprime les volumes (données perdues) et redémarre
+pnpm apps:up       # infra, puis migrations, api, worker et backoffice dans leurs images Docker (profil `apps`)
+pnpm apps:down     # arrête les apps conteneurisées, garde l'infra ; pnpm apps:logs
 ```
 
-- Les apps tournent sur la machine, pas dans Docker. Les ports sont exposés uniquement sur `127.0.0.1`. Les variables de connexion (`DATABASE_URL`, `REDIS_URL`, `S3_*`) sont dans `.env.example`.
+- En développement, les apps tournent sur la machine (`pnpm dev`) ; `pnpm apps:up` les lance dans leurs images (voir « Images Docker »). Les ports sont exposés uniquement sur `127.0.0.1`. Les variables de connexion (`DATABASE_URL`, `REDIS_URL`, `S3_*`) sont dans `.env.example`.
 - `minio-init` est un conteneur éphémère qui s'arrête après avoir créé les buckets. C'est pour ça que `docker compose up --wait` échoue sur lui ; passer par `pnpm infra:up`.
 - MinIO ne publie plus d'images sur Docker Hub : les images `quay.io/minio/*` sont figées sur une version précise.
 - Redis est en `maxmemory-policy noeviction`, ce qu'exige BullMQ. Ne pas changer cette politique.
@@ -94,6 +96,7 @@ Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clon
 
 CI GitHub Actions (`.github/workflows/ci.yml`), à chaque push sur `main` et sur chaque pull request, sans secret :
 - `verify` : `pnpm install --frozen-lockfile`, `typecheck`, `test` (FFmpeg de la distribution Ubuntu pour le worker), `build`, `openapi:check` ;
+- `images` : construction des images Docker de l'api, du worker et du backoffice (matrice, cache GitHub Actions, sans publication) ;
 - `migrations` : PostgreSQL 18 vierge (service), `prisma migrate deploy`, puis `prisma migrate diff` doit être vide. Un schéma modifié sans migration, ou une migration SQL écrite à la main qui échoue, fait échouer la CI.
 Un changement du lockfile doit être committé (`--frozen-lockfile`). Pour reproduire la CI en local : mêmes commandes, dans cet ordre. Jamais versionnés (`.gitignore`) :
 - `.env` (seul `.env.example` l'est) et les clés `*.p8`, `*.pem`, `*.key` (clé APNs notamment) ;
@@ -244,7 +247,22 @@ Seed de démo (ADR-016), `apps/api/scripts/seed.ts` :
 - **Redis** (`ioredis`) : cache du feed, sessions, compteurs, limites d'envoi (`ratelimit:*`), pub/sub du temps réel, support de BullMQ (ADR-014). Dans l'API, le client partagé est fourni par le `RedisModule` global (`src/redis`), injecté par la classe `Redis`, et réservé aux adaptateurs `infrastructure/`. Il est en `lazyConnect` (l'export OpenAPI ne s'y connecte pas) et échoue au démarrage si Redis est injoignable. Les files BullMQ ont leurs propres connexions.
 - **Jetons et paywall** : RevenueCat, jetons crédités sur le `WALLET` (ADR-009) : voir « Portefeuille ».
 - **Analytics** : PostHog (ADR-013), dans l'app iOS seulement (un seul SDK, pas d'événement côté API) : voir « Mesure d'audience » dans « App iOS ».
-- **Hébergement** : pas encore choisi (ADR-015). Tout reste dockerisé et indépendant de l'hébergeur. Le stockage passe par une interface compatible S3 (MinIO en local).
+- **Hébergement** : pas encore choisi (ADR-015). Tout reste dockerisé et indépendant de l'hébergeur. Le stockage passe par une interface compatible S3 (MinIO en local). Voir « Images Docker ».
+
+### Images Docker (ADR-015)
+
+- **Un Dockerfile par app** (`apps/<app>/Dockerfile`), contexte = racine du monorepo, `.dockerignore` à la racine (ni `.env`, ni clés, ni `node_modules`, ni `apps/ios`). Base `node:22-alpine`, utilisateur `node`.
+- **Étapes** : `pruner` (`turbo prune <app> --docker`, version de turbo figée par `ARG TURBO_VERSION`) → `builder` (installation figée avec cache du store pnpm, puis `turbo run build`) → `prod-deps` (`pnpm install --prod`) → `runner` (dépendances de production + `dist` de l'app et de `@repo/shared`).
+- **Piège** : `turbo prune` ne reprend pas `tsconfig.base.json` de la racine ; il est copié à la main dans l'étape `builder`.
+- **api** : `HEALTHCHECK` sur `/health`. Étape **`migrate`** (`--target migrate`) : l'étape `builder` avec `prisma migrate deploy`, qui garde la CLI Prisma absente de l'image finale.
+- **worker** : FFmpeg et ffprobe d'Alpine (`apk add ffmpeg`), transcodage dans `/tmp`.
+- **backoffice** : `NEXT_OUTPUT=standalone` fait produire à `next.config.ts` un serveur autonome (`output: 'standalone'`, `outputFileTracingRoot` = racine du monorepo) ; hors Docker, la sortie reste normale (`next dev`, `next start`). `--env-mode=loose` pour que Turborepo transmette la variable. `.next/static` copié à part. `HEALTHCHECK` sur `/login`.
+- **Compose, profil `apps`** (`docker-compose.yml`) : `migrate` (terminé avant l'api), `api`, `worker`, `backoffice`. Même `.env` que `pnpm dev`, hôtes internes surchargés (`postgres`, `redis`, `minio`) ; `S3_PUBLIC_ENDPOINT` reste `localhost:9000` (URLs signées jointes par l'app et le navigateur). Backoffice → `API_URL=http://api:3000`.
+- **Vérifié** : les trois images se construisent ; `pnpm apps:up` (migrations, conteneurs sains) ; envoi d'une vidéo depuis l'hôte, transcodage par le worker conteneurisé, HLS servi ; tableau de bord du backoffice conteneurisé via l'API ; suppression du compte, fichiers nettoyés par la file de l'API.
+- **Limites** : image de l'api lourde (~850 Mo non compressés) : pnpm installe en production les dépendances pair de `@prisma/client` (CLI Prisma, Studio, pglite) ; pas encore de publication vers un registre ni de configuration propre à un hébergeur (ADR-015) ; migrations lancées par un conteneur séparé, pas par l'api au démarrage.
+- **Backoffice** (ADR-004) : voir « Backoffice » ci-dessous.
+- **iOS** (ADR-002) : voir « App iOS » ci-dessous.
+
 ### Portefeuille (ADR-009, module `wallet`)
 
 - **Principe** : RevenueCat valide l'achat auprès du store et gère sa monnaie virtuelle ; **l'API reste la source de vérité du solde** (`wallets.balance`). Elle applique chaque événement `VIRTUAL_CURRENCY_TRANSACTION` du webhook : achat (montant positif), remboursement (négatif), ajustement (`source: admin_api`, tableau de bord RevenueCat). Les autres types (`TEST`, `NON_RENEWING_PURCHASE`…) et les autres monnaies sont ignorés (200).
@@ -531,7 +549,7 @@ Socle implémenté ; détails et commandes dans `apps/ios/README.md`.
   - vidéos partagées via `VideosService` ;
   - événements via `MessagingEventPublisher` (WebSocket et push), et « en train d'écrire » reçu via `MessagingRealtimeHandlers` ;
   - vues de conversation en SQL brut (`$queryRaw`, `LATERAL`), une requête par page ; index `messages(conversation_id, message_id)`.
-- **À reporter dans les ADR** : ADR-004, pour le rôle administrateur (colonne `users.role`, script `admin:grant`, pas de route d'attribution), le périmètre de la première version et la session du backoffice (cookies httpOnly, rafraîchissement dans le proxy). ADR-006, pour la colonne `role`, la table `wallet_transactions` (journal, CHECK), les index `follows(following_id, created_at)`, `follows(follower_id, created_at)`, `favorites(user_id, created_at)`, `reposts(user_id, created_at)` et `likes(user_id, created_at)`, le trigger `views_count` (comptes distincts, jamais décrémenté), les colonnes `last_read_message_id`, `cleared_up_to_message_id`, `request_sender_id`, `accepted_at`, `declined_at`, `shared_video_id`, les tables `blocks` et `push_devices`, et les triggers. ADR-009, pour le journal `wallet_transactions` (clé d'idempotence = événement RevenueCat), le plancher à 0 des remboursements, les achats sandbox acceptés par défaut, le client inconnu gardé pour rapprochement et le paywall iOS (profil et paramètres). ADR-013, pour le consentement opt-in, l'identification par le seul identifiant du compte, PostHog Cloud UE et l'expérience « invitation invité ». ADR-016, pour les demandes, le blocage, les limites et les règles du profil (pseudo modifiable sans délai, bio de 80 caractères, listes publiques, favoris et likes privés, vidéos en attente visibles de leur seul auteur, suppression d'une vidéo par son auteur, vues par comptes distincts, historique effaçable à la main, historique des commentaires privé). ADR-012, pour la file `video-cleanup`. ADR-015 (ou ADR-007), pour le bucket `avatars` et l'envoi signé de la photo de profil.
+- **À reporter dans les ADR** : ADR-004, pour le rôle administrateur (colonne `users.role`, script `admin:grant`, pas de route d'attribution), le périmètre de la première version et la session du backoffice (cookies httpOnly, rafraîchissement dans le proxy). ADR-006, pour la colonne `role`, la table `wallet_transactions` (journal, CHECK), les index `follows(following_id, created_at)`, `follows(follower_id, created_at)`, `favorites(user_id, created_at)`, `reposts(user_id, created_at)` et `likes(user_id, created_at)`, le trigger `views_count` (comptes distincts, jamais décrémenté), les colonnes `last_read_message_id`, `cleared_up_to_message_id`, `request_sender_id`, `accepted_at`, `declined_at`, `shared_video_id`, les tables `blocks` et `push_devices`, et les triggers. ADR-009, pour le journal `wallet_transactions` (clé d'idempotence = événement RevenueCat), le plancher à 0 des remboursements, les achats sandbox acceptés par défaut, le client inconnu gardé pour rapprochement et le paywall iOS (profil et paramètres). ADR-013, pour le consentement opt-in, l'identification par le seul identifiant du compte, PostHog Cloud UE et l'expérience « invitation invité ». ADR-016, pour les demandes, le blocage, les limites et les règles du profil (pseudo modifiable sans délai, bio de 80 caractères, listes publiques, favoris et likes privés, vidéos en attente visibles de leur seul auteur, suppression d'une vidéo par son auteur, vues par comptes distincts, historique effaçable à la main, historique des commentaires privé). ADR-012, pour la file `video-cleanup`. ADR-015 (ou ADR-007), pour le bucket `avatars` et l'envoi signé de la photo de profil ; ADR-015, pour les images Docker (un Dockerfile par app, profil Compose `apps`, migrations en conteneur séparé).
 - **Pas encore** :
   - conversations à plusieurs ;
   - pièces jointes autres que des vidéos du feed ;

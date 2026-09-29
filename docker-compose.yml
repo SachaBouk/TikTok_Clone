@@ -1,5 +1,6 @@
 # Environnement local : PostgreSQL, Redis, MinIO (ADR-015).
-# Les apps (api, worker, backoffice) tournent sur la machine via `pnpm dev`.
+# Les apps (api, worker, backoffice) tournent sur la machine via `pnpm dev`, ou dans leurs images Docker
+# avec le profil `apps` (`pnpm apps:up`), sur les mêmes ports : l'un ou l'autre, pas les deux.
 # Valeurs par défaut surchargeables dans `.env` (voir `.env.example`).
 name: tiktok-clone
 
@@ -83,6 +84,83 @@ services:
       done;
       "
     restart: "no"
+
+  # ─── Apps dans leurs images (profil `apps`, ADR-015) ──────────────────────────
+  # Même configuration que `pnpm dev` (.env), sauf les hôtes internes : dans le réseau Docker, PostgreSQL,
+  # Redis et MinIO s'appellent par leur nom de service. Les URLs données à l'app iOS et au navigateur
+  # (URLs signées, HLS, photos) restent celles de la machine (localhost).
+
+  migrate:
+    # prisma migrate deploy, avant l'API.
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    image: tiktok-clone-api-migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: tiktok-clone-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      # Hôte signé dans les URLs d'envoi : celui que l'app joint, pas le réseau Docker.
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    image: tiktok-clone-worker
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backoffice:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/backoffice/Dockerfile
+    image: tiktok-clone-backoffice
+    environment:
+      API_URL: http://api:3000
+      POSTHOG_PROJECT_URL: ${POSTHOG_PROJECT_URL:-}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres-data:

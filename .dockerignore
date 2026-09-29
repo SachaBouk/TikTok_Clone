@@ -1,0 +1,20 @@
+# Contexte des images (Dockerfiles de apps/*) : les sources seulement. Dépendances, builds et fichiers
+# générés sont refaits dans l'image ; les secrets n'y entrent jamais.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/next-env.d.ts
+apps/api/src/generated
+.env
+.env.*
+!.env.example
+*.p8
+*.pem
+*.key
+.git
+apps/ios
+seed/videos
+**/.DS_Store
+**/*.log

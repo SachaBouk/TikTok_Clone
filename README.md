@@ -46,6 +46,23 @@ La lecture publique ne porte que sur les fichiers : lister le contenu d'un bucke
 > Après une mise à jour du dépôt qui ajoute un bucket ou une variable, relancer `pnpm infra:up` (création idempotente)
 > et reporter dans `.env` les nouvelles variables de `.env.example` (ex. `S3_BUCKET_AVATARS`, `AVATARS_PUBLIC_BASE_URL`).
 
+## Images Docker (ADR-015)
+
+Chaque app a son image (`apps/api/Dockerfile`, `apps/worker/Dockerfile`, `apps/backoffice/Dockerfile`), construite depuis
+la racine du monorepo. Elles ne dépendent d'aucun hébergeur : toute la configuration passe par l'environnement.
+
+```bash
+pnpm apps:up     # infra, puis migrations, api (:3000), worker et backoffice (:3001) dans leurs images
+pnpm apps:logs
+pnpm apps:down   # arrête les apps, garde l'infra
+```
+
+- Même `.env` que `pnpm dev`, sauf les hôtes internes (PostgreSQL, Redis, MinIO joints par leur nom de service). Mêmes ports :
+  `pnpm dev` ou `pnpm apps:up`, pas les deux à la fois.
+- Construire une image à la main : `docker build -f apps/api/Dockerfile -t tiktok-clone-api .` ; migrations :
+  `--target migrate` (`prisma migrate deploy`, à lancer avant l'API avec `DATABASE_URL`).
+- Le worker embarque FFmpeg ; le backoffice est la sortie autonome de Next.js (`NEXT_OUTPUT=standalone`).
+
 ## Base de données (Prisma)
 
 Schéma dans `apps/api/prisma/schema.prisma` (ADR-006). Après `pnpm infra:up` :
