@@ -10,7 +10,9 @@ import { RealtimeWsAdapter } from './modules/realtime/interfaces/realtime-ws.ada
 import { buildOpenApiDocument } from './openapi/openapi';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // `rawBody` : corps brut gardé à côté du JSON lu (`req.rawBody`), pour vérifier la signature HMAC du webhook
+  // RevenueCat, calculée sur les octets reçus (ADR-031).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   // Adresse IP du client derrière un proxy (limites de débit, ADR-030) : voir TRUST_PROXY dans .env.example.
   app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
   // SIGTERM / SIGINT : ferme proprement les workers BullMQ et les connexions (onModuleDestroy).

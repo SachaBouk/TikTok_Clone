@@ -165,6 +165,10 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
     -d '{"event":{"type":"VIRTUAL_CURRENCY_TRANSACTION","id":"test-1","app_user_id":"<UUID du compte>","environment":"SANDBOX",
          "product_id":"tokens_500","adjustments":[{"amount":500,"currency":{"code":"TKN"}}]}}'
   ```
+  Avec `REVENUECAT_WEBHOOK_SIGNING_SECRET` (ADR-031), signer le corps exact envoyé :
+  ```bash
+  BODY='{"event":{"type":"VIRTUAL_CURRENCY_TRANSACTION","id":"test-2","app_user_id":"<UUID du compte>","environment":"SANDBOX","product_id":"tokens_500","adjustments":[{"amount":500,"currency":{"code":"TKN"}}]}}'; T=$(date +%s); SIG=$(printf '%s.%s' "$T" "$BODY" | openssl dgst -sha256 -hmac "$REVENUECAT_WEBHOOK_SIGNING_SECRET" -r | cut -d' ' -f1); curl -X POST localhost:3000/webhooks/revenuecat -H "Authorization: $REVENUECAT_WEBHOOK_AUTHORIZATION" -H "X-RevenueCat-Webhook-Signature: t=$T,v1=$SIG" -H 'Content-Type: application/json' --data-raw "$BODY"
+  ```
 
 ## Temps réel (ADR-011)
 
