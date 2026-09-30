@@ -9,7 +9,7 @@ Elle ne fait pas partie du workspace pnpm et Turborepo ne l'orchestre pas (ADR-0
 
 ## Mise en route
 
-Prérequis : Xcode 26 ou plus, XcodeGen (`brew install xcodegen`).
+Prérequis : Xcode 26 ou plus (27.0 en CI), XcodeGen (2.46.0 en CI, `brew install xcodegen`).
 
 ```bash
 cd apps/ios
@@ -25,9 +25,13 @@ open TikTokClone.xcodeproj
 Build et tests en ligne de commande :
 
 ```bash
+scripts/test.sh            # comme la CI : résultat lu sur la ligne de fin de xcodebuild, journal dans build/
 xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -skipPackagePluginValidation test
 ```
+
+CI (`.github/workflows/ios.yml`, ADR-033) : image `xcode-27` de GitHub, Xcode 27.0, XcodeGen 2.46.0 (vérifié par SHA-256),
+puis `scripts/test.sh`, quand `apps/ios/**` ou `apps/api/openapi.json` changent, ou à la demande depuis l'onglet Actions.
 
 ## Organisation (ADR-002)
 

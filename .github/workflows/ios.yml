@@ -1,0 +1,92 @@
+# Intégration continue de l'app iOS (ADR-033) : projet généré par XcodeGen, compilation et tests dans le simulateur.
+# Runner macOS (tarif macOS, bien plus cher que Linux) : seulement quand l'app ou le contrat d'API change, et à la
+# demande (onglet Actions). Aucun secret : ni signature (simulateur), ni jeton PostHog, ni clé RevenueCat.
+name: CI iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/ios/**
+      # Le client Swift est généré depuis ce fichier (lien symbolique dans Packages/TikTokAPI).
+      - apps/api/openapi.json
+      - .github/workflows/ios.yml
+  pull_request:
+    paths:
+      - apps/ios/**
+      - apps/api/openapi.json
+      - .github/workflows/ios.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests de l'app iOS
+    # Image Xcode 27 de GitHub (macOS 27, arm64), en préversion publique : Xcode 27.0 par défaut, simulateurs iOS 27.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      # Même version qu'en local ; archive vérifiée par son empreinte (publiée par GitHub pour la release).
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dossiers de travail hors du dépôt (le contexte `runner` n'est pas disponible dans `env` au niveau du job).
+      - name: Dossiers de build
+        run: |
+          {
+            echo "SPM_DIR=$RUNNER_TEMP/SourcePackages"
+            echo "DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData"
+            echo "RESULT_BUNDLE_PATH=$RUNNER_TEMP/TikTokClone.xcresult"
+            echo "TEST_LOG=$RUNNER_TEMP/xcodebuild-test.log"
+          } >> "$GITHUB_ENV"
+
+      # Xcode figé : l'image en contient d'autres (27.1, 27.2 bêta), et son défaut peut changer.
+      - name: Xcode 27.0
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_27.app
+          xcodebuild -version
+
+      - name: XcodeGen ${{ env.XCODEGEN_VERSION }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Générer le projet
+        working-directory: apps/ios
+        run: |
+          xcodegen --version
+          xcodegen generate
+
+      # Paquets Swift clonés (PostHog, RevenueCat, swift-openapi-*), versions figées dans project.yml et Package.swift.
+      - name: Cache des paquets Swift
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SPM_DIR }}
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/TikTokAPI/Package.swift', 'apps/ios/**/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # Voir apps/ios/scripts/test.sh : résultat lu sur la ligne de fin de xcodebuild, qui reste parfois bloqué ensuite.
+      - name: Tests (iPhone 18 Pro, iOS 27)
+        working-directory: apps/ios
+        run: ./scripts/test.sh
+
+      - name: Résultats détaillés
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            ${{ env.RESULT_BUNDLE_PATH }}
+            ${{ env.TEST_LOG }}
+          retention-days: 7
+          if-no-files-found: ignore
