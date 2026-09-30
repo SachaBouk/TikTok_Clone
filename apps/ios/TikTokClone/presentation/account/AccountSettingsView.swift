@@ -91,6 +91,11 @@ struct AccountSettingsView: View {
             Section {
                 Button("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right") { isConfirmingSignOut = true }
                     .accessibilityIdentifier("profile.signOut")
+                    // Attachée au bouton : iOS ancre la confirmation sur la vue qui la porte (sur la liste entière,
+                    // elle apparaissait en haut de l'écran, loin du bouton touché).
+                    .confirmationDialog("Se déconnecter ?", isPresented: $isConfirmingSignOut, titleVisibility: .visible) {
+                        Button("Se déconnecter", role: .destructive) { Task { await viewModel.signOut() } }
+                    }
             }
             Section {
                 Button("Supprimer le compte", systemImage: "trash", role: .destructive) { isConfirmingDeletion = true }
@@ -104,9 +109,6 @@ struct AccountSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if viewModel.isDeleting { ProgressView() }
-        }
-        .confirmationDialog("Se déconnecter ?", isPresented: $isConfirmingSignOut, titleVisibility: .visible) {
-            Button("Se déconnecter", role: .destructive) { Task { await viewModel.signOut() } }
         }
         .alert("Supprimer ton compte ?", isPresented: $isConfirmingDeletion) {
             Button("Supprimer définitivement", role: .destructive) { Task { await viewModel.deleteMyAccount() } }

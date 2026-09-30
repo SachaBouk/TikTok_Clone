@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import TikTokClone
 
 @MainActor
@@ -211,6 +212,18 @@ struct InteractionsTests {
                                            playback: playback, session: session, analytics: analytics)
         await missing.start()
         #expect(missing.state == .failed(AppError.notFound.message))
+    }
+
+    @Test("partage : message et lien séparés, sauf pour « Copier » où le message contient le lien")
+    func shareContent() {
+        let content = VideoShareContent(video: .sample("01a0d86f-1c2b-7000-8000-000000000001"))
+        let link = URL(string: "tiktokclone://videos/01a0d86f-1c2b-7000-8000-000000000001")!
+        #expect(content.text(for: .message) == "Regarde cette vidéo de @bob sur TikTok Clone")
+        #expect(content.link(for: .message) == link)
+        #expect(content.link(for: nil) == link)
+        #expect(content.text(for: .copyToPasteboard) == "Regarde cette vidéo de @bob sur TikTok Clone : \(link.absoluteString)")
+        #expect(content.link(for: .copyToPasteboard) == nil)
+        #expect(content.activityItems.count == 2)
     }
 
     @Test("lien d'app : construit, reconnu, ouvert par le routeur")

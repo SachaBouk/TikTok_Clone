@@ -71,11 +71,16 @@ Enregistrement et édition vidéo ; Live, Stories et réponses vidéo ; For You,
 
 ## Constats de la relecture
 
-Aucun défaut bloquant. Cinq points à corriger ou à surveiller :
+Aucun défaut bloquant. Cinq points relevés ; les trois premiers sont corrigés et vérifiés dans le simulateur :
 
-1. **Démarrage** : l'écran reste blanc environ 3 s au lancement, le temps de reprendre la session (rafraîchissement du jeton, puis lecture du profil). Le contenu apparaît vers 5 s. `RootView` n'affiche qu'un `ProgressView` sur fond blanc. Piste : un écran de lancement aux couleurs de l'app, et lancer le feed pendant la reprise de session.
-2. **Partage par « Copier »** : `ActivityShareSheet` passe le texte et le lien `tiktokclone://videos/<id>` comme deux éléments séparés. Un collage dans un champ de texte ne restitue que le texte, sans le lien. Piste : un seul élément texte qui contient le lien, ou un `UIActivityItemSource` qui fournit l'URL.
-3. **Confirmation de déconnexion** : elle s'affiche ancrée en haut de l'écran, près de la ligne « Jetons », loin du bouton touché. Défaut d'affichage mineur.
+1. **Démarrage** (corrigé) : l'écran restait blanc environ 3 s au lancement. Mesure faite à partir des journaux horodatés :
+   - l'essentiel du délai précède notre code : le processus démarre environ 3,3 s après la commande de lancement du simulateur (build Debug) ;
+   - il faut ensuite environ 1,4 s jusqu'à la première requête du feed ;
+   - le blanc venait de l'écran de lancement système, vide, puis de l'attente de reprise de session sur fond blanc.
+
+   L'écran de lancement et cette attente ont maintenant le fond noir du feed (couleur `LaunchBackground`, `LaunchView`) : plus d'éclair blanc. La durée elle-même sera à mesurer sur un iPhone, en build Release.
+2. **Partage par « Copier »** (corrigé) : le texte et le lien étaient deux éléments séparés, et un collage perdait le lien. Pour « Copier », le texte contient désormais le lien. Pour les autres actions, le lien reste un élément à part, que Messages ou Mail affichent comme un vrai lien.
+3. **Confirmation de déconnexion** (corrigé) : elle s'ancrait en haut de l'écran, sur la liste entière. Elle est maintenant attachée au bouton « Se déconnecter » et s'affiche juste au-dessus.
 4. **Dates relatives** (« il y a 16 secondes ») : elles ne se mettent pas à jour tant que l'écran reste ouvert.
 5. **Position GPS** : le sélecteur de la galerie d'iOS 27 propose « Lieu inclus ». La dette connue (position gardée dans le fichier brut) peut donc être contournée par l'utilisateur, mais l'app ne le guide pas et le serveur ne retire pas ces métadonnées.
 

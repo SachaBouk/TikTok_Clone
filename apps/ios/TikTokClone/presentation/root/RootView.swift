@@ -10,7 +10,7 @@ struct RootView: View {
         Group {
             switch session.state {
             case .restoring:
-                ProgressView()
+                LaunchView()
             case .unavailable:
                 ContentUnavailableView {
                     Label("Serveur injoignable", systemImage: "wifi.exclamationmark")

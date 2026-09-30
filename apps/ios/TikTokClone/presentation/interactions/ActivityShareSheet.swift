@@ -48,9 +48,52 @@ private final class SendByMessageActivity: UIActivity {
     override func perform() { activityDidFinish(true) }
 }
 
-extension FeedVideo {
-    // Contenu partagé : un message et le lien d'app vers la vidéo.
-    var shareItems: [Any] {
-        ["Regarde cette vidéo de @\(author.username) sur TikTok Clone", VideoLink.url(for: id)]
+// Contenu partagé : un message et le lien d'app vers la vidéo, en deux éléments pour que Messages ou Mail
+// affichent un vrai lien. « Copier » les mettrait dans deux entrées du presse-papiers, et un collage ne rendrait
+// que le message : pour cette action seulement, le message contient le lien et le lien seul est omis.
+struct VideoShareContent: Equatable {
+    let message: String
+    let link: URL
+
+    init(video: FeedVideo) {
+        message = "Regarde cette vidéo de @\(video.author.username) sur TikTok Clone"
+        link = VideoLink.url(for: video.id)
     }
+
+    // Texte copié : message et lien, pour qu'un collage garde le lien.
+    var copiedText: String { "\(message) : \(link.absoluteString)" }
+
+    // Élément texte, puis lien, tels qu'une action de la feuille de partage les reçoit (nil : élément omis).
+    func text(for activity: UIActivity.ActivityType?) -> String {
+        activity == .copyToPasteboard ? copiedText : message
+    }
+
+    func link(for activity: UIActivity.ActivityType?) -> URL? {
+        activity == .copyToPasteboard ? nil : link
+    }
+
+    var activityItems: [Any] {
+        [ShareItemSource(placeholder: message) { text(for: $0) }, ShareItemSource(placeholder: link) { link(for: $0) }]
+    }
+}
+
+// Élément de la feuille de partage dont la valeur dépend de l'action choisie.
+private final class ShareItemSource: NSObject, UIActivityItemSource {
+    private let placeholder: Any
+    private let item: (UIActivity.ActivityType?) -> Any?
+
+    init(placeholder: Any, item: @escaping (UIActivity.ActivityType?) -> Any?) {
+        self.placeholder = placeholder
+        self.item = item
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any { placeholder }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        item(activityType)
+    }
+}
+
+extension FeedVideo {
+    var shareItems: [Any] { VideoShareContent(video: self).activityItems }
 }

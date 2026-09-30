@@ -59,7 +59,9 @@ targets:
         PostHogHost: $(POSTHOG_HOST)
         # Achats de jetons (ADR-009) : clé publique du SDK RevenueCat (vide : achats indisponibles).
         RevenueCatAPIKey: $(REVENUECAT_API_KEY)
-        UILaunchScreen: {}
+        # Écran de lancement noir, comme l'attente de la reprise de session (LaunchView) et le feed.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:
