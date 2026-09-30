@@ -1,7 +1,9 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/lib/api-error';
+import { clientAddress, formatDelay } from '@/lib/format';
 import { clearSession, saveSession } from '@/lib/session';
 import { safeReturnPath } from '@/lib/session-cookies';
 import * as auth from '@/models/auth.model';
@@ -21,7 +23,7 @@ export async function login(_previous: LoginState, form: FormData): Promise<Logi
   if (!email || !password) return { error: 'Saisis ton email et ton mot de passe.', email };
 
   try {
-    const tokens = await auth.login(email, password);
+    const tokens = await auth.login(email, password, clientAddress((await headers()).get('x-forwarded-for')));
     try {
       await auth.getAdminSession(tokens.accessToken);
     } catch (error) {
@@ -32,6 +34,9 @@ export async function login(_previous: LoginState, form: FormData): Promise<Logi
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return { error: 'Email ou mot de passe incorrect.', email };
     if (error instanceof ApiError && error.status === 403) return { error: 'Ce compte n’a pas accès au backoffice.', email };
+    if (error instanceof ApiError && error.status === 429) {
+      return { error: `Trop de tentatives de connexion. Réessaie dans ${formatDelay(error.retryAfterSeconds ?? 60)}.`, email };
+    }
     return { error: 'L’API est injoignable. Réessaie dans un instant.', email };
   }
   redirect(safeReturnPath(String(form.get('suite') ?? '')));

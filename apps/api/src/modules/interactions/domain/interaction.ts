@@ -70,6 +70,13 @@ export interface FollowRelations {
   followedBy: Set<string>;
 }
 
+// Qui partage une vidéo (route publique) : le compte connecté, sinon l'adresse IP de l'invité.
+export type Sharer = { userId: string } | { ip: string };
+
+// Partages comptés (ADR-030) : au plus un par vidéo et par personne (compte ou IP) sur 24 h glissantes.
+// Les suivants sont acceptés sans être comptés : le compteur ne se gonfle pas en rappelant la route.
+export const SHARE_DEDUP_SECONDS = 24 * 3600;
+
 export const MAX_COMMENT_LENGTH = 500;
 export const DEFAULT_COMMENTS_PAGE_SIZE = 20;
 export const MAX_COMMENTS_PAGE_SIZE = 50;

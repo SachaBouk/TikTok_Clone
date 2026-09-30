@@ -1,3 +1,4 @@
+import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { User } from '../../users/domain/user';
 import type { PublishedVideo } from '../../videos/domain/video';
 
@@ -74,11 +75,6 @@ export interface MessagingBadges {
   unreadConversations: number;
   // Demandes reçues en attente.
   pendingRequests: number;
-}
-
-export interface RateLimitRule {
-  limit: number;
-  windowSeconds: number;
 }
 
 export const MAX_MESSAGE_LENGTH = 1000;

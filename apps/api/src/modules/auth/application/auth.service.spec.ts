@@ -6,8 +6,10 @@ import {
   InvalidAppleTokenError,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  TooManyLoginAttemptsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { PasswordHasher } from '../domain/password-hasher';
 import { InMemoryAuthAccountRepository } from '../infrastructure/in-memory-auth-account.repository';
 import { InMemoryRefreshTokenRepository } from '../infrastructure/in-memory-refresh-token.repository';
@@ -49,6 +51,7 @@ describe('AuthService', () => {
   let refreshTokens: InMemoryRefreshTokenRepository;
   let apple: FakeAppleVerifier;
   let now: Date;
+  let limiter: InMemoryRateLimiter;
   let service: AuthService;
 
   beforeEach(() => {
@@ -56,6 +59,7 @@ describe('AuthService', () => {
     refreshTokens = new InMemoryRefreshTokenRepository();
     apple = new FakeAppleVerifier();
     now = new Date('2026-01-01T00:00:00Z');
+    limiter = new InMemoryRateLimiter(() => now.getTime());
     service = new AuthService(
       accounts,
       refreshTokens,
@@ -63,8 +67,47 @@ describe('AuthService', () => {
       new FakeAccessTokenIssuer(),
       apple,
       { accessTokenTtlSeconds: 900, refreshTokenTtlDays: 30 },
+      limiter,
       () => now,
     );
+  });
+
+  describe('limite des échecs de connexion (ADR-030)', () => {
+    const fail = (email = 'alice@example.com', ip: string | null = '10.0.0.1') => service.login(email, 'mauvais', ip);
+
+    it('5 échecs par email en 15 min, puis 429 même avec le bon mot de passe, jusqu’à la fin de la fenêtre', async () => {
+      await service.register(registration);
+      for (let i = 0; i < 5; i++) await expect(fail('alice@example.com', `10.0.0.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      const blocked = await service.login('ALICE@example.com', 'motdepasse', '10.0.9.9').catch((e: unknown) => e);
+      expect(blocked).toBeInstanceOf(TooManyLoginAttemptsError);
+      expect((blocked as TooManyLoginAttemptsError).retryAfterSeconds).toBe(15 * 60);
+      expect((blocked as TooManyLoginAttemptsError).message).toBe('Trop de tentatives de connexion : réessayez dans 15 min');
+
+      now = new Date(now.getTime() + 15 * 60 * 1000);
+      await expect(service.login('alice@example.com', 'motdepasse', '10.0.9.9')).resolves.toHaveProperty('accessToken');
+    });
+
+    it('une connexion réussie remet à zéro le compteur de l’email', async () => {
+      await service.register(registration);
+      for (let i = 0; i < 4; i++) await expect(fail()).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await service.login('alice@example.com', 'motdepasse', '10.0.0.2');
+      for (let i = 0; i < 4; i++) await expect(fail('alice@example.com', '10.0.0.3')).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.2')).resolves.toHaveProperty('accessToken');
+    });
+
+    it('20 échecs par IP en 15 min, sur des emails différents (inconnus compris)', async () => {
+      await service.register(registration);
+      for (let i = 0; i < 20; i++) await expect(fail(`inconnu${i}@example.com`)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.1')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.2')).resolves.toHaveProperty('accessToken');
+    });
+
+    it('les connexions réussies ne comptent pas ; sans IP, seule la limite par email s’applique', async () => {
+      await service.register(registration);
+      for (let i = 0; i < 30; i++) await service.login('alice@example.com', 'motdepasse', '10.0.0.1');
+      for (let i = 0; i < 5; i++) await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+    });
   });
 
   describe('inscription et connexion par email', () => {

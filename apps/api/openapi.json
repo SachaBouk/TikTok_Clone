@@ -119,6 +119,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1430,7 +1449,7 @@
         ],
         "responses": {
           "200": {
-            "description": "À appeler quand l’utilisateur partage le lien de la vidéo.",
+            "description": "À appeler quand l’utilisateur partage le lien de la vidéo. Un seul partage compté par vidéo et par personne (compte, sinon adresse IP) sur 24 h : les suivants renvoient le compteur inchangé.",
             "content": {
               "application/json": {
                 "schema": {

@@ -31,7 +31,7 @@ import {
 } from '../domain/messaging.errors';
 import { InMemoryConversationRepository } from '../infrastructure/in-memory-conversation.repository';
 import { InMemoryMessagingEventPublisher } from '../infrastructure/in-memory-messaging-event-publisher';
-import { InMemoryRateLimiter } from '../infrastructure/in-memory-rate-limiter';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { MessagingService } from './messaging.service';
 
 class NoopTranscodingQueue extends TranscodingQueue {
@@ -74,7 +74,7 @@ describe('MessagingService', () => {
     const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications);
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter());
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();
     service = new MessagingService(conversations, users, interactions, videos, events, new InMemoryRateLimiter(() => clock), () => clock);

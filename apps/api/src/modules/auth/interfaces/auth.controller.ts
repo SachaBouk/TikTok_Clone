@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, HttpCode, Ip, Post, UseFilters } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -6,6 +6,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { AuthTokensDto } from '@repo/shared';
@@ -36,8 +37,14 @@ export class AuthController {
   @HttpCode(200)
   @ApiOkResponse({ type: AuthTokensResponse })
   @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Email ou mot de passe incorrect.' })
-  async login(@Body() body: LoginRequest): Promise<AuthTokensDto> {
-    return toTokensDto(await this.auth.login(body.email, body.password));
+  @ApiTooManyRequestsResponse({
+    type: ErrorResponse,
+    description: 'Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
+    // Documenté pour que le client Swift généré l'expose (`headers.retryAfter`).
+    headers: { 'Retry-After': { description: 'Secondes à attendre avant de réessayer.', schema: { type: 'integer', minimum: 1 } } },
+  })
+  async login(@Body() body: LoginRequest, @Ip() ip: string | undefined): Promise<AuthTokensDto> {
+    return toTokensDto(await this.auth.login(body.email, body.password, ip || null));
   }
 
   @Post('apple')

@@ -3,10 +3,12 @@ import type { AccessTokenIssuer, VerifiedAccessToken } from '../domain/access-to
 import type { AuthAccount, AuthTokens } from '../domain/auth-account';
 import type { AuthAccountRepository } from '../domain/auth-account.repository';
 import type { AppleIdentityVerifier } from '../domain/apple-identity-verifier';
-import { InvalidCredentialsError, InvalidRefreshTokenError, UsernameAlreadyUsedError } from '../domain/auth.errors';
+import { InvalidCredentialsError, InvalidRefreshTokenError, TooManyLoginAttemptsError, UsernameAlreadyUsedError } from '../domain/auth.errors';
+import { LOGIN_EMAIL_RATE_LIMITS, LOGIN_IP_RATE_LIMITS } from '../domain/login-rules';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { RESERVED_USERNAMES } from '../../users/domain/profile-rules';
+import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 
 export interface AuthSettings {
   accessTokenTtlSeconds: number;
@@ -40,6 +42,7 @@ export class AuthService {
     private readonly accessTokens: AccessTokenIssuer,
     private readonly apple: AppleIdentityVerifier,
     private readonly settings: AuthSettings,
+    private readonly rateLimiter: RateLimiter,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -56,11 +59,28 @@ export class AuthService {
     return this.startSession(account.id);
   }
 
-  async login(email: string, password: string): Promise<AuthTokens> {
-    const account = await this.accounts.findByEmail(normalizeEmail(email));
+  // `ip` : adresse du client (null hors HTTP). Échecs limités par email et par IP (ADR-030) : la limite est
+  // vérifiée avant le mot de passe (qui n'est alors pas testé), et un échec est compté après coup.
+  async login(email: string, password: string, ip: string | null = null): Promise<AuthTokens> {
+    const normalized = normalizeEmail(email);
+    // Empreinte de l'email : aucune adresse en clair dans les clés Redis.
+    const emailKey = `login-email:${createHash('sha256').update(normalized).digest('hex')}`;
+    const ipKey = ip ? `login-ip:${ip}` : null;
+    const waits = await Promise.all([
+      this.rateLimiter.check(emailKey, LOGIN_EMAIL_RATE_LIMITS),
+      ipKey ? this.rateLimiter.check(ipKey, LOGIN_IP_RATE_LIMITS) : null,
+    ]);
+    const retryAfter = Math.max(...waits.map((wait) => wait ?? 0));
+    if (retryAfter > 0) throw new TooManyLoginAttemptsError(retryAfter);
+
+    const account = await this.accounts.findByEmail(normalized);
     // Vérification faite même si le compte n'existe pas (voir PasswordHasher.verify).
     const valid = await this.passwords.verify(password, account?.passwordHash ?? null);
-    if (!account || !valid) throw new InvalidCredentialsError();
+    if (!account || !valid) {
+      await Promise.all([this.rateLimiter.hit(emailKey, LOGIN_EMAIL_RATE_LIMITS), ipKey && this.rateLimiter.hit(ipKey, LOGIN_IP_RATE_LIMITS)]);
+      throw new InvalidCredentialsError();
+    }
+    await this.rateLimiter.reset(emailKey, LOGIN_EMAIL_RATE_LIMITS);
     return this.startSession(account.id);
   }
 

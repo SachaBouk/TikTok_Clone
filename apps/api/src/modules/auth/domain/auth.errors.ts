@@ -36,3 +36,16 @@ export class UsernameAlreadyUsedError extends AuthError {
     this.name = 'UsernameAlreadyUsedError';
   }
 }
+
+// Trop d'échecs de connexion récents pour cet email ou depuis cette adresse IP (ADR-030) : 429 avec Retry-After.
+// Le message ne dit pas laquelle des deux limites est atteinte.
+export class TooManyLoginAttemptsError extends AuthError {
+  constructor(readonly retryAfterSeconds: number) {
+    super(`Trop de tentatives de connexion : réessayez dans ${formatDelay(retryAfterSeconds)}`);
+    this.name = 'TooManyLoginAttemptsError';
+  }
+}
+
+function formatDelay(seconds: number): string {
+  return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;
+}

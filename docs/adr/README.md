@@ -31,6 +31,7 @@
 | [ADR-027](ADR-027-images-docker.md) | Images Docker des applications (complète ADR-015) | Accepté |
 | [ADR-028](ADR-028-regles-produit-premiere-version.md) | Règles produit de la première version (complète ADR-016) | Accepté |
 | [ADR-029](ADR-029-blocage-filtrage-contenus.md) | Blocage : contenus masqués dans le feed, les profils et les commentaires (complète ADR-028) | Proposé |
+| [ADR-030](ADR-030-limites-debit-connexion-partage.md) | Limites de débit : connexion et partages (complète ADR-028 et ADR-025) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

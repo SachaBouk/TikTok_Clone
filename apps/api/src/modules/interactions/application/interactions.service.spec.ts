@@ -26,6 +26,7 @@ import {
 } from '../domain/interaction.errors';
 import { InMemoryInteractionRepository } from '../infrastructure/in-memory-interaction.repository';
 import { InteractionsService } from './interactions.service';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -47,6 +48,7 @@ describe('InteractionsService', () => {
   let videoRepository: InMemoryVideoRepository;
   let users: UsersService;
   let service: InteractionsService;
+  let clock: number;
   let notificationRepository: InMemoryNotificationRepository;
   let video: string;
 
@@ -67,7 +69,14 @@ describe('InteractionsService', () => {
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     notificationRepository = new InMemoryNotificationRepository();
     const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher());
-    service = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications);
+    clock = Date.UTC(2026, 0, 1);
+    service = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, userRepository),
+      videos,
+      users,
+      notifications,
+      new InMemoryRateLimiter(() => clock),
+    );
     video = await createVideo();
   });
 
@@ -94,10 +103,33 @@ describe('InteractionsService', () => {
   });
 
   describe('partage', () => {
-    it('incrémente le compteur à chaque partage', async () => {
-      await expect(service.share(video)).resolves.toBe(1);
-      await expect(service.share(video)).resolves.toBe(2);
-      await expect(service.share('inconnue')).rejects.toBeInstanceOf(VideoNotAvailableError);
+    it('compte un partage par personne (compte ou IP) et par vidéo', async () => {
+      const other = await createVideo();
+      await expect(service.share(video, { userId: 'alice' })).resolves.toBe(1);
+      await expect(service.share(video, { userId: 'carol' })).resolves.toBe(2);
+      await expect(service.share(video, { ip: '10.0.0.1' })).resolves.toBe(3);
+      await expect(service.share(other, { userId: 'alice' })).resolves.toBe(1);
+      await expect(service.share('inconnue', { userId: 'alice' })).rejects.toBeInstanceOf(VideoNotAvailableError);
+    });
+
+    it('ignore sans erreur un partage répété dans les 24 h, le compte de nouveau ensuite', async () => {
+      await service.share(video, { userId: 'alice' });
+      await service.share(video, { ip: '10.0.0.1' });
+      for (let i = 0; i < 5; i++) {
+        await expect(service.share(video, { userId: 'alice' })).resolves.toBe(2);
+        await expect(service.share(video, { ip: '10.0.0.1' })).resolves.toBe(2);
+      }
+      clock += 24 * 3600 * 1000 - 1;
+      await expect(service.share(video, { userId: 'alice' })).resolves.toBe(2);
+      clock += 1;
+      await expect(service.share(video, { userId: 'alice' })).resolves.toBe(3);
+    });
+
+    it("une vidéo pas encore publiée : 404, sans réserver le partage de la personne", async () => {
+      const processing = await createVideo('processing');
+      await expect(service.share(processing, { userId: 'alice' })).rejects.toBeInstanceOf(VideoNotAvailableError);
+      Object.assign(videoRepository.videos.get(processing)!, { status: 'ready' });
+      await expect(service.share(processing, { userId: 'alice' })).resolves.toBe(1);
     });
   });
 
@@ -211,7 +243,7 @@ describe('InteractionsService', () => {
       const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
       const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher());
       repository = new InMemoryInteractionRepository(videoRepository, userRepository);
-      lists = new InteractionsService(repository, videos, usersService, notifications);
+      lists = new InteractionsService(repository, videos, usersService, notifications, new InMemoryRateLimiter());
       // u2, u3, u4, u5 suivent u1, dans cet ordre ; u1 suit u3 ; u2 suit u5.
       for (const n of [2, 3, 4, 5]) await lists.setFollow(id(n), 'u1', true);
       await lists.setFollow(id(1), 'u3', true);

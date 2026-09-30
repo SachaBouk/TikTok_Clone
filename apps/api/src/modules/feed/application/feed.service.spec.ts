@@ -22,6 +22,7 @@ import { encodeListCursor } from '../domain/list-cursor';
 import { seededShuffle } from '../domain/seeded-shuffle';
 import { InMemoryFeedSnapshotStore } from '../infrastructure/in-memory-feed-snapshot.store';
 import { FeedService } from './feed.service';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -73,7 +74,7 @@ describe('FeedService', () => {
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
     const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications);
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications, new InMemoryRateLimiter());
     feed = new FeedService(snapshots, videos, usersService, interactions);
   });
 

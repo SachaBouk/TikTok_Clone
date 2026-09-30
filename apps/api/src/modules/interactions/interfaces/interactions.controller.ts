@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Ip, Param, ParseUUIDPipe, Post, Put, Query, UseFilters } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
@@ -131,13 +131,23 @@ export class InteractionsController {
   }
 
   // Public : partager un lien ne demande pas de compte (ADR-010 ne l'exige que pour liker, commenter, publier, suivre).
+  // Un partage compté par vidéo et par personne (compte connecté, sinon adresse IP) sur 24 h (ADR-030).
   @Public()
   @Post('videos/:id/share')
   @HttpCode(200)
-  @ApiOkResponse({ type: ShareResultResponse, description: 'À appeler quand l’utilisateur partage le lien de la vidéo.' })
+  @ApiOkResponse({
+    type: ShareResultResponse,
+    description:
+      'À appeler quand l’utilisateur partage le lien de la vidéo. Un seul partage compté par vidéo et par personne (compte, ' +
+      'sinon adresse IP) sur 24 h : les suivants renvoient le compteur inchangé.',
+  })
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
-  async shareVideo(@Param('id', VIDEO_ID) id: string): Promise<ShareResultDto> {
-    return { sharesCount: await this.interactions.share(id) };
+  async shareVideo(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Ip() ip: string | undefined,
+    @Param('id', VIDEO_ID) id: string,
+  ): Promise<ShareResultDto> {
+    return { sharesCount: await this.interactions.share(id, user ? { userId: user.userId } : { ip: ip || 'inconnue' }) };
   }
 
   // Public. Connecté : les commentaires des comptes bloqués (dans un sens ou dans l'autre) sont retirés.

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { AuthService } from './application/auth.service';
 import { AuthConfig } from './auth.config';
 import { AccessTokenIssuer } from './domain/access-token-issuer';
@@ -55,12 +56,18 @@ import { JwtStrategy } from './interfaces/jwt.strategy';
         accessTokens: AccessTokenIssuer,
         apple: AppleIdentityVerifier,
         config: AuthConfig,
+        rateLimiter: RateLimiter,
       ) =>
-        new AuthService(accounts, refreshTokens, passwords, accessTokens, apple, {
-          accessTokenTtlSeconds: config.accessTokenTtlSeconds,
-          refreshTokenTtlDays: config.refreshTokenTtlDays,
-        }),
-      inject: [AuthAccountRepository, RefreshTokenRepository, PasswordHasher, AccessTokenIssuer, AppleIdentityVerifier, AuthConfig],
+        new AuthService(
+          accounts,
+          refreshTokens,
+          passwords,
+          accessTokens,
+          apple,
+          { accessTokenTtlSeconds: config.accessTokenTtlSeconds, refreshTokenTtlDays: config.refreshTokenTtlDays },
+          rateLimiter,
+        ),
+      inject: [AuthAccountRepository, RefreshTokenRepository, PasswordHasher, AccessTokenIssuer, AppleIdentityVerifier, AuthConfig, RateLimiter],
     },
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

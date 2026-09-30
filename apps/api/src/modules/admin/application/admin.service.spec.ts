@@ -24,6 +24,7 @@ import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-v
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
 import { AdminTargetNotFoundError } from '../domain/admin.errors';
 import { AdminService } from './admin.service';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -96,11 +97,16 @@ describe('AdminService', () => {
     const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), () => NOW);
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), cleanup, () => NOW);
     const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications);
-    const auth = new AuthService(accounts, new InMemoryRefreshTokenRepository(), new UnusedHasher(), new UnusedIssuer(), new UnusedApple(), {
-      accessTokenTtlSeconds: 900,
-      refreshTokenTtlDays: 30,
-    });
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter());
+    const auth = new AuthService(
+      accounts,
+      new InMemoryRefreshTokenRepository(),
+      new UnusedHasher(),
+      new UnusedIssuer(),
+      new UnusedApple(),
+      { accessTokenTtlSeconds: 900, refreshTokenTtlDays: 30 },
+      new InMemoryRateLimiter(),
+    );
     service = new AdminService(users, videos, interactions, auth, () => NOW);
   });
 

@@ -12,6 +12,7 @@ import type {
   FollowDirection,
   ReactionPosition,
   Relationship,
+  Sharer,
   VideoReaction,
   ViewerInteractions,
   ViewPosition,
@@ -26,7 +27,9 @@ import {
   TargetUserNotFoundError,
   VideoNotAvailableError,
 } from '../domain/interaction.errors';
+import { SHARE_DEDUP_SECONDS } from '../domain/interaction';
 import type { InteractionRepository } from '../domain/interaction.repository';
+import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 
 export interface InteractionState {
   active: boolean;
@@ -84,6 +87,7 @@ export class InteractionsService {
     private readonly videos: VideosService,
     private readonly users: UsersService,
     private readonly notifications: NotificationsService,
+    private readonly rateLimiter: RateLimiter,
   ) {}
 
   // Like, favori ou republication (`active`), ou leur retrait. Idempotent. Seulement sur une vidéo publiée.
@@ -132,7 +136,12 @@ export class InteractionsService {
   }
 
   // Partage (lien envoyé depuis la feuille de partage de l'app) : compteur seul, sans table (ADR-006).
-  async share(videoId: string): Promise<number> {
+  // Au plus un partage compté par vidéo et par personne sur 24 h (ADR-030) ; les suivants renvoient le compteur
+  // inchangé, sans erreur. Le dédoublonnage n'est posé que pour une vidéo publiée.
+  async share(videoId: string, sharer: Sharer): Promise<number> {
+    const video = await this.publishedVideo(videoId);
+    const who = 'userId' in sharer ? `user:${sharer.userId}` : `ip:${sharer.ip}`;
+    if (!(await this.rateLimiter.once(`share:${videoId}:${who}`, SHARE_DEDUP_SECONDS))) return video.sharesCount;
     const sharesCount = await this.videos.recordShare(videoId);
     if (sharesCount === null) throw new VideoNotAvailableError(videoId);
     return sharesCount;

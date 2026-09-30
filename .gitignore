@@ -5,6 +5,9 @@ dist/
 .turbo/
 *.tsbuildinfo
 next-env.d.ts
+# Consignes pour les assistants de code, écrites par `next dev` (Next 16) à chaque lancement
+apps/backoffice/AGENTS.md
+apps/backoffice/CLAUDE.md
 coverage/
 
 # Client Prisma généré (apps/api) : régénéré par build, dev et typecheck

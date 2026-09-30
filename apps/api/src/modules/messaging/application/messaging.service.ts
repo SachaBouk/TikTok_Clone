@@ -15,7 +15,6 @@ import {
   type Message,
   type MessageItem,
   type MessagingBadges,
-  type RateLimitRule,
 } from '../domain/messaging';
 import {
   BlockedConversationError,
@@ -30,7 +29,7 @@ import {
   RequestLimitReachedError,
   SharedVideoNotFoundError,
 } from '../domain/messaging.errors';
-import type { RateLimiter } from '../domain/rate-limiter';
+import type { RateLimiter, RateLimitRule } from '../../../rate-limit/rate-limiter';
 
 export interface ConversationWithParticipant {
   conversation: ConversationView;

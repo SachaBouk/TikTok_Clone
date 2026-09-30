@@ -65,6 +65,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 ## Authentification (ADR-010)
 
 - Connexion et inscription par email ; mode invité au lancement (l'accueil est lisible, les autres onglets invitent à se connecter).
+- Trop d'échecs de connexion (ADR-030, 429) : `AppError.tooManyLoginAttempts(retryAfter:)`, « Trop de tentatives de connexion. Réessaie dans N min. ».
 - Tokens dans le Keychain (`KeychainTokenStore`, `AfterFirstUnlockThisDeviceOnly`), avec la date d'expiration de l'access token.
 - `AuthMiddleware` (sur toutes les routes sauf `login`, `register`, `refresh`, `logout`, `loginWithApple`) :
   - ajoute `Authorization: Bearer …` ;

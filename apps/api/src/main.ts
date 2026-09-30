@@ -1,14 +1,18 @@
 import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { parseTrustProxy } from './http/trust-proxy';
 import { RealtimeService } from './modules/realtime/application/realtime.service';
 import { RealtimeWsAdapter } from './modules/realtime/interfaces/realtime-ws.adapter';
 import { buildOpenApiDocument } from './openapi/openapi';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Adresse IP du client derrière un proxy (limites de débit, ADR-030) : voir TRUST_PROXY dans .env.example.
+  app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
   // SIGTERM / SIGINT : ferme proprement les workers BullMQ et les connexions (onModuleDestroy).
   app.enableShutdownHooks();
   // Valide les corps et paramètres de requête (classes class-validator) ; les champs inattendus sont refusés.

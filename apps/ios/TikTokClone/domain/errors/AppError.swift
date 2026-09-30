@@ -12,6 +12,8 @@ enum AppError: Error, Equatable, Sendable {
     case notFound
     // Trop de requêtes (limite d'envoi des messages) : réessayer après ce nombre de secondes.
     case rateLimited(retryAfter: Int)
+    // Trop d'échecs de connexion récents pour cet email ou cette adresse (ADR-030) : réessayer après ce nombre de secondes.
+    case tooManyLoginAttempts(retryAfter: Int)
     // API injoignable (réseau, serveur arrêté).
     case network
     // Réponse inattendue.
@@ -26,6 +28,8 @@ enum AppError: Error, Equatable, Sendable {
         case .blocked: "Action impossible : l’un de vous a bloqué l’autre."
         case .notFound: "Ce contenu n’est plus disponible."
         case .rateLimited(let seconds): "Trop de messages envoyés. Réessaie dans \(seconds) s."
+        case .tooManyLoginAttempts(let seconds):
+            "Trop de tentatives de connexion. Réessaie dans \(seconds < 60 ? "\(seconds) s" : "\((seconds + 59) / 60) min")."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
         }

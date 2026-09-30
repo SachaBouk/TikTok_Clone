@@ -31,6 +31,20 @@ struct RemoteAuthRepositoryTests {
         #expect(store.load() == nil)
     }
 
+    @Test("trop d'échecs de connexion : 429 → délai de l'en-tête Retry-After, message en minutes")
+    func loginTooManyAttempts() async {
+        await #expect(throws: AppError.tooManyLoginAttempts(retryAfter: 840)) {
+            try await repository { _ in
+                var response = HTTPResponse(status: .tooManyRequests, headerFields: [.contentType: "application/json"])
+                response.headerFields[HTTPField.Name("Retry-After")!] = "840"
+                return (response, HTTPBody(errorJSON(429, "Trop de tentatives de connexion")))
+            }.login(email: "a@b.c", password: "x")
+        }
+        #expect(store.load() == nil)
+        #expect(AppError.tooManyLoginAttempts(retryAfter: 840).message == "Trop de tentatives de connexion. Réessaie dans 14 min.")
+        #expect(AppError.tooManyLoginAttempts(retryAfter: 30).message == "Trop de tentatives de connexion. Réessaie dans 30 s.")
+    }
+
     @Test("inscription refusée : message de l'API (pseudo pris)")
     func registerConflict() async {
         await #expect(throws: AppError.rejected("Le pseudo @alice est déjà pris")) {
