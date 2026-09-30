@@ -55,3 +55,4 @@ Règles :
 - ADR-007 — Upload vidéo direct
 - ADR-012 — Traitement asynchrone
 - ADR-015 — Hébergement
+- Complété par [ADR-018](ADR-018-modules-messaging-push-admin.md) — Modules messaging, push et admin

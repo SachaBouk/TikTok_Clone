@@ -31,3 +31,4 @@ Les ViewModels dépendent de protocoles, fournis par injection de dépendances m
 ## Liens
 - ADR-003 — Architecture backend
 - ADR-005 — Contrat d'API OpenAPI
+- Complété par [ADR-017](ADR-017-app-ios-choix-implementation.md) — Application iOS : choix d'implémentation

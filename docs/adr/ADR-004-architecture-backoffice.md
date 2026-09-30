@@ -29,3 +29,4 @@ Il porte très peu de logique métier propre : il affiche des données et appell
 ## Liens
 - ADR-003 — Architecture backend
 - ADR-005 — Contrat d'API OpenAPI
+- Complété par [ADR-019](ADR-019-backoffice-role-perimetre-session.md) — Backoffice : rôle administrateur, périmètre et session

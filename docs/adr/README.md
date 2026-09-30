@@ -18,5 +18,20 @@
 | [ADR-014](ADR-014-cache-sessions-redis.md) | Cache et sessions avec Redis | Accepté |
 | [ADR-015](ADR-015-hebergement.md) | Hébergement : indépendance vis-à-vis de l'hébergeur | Accepté |
 | [ADR-016](ADR-016-perimetre-mvp.md) | Périmètre de la première version (MVP) | Accepté |
+| [ADR-017](ADR-017-app-ios-choix-implementation.md) | Application iOS : choix d'implémentation (complète ADR-002) | Accepté |
+| [ADR-018](ADR-018-modules-messaging-push-admin.md) | Modules messaging, push et admin (complète ADR-003) | Accepté |
+| [ADR-019](ADR-019-backoffice-role-perimetre-session.md) | Backoffice : rôle administrateur, périmètre et session (complète ADR-004) | Accepté |
+| [ADR-020](ADR-020-modele-donnees-complements.md) | Modèle de données : compléments (complète ADR-006) | Accepté |
+| [ADR-021](ADR-021-portefeuille-journal-credit.md) | Portefeuille : journal et règles de crédit (complète ADR-009) | Accepté |
+| [ADR-022](ADR-022-temps-reel-protocole.md) | Temps réel : protocole (complète ADR-011) | Accepté |
+| [ADR-023](ADR-023-files-asynchrones-complements.md) | Files asynchrones : compléments (complète ADR-012) | Accepté |
+| [ADR-024](ADR-024-mesure-audience-consentement.md) | Mesure d'audience : consentement, identification et première expérience (complète ADR-013) | Accepté |
+| [ADR-025](ADR-025-role-redis.md) | Rôle de Redis (complète ADR-014) | Accepté |
+| [ADR-026](ADR-026-envoi-direct-photos-profil.md) | Envoi direct des photos de profil (complète ADR-007) | Accepté |
+| [ADR-027](ADR-027-images-docker.md) | Images Docker des applications (complète ADR-015) | Accepté |
+| [ADR-028](ADR-028-regles-produit-premiere-version.md) | Règles produit de la première version (complète ADR-016) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
+
+Les ADR 017 à 028 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté sans le
+remplacer : l'ADR d'origine reste valable, et renvoie vers son complément (« Complété par »).

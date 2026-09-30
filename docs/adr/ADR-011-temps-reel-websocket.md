@@ -27,3 +27,4 @@ Ces flux nécessitent une connexion persistante, séparée du flux REST.
 - ADR-008 — Pipeline vidéo
 - ADR-010 — Authentification
 - ADR-014 — Cache et sessions
+- Complété par [ADR-022](ADR-022-temps-reel-protocole.md) — Temps réel : protocole

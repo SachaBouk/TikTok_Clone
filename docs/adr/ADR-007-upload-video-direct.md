@@ -30,3 +30,4 @@ Retour de l'intervenant : alléger l'API principale pour l'upload, en s'inspiran
 - ADR-008 — Pipeline vidéo
 - ADR-012 — Traitement asynchrone
 - ADR-015 — Hébergement
+- Complété par [ADR-026](ADR-026-envoi-direct-photos-profil.md) — Envoi direct des photos de profil

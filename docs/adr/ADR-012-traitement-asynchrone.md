@@ -31,3 +31,4 @@ Le backend est un monolithe modulaire (ADR-003).
 - ADR-008 — Pipeline vidéo
 - ADR-014 — Cache et sessions
 - ADR-015 — Hébergement
+- Complété par [ADR-023](ADR-023-files-asynchrones-complements.md) — Files asynchrones : compléments

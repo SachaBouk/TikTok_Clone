@@ -29,3 +29,4 @@ Redis sert aussi de support à BullMQ (ADR-012) et au pub/sub WebSocket (ADR-011
 ## Liens
 - ADR-011 — Temps réel
 - ADR-012 — Traitement asynchrone
+- Complété par [ADR-025](ADR-025-role-redis.md) — Rôle de Redis

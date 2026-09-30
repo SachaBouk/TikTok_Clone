@@ -54,3 +54,4 @@ L'historique des recherches n'est pas modélisé : il est reporté avec la reche
 - ADR-009 — Paiement et jetons
 - ADR-011 — Temps réel (messagerie directe)
 - ADR-016 — Périmètre de la première version
+- Complété par [ADR-020](ADR-020-modele-donnees-complements.md) — Modèle de données : compléments

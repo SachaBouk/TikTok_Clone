@@ -34,3 +34,4 @@ Critères pour le choix final :
 - ADR-003 — Architecture backend
 - ADR-007 — Upload vidéo direct
 - ADR-012 — Traitement asynchrone
+- Complété par [ADR-027](ADR-027-images-docker.md) — Images Docker des applications
