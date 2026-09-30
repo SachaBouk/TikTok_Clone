@@ -60,7 +60,10 @@ TikTokCloneTests/           Swift Testing : fakes en mémoire, transport HTTP si
 La spec fait foi : `apps/api/openapi.json`, versionnée, régénérée par `pnpm openapi:export` à la racine.
 Le client est généré à chaque build par le plugin de `swift-openapi-generator`, dans le paquet local `Packages/TikTokAPI` (types et client `public`, `namingStrategy: idiomatic`). Il n'est jamais versionné.
 
-- Versions figées dans `Packages/TikTokAPI/Package.swift` (`exact:`) : le `.xcodeproj`, et donc son `Package.resolved`, n'est pas versionné.
+- Versions figées dans `Packages/TikTokAPI/Package.swift` (`exact:`) et `project.yml` (`exactVersion`).
+- `Package.resolved` versionné (ADR-034), seul fichier suivi du `.xcodeproj` : versions exactes de tous les paquets,
+  dépendances transitives comprises. Après un changement de version, laisser Xcode le mettre à jour et le committer ;
+  la CI iOS échoue s'il n'est plus à jour (`-onlyUsePackageVersionsFromResolvedFile`, `SPM_RESOLVED_ONLY=1` pour `scripts/test.sh`).
 - Le paquet réexporte `OpenAPIRuntime`, `OpenAPIURLSession` et `HTTPTypes` : une seule source de versions.
 - Seule la couche `data/` importe `TikTokAPI`. Les DTO générés ne sortent jamais de `data/` : ils sont convertis en entités du domaine.
 - Client : `APIClientFactory.make` (dates ISO 8601 avec millisecondes, `.iso8601WithFractionalSeconds`, obligatoire).

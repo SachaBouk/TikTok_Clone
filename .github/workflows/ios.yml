@@ -67,7 +67,7 @@ jobs:
           xcodegen --version
           xcodegen generate
 
-      # Paquets Swift clonés (PostHog, RevenueCat, swift-openapi-*), versions figées dans project.yml et Package.swift.
+      # Paquets Swift clonés (PostHog, RevenueCat, swift-openapi-* et leurs dépendances), versions du Package.resolved.
       - name: Cache des paquets Swift
         uses: actions/cache@v4
         with:
@@ -75,9 +75,19 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/TikTokAPI/Package.swift', 'apps/ios/**/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
+      # Versions exactes du Package.resolved versionné (ADR-034), dépendances transitives comprises. Échoue s'il
+      # n'est plus à jour (version changée dans project.yml ou Package.swift) : le régénérer avec Xcode et le committer.
+      - name: Paquets Swift (versions du Package.resolved)
+        working-directory: apps/ios
+        run: |
+          xcodebuild -resolvePackageDependencies -project TikTokClone.xcodeproj -scheme TikTokClone \
+            -onlyUsePackageVersionsFromResolvedFile -skipPackagePluginValidation -clonedSourcePackagesDirPath "$SPM_DIR"
+
       # Voir apps/ios/scripts/test.sh : résultat lu sur la ligne de fin de xcodebuild, qui reste parfois bloqué ensuite.
       - name: Tests (iPhone 18 Pro, iOS 27)
         working-directory: apps/ios
+        env:
+          SPM_RESOLVED_ONLY: 1
         run: ./scripts/test.sh
 
       - name: Résultats détaillés

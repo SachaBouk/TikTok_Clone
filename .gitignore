@@ -42,8 +42,17 @@ build/
 seed/videos/*
 !seed/videos/.gitkeep
 
-# Généré par XcodeGen (apps/ios/project.yml)
-apps/ios/*.xcodeproj/
+# Généré par XcodeGen (apps/ios/project.yml), sauf le Package.resolved : versions exactes des paquets Swift,
+# dépendances transitives comprises, mises à jour par Xcode et conservées par XcodeGen (ADR-034). Git ne peut
+# ré-inclure un fichier que si ses dossiers parents ne sont pas exclus : d'où une exception par niveau.
+apps/ios/*.xcodeproj/*
+!apps/ios/TikTokClone.xcodeproj/project.xcworkspace/
+apps/ios/TikTokClone.xcodeproj/project.xcworkspace/*
+!apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/
+apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/*
+!apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 apps/ios/TikTokClone/Info.plist
 # Réglages locaux de l'app (jeton du projet PostHog, ADR-013)
 apps/ios/Config/Local.xcconfig

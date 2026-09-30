@@ -27,7 +27,8 @@ packages:
   # Client généré depuis apps/api/openapi.json (ADR-005).
   TikTokAPI:
     path: Packages/TikTokAPI
-  # Mesure d'audience et tests A/B (ADR-013). Version figée : le Package.resolved du .xcodeproj n'est pas versionné.
+  # Mesure d'audience et tests A/B (ADR-013). Version figée ; dépendances transitives dans le Package.resolved versionné
+  # (TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm, ADR-034) : le committer après tout changement.
   PostHog:
     url: https://github.com/PostHog/posthog-ios
     exactVersion: 3.85.0

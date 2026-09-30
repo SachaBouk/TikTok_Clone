@@ -13,6 +13,7 @@
 #   RESULT_BUNDLE_PATH  résultats détaillés .xcresult (défaut : build/TikTokClone.xcresult)
 #   TEST_LOG            journal complet de xcodebuild (défaut : build/xcodebuild-test.log)
 #   TEST_GRACE_SECONDS  délai laissé à xcodebuild après sa ligne de fin (défaut : 60)
+#   SPM_RESOLVED_ONLY   1 : versions du Package.resolved versionné seulement, échec s'il n'est plus à jour (CI, ADR-034)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -35,6 +36,7 @@ rm -rf "$RESULT_BUNDLE_PATH"
 args=(-project TikTokClone.xcodeproj -scheme TikTokClone -destination "$DESTINATION"
   -skipPackagePluginValidation -derivedDataPath "$DERIVED_DATA_PATH" -resultBundlePath "$RESULT_BUNDLE_PATH")
 if [ -n "${SPM_DIR:-}" ]; then args+=(-clonedSourcePackagesDirPath "$SPM_DIR"); fi
+if [ "${SPM_RESOLVED_ONLY:-0}" = 1 ]; then args+=(-onlyUsePackageVersionsFromResolvedFile); fi
 
 xcodebuild "${args[@]}" test >> "$TEST_LOG" 2>&1 &
 build_pid=$!

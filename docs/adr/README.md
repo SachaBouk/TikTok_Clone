@@ -35,6 +35,7 @@
 | [ADR-031](ADR-031-signature-webhook-revenuecat.md) | Signature HMAC du webhook RevenueCat (complète ADR-021) | Proposé |
 | [ADR-032](ADR-032-backoffice-portefeuille.md) | Backoffice : portefeuille et journal des jetons (complète ADR-019) | Proposé |
 | [ADR-033](ADR-033-ci-ios.md) | Intégration continue de l'app iOS (complète ADR-017) | Proposé |
+| [ADR-034](ADR-034-package-resolved-versionne.md) | Versions des paquets Swift : Package.resolved versionné (complète ADR-017) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

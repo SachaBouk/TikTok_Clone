@@ -2,8 +2,8 @@
 import PackageDescription
 
 // Client de l'API généré depuis apps/api/openapi.json (ADR-005), à chaque build, par swift-openapi-generator.
-// Le code généré n'est jamais versionné. Versions figées : le .xcodeproj (et donc son Package.resolved)
-// est généré par XcodeGen et n'est pas versionné.
+// Le code généré n'est jamais versionné. Versions figées ici, et avec leurs dépendances transitives dans le
+// Package.resolved versionné du projet (ADR-034).
 let package = Package(
     name: "TikTokAPI",
     platforms: [.iOS(.v18), .macOS(.v15)],
