@@ -104,6 +104,8 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d'origine sans conversion), description facultative (2 200 caractères), puis envoi direct au stockage (ADR-007).
 
+- **Sans position** (ADR-035) : à l'import, la vidéo est ré-écrite sans réencodage avec le filtre de partage d'AVFoundation (`AVFoundationVideoMetadataCleaner`) : position GPS, modèle d'appareil et autres métadonnées personnelles retirés, rotation et HDR gardés, sortie `.mov`. La position ne quitte jamais le téléphone. Une vidéo qu'on ne sait pas ré-écrire est refusée.
+
 - L'envoi continue quand on change d'onglet (`PublishingModel`, partagé) ; les publications passent une par une. Badge de l'onglet : publications en cours.
 - **Reprise** : le fichier et l'état de l'envoi (URLs signées, ETag de chaque partie reçue) sont enregistrés dans `Application Support/Uploads` après chaque partie de 10 Mio. Après une coupure, un passage en arrière-plan ou une relance de l'app, l'envoi reprend à la première partie non reçue.
 - URLs expirées (2 h) ou refusées : l'envoi repart de zéro sur une nouvelle vidéo, à partir du fichier local.

@@ -13,7 +13,7 @@ Trois points dépendent de comptes externes que le projet n'a pas encore :
 
 ## Méthode
 
-- **Tests automatisés** : 248 tests pour l'API, 13 pour le worker (FFmpeg réel), 10 pour le backoffice et 198 pour l'app iOS (Swift Testing), tous verts.
+- **Tests automatisés** : 248 tests pour l'API, 14 pour le worker (FFmpeg réel), 10 pour le backoffice et 201 pour l'app iOS (Swift Testing), tous verts.
 - **Intégration continue** : deux workflows GitHub Actions.
   - `ci.yml` : typecheck, tests, build, contrat OpenAPI, migrations sur une base vierge, images Docker.
   - `ios.yml` : app iOS sur l'image Xcode 27, avec les versions du `Package.resolved`.
@@ -41,10 +41,11 @@ Suppression du compte (exigence Apple) : faite, et vérifiée au parcours 11. El
 
 ### Au-delà du périmètre
 
-Ajouts décidés pendant la réalisation (ADR 017 à 034) :
+Ajouts décidés pendant la réalisation (ADR 017 à 035) :
 - **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032).
 - **Blocage** : actions interdites dans les deux sens, contenus masqués (ADR-029, proposé).
 - **Sécurité** : limites de débit de la connexion et des partages (ADR-030), signature HMAC du webhook (ADR-031).
+- **Confidentialité** : position GPS et appareil retirés des vidéos avant l'envoi (ADR-035, proposé).
 - **Notifications push** côté API (APNs, testées contre un faux serveur).
 - **Mesure d'audience et test A/B** (PostHog, consentement opt-in, ADR-013 et ADR-024).
 - **Images Docker** et CI iOS (ADR-027 et ADR-033), `Package.resolved` versionné (ADR-034).
@@ -71,7 +72,7 @@ Enregistrement et édition vidéo ; Live, Stories et réponses vidéo ; For You,
 
 ## Constats de la relecture
 
-Aucun défaut bloquant. Cinq points relevés ; les quatre premiers sont corrigés et vérifiés dans le simulateur :
+Aucun défaut bloquant. Cinq points relevés, tous corrigés et vérifiés dans le simulateur :
 
 1. **Démarrage** (corrigé) : l'écran restait blanc environ 3 s au lancement. Mesure faite à partir des journaux horodatés :
    - l'essentiel du délai précède notre code : le processus démarre environ 3,3 s après la commande de lancement du simulateur (build Debug) ;
@@ -82,7 +83,7 @@ Aucun défaut bloquant. Cinq points relevés ; les quatre premiers sont corrigé
 2. **Partage par « Copier »** (corrigé) : le texte et le lien étaient deux éléments séparés, et un collage perdait le lien. Pour « Copier », le texte contient désormais le lien. Pour les autres actions, le lien reste un élément à part, que Messages ou Mail affichent comme un vrai lien.
 3. **Confirmation de déconnexion** (corrigé) : elle s'ancrait en haut de l'écran, sur la liste entière. Elle est maintenant attachée au bouton « Se déconnecter » et s'affiche juste au-dessus.
 4. **Dates relatives** (corrigé) : « il y a 16 secondes » restait affiché tant que l'écran était ouvert. Les dates des commentaires, de l'activité, des conversations et de l'historique des commentaires utilisent maintenant le style de date relative du système (iOS 18), qui se met à jour seul à l'écran : « maintenant » sous 30 s, puis « il y a 1 minute », « il y a 2 heures », « hier », « il y a 8 jours », et la date au-delà d'un mois.
-5. **Position GPS** : le sélecteur de la galerie d'iOS 27 propose « Lieu inclus ». La dette connue (position gardée dans le fichier brut) peut donc être contournée par l'utilisateur, mais l'app ne le guide pas et le serveur ne retire pas ces métadonnées.
+5. **Position GPS** (corrigé, ADR-035) : le fichier brut gardait la position du tournage (« Lieu inclus » est activé par défaut dans le sélecteur d'iOS 27). Les fichiers publiés (HLS, miniature) n'en contenaient déjà pas. L'app retire désormais la position et les autres métadonnées personnelles dès l'import, sans réencodage : elle ne quitte plus le téléphone. Le seed fait de même pour `seed/videos/`. Vérifié sur le brut réellement stocké.
 
 ## Ce qui reste bloqué, et pourquoi
 
@@ -100,7 +101,6 @@ Consignées au fil des étapes, détaillées dans `CLAUDE.md` :
 - **Médias** :
   - HDR converti sans ajustement des couleurs ;
   - pas de purge du CDN à la suppression d'une vidéo ;
-  - position GPS gardée dans le fichier brut ;
   - envoi en arrière-plan pas testé sur un vrai iPhone.
 - **Compte** :
   - révocation des jetons Apple à la suppression d'un compte ;

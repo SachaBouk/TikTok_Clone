@@ -27,7 +27,7 @@ struct PublishView: View {
                     Text("Nouvelle vidéo")
                 } footer: {
                     if case .empty = draft.state {
-                        Text("MP4 ou MOV, 1 Go au plus. La vidéo est publiée telle quelle.")
+                        Text("MP4 ou MOV, 1 Go au plus. La vidéo est publiée telle quelle, sans sa position.")
                     }
                 }
 

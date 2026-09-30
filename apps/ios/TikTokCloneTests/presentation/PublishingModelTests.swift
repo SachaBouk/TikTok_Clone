@@ -137,11 +137,18 @@ struct PublishingModelTests {
     @Test("brouillon : chargement, compteur de caractères, publication")
     func draft() async {
         let (model, _) = await makeModel()
-        let draft = PublishDraftViewModel(publishing: model, makePreview: { _ in nil }, loadDuration: { _ in .seconds(12) })
+        let cleaner = FakeVideoMetadataCleaner(store: store)
+        let draft = PublishDraftViewModel(
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { _ in .seconds(12) }
+        )
         #expect(!draft.canPublish)
         let file = picked()
         await draft.load { file }
-        #expect(draft.state == .ready(.init(file: file, preview: nil, duration: .seconds(12))))
+        // C'est le fichier nettoyé qui est gardé, puis envoyé ; l'original a disparu.
+        let cleaned = file.deletingPathExtension().appendingPathExtension("clean.mov")
+        #expect(cleaner.cleaned == [file])
+        #expect(store.state.withLock { $0.picked[file] } == nil)
+        #expect(draft.state == .ready(.init(file: cleaned, preview: nil, duration: .seconds(12))))
         draft.description = String(repeating: "a", count: 2201)
         #expect(draft.remainingCharacters == -1)
         #expect(!draft.canPublish)
@@ -153,5 +160,20 @@ struct PublishingModelTests {
 
         await draft.load { throw URLError(.cancelled) }
         #expect(draft.state == .failed("Impossible d’importer cette vidéo."))
+    }
+
+    @Test("brouillon : une vidéo qu'on ne sait pas nettoyer est refusée, rien n'est gardé")
+    func draftCleaningFails() async {
+        let (model, _) = await makeModel()
+        let draft = PublishDraftViewModel(
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: FakeVideoMetadataCleaner(store: store, fails: true)),
+            makePreview: { _ in nil }, loadDuration: { _ in nil }
+        )
+        let file = picked()
+        await draft.load { file }
+        #expect(draft.state == .failed("Impossible de préparer cette vidéo."))
+        #expect(!draft.canPublish)
+        #expect(store.state.withLock { $0.picked.isEmpty })
+        #expect(model.publications.isEmpty)
     }
 }

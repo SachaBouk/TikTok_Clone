@@ -202,7 +202,7 @@ final class AppContainer {
     }
 
     func makePublishDraftViewModel() -> PublishDraftViewModel {
-        PublishDraftViewModel(publishing: publishing)
+        PublishDraftViewModel(publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()))
     }
 
     func makeLoginViewModel() -> LoginViewModel {

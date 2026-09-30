@@ -174,3 +174,29 @@ func eventually(_ condition: () -> Bool) async -> Bool {
     }
     return condition()
 }
+
+// Nettoyage des métadonnées en mémoire, sur les fichiers « choisis » du magasin : le fichier est renommé
+// (`…-clean.mov`), l'original disparaît, comme avec l'adaptateur AVFoundation. `fails` simule une vidéo qu'on ne
+// sait pas ré-écrire (le fichier reçu disparaît aussi).
+final class FakeVideoMetadataCleaner: VideoMetadataCleaner {
+    let store: InMemoryUploadStore
+    let fails: Bool
+    private let calls = Mutex<[URL]>([])
+    var cleaned: [URL] { calls.withLock { $0 } }
+
+    init(store: InMemoryUploadStore, fails: Bool = false) {
+        self.store = store
+        self.fails = fails
+    }
+
+    func clean(_ file: URL) async throws -> URL {
+        calls.withLock { $0.append(file) }
+        let output = file.deletingPathExtension().appendingPathExtension("clean.mov")
+        try store.state.withLock { state in
+            guard let data = state.picked.removeValue(forKey: file) else { throw AppError.unexpected }
+            if fails { throw CocoaError(.fileReadCorruptFile) }
+            state.picked[output] = data
+        }
+        return output
+    }
+}

@@ -25,15 +25,18 @@ final class PublishDraftViewModel {
     var errorMessage: String?
 
     private let publishing: PublishingModel
+    private let prepareVideo: PrepareVideoUseCase
     private let makePreview: @Sendable (URL) async -> UIImage?
     private let loadDuration: @Sendable (URL) async -> Duration?
 
     init(
         publishing: PublishingModel,
+        prepareVideo: PrepareVideoUseCase,
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
         loadDuration: @escaping @Sendable (URL) async -> Duration? = { await VideoPreview.duration(of: $0) }
     ) {
         self.publishing = publishing
+        self.prepareVideo = prepareVideo
         self.makePreview = makePreview
         self.loadDuration = loadDuration
     }
@@ -47,18 +50,22 @@ final class PublishDraftViewModel {
         return remainingCharacters >= 0
     }
 
-    // `loader` exporte la vidéo choisie vers un fichier temporaire (nil si la sélection est vide).
+    // `loader` exporte la vidéo choisie vers un fichier temporaire (nil si la sélection est vide), puis la vidéo
+    // est préparée (métadonnées personnelles retirées) : c'est ce fichier-là qui sera envoyé.
     func load(_ loader: () async throws -> URL?) async {
         discardFile()
         state = .loading
         do {
-            guard let file = try await loader() else {
+            guard let picked = try await loader() else {
                 state = .empty
                 return
             }
+            let file = try await prepareVideo(picked)
             async let preview = makePreview(file)
             async let duration = loadDuration(file)
             state = .ready(Draft(file: file, preview: await preview, duration: await duration))
+        } catch let error as AppError {
+            state = .failed(error.message)
         } catch {
             state = .failed("Impossible d’importer cette vidéo.")
         }

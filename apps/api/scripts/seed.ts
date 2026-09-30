@@ -13,13 +13,14 @@
 // Usage : pnpm seed [--videos=12] [--no-wait] [--no-interactions]   (--no-interactions : ni interactions ni conversations)
 //   --videos=0 : aucune nouvelle vidéo, seulement les comptes et les interactions sur les vidéos existantes.
 //   Vidéos : celles de seed/videos/ (.mp4, .mov) si le dossier en contient, sinon générées avec FFmpeg.
+//   Celles de seed/videos/ sont d'abord recopiées sans métadonnées (position GPS…), comme l'app le fait avant l'envoi.
 //   Relançable : les comptes sont réutilisés, les interactions et conversations ne sont pas dupliquées ;
 //   seules les vidéos s'ajoutent à chaque lancement.
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, resolve } from 'node:path';
+import { basename, extname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   AuthTokensDto,
@@ -132,7 +133,8 @@ async function main() {
   const provided = listProvidedVideos();
   const workDir = mkdtempSync(join(tmpdir(), 'seed-videos-'));
   try {
-    const files = provided.length > 0 ? provided : videoCount > 0 ? await generateVideos(videoCount, workDir) : [];
+    const files =
+      provided.length > 0 ? await withoutMetadata(provided, workDir) : videoCount > 0 ? await generateVideos(videoCount, workDir) : [];
     if (files.length > 0) {
       console.log(`\nPublication de ${files.length} vidéo(s) ${provided.length > 0 ? `depuis ${VIDEOS_DIR}` : 'générées'}`);
     } else {
@@ -206,6 +208,24 @@ function listProvidedVideos(): string[] {
     .filter((name) => CONTENT_TYPES[extname(name).toLowerCase()])
     .sort()
     .map((name) => join(VIDEOS_DIR, name));
+}
+
+// Copie des vidéos fournies sans leurs métadonnées (position GPS, appareil…), sans réencodage : la position
+// ne doit pas partir vers le stockage, comme depuis l'app. La rotation, portée par la piste vidéo, est gardée.
+// Pistes gardées : la vidéo (hors pochette) et le son ; les pistes de métadonnées d'iPhone sont écartées.
+async function withoutMetadata(files: string[], directory: string): Promise<string[]> {
+  console.log(`\nRetrait des métadonnées de ${files.length} vidéo(s) de ${VIDEOS_DIR}`);
+  const cleaned: string[] = [];
+  for (const file of files) {
+    const output = join(directory, basename(file));
+    await execFileAsync(FFMPEG, [
+      '-nostdin', '-y', '-loglevel', 'error', '-i', file,
+      '-map', '0:V', '-map', '0:a?', '-c', 'copy', '-map_metadata', '-1', '-map_chapters', '-1',
+      output,
+    ]);
+    cleaned.push(output);
+  }
+  return cleaned;
 }
 
 // Asynchrone, pas execFileSync : bloquer la boucle d'événements plusieurs secondes empêche Node de voir

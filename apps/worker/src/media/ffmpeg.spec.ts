@@ -102,3 +102,28 @@ describe('createThumbnail', () => {
     expect(`${image.width}x${image.height}`).toBe('720x1280');
   });
 });
+
+// La position GPS d'un fichier brut (métadonnées QuickTime d'iPhone) ne doit se retrouver dans aucun fichier publié.
+// L'app la retire avant l'envoi (brut propre) ; ce test vérifie le reste de la chaîne. Constaté avec FFmpeg 8 :
+// ni les segments HLS (MPEG-TS ou fMP4) ni la miniature JPEG ne reprennent ces balises, même sans `-map_metadata -1`.
+describe('métadonnées personnelles', () => {
+  it('aucune position dans le HLS ni dans la miniature', async () => {
+    const located = join(dir, 'located.mov');
+    ffmpeg('-i', iphoneLike, '-c', 'copy', '-movflags', 'use_metadata_tags',
+      '-metadata', 'com.apple.quicktime.location.ISO6709=+48.8566+002.3522+035.000/', '-metadata', 'location=+48.8566+002.3522/', located);
+    expect(readFileSync(located).includes('+48.8566')).toBe(true);
+
+    const out = join(dir, 'hls-located');
+    const media = await probe(located, options);
+    await transcodeToHls(located, out, renditionsFor(media), media, options);
+    await createThumbnail(located, join(out, 'thumbnail.jpg'), media, options);
+
+    const published = readdirSync(out, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+    expect(published.length).toBeGreaterThan(3);
+    for (const entry of published) {
+      const content = readFileSync(join(entry.parentPath, entry.name));
+      expect(content.includes('48.8566'), entry.name).toBe(false);
+      expect(content.includes('ISO6709'), entry.name).toBe(false);
+    }
+  });
+});

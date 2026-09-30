@@ -2,6 +2,22 @@ import Foundation
 
 // Cas d'usage de la publication (ADR-007, ADR-016).
 
+// Prépare la vidéo choisie dans la galerie : métadonnées personnelles retirées (position GPS…), pour que la
+// position ne quitte jamais le téléphone. Une vidéo qu'on ne sait pas nettoyer est refusée plutôt qu'envoyée telle quelle.
+struct PrepareVideoUseCase: Sendable {
+    let cleaner: any VideoMetadataCleaner
+
+    func callAsFunction(_ file: URL) async throws -> URL {
+        do {
+            return try await cleaner.clean(file)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw AppError.rejected("Impossible de préparer cette vidéo.")
+        }
+    }
+}
+
 // Vérifie la vidéo choisie (format, taille) et sa description, puis l'enregistre pour l'envoi.
 // Le fichier est déplacé dans le stockage des envois : il survit à une relance de l'app.
 struct CreatePublicationUseCase: Sendable {
