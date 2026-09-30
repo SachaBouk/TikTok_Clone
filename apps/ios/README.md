@@ -54,6 +54,7 @@ TikTokCloneTests/           Swift Testing : fakes en mémoire, transport HTTP si
 
 - Les ViewModels ne dépendent que de use cases, qui ne dépendent que de protocoles du domaine. `AppContainer` est le seul endroit qui choisit les implémentations.
 - Les tests suivent le même principe que l'API : adaptateurs en mémoire (`fakes/`), et un `MockTransport` qui fait tourner le vrai client généré et ses middlewares sans réseau.
+- Dates relatives des listes (« il y a 3 minutes ») : `Text.relative(date)` (`presentation/common/RelativeTime.swift`), mises à jour par le système tant qu'elles sont affichées.
 
 ## Client d'API généré (ADR-005)
 

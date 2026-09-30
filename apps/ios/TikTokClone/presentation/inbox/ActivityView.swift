@@ -134,7 +134,7 @@ private struct ActivityGroupRow: View {
                         (Text(group.actorNames).bold() + Text(" ") + Text(group.summary))
                             .font(.subheadline)
                             .lineLimit(3)
-                        Text(group.createdAt, format: .relative(presentation: .named))
+                        Text.relative(group.createdAt)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -172,7 +172,7 @@ private struct ActivityRow: View {
                         (Text(notification.actor.displayName).bold() + Text(" ") + Text(notification.summary))
                             .font(.subheadline)
                             .lineLimit(3)
-                        Text(notification.createdAt, format: .relative(presentation: .named))
+                        Text.relative(notification.createdAt)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

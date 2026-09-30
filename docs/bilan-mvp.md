@@ -1,6 +1,6 @@
 # Bilan de la première version (MVP) face à l'ADR-016
 
-État au 30 septembre 2026, commit `3b1a76f` (branche `main`).
+État au 30 septembre 2026 (branche `main`).
 
 ## En bref
 
@@ -13,8 +13,8 @@ Trois points dépendent de comptes externes que le projet n'a pas encore :
 
 ## Méthode
 
-- **Tests automatisés** : 248 tests pour l'API, 13 pour le worker (FFmpeg réel), 10 pour le backoffice et 195 pour l'app iOS (Swift Testing), tous verts.
-- **Intégration continue** : trois workflows GitHub Actions.
+- **Tests automatisés** : 248 tests pour l'API, 13 pour le worker (FFmpeg réel), 10 pour le backoffice et 198 pour l'app iOS (Swift Testing), tous verts.
+- **Intégration continue** : deux workflows GitHub Actions.
   - `ci.yml` : typecheck, tests, build, contrat OpenAPI, migrations sur une base vierge, images Docker.
   - `ios.yml` : app iOS sur l'image Xcode 27, avec les versions du `Package.resolved`.
 - **Tests de bout en bout** à chaque étape, contre PostgreSQL, Redis et MinIO locaux, avec des comptes jetables. L'état de la base est restauré ensuite.
@@ -71,7 +71,7 @@ Enregistrement et édition vidéo ; Live, Stories et réponses vidéo ; For You,
 
 ## Constats de la relecture
 
-Aucun défaut bloquant. Cinq points relevés ; les trois premiers sont corrigés et vérifiés dans le simulateur :
+Aucun défaut bloquant. Cinq points relevés ; les quatre premiers sont corrigés et vérifiés dans le simulateur :
 
 1. **Démarrage** (corrigé) : l'écran restait blanc environ 3 s au lancement. Mesure faite à partir des journaux horodatés :
    - l'essentiel du délai précède notre code : le processus démarre environ 3,3 s après la commande de lancement du simulateur (build Debug) ;
@@ -81,7 +81,7 @@ Aucun défaut bloquant. Cinq points relevés ; les trois premiers sont corrigés
    L'écran de lancement et cette attente ont maintenant le fond noir du feed (couleur `LaunchBackground`, `LaunchView`) : plus d'éclair blanc. La durée elle-même sera à mesurer sur un iPhone, en build Release.
 2. **Partage par « Copier »** (corrigé) : le texte et le lien étaient deux éléments séparés, et un collage perdait le lien. Pour « Copier », le texte contient désormais le lien. Pour les autres actions, le lien reste un élément à part, que Messages ou Mail affichent comme un vrai lien.
 3. **Confirmation de déconnexion** (corrigé) : elle s'ancrait en haut de l'écran, sur la liste entière. Elle est maintenant attachée au bouton « Se déconnecter » et s'affiche juste au-dessus.
-4. **Dates relatives** (« il y a 16 secondes ») : elles ne se mettent pas à jour tant que l'écran reste ouvert.
+4. **Dates relatives** (corrigé) : « il y a 16 secondes » restait affiché tant que l'écran était ouvert. Les dates des commentaires, de l'activité, des conversations et de l'historique des commentaires utilisent maintenant le style de date relative du système (iOS 18), qui se met à jour seul à l'écran : « maintenant » sous 30 s, puis « il y a 1 minute », « il y a 2 heures », « hier », « il y a 8 jours », et la date au-delà d'un mois.
 5. **Position GPS** : le sélecteur de la galerie d'iOS 27 propose « Lieu inclus ». La dette connue (position gardée dans le fichier brut) peut donc être contournée par l'utilisateur, mais l'app ne le guide pas et le serveur ne retire pas ces métadonnées.
 
 ## Ce qui reste bloqué, et pourquoi

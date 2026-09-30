@@ -163,7 +163,7 @@ struct ConversationRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 6) {
                 if let date = conversation.lastMessage?.createdAt {
-                    Text(date, format: .relative(presentation: .named))
+                    Text.relative(date)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

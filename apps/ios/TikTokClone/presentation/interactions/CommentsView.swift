@@ -138,7 +138,7 @@ struct CommentRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(comment.author.username).font(.subheadline.bold())
-                    Text(comment.createdAt, format: .relative(presentation: .named))
+                    Text.relative(comment.createdAt)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

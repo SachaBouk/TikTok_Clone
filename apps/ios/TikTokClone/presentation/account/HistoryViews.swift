@@ -200,7 +200,7 @@ private struct CommentHistoryRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.content).lineLimit(3)
-                Text("Sur la vidéo de @\(entry.video.author.username) · \(entry.createdAt, format: .relative(presentation: .named))")
+                Text("Sur la vidéo de @\(entry.video.author.username) · \(.currentDate, format: RelativeTime.style(for: entry.createdAt))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
