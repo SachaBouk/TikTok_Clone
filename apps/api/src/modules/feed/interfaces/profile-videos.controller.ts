@@ -14,6 +14,7 @@ const BAD_REQUEST = { type: ErrorResponse, description: 'Curseur ou taille de pa
 const USER_NOT_FOUND = { type: ErrorResponse, description: 'Pseudo inconnu.' };
 
 // Grilles du profil (ADR-016). Mêmes éléments que le feed ; connecté, chaque vidéo porte l'état des boutons.
+// Blocage : les vidéos des comptes bloqués (dans un sens ou dans l'autre) sont retirées, et leurs grilles sont vides.
 // Les vidéos en traitement ou en échec de son propre compte : `GET /users/me/videos/pending` (module videos).
 @ApiTags('feed')
 @Controller('users')

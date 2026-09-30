@@ -57,6 +57,8 @@ export abstract class InteractionRepository {
   // L'un des deux a-t-il bloqué l'autre ?
   abstract isBlockedBetween(userId: string, otherId: string): Promise<boolean>;
   abstract findBlocks(userId: string, otherIds: string[]): Promise<BlockRelations>;
+  // Tous les comptes bloqués par `userId` ou qui l'ont bloqué (contenus à masquer au compte connecté).
+  abstract findBlockedEitherWay(userId: string): Promise<Set<string>>;
   // Comptes bloqués par `blockerId`, du plus récent au plus ancien.
   abstract listBlocked(blockerId: string): Promise<string[]>;
 

@@ -49,6 +49,7 @@ struct FeedView: View {
         .onChange(of: scenePhase) { updateActivity() }
         .onChange(of: session.isSignedIn) { Task { await reload() } }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
+        .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
         .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
     }
 

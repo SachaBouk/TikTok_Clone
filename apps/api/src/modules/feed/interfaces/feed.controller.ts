@@ -15,7 +15,8 @@ import { FeedItemResponse, FeedPageResponse, toFeedItemDto } from './feed.respon
 export class FeedController {
   constructor(private readonly feed: FeedService) {}
 
-  // Mode invité (ADR-010) : le feed est lisible sans compte. Connecté, chaque vidéo porte l'état des boutons.
+  // Mode invité (ADR-010) : le feed est lisible sans compte. Connecté, chaque vidéo porte l'état des boutons,
+  // et les vidéos des comptes bloqués (dans un sens ou dans l'autre) sont retirées.
   @Public()
   @Get()
   @ApiOkResponse({
@@ -42,7 +43,7 @@ export class FeedController {
   @Get('items/:id')
   @ApiOkResponse({ type: FeedItemResponse })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
-  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, supprimée ou pas encore publiée.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, supprimée, pas encore publiée, ou d’un compte bloqué.' })
   async getFeedItem(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Param('id', new ParseUUIDPipe()) id: string,

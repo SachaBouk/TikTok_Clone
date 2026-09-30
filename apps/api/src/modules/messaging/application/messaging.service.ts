@@ -118,7 +118,7 @@ export class MessagingService {
     const member = await this.member(conversationId, userId);
     const rows = await this.conversations.listMessages(conversationId, cursor, member.clearedUpToMessageId, limit + 1);
     const page = rows.slice(0, limit);
-    return { items: await this.withVideos(page), nextCursor: rows.length > limit ? page.at(-1)!.id : null };
+    return { items: await this.withVideos(userId, page), nextCursor: rows.length > limit ? page.at(-1)!.id : null };
   }
 
   async sendMessage(userId: string, conversationId: string, input: SendMessageInput): Promise<MessageItem> {
@@ -138,22 +138,30 @@ export class MessagingService {
     // Répondre à une demande l'accepte ; entre abonnés mutuels, la conversation est acceptée d'emblée.
     const accept = !view.accepted && status !== 'requestSent';
     const openRequest = status === 'requestSent' && view.requestSenderId === null;
-    if (sharedVideoId && (await this.videos.getPublishedVideos([sharedVideoId])).length === 0) throw new SharedVideoNotFoundError(sharedVideoId);
+    // Vidéo introuvable aussi quand son auteur et l'expéditeur se sont bloqués : l'expéditeur ne la voit pas.
+    if (sharedVideoId) {
+      const [video] = await this.videos.getPublishedVideos([sharedVideoId]);
+      if (!video || (await this.interactions.getBlockedAccountIds(userId)).has(video.userId)) throw new SharedVideoNotFoundError(sharedVideoId);
+    }
 
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
 
     const message = await this.conversations.addMessage({ conversationId, senderId: userId, content, sharedVideoId, accept, openRequest });
     if (sharedVideoId) await this.videos.recordShare(sharedVideoId);
-    const [item] = await this.withVideos([message]);
+    const [item] = await this.withVideos(userId, [message]);
 
     // Demande refusée : ses messages suivants ne sont plus remis au destinataire (l'expéditeur n'en sait rien).
+    // La vidéo partagée est vue par chacun (indisponible pour celui qui a un blocage avec son auteur).
     const recipients = view.declined && !accept ? [userId] : [userId, otherId];
-    for (const recipientId of recipients) await this.events.messageCreated(recipientId, item!, await this.badges(recipientId));
+    const received = recipients.includes(otherId) ? (await this.withVideos(otherId, [message]))[0]! : null;
+    for (const recipientId of recipients) {
+      await this.events.messageCreated(recipientId, recipientId === userId ? item! : received!, await this.badges(recipientId));
+    }
     if (accept && view.requestSenderId !== null) {
       for (const recipientId of [userId, otherId]) await this.events.conversationAccepted(recipientId, conversationId, await this.badges(recipientId));
     }
-    if (recipients.includes(otherId)) await this.events.pushNewMessage(otherId, await this.users.getById(userId), item!, status === 'requestSent');
+    if (received) await this.events.pushNewMessage(otherId, await this.users.getById(userId), received, status === 'requestSent');
     return item!;
   }
 
@@ -288,7 +296,7 @@ export class MessagingService {
     const mutual = await this.interactions.getMutualFollowers(userId, ids);
     const blocks = await this.interactions.getBlocks(userId, ids);
     const lastMessages = new Map(
-      (await this.withVideos(views.flatMap((v) => (v.lastMessage ? [v.lastMessage] : [])))).map((item) => [item.message.conversationId, item]),
+      (await this.withVideos(userId, views.flatMap((v) => (v.lastMessage ? [v.lastMessage] : [])))).map((item) => [item.message.conversationId, item]),
     );
     return views.flatMap((conversation) => {
       const participant = participants.get(conversation.participantId);
@@ -311,15 +319,20 @@ export class MessagingService {
     });
   }
 
-  private async withVideos(messages: Message[]): Promise<MessageItem[]> {
+  // Vidéos partagées, telles que `viewerId` les voit : celle d'un compte bloqué dans un sens ou dans l'autre
+  // est indisponible, comme dans le feed (blocages lus seulement s'il y a des vidéos).
+  private async withVideos(viewerId: string, messages: Message[]): Promise<MessageItem[]> {
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
-    const videos = new Map((await this.videos.getPublishedVideos(videoIds)).map((v) => [v.id, v]));
+    const [published, hidden] = videoIds.length
+      ? await Promise.all([this.videos.getPublishedVideos(videoIds), this.interactions.getBlockedAccountIds(viewerId)])
+      : [[], new Set<string>()];
+    const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));
     return messages.map((message) => {
       if (!message.sharedVideoId) return { message, sharedVideo: null };
       const video = videos.get(message.sharedVideoId) ?? null;
       const author = video ? (authors.get(video.userId) ?? null) : null;
-      // Vidéo supprimée, ou son auteur : « indisponible ».
+      // Vidéo supprimée, son auteur, ou compte bloqué : « indisponible ».
       return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author } };
     });
   }

@@ -177,6 +177,19 @@ struct InteractionsTests {
         #expect(viewModel.errorMessage == AppError.network.message)
     }
 
+    @Test("commentaires : ceux d'un compte bloqué depuis la feuille disparaissent, le nombre affiché reste celui de l'API")
+    func commentsOfBlockedAccount() async {
+        let (_, session) = await makeModel()
+        repository.state.withLock { $0.comments["v1"] = [.sample("c1"), .sample("c2", author: .alice)] }
+        let viewModel = CommentsViewModel(video: video, loadComments: LoadCommentsUseCase(interactions: repository),
+                                          addComment: AddCommentUseCase(interactions: repository),
+                                          deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        await viewModel.start()
+        viewModel.removeComments(byAuthors: [UserSummary.bob.id])
+        #expect(viewModel.comments.map(\.id) == ["c2"])
+        #expect(viewModel.count == video.stats.comments)
+    }
+
     @Test("vidéo seule : chargée, lue, vue comptée ; introuvable → message")
     func videoDetail() async throws {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))

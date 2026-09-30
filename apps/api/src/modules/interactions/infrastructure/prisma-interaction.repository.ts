@@ -206,6 +206,15 @@ export class PrismaInteractionRepository extends InteractionRepository {
     };
   }
 
+  // Deux lectures sur les index de la table (clé primaire et `blocked_id`) : un compte en bloque peu.
+  async findBlockedEitherWay(userId: string): Promise<Set<string>> {
+    const rows = await this.prisma.block.findMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    return new Set(rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId)));
+  }
+
   async listBlocked(blockerId: string): Promise<string[]> {
     const rows = await this.prisma.block.findMany({ where: { blockerId }, orderBy: { createdAt: 'desc' }, select: { blockedId: true } });
     return rows.map((r) => r.blockedId);

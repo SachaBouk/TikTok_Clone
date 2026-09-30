@@ -8,7 +8,7 @@ import type { VideosService } from '../../videos/application/videos.service';
 import { decodeCursor, encodeCursor, type FeedPosition } from '../domain/feed-cursor';
 import { FeedItemNotFoundError } from '../domain/feed.errors';
 import { decodeListCursor, encodeListCursor } from '../domain/list-cursor';
-import { CATALOG_LIMIT, SNAPSHOT_REFRESH_SECONDS, SNAPSHOT_TTL_SECONDS } from '../domain/feed-rules';
+import { CATALOG_LIMIT, PAGE_FILL_ROUNDS, SNAPSHOT_REFRESH_SECONDS, SNAPSHOT_TTL_SECONDS } from '../domain/feed-rules';
 import type { FeedSnapshot, FeedSnapshotStore } from '../domain/feed-snapshot.store';
 import { seededShuffle } from '../domain/seeded-shuffle';
 
@@ -38,6 +38,9 @@ export interface FeedPage {
 // - Pages suivantes : même photo, même graine, donc même ordre → ni doublon ni vidéo manquée.
 // Vidéos, auteurs et état du lecteur passent par les services exportés de `videos`, `users`
 // et `interactions` (ADR-003).
+// Blocage : pour un compte connecté, les vidéos des comptes bloqués dans un sens ou dans l'autre sont retirées
+// de toutes les listes (feed, grilles, historique), et une telle vidéo seule est introuvable. Même règle pour les
+// grilles d'un tel compte : vides. Rien n'est filtré en mode invité.
 export class FeedService {
   constructor(
     private readonly snapshots: FeedSnapshotStore,
@@ -64,19 +67,26 @@ export class FeedService {
     }
 
     const order = seededShuffle(snapshot.videoIds, position.seed);
-    const pageIds = order.slice(position.offset, position.offset + limit);
-    const nextOffset = position.offset + pageIds.length;
+    const hidden = await this.hiddenAccounts(viewerId);
+    // Des vidéos sautées (compte bloqué, vidéo supprimée) : la page est complétée avec les suivantes de l'ordre.
+    const items: FeedItem[] = [];
+    let offset = position.offset;
+    for (let round = 0; round < PAGE_FILL_ROUNDS && items.length < limit && offset < order.length; round++) {
+      const ids = order.slice(offset, offset + limit - items.length);
+      offset += ids.length;
+      items.push(...(await this.loadItems(ids, viewerId, hidden)));
+    }
 
     return {
-      items: await this.loadItems(pageIds, viewerId),
-      nextCursor: nextOffset < order.length ? encodeCursor({ ...position, offset: nextOffset }) : null,
+      items,
+      nextCursor: offset < order.length ? encodeCursor({ ...position, offset }) : null,
     };
   }
 
   // Une vidéo publiée seule, sous la forme d'un élément du feed : pour l'ouvrir dans le lecteur depuis une
   // notification, l'historique des commentaires, un message partagé ou un lien. Publique (mode invité compris).
   async getItem(videoId: string, viewerId: string | null): Promise<FeedItem> {
-    const [item] = await this.loadItems([videoId], viewerId);
+    const [item] = await this.loadItems([videoId], viewerId, await this.hiddenAccounts(viewerId));
     if (!item) throw new FeedItemNotFoundError(videoId);
     return item;
   }
@@ -84,21 +94,26 @@ export class FeedService {
   // Vidéos publiées de @username, de la plus récente à la plus ancienne. Publique (mode invité compris).
   // Lève UserNotFoundError pour un pseudo inconnu, InvalidFeedCursorError pour un curseur invalide.
   async listAuthorVideos(username: string, cursor: string | undefined, limit: number, viewerId: string | null): Promise<FeedPage> {
-    const author = await this.users.getByUsername(username);
+    const [author, hidden] = await Promise.all([this.users.getByUsername(username), this.hiddenAccounts(viewerId)]);
     const after = cursor ? decodeListCursor(cursor) : null;
+    if (hidden.has(author.id)) return { items: [], nextCursor: null };
     const rows = await this.videos.listPublishedByAuthor(author.id, after && { createdAt: after.at, id: after.videoId }, limit + 1);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: await this.toItems(page, viewerId),
+      items: await this.toItems(page, viewerId, hidden),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
     };
   }
 
   // Vidéos republiées par @username, de la republication la plus récente à la plus ancienne. Publique.
   async listReposts(username: string, cursor: string | undefined, limit: number, viewerId: string | null): Promise<FeedPage> {
-    const user = await this.users.getByUsername(username);
-    return this.listReacted('repost', user.id, cursor, limit, viewerId);
+    const [user, hidden] = await Promise.all([this.users.getByUsername(username), this.hiddenAccounts(viewerId)]);
+    if (hidden.has(user.id)) {
+      if (cursor) decodeListCursor(cursor); // un curseur invalide reste une erreur (400)
+      return { items: [], nextCursor: null };
+    }
+    return this.listReacted('repost', user.id, cursor, limit, viewerId, hidden);
   }
 
   // Favoris du compte connecté, du plus récent au plus ancien. Privés : seul leur titulaire les voit.
@@ -115,11 +130,14 @@ export class FeedService {
   // en tête : pendant qu'on parcourt l'historique, elle peut manquer dans les pages suivantes.
   async listHistory(userId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
     const after = cursor ? decodeListCursor(cursor) : null;
-    const rows = await this.interactions.listViewedVideos(userId, after && { videoId: after.videoId, viewedAt: after.at }, limit + 1);
+    const [rows, hidden] = await Promise.all([
+      this.interactions.listViewedVideos(userId, after && { videoId: after.videoId, viewedAt: after.at }, limit + 1),
+      this.hiddenAccounts(userId),
+    ]);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: await this.loadItems(page.map((row) => row.videoId), userId),
+      items: await this.loadItems(page.map((row) => row.videoId), userId, hidden),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.viewedAt, videoId: last.videoId }) : null,
     };
   }
@@ -132,13 +150,17 @@ export class FeedService {
     cursor: string | undefined,
     limit: number,
     viewerId: string | null,
+    knownHidden?: Set<string>,
   ): Promise<FeedPage> {
     const after = cursor ? decodeListCursor(cursor) : null;
-    const rows = await this.interactions.listReactedVideos(kind, userId, after && { videoId: after.videoId, reactedAt: after.at }, limit + 1);
+    const [rows, hidden] = await Promise.all([
+      this.interactions.listReactedVideos(kind, userId, after && { videoId: after.videoId, reactedAt: after.at }, limit + 1),
+      knownHidden ?? this.hiddenAccounts(viewerId),
+    ]);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: await this.loadItems(page.map((row) => row.videoId), viewerId),
+      items: await this.loadItems(page.map((row) => row.videoId), viewerId, hidden),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.reactedAt, videoId: last.videoId }) : null,
     };
   }
@@ -151,15 +173,22 @@ export class FeedService {
     return snapshot;
   }
 
-  // Remet les vidéos dans l'ordre de la page. Une vidéo supprimée (ou son auteur) depuis la photo est
-  // simplement absente : la page peut être plus courte, la pagination continue.
-  private async loadItems(ids: string[], viewerId: string | null): Promise<FeedItem[]> {
-    const videos = new Map((await this.videos.getPublishedVideos(ids)).map((v) => [v.id, v]));
-    return this.toItems(ids.flatMap((id) => videos.get(id) ?? []), viewerId);
+  // Comptes dont les vidéos sont masquées au compte connecté (blocage, dans un sens ou dans l'autre) ; aucun en invité.
+  private async hiddenAccounts(viewerId: string | null): Promise<Set<string>> {
+    return viewerId ? this.interactions.getBlockedAccountIds(viewerId) : new Set();
   }
 
-  // Ajoute auteur et état du lecteur, dans l'ordre donné. Une vidéo dont l'auteur a disparu est sautée.
-  private async toItems(videos: PublishedVideo[], viewerId: string | null): Promise<FeedItem[]> {
+  // Remet les vidéos dans l'ordre de la page. Une vidéo supprimée (ou son auteur) depuis la photo est
+  // simplement absente : la page peut être plus courte, la pagination continue.
+  private async loadItems(ids: string[], viewerId: string | null, hidden: Set<string>): Promise<FeedItem[]> {
+    const videos = new Map((await this.videos.getPublishedVideos(ids)).map((v) => [v.id, v]));
+    return this.toItems(ids.flatMap((id) => videos.get(id) ?? []), viewerId, hidden);
+  }
+
+  // Ajoute auteur et état du lecteur, dans l'ordre donné. Une vidéo dont l'auteur a disparu, ou d'un compte
+  // masqué (`hidden`), est sautée.
+  private async toItems(all: PublishedVideo[], viewerId: string | null, hidden: Set<string>): Promise<FeedItem[]> {
+    const videos = all.filter((video) => !hidden.has(video.userId));
     const authors = new Map((await this.users.getByIds(videos.map((v) => v.userId))).map((u) => [u.id, u]));
     const seen = viewerId ? await this.interactions.getViewerInteractions(viewerId, videos) : null;
     return videos.flatMap((video) => {

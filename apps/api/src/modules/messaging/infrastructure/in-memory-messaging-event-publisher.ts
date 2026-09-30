@@ -14,9 +14,12 @@ export interface RecordedEvent {
 export class InMemoryMessagingEventPublisher extends MessagingEventPublisher {
   readonly events: RecordedEvent[] = [];
   readonly pushes: { recipientId: string; senderId: string; content: string; asRequest: boolean }[] = [];
+  // Messages remis, tels que chaque destinataire les reçoit (vidéo partagée comprise).
+  readonly created: { recipientId: string; item: MessageItem }[] = [];
 
   async messageCreated(recipientId: string, item: MessageItem, badges: MessagingBadges): Promise<void> {
     this.events.push({ recipientId, event: 'messageCreated', detail: item.message.content, badges });
+    this.created.push({ recipientId, item });
   }
 
   async messageDeleted(recipientId: string, message: { conversationId: string; messageId: string }, badges: MessagingBadges): Promise<void> {

@@ -1512,7 +1512,7 @@
             }
           },
           "404": {
-            "description": "Vidéo inconnue ou pas encore publiée.",
+            "description": "Vidéo inconnue, pas encore publiée, ou d’un compte bloqué.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2490,7 +2490,7 @@
             }
           },
           "404": {
-            "description": "Vidéo inconnue, supprimée ou pas encore publiée.",
+            "description": "Vidéo inconnue, supprimée, pas encore publiée, ou d’un compte bloqué.",
             "content": {
               "application/json": {
                 "schema": {

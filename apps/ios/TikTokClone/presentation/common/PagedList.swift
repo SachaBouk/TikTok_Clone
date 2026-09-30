@@ -8,6 +8,28 @@ enum PagedListState: Equatable {
     case failed(String)
 }
 
+// Page vide mais suivie d'autres (contenus d'un compte bloqué ou supprimés, retirés par l'API) : rien n'apparaît
+// à l'écran pour déclencher la suite. Les listes lisent donc aussitôt la page suivante, au plus ce nombre de fois.
+@MainActor
+enum EmptyPages {
+    static let maxSkipped = 3
+
+    static func fetch<Page>(
+        _ cursor: String?,
+        load: (String?) async throws -> Page,
+        isEmpty: (Page) -> Bool,
+        next: (Page) -> String?
+    ) async throws -> Page {
+        var page = try await load(cursor)
+        var skipped = 0
+        while isEmpty(page), let cursor = next(page), skipped < maxSkipped {
+            page = try await load(cursor)
+            skipped += 1
+        }
+        return page
+    }
+}
+
 // Liste paginée par curseur (grilles, abonnés, historiques) : première page, pages suivantes à l'approche
 // de la fin, retrait d'un élément. Une session expirée renvoie l'app en invité.
 @MainActor
@@ -38,7 +60,7 @@ final class PagedList<Item: Identifiable & Equatable> {
         let generation = generation
         if items.isEmpty { state = .loading }
         do {
-            let page = try await load(nil)
+            let page = try await fetch(nil)
             guard generation == self.generation else { return }
             items = page.items
             nextCursor = page.nextCursor
@@ -67,7 +89,7 @@ final class PagedList<Item: Identifiable & Equatable> {
         defer { isLoadingMore = false }
         let generation = generation
         do {
-            let page = try await load(cursor)
+            let page = try await fetch(cursor)
             guard generation == self.generation else { return }
             let known = Set(items.map(\.id))
             items += page.items.filter { !known.contains($0.id) }
@@ -76,6 +98,10 @@ final class PagedList<Item: Identifiable & Equatable> {
             // Silencieux : un prochain défilement réessaiera.
             _ = handle(error)
         }
+    }
+
+    private func fetch(_ cursor: String?) async throws -> (items: [Item], nextCursor: String?) {
+        try await EmptyPages.fetch(cursor, load: load, isEmpty: { $0.items.isEmpty }, next: { $0.nextCursor })
     }
 
     // Élément arrivé en direct (temps réel), en tête de liste.

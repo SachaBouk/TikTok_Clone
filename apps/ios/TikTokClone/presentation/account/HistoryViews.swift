@@ -82,6 +82,7 @@ struct ViewHistoryView: View {
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
         .onChange(of: container.videoInteractions.deletedVideoIDs) { _, ids in viewModel.list.remove { ids.contains($0.id) } }
+        .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in viewModel.list.remove { ids.contains($0.author.id) } }
         .confirmationDialog("Effacer tout l’historique de visionnage ?", isPresented: $isConfirmingClear, titleVisibility: .visible) {
             Button("Effacer l’historique", role: .destructive) { Task { await viewModel.clear() } }
         } message: {
@@ -107,15 +108,24 @@ final class CommentHistoryViewModel {
     var errorMessage: String?
 
     private let deleteComment: DeleteCommentUseCase
+    private let interactions: VideoInteractionsModel
     private let session: SessionStore
 
-    init(loadComments: LoadCommentHistoryUseCase, deleteComment: DeleteCommentUseCase, session: SessionStore) {
+    init(loadComments: LoadCommentHistoryUseCase, deleteComment: DeleteCommentUseCase, interactions: VideoInteractionsModel, session: SessionStore) {
         self.deleteComment = deleteComment
+        self.interactions = interactions
         self.session = session
         list = PagedList(session: session) { cursor in
             let page = try await loadComments(cursor: cursor)
             return (page.entries, page.nextCursor)
         }
+    }
+
+    // Comptes bloqués depuis le chargement : les commentaires sur leurs vidéos disparaissent (l'API ne les renvoie plus).
+    var blockedUserIDs: Set<String> { interactions.blockedUserIDs }
+
+    func removeBlocked(_ ids: Set<String>) {
+        list.remove { ids.contains($0.video.author.id) }
     }
 
     func delete(_ entry: CommentHistoryEntry) async {
@@ -168,6 +178,7 @@ struct CommentHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
+        .onChange(of: viewModel.blockedUserIDs) { _, ids in viewModel.removeBlocked(ids) }
         .alert("Commentaires", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }

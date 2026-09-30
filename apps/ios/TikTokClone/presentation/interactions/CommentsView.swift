@@ -28,6 +28,11 @@ struct CommentsView: View {
                 .appDestinations(container)
         }
         .task { await viewModel.start() }
+        // Blocage de l'auteur de la vidéo : la feuille se ferme (la vidéo quitte les écrans) ; d'un autre compte :
+        // ses commentaires disparaissent.
+        .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in
+            if ids.contains(viewModel.video.author.id) { dismiss() } else { viewModel.removeComments(byAuthors: ids) }
+        }
         .sheet(isPresented: $isPresentingSignIn) {
             AuthFlowView(container: container)
         }

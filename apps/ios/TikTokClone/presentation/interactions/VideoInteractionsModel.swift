@@ -33,6 +33,9 @@ final class VideoInteractionsModel {
     private var pending: Set<String> = []
     // Vidéos supprimées par leur auteur depuis leur chargement : les écrans les retirent.
     private(set) var deletedVideoIDs: Set<String> = []
+    // Comptes bloqués depuis le chargement des écrans : ceux-ci retirent leurs vidéos, commentaires et lignes,
+    // que l'API ne renvoie plus (blocage dans les deux sens). Débloquer retire le compte de l'ensemble.
+    private(set) var blockedUserIDs: Set<String> = []
 
     private let setReaction: SetReactionUseCase
     private let setFollow: SetFollowUseCase
@@ -76,6 +79,7 @@ final class VideoInteractionsModel {
     func reset() {
         overrides.removeAll()
         followOverrides.removeAll()
+        blockedUserIDs.removeAll()
     }
 
     // Bouton cœur, favori ou republication : bascule l'état.
@@ -123,9 +127,15 @@ final class VideoInteractionsModel {
         }
     }
 
-    // Compte bloqué : les follows sont supprimés dans les deux sens par l'API.
+    // Compte bloqué : les follows sont supprimés dans les deux sens par l'API, et ses contenus disparaissent des écrans.
     func blocked(_ userID: String) {
         followOverrides[userID] = false
+        blockedUserIDs.insert(userID)
+    }
+
+    // Compte débloqué (profil ou réglages) : ses contenus reviendront au prochain chargement.
+    func unblocked(_ userID: String) {
+        blockedUserIDs.remove(userID)
     }
 
     // Suppression d'une de ses vidéos, quel que soit l'écran (feed, lecteur d'une grille, vidéo seule).

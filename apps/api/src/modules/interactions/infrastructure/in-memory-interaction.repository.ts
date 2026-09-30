@@ -190,6 +190,16 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     };
   }
 
+  async findBlockedEitherWay(userId: string): Promise<Set<string>> {
+    return new Set(
+      this.blocks.flatMap((key) => {
+        const [blockerId, blockedId] = key.split(':') as [string, string];
+        if (blockerId === userId) return [blockedId];
+        return blockedId === userId ? [blockerId] : [];
+      }),
+    );
+  }
+
   async listBlocked(blockerId: string): Promise<string[]> {
     return this.blocks.filter((key) => key.startsWith(`${blockerId}:`)).map((key) => key.split(':')[1]!).reverse();
   }

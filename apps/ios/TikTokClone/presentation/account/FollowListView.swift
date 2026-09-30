@@ -25,6 +25,13 @@ final class FollowListViewModel {
         }
     }
 
+    // Comptes bloqués depuis le chargement (profil ouvert depuis la liste) : leurs lignes disparaissent.
+    var blockedUserIDs: Set<String> { interactions.blockedUserIDs }
+
+    func removeBlocked(_ ids: Set<String>) {
+        list.remove { ids.contains($0.user.id) }
+    }
+
     // Nil pour son propre compte (pas de bouton).
     func status(of entry: FollowEntry) -> FollowStatus? {
         guard session.profile?.id != entry.user.id else { return nil }
@@ -67,6 +74,7 @@ struct FollowListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
+        .onChange(of: viewModel.blockedUserIDs) { _, ids in viewModel.removeBlocked(ids) }
         .alert("Abonnements", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }

@@ -16,3 +16,7 @@ export const MAX_PAGE_SIZE = 20;
 // Grilles du profil (vidéos, republications, favoris d'un compte) : 3 colonnes.
 export const DEFAULT_GRID_PAGE_SIZE = 21;
 export const MAX_GRID_PAGE_SIZE = 60;
+
+// Vidéos sautées (comptes bloqués, vidéos supprimées depuis la photo) : la page du feed est complétée avec les
+// suivantes de l'ordre, en au plus ce nombre de lectures. Au-delà, elle reste plus courte ; la pagination continue.
+export const PAGE_FILL_ROUNDS = 3;

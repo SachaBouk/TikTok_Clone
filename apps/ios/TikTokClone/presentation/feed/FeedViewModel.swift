@@ -97,6 +97,11 @@ final class FeedViewModel {
     }
 
     // Vidéo supprimée (par son auteur) : retirée ; la suivante devient courante.
+    // Comptes bloqués : leurs vidéos quittent le feed (l'API ne les renvoie plus).
+    func remove(authorIDs: Set<String>) {
+        remove(videoIDs: Set(entries.filter { authorIDs.contains($0.video.author.id) }.map(\.video.id)))
+    }
+
     func remove(videoIDs: Set<String>) {
         guard entries.contains(where: { videoIDs.contains($0.video.id) }) else { return }
         let currentIndex = entries.firstIndex { $0.id == currentEntryID }
@@ -189,7 +194,7 @@ final class FeedViewModel {
         // Fin de session : nouvelle session, nouvel ordre (les vidéos peuvent revenir).
         if nextCursor == nil { generation += 1 }
         do {
-            append(try await loadPage.page(cursor: nextCursor))
+            append(try await fetchPage(cursor: nextCursor))
             // La fenêtre de préchargement peut maintenant inclure la vidéo suivante.
             if let currentEntryID, let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
                 playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
@@ -202,12 +207,16 @@ final class FeedViewModel {
     private func loadFirstPage() async {
         loadState = .loading
         do {
-            append(try await loadPage.page(cursor: nil))
+            append(try await fetchPage(cursor: nil))
             loadState = .loaded
             if let first = entries.first { show(first.id) }
         } catch {
             loadState = .failed(AppError.from(error).message)
         }
+    }
+
+    private func fetchPage(cursor: String?) async throws -> FeedPage {
+        try await EmptyPages.fetch(cursor, load: { try await loadPage.page(cursor: $0) }, isEmpty: { $0.videos.isEmpty }, next: { $0.nextCursor })
     }
 
     private func append(_ page: FeedPage) {

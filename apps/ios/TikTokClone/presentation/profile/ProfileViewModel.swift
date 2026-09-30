@@ -128,8 +128,17 @@ final class ProfileViewModel {
 
     // Vidéos supprimées depuis un lecteur : retirées des grilles.
     func removeVideos(_ ids: Set<String>) {
+        removeVideos { ids.contains($0.id) }
+    }
+
+    // Comptes bloqués : leurs vidéos quittent les grilles (republications, favoris, likes).
+    func removeVideos(byAuthors ids: Set<String>) {
+        removeVideos { ids.contains($0.author.id) }
+    }
+
+    private func removeVideos(where shouldRemove: (FeedVideo) -> Bool) {
         for list in grids.values {
-            list.remove { ids.contains($0.id) }
+            list.remove(where: shouldRemove)
         }
     }
 
@@ -152,7 +161,7 @@ final class ProfileViewModel {
         do {
             try await setBlocked(blocked, username: profile.username)
             relationship = Relationship(following: false, followedBy: blocked ? false : relationship?.followedBy ?? false, blockedByMe: blocked)
-            if blocked { interactions.blocked(profile.id) }
+            if blocked { interactions.blocked(profile.id) } else { interactions.unblocked(profile.id) }
             await refresh()
             return nil
         } catch {

@@ -43,6 +43,10 @@ struct VideoDetailView: View {
         .onChange(of: interactions.deletedVideoIDs) { _, ids in
             if ids.contains(viewModel.videoID) { dismiss() }
         }
+        // Auteur bloqué (profil ouvert depuis la vidéo) : la vidéo se ferme, comme une vidéo supprimée.
+        .onChange(of: interactions.blockedUserIDs) { _, ids in
+            if case .loaded(let video) = viewModel.state, ids.contains(video.author.id) { dismiss() }
+        }
         .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
     }
 

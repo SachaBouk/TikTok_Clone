@@ -11,11 +11,13 @@ final class BlockedAccountsViewModel {
 
     private let loadBlockedUsers: LoadBlockedUsersUseCase
     private let setBlocked: SetBlockedUseCase
+    private let interactions: VideoInteractionsModel
     private let session: SessionStore
 
-    init(loadBlockedUsers: LoadBlockedUsersUseCase, setBlocked: SetBlockedUseCase, session: SessionStore) {
+    init(loadBlockedUsers: LoadBlockedUsersUseCase, setBlocked: SetBlockedUseCase, interactions: VideoInteractionsModel, session: SessionStore) {
         self.loadBlockedUsers = loadBlockedUsers
         self.setBlocked = setBlocked
+        self.interactions = interactions
         self.session = session
     }
 
@@ -34,6 +36,7 @@ final class BlockedAccountsViewModel {
         do {
             try await setBlocked(false, username: user.username)
             users.removeAll { $0.id == user.id }
+            interactions.unblocked(user.id)
         } catch {
             errorMessage = handle(error)
         }

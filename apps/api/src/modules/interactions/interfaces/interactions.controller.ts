@@ -140,13 +140,18 @@ export class InteractionsController {
     return { sharesCount: await this.interactions.share(id) };
   }
 
+  // Public. Connecté : les commentaires des comptes bloqués (dans un sens ou dans l'autre) sont retirés.
   @Public()
   @Get('videos/:id/comments')
   @ApiOkResponse({ type: CommentPageResponse })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
-  @ApiNotFoundResponse(VIDEO_NOT_FOUND)
-  async listComments(@Param('id', VIDEO_ID) id: string, @Query() query: CommentsQuery): Promise<CommentPageDto> {
-    const page = await this.interactions.listComments(id, query.cursor ?? null, query.limit);
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, pas encore publiée, ou d’un compte bloqué.' })
+  async listComments(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id', VIDEO_ID) id: string,
+    @Query() query: CommentsQuery,
+  ): Promise<CommentPageDto> {
+    const page = await this.interactions.listComments(id, query.cursor ?? null, query.limit, user?.userId ?? null);
     return { items: page.items.map(toCommentDto), nextCursor: page.nextCursor };
   }
 
@@ -214,6 +219,7 @@ export class InteractionsController {
   }
 
   // Listes publiques (mode invité compris) ; `viewer` n'est renseigné que pour un compte connecté.
+  // Connecté : les comptes bloqués (dans un sens ou dans l'autre) sont retirés, et leurs listes sont vides.
   @Public()
   @Get('users/:username/followers')
   @ApiOkResponse({ type: FollowPageResponse, description: 'Abonnés du compte.' })

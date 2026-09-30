@@ -121,6 +121,11 @@ struct ProfileViewModelTests {
         #expect(viewModel.isBlocked)
         #expect(!interactions.isFollowing("bob-id", loaded: true))
         #expect(relationships.calls.contains("block-bob"))
+        // Les écrans retirent ses contenus ; débloquer le retire de l'ensemble.
+        #expect(interactions.blockedUserIDs == ["bob-id"])
+        relationships.state.withLock { $0.relationships["bob"] = Relationship(following: false, followedBy: false, blockedByMe: false) }
+        #expect(await viewModel.setBlocked(false) == nil)
+        #expect(interactions.blockedUserIDs.isEmpty)
     }
 
     @Test("vidéo supprimée depuis un lecteur : retirée des grilles")
@@ -131,6 +136,17 @@ struct ProfileViewModelTests {
         await viewModel.load()
         viewModel.removeVideos(["v1"])
         #expect(viewModel.grid(.videos).items.map(\.id) == ["v2"])
+    }
+
+    @Test("compte bloqué depuis un autre écran : ses vidéos quittent les grilles")
+    func removeBlockedAuthors() async {
+        let session = await makeSession()
+        videoLists.set(.myLikes, [FeedPage(videos: [.sample("v1", author: "bob"), .sample("v2", author: "carol")], nextCursor: nil)])
+        let viewModel = makeProfile(nil, session: session)
+        await viewModel.load()
+        await viewModel.select(.likes)
+        viewModel.removeVideos(byAuthors: ["bob-id"])
+        #expect(viewModel.grid(.likes).items.map(\.id) == ["v2"])
     }
 
     @Test("modifier le profil : seuls les champs changés ; pseudo pris : message ; photo recadrée puis envoyée")
@@ -221,19 +237,48 @@ struct ProfileViewModelTests {
         #expect(viewModel.status(of: viewModel.list.items[1]) == .followBack)
         await viewModel.toggleFollow(viewModel.list.items[1])
         #expect(viewModel.status(of: viewModel.list.items[1]) == .friends)
+
+        // Bloqué depuis son profil, ouvert depuis la liste : sa ligne disparaît.
+        interactions.blocked(UserSummary.bob.id)
+        #expect(viewModel.blockedUserIDs == [UserSummary.bob.id])
+        viewModel.removeBlocked(viewModel.blockedUserIDs)
+        #expect(viewModel.list.items.map(\.user) == [me])
     }
 
-    @Test("comptes bloqués : débloquer retire la ligne")
+    @Test("comptes bloqués : débloquer retire la ligne, et le compte des contenus masqués")
     func blockedAccounts() async {
         let session = await makeSession()
         relationships.state.withLock { $0.blocked = [.bob] }
+        let interactions = makeInteractions(session)
+        interactions.blocked(UserSummary.bob.id)
         let viewModel = BlockedAccountsViewModel(loadBlockedUsers: LoadBlockedUsersUseCase(relationships: relationships),
-                                                 setBlocked: SetBlockedUseCase(relationships: relationships), session: session)
+                                                 setBlocked: SetBlockedUseCase(relationships: relationships), interactions: interactions, session: session)
         await viewModel.load()
         #expect(viewModel.users == [.bob])
         await viewModel.unblock(.bob)
         #expect(viewModel.users.isEmpty)
         #expect(relationships.calls == ["unblock-bob"])
+        #expect(interactions.blockedUserIDs.isEmpty)
+    }
+
+    @Test("historique des commentaires : ceux sur les vidéos d'un compte bloqué disparaissent")
+    func commentHistoryBlocked() async {
+        let session = await makeSession()
+        let video = { (author: UserSummary) in CommentHistoryEntry.Video(id: "v-\(author.username)", thumbnailURL: nil, author: author) }
+        interactionRepository.state.withLock {
+            $0.myComments = [
+                CommentHistoryEntry(id: "c1", content: "Un", createdAt: .now, video: video(.bob)),
+                CommentHistoryEntry(id: "c2", content: "Deux", createdAt: .now, video: video(.alice)),
+            ]
+        }
+        let interactions = makeInteractions(session)
+        let viewModel = CommentHistoryViewModel(loadComments: LoadCommentHistoryUseCase(interactions: interactionRepository),
+                                                deleteComment: DeleteCommentUseCase(interactions: interactionRepository),
+                                                interactions: interactions, session: session)
+        await viewModel.list.loadFirst()
+        interactions.blocked(UserSummary.bob.id)
+        viewModel.removeBlocked(viewModel.blockedUserIDs)
+        #expect(viewModel.list.items.map(\.id) == ["c2"])
     }
 
     @Test("historique de visionnage : retirer une vidéo, tout effacer")
@@ -275,6 +320,26 @@ struct ProfileViewModelTests {
         #expect(session.state == .guest)
     }
 
+    @Test("pages vides suivies d'autres (contenus masqués) : la suivante est lue aussitôt, au plus 3 fois de suite")
+    func emptyPagesSkipped() async {
+        let session = await makeSession()
+        let empty = { (next: String?) in FeedPage(videos: [], nextCursor: next) }
+        videoLists.set(.myLikes, [empty("1"), empty("2"), page(["v1"], next: "3"), empty("4"), empty("5"), empty("6"), empty("7"), page(["v2"], next: nil)])
+        let list = PagedList<FeedVideo>(session: session) { cursor in
+            try await LoadVideoPageUseCase(videos: videoLists)(.myLikes, cursor: cursor).asPage
+        }
+        await list.loadFirst()
+        #expect(list.items.map(\.id) == ["v1"])
+        #expect(list.nextCursor == "3")
+        // 4 pages vides d'affilée : la liste s'arrête après 3 sauts, et reprendra au prochain défilement.
+        await list.loadMore()
+        #expect(list.items.map(\.id) == ["v1"])
+        #expect(list.nextCursor == "7")
+        await list.loadMore()
+        #expect(list.items.map(\.id) == ["v1", "v2"])
+        #expect(videoLists.requests.count == 8)
+    }
+
     @Test("lecteur d'une grille : ouvert sur la vidéo touchée, s'arrête à la fin, vidéo supprimée retirée")
     func listPlayer() async {
         let session = await makeSession()
@@ -296,6 +361,25 @@ struct ProfileViewModelTests {
         viewModel.remove(videoIDs: ["v2"])
         #expect(viewModel.entries.map(\.video.id) == ["v1", "v3"])
         #expect(viewModel.currentVideo?.id == "v3")
+    }
+
+    @Test("compte bloqué : ses vidéos quittent le lecteur, la suivante devient courante")
+    func listPlayerBlockedAuthor() async {
+        let session = await makeSession()
+        let viewModel = FeedViewModel(
+            loadPage: LoadVideoListUseCase(videos: videoLists, list: .myLikes),
+            recordView: RecordViewUseCase(history: FakeViewHistoryRepository()),
+            playback: FakePlayback(),
+            session: session,
+            analytics: makeAnalytics(),
+            mode: .list(FeedPage(videos: [.sample("v1", author: "carol"), .sample("v2"), .sample("v3"), .sample("v4", author: "carol")], nextCursor: nil),
+                        startIndex: 1)
+        )
+        await viewModel.start()
+        #expect(viewModel.currentVideo?.id == "v2")
+        viewModel.remove(authorIDs: ["bob-id"])
+        #expect(viewModel.entries.map(\.video.id) == ["v1", "v4"])
+        #expect(viewModel.currentVideo?.id == "v4")
     }
 
     @Test("supprimer sa vidéo : signalée aux écrans ; celle d'un autre : ignorée")

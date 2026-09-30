@@ -60,6 +60,7 @@ struct ProfileView: View {
                 Text(alertMessage ?? "")
             }
             .onChange(of: container.videoInteractions.deletedVideoIDs) { _, ids in viewModel.removeVideos(ids) }
+            .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in viewModel.removeVideos(byAuthors: ids) }
             // Une publication vient d'être mise en ligne : elle rejoint la grille des vidéos.
             .onChange(of: publishedCount) { old, new in
                 if new > old, viewModel.isOwn { Task { await viewModel.grid(.videos).loadFirst() } }

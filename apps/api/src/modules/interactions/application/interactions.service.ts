@@ -154,8 +154,9 @@ export class InteractionsService {
   }
 
   // Abonnés ou abonnements de @username, du follow le plus récent au plus ancien. Listes publiques
-  // (lisibles en mode invité) ; les comptes bloqués n'en sont pas retirés. `viewerId` : compte connecté,
-  // dont on donne la relation avec chaque compte listé (boutons « Suivre », « Suivre en retour »).
+  // (lisibles en mode invité). `viewerId` : compte connecté, dont on donne la relation avec chaque compte listé
+  // (boutons « Suivre », « Suivre en retour »). Blocage : les comptes bloqués dans un sens ou dans l'autre
+  // sont retirés de la liste (page plus courte), et la liste d'un tel compte est vide.
   async listFollows(
     direction: FollowDirection,
     username: string,
@@ -165,9 +166,11 @@ export class InteractionsService {
   ): Promise<FollowPage> {
     const target = await this.userByUsername(username);
     const after = cursor ? decodeFollowCursor(cursor) : null;
+    const hidden = await this.hiddenAccounts(viewerId);
+    if (hidden.has(target.id)) return { items: [], nextCursor: null };
     const rows = await this.interactions.listFollows(direction, target.id, after, limit + 1);
     const page = rows.slice(0, limit);
-    const ids = page.map((row) => row.userId);
+    const ids = page.map((row) => row.userId).filter((id) => !hidden.has(id));
     const [users, relations] = await Promise.all([
       this.users.getByIds(ids),
       viewerId ? this.interactions.findFollowRelations(viewerId, ids) : null,
@@ -231,11 +234,16 @@ export class InteractionsService {
 
   // Commentaires d'une vidéo publiée, du plus récent au plus ancien. Le curseur est l'identifiant
   // du dernier commentaire reçu (UUID v7, ordonné dans le temps) : stable même si d'autres arrivent.
-  async listComments(videoId: string, cursor: string | null, limit: number): Promise<CommentPage> {
-    await this.publishedVideo(videoId);
+  // Blocage (`viewerId`, compte connecté) : la vidéo d'un compte bloqué dans un sens ou dans l'autre est
+  // introuvable, comme dans le feed, et les commentaires de ces comptes sont retirés (page plus courte ;
+  // `comments_count` les compte toujours).
+  async listComments(videoId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
+    const [video, hidden] = await Promise.all([this.publishedVideo(videoId), this.hiddenAccounts(viewerId)]);
+    if (hidden.has(video.userId)) throw new VideoNotAvailableError(videoId);
     const rows = await this.interactions.listComments(videoId, cursor, limit + 1);
     const page = rows.slice(0, limit);
-    const authors = new Map((await this.users.getByIds(page.map((c) => c.userId))).map((u) => [u.id, u]));
+    const authorIds = page.map((c) => c.userId).filter((id) => !hidden.has(id));
+    const authors = new Map((await this.users.getByIds(authorIds)).map((u) => [u.id, u]));
     return {
       items: page.flatMap((comment) => {
         const author = authors.get(comment.userId);
@@ -268,11 +276,13 @@ export class InteractionsService {
 
   // Historique des commentaires de `userId` (centre d'activités, ADR-006 : lu dans la table comments, sans
   // nouvelle entité), du plus récent au plus ancien. Privé. Un commentaire dont la vidéo ou son auteur a disparu
-  // entre-temps est sauté (la cascade le supprime de toute façon).
+  // entre-temps est sauté (la cascade le supprime de toute façon), comme un commentaire sur la vidéo d'un compte
+  // bloqué dans un sens ou dans l'autre (la vidéo serait introuvable).
   async listCommentHistory(userId: string, cursor: string | null, limit: number): Promise<CommentHistoryPage> {
-    const rows = await this.interactions.listUserComments(userId, cursor, limit + 1);
+    const [rows, hidden] = await Promise.all([this.interactions.listUserComments(userId, cursor, limit + 1), this.hiddenAccounts(userId)]);
     const page = rows.slice(0, limit);
-    const videos = new Map((await this.videos.getPublishedVideos([...new Set(page.map((c) => c.videoId))])).map((v) => [v.id, v]));
+    const published = await this.videos.getPublishedVideos([...new Set(page.map((c) => c.videoId))]);
+    const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));
     return {
       items: page.flatMap((comment) => {
@@ -315,9 +325,20 @@ export class InteractionsService {
     return this.interactions.findBlocks(userId, [...new Set(userIds)]);
   }
 
+  // Pour les modules feed et messaging : comptes bloqués par `userId` ou qui l'ont bloqué. Leurs contenus
+  // (vidéos, commentaires, présence dans les listes) sont masqués à `userId`, dans les deux sens.
+  getBlockedAccountIds(userId: string): Promise<Set<string>> {
+    return this.interactions.findBlockedEitherWay(userId);
+  }
+
   // Pour le module messaging : parmi `userIds`, les abonnés mutuels de `userId` (seuls autorisés à s'écrire).
   getMutualFollowers(userId: string, userIds: string[]): Promise<Set<string>> {
     return this.interactions.findMutualFollows(userId, [...new Set(userIds)]);
+  }
+
+  // Comptes à masquer au compte connecté ; aucun en mode invité.
+  private async hiddenAccounts(viewerId: string | null | undefined): Promise<Set<string>> {
+    return viewerId ? this.interactions.findBlockedEitherWay(viewerId) : new Set();
   }
 
   // Sur ses propres vidéos, pas de blocage possible (on ne se bloque pas soi-même).

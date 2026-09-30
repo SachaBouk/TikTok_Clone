@@ -289,6 +289,22 @@ describe('MessagingService', () => {
       const [item] = (await service.listMessages('bob', id, null, 10)).items;
       expect(item!.sharedVideo).toEqual({ id: video, video: null, author: null });
     });
+
+    it("vidéo d'un compte bloqué : refusée à l'envoi, indisponible pour le destinataire concerné", async () => {
+      const video = await publishedVideo('carol');
+      const id = await open('alice', 'bob');
+      await interactions.setBlock('carol', 'bob', true);
+      await service.sendMessage('alice', id, { videoId: video });
+
+      const shared = (viewer: string) => events.created.find((c) => c.recipientId === viewer)!.item.sharedVideo;
+      expect(shared('alice')).toMatchObject({ id: video, video: { id: video }, author: { id: 'carol' } });
+      expect(shared('bob')).toEqual({ id: video, video: null, author: null });
+      expect((await service.listMessages('bob', id, null, 10)).items[0]!.sharedVideo).toEqual({ id: video, video: null, author: null });
+      expect((await service.listMessages('alice', id, null, 10)).items[0]!.sharedVideo).toMatchObject({ author: { id: 'carol' } });
+      expect((await service.listConversations('bob', null, 10)).items[0]!.lastMessage!.sharedVideo).toMatchObject({ video: null });
+
+      await expect(service.sendMessage('bob', id, { videoId: video })).rejects.toBeInstanceOf(SharedVideoNotFoundError);
+    });
   });
 
   describe('limites d’envoi', () => {

@@ -300,6 +300,7 @@ final class AppContainer {
         CommentHistoryViewModel(
             loadComments: LoadCommentHistoryUseCase(interactions: interactions),
             deleteComment: DeleteCommentUseCase(interactions: interactions),
+            interactions: videoInteractions,
             session: session
         )
     }
@@ -308,6 +309,7 @@ final class AppContainer {
         BlockedAccountsViewModel(
             loadBlockedUsers: LoadBlockedUsersUseCase(relationships: relationships),
             setBlocked: SetBlockedUseCase(relationships: relationships),
+            interactions: videoInteractions,
             session: session
         )
     }

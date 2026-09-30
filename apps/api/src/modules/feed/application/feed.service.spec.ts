@@ -68,7 +68,7 @@ describe('FeedService', () => {
     // Dates de création strictement croissantes : ordre des grilles du profil déterministe.
     let tick = 0;
     videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
-    users = new InMemoryUserRepository([user('alice'), user('bob')]);
+    users = new InMemoryUserRepository([user('alice'), user('bob'), user('dave')]);
     snapshots = new InMemoryFeedSnapshotStore();
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
@@ -311,6 +311,107 @@ describe('FeedService', () => {
       for (const id of [processing, deleted, 'inconnue']) {
         await expect(feed.getItem(id, 'bob')).rejects.toBeInstanceOf(FeedItemNotFoundError);
       }
+    });
+  });
+
+  describe('blocage', () => {
+    const ids = (page: { items: { video: { id: string } }[] }) => page.items.map((i) => i.video.id);
+
+    it("retire du feed les vidéos d'un compte bloqué, dans les deux sens, et complète la page avec les suivantes", async () => {
+      const bobs = await Promise.all(Array.from({ length: 4 }, () => publish('bob')));
+      const others = await Promise.all(Array.from({ length: 4 }, () => publish('dave')));
+      await interactions.setBlock('alice', 'bob', true);
+
+      for (const viewer of ['alice', 'bob']) {
+        const seen = await (async () => {
+          const all: string[] = [];
+          let cursor: string | undefined;
+          do {
+            const page = await feed.getPage(cursor, 3, viewer);
+            all.push(...ids(page));
+            cursor = page.nextCursor ?? undefined;
+          } while (cursor);
+          return all;
+        })();
+        // Alice ne voit plus les vidéos de Bob ; Bob, lui, voit les siennes et celles de Dave.
+        if (viewer === 'alice') expect(seen.sort()).toEqual([...others].sort());
+        else expect(seen.sort()).toEqual([...bobs, ...others].sort());
+      }
+      // Invité : rien n'est filtré.
+      expect((await scrollAll(3)).flat()).toHaveLength(8);
+    });
+
+    it('complète la page avec les vidéos suivantes de l’ordre, sans en perdre ni en répéter', async () => {
+      // Une vidéo de Bob parmi 4 : quelle que soit sa place, la première page de 3 d'Alice est pleine.
+      const bobs = await publish('bob');
+      const daves = await Promise.all(Array.from({ length: 3 }, () => publish('dave')));
+      await interactions.setBlock('alice', 'bob', true);
+      const first = await feed.getPage(undefined, 3, 'alice');
+      expect(ids(first)).toHaveLength(3);
+      expect(ids(first)).not.toContain(bobs);
+      const rest = first.nextCursor ? ids(await feed.getPage(first.nextCursor, 3, 'alice')) : [];
+      expect([...ids(first), ...rest].sort()).toEqual([...daves].sort());
+    });
+
+    it('bloqué par l’auteur : ses vidéos disparaissent aussi du feed du compte bloqué', async () => {
+      await publish('alice');
+      const daves = await publish('dave');
+      await interactions.setBlock('alice', 'bob', true);
+      expect(ids(await feed.getPage(undefined, 10, 'bob'))).toEqual([daves]);
+    });
+
+    it('débloquer fait revenir les vidéos', async () => {
+      await publish('bob');
+      await interactions.setBlock('alice', 'bob', true);
+      expect(ids(await feed.getPage(undefined, 10, 'alice'))).toEqual([]);
+      await interactions.setBlock('alice', 'bob', false);
+      expect(ids(await feed.getPage(undefined, 10, 'alice'))).toHaveLength(1);
+    });
+
+    it('vidéo seule introuvable pour les deux comptes, visible pour les autres', async () => {
+      const video = await publish('bob');
+      await interactions.setBlock('bob', 'alice', true);
+      await expect(feed.getItem(video, 'alice')).rejects.toBeInstanceOf(FeedItemNotFoundError);
+      await expect(feed.getItem(video, 'dave')).resolves.toMatchObject({ video: { id: video } });
+      await expect(feed.getItem(video, null)).resolves.toMatchObject({ video: { id: video } });
+      await expect(feed.getItem(video, 'bob')).resolves.toMatchObject({ video: { id: video } });
+    });
+
+    it("grilles d'un compte bloqué vides, dans les deux sens ; un curseur invalide reste refusé", async () => {
+      const bobs = await publish('bob');
+      const alices = await publish('alice');
+      await interactions.setReaction('bob', alices, 'repost', true);
+      await interactions.setReaction('alice', bobs, 'repost', true);
+      await interactions.setBlock('alice', 'bob', true);
+
+      await expect(feed.listAuthorVideos('bob', undefined, 21, 'alice')).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(feed.listReposts('bob', undefined, 21, 'alice')).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(feed.listAuthorVideos('alice', undefined, 21, 'bob')).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(feed.listReposts('bob', 'pas-un-curseur', 21, 'alice')).rejects.toBeInstanceOf(InvalidFeedCursorError);
+      // Ses propres grilles et celles des autres comptes restent lisibles ; en invité, rien n'est filtré.
+      expect(ids(await feed.listAuthorVideos('bob', undefined, 21, 'bob'))).toEqual([bobs]);
+      expect(ids(await feed.listAuthorVideos('bob', undefined, 21, 'dave'))).toEqual([bobs]);
+      expect(ids(await feed.listAuthorVideos('bob', undefined, 21, null))).toEqual([bobs]);
+    });
+
+    it("retire les vidéos d'un compte bloqué des republications d'un tiers, des favoris, des likes et de l'historique", async () => {
+      const bobs = await publish('bob');
+      const daves = await publish('dave');
+      for (const kind of ['repost', 'favorite', 'like'] as const) {
+        await interactions.setReaction('dave', bobs, kind, true);
+        await interactions.setReaction('alice', bobs, kind, true);
+        await interactions.setReaction('alice', daves, kind, true);
+      }
+      await interactions.recordView('alice', bobs);
+      await interactions.recordView('alice', daves);
+      await interactions.setBlock('alice', 'bob', true);
+
+      expect(ids(await feed.listReposts('dave', undefined, 21, 'alice'))).toEqual([]);
+      expect(ids(await feed.listReposts('dave', undefined, 21, null))).toEqual([bobs]);
+      expect(ids(await feed.listReposts('alice', undefined, 21, 'alice'))).toEqual([daves]);
+      expect(ids(await feed.listFavorites('alice', undefined, 21))).toEqual([daves]);
+      expect(ids(await feed.listLikes('alice', undefined, 21))).toEqual([daves]);
+      expect(ids(await feed.listHistory('alice', undefined, 21))).toEqual([daves]);
     });
   });
 

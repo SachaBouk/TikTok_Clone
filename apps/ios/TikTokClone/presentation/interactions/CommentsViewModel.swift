@@ -78,6 +78,12 @@ final class CommentsViewModel {
         }
     }
 
+    // Compte bloqué depuis la feuille (profil ouvert depuis un commentaire) : ses commentaires disparaissent, comme
+    // au prochain chargement. Le nombre affiché ne change pas : l'API les compte toujours.
+    func removeComments(byAuthors ids: Set<String>) {
+        comments.removeAll { ids.contains($0.author.id) }
+    }
+
     // Suppression de son propre commentaire ; il revient à sa place si l'API refuse.
     func delete(_ comment: VideoComment) async {
         guard isOwn(comment), let index = comments.firstIndex(of: comment) else { return }
@@ -98,7 +104,8 @@ final class CommentsViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let page = try await loadComments(videoID: video.id, cursor: cursor)
+            let page = try await EmptyPages.fetch(cursor, load: { try await loadComments(videoID: video.id, cursor: $0) },
+                                                  isEmpty: { $0.comments.isEmpty }, next: { $0.nextCursor })
             comments += page.comments.filter { new in !comments.contains { $0.id == new.id } }
             nextCursor = page.nextCursor
             hasLoaded = true

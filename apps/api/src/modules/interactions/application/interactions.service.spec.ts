@@ -272,6 +272,18 @@ describe('InteractionsService', () => {
       await expect(lists.listFollows('followers', 'u1', undefined, null, 20).then(usernames)).resolves.toEqual(['u5', 'u3', 'u2']);
     });
 
+    it('retire les comptes bloqués des listes, dans les deux sens, et vide la liste d’un tel compte', async () => {
+      // u1 bloque u4 (u4 ne le suit plus) ; u3 bloque u2 (ils ne se suivaient pas : rien d'autre ne change).
+      await lists.setBlock(id(1), 'u4', true);
+      await lists.setBlock(id(3), 'u2', true);
+      await expect(lists.listFollows('followers', 'u1', id(2), null, 20).then(usernames)).resolves.toEqual(['u5', 'u2']);
+      await expect(lists.listFollows('followers', 'u1', id(3), null, 20).then(usernames)).resolves.toEqual(['u5', 'u3']);
+      await expect(lists.listFollows('followers', 'u1', id(5), null, 20).then(usernames)).resolves.toEqual(['u5', 'u3', 'u2']);
+      await expect(lists.listFollows('followers', 'u1', undefined, null, 20).then(usernames)).resolves.toEqual(['u5', 'u3', 'u2']);
+      await expect(lists.listFollows('following', 'u1', id(4), null, 20)).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(lists.listFollows('followers', 'u3', id(2), null, 20)).resolves.toEqual({ items: [], nextCursor: null });
+    });
+
     it('refuse un curseur invalide et un pseudo inconnu', async () => {
       for (const cursor of ['pas-du-base64', Buffer.from('{"t":1,"u":"x"}').toString('base64url'), Buffer.from('[]').toString('base64url')]) {
         await expect(lists.listFollows('followers', 'u1', undefined, cursor, 20)).rejects.toBeInstanceOf(InvalidFollowCursorError);
@@ -410,6 +422,46 @@ describe('InteractionsService', () => {
 
     it('refuse de se bloquer soi-même', async () => {
       await expect(service.setBlock('alice', 'alice', true)).rejects.toBeInstanceOf(CannotBlockYourselfError);
+    });
+
+    it('donne les comptes bloqués dans un sens ou dans l’autre', async () => {
+      await service.setBlock('alice', 'bob', true);
+      await service.setBlock('carol', 'alice', true);
+      await expect(service.getBlockedAccountIds('alice')).resolves.toEqual(new Set(['bob', 'carol']));
+      await expect(service.getBlockedAccountIds('bob')).resolves.toEqual(new Set(['alice']));
+    });
+
+    it("masque les commentaires d'un compte bloqué, dans les deux sens, et pas aux autres ni en invité", async () => {
+      const own = await service.addComment('alice', video, 'Alice');
+      const carols = await service.addComment('carol', video, 'Carol');
+      await service.setBlock('carol', 'alice', true);
+      const contents = async (viewer: string | null) => (await service.listComments(video, null, 10, viewer)).items.map((i) => i.comment.content);
+
+      await expect(contents('alice')).resolves.toEqual(['Alice']);
+      await expect(contents('carol')).resolves.toEqual(['Carol']);
+      await expect(contents('bob')).resolves.toEqual(['Carol', 'Alice']);
+      await expect(contents(null)).resolves.toEqual(['Carol', 'Alice']);
+      // Le curseur suit les commentaires lus, masqués compris : la page suivante ne les répète pas.
+      const first = await service.listComments(video, null, 1, 'alice');
+      expect(first).toEqual({ items: [], nextCursor: carols.comment.id });
+      await expect(service.listComments(video, first.nextCursor, 1, 'alice')).resolves.toMatchObject({
+        items: [{ comment: { id: own.comment.id } }],
+        nextCursor: null,
+      });
+    });
+
+    it("rend introuvables les commentaires d'une vidéo dont l'auteur a un blocage avec le lecteur", async () => {
+      await service.setBlock('bob', 'alice', true);
+      await expect(service.listComments(video, null, 10, 'alice')).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.listComments(video, null, 10, 'carol')).resolves.toMatchObject({ items: [] });
+    });
+
+    it("retire de l'historique des commentaires ceux écrits sur les vidéos d'un compte bloqué", async () => {
+      await service.addComment('alice', video, 'Sur la vidéo de Bob');
+      await service.setBlock('alice', 'bob', true);
+      await expect(service.listCommentHistory('alice', null, 10)).resolves.toMatchObject({ items: [] });
+      await service.setBlock('alice', 'bob', false);
+      await expect(service.listCommentHistory('alice', null, 10)).resolves.toMatchObject({ items: [{ comment: { content: 'Sur la vidéo de Bob' } }] });
     });
   });
 
