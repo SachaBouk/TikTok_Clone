@@ -4,28 +4,36 @@ import { notFound } from 'next/navigation';
 import { Thumbnail } from '@/components/thumbnail';
 import { UserAvatar } from '@/components/user-avatar';
 import { VideoStatusBadge } from '@/components/video-status-badge';
+import { WalletTransactionsTable } from '@/components/wallet-transactions-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { getUser } from '@/models/users.model';
 import { listVideos } from '@/models/videos.model';
+import { listWalletTransactions } from '@/models/wallet.model';
 
 export const metadata: Metadata = { title: 'Compte' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECENT_VIDEOS = 12;
+const RECENT_TRANSACTIONS = 10;
 
 export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const [user, videos] = await Promise.all([getUser(id), listVideos({ userId: id, limit: RECENT_VIDEOS })]);
+  const [user, videos, transactions] = await Promise.all([
+    getUser(id),
+    listVideos({ userId: id, limit: RECENT_VIDEOS }),
+    listWalletTransactions({ userId: id, limit: RECENT_TRANSACTIONS }),
+  ]);
   if (!user) notFound();
 
   const figures = [
     ['Vidéos', user.videosCount],
     ['Abonnés', user.followersCount],
     ['Abonnements', user.followingCount],
+    ['Jetons', user.tokenBalance],
   ] as const;
 
   return (
@@ -52,7 +60,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               <div className="text-xl font-semibold tabular-nums">{formatNumber(value)}</div>
             </div>
           ))}
-          <div>
+          <div className="sm:col-span-4">
             <div className="text-sm text-muted-foreground">Inscription</div>
             <div className="font-medium">{formatDateTime(user.createdAt)}</div>
           </div>
@@ -91,6 +99,20 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Jetons</CardTitle>
+          {transactions.nextCursor && (
+            <Button variant="link" asChild>
+              <Link href={`/tokens?userId=${user.id}`}>Tous ses mouvements</Link>
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <WalletTransactionsTable transactions={transactions.items} showAccount={false} />
         </CardContent>
       </Card>
     </div>

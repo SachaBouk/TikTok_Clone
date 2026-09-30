@@ -30,6 +30,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <NavLink href="/users">Comptes</NavLink>
             <NavLink href="/videos">Vidéos</NavLink>
             <NavLink href="/comments">Commentaires</NavLink>
+            <NavLink href="/tokens">Jetons</NavLink>
           </nav>
           <div className="flex items-center gap-2 text-sm">
             <UserAvatar user={admin} size="sm" />

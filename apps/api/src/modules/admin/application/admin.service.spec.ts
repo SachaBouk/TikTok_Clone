@@ -22,6 +22,10 @@ import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory
 import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
+import { WalletService } from '../../wallet/application/wallet.service';
+import type { CurrencyEvent } from '../../wallet/domain/wallet';
+import { InMemoryWalletEventPublisher } from '../../wallet/infrastructure/in-memory-wallet-event-publisher';
+import { InMemoryWalletRepository } from '../../wallet/infrastructure/in-memory-wallet.repository';
 import { AdminTargetNotFoundError } from '../domain/admin.errors';
 import { AdminService } from './admin.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
@@ -77,7 +81,21 @@ describe('AdminService', () => {
   let accounts: InMemoryAuthAccountRepository;
   let cleanup: InMemoryVideoCleanupQueue;
   let interactions: InteractionsService;
+  let wallet: WalletService;
   let service: AdminService;
+
+  let eventSequence = 0;
+  const tokens = (appUserId: string, amount: number, environment = 'PRODUCTION'): CurrencyEvent => ({
+    eventId: `evt-${++eventSequence}`,
+    appUserIds: [appUserId],
+    amount,
+    source: 'in_app_purchase',
+    productId: `tokens_${Math.abs(amount)}`,
+    storeTransactionId: `tx-${eventSequence}`,
+    store: 'APP_STORE',
+    environment,
+    occurredAt: NOW,
+  });
 
   async function createVideo(userId: string, status: VideoStatus = 'ready') {
     const created = await videoRepository.create({ userId, description: 'Démo', rawKey: `${userId}/k`, uploadId: 'u', rawSize: 1 });
@@ -107,7 +125,8 @@ describe('AdminService', () => {
       { accessTokenTtlSeconds: 900, refreshTokenTtlDays: 30 },
       new InMemoryRateLimiter(),
     );
-    service = new AdminService(users, videos, interactions, auth, () => NOW);
+    wallet = new WalletService(new InMemoryWalletRepository(), users, new InMemoryWalletEventPublisher(), { rejectSandbox: false });
+    service = new AdminService(users, videos, interactions, auth, wallet, () => NOW);
   });
 
   describe('comptes', () => {
@@ -130,7 +149,7 @@ describe('AdminService', () => {
 
     it('cherche un compte, et en ouvre un par identifiant', async () => {
       await expect(service.listAccounts('@BO', null, 10)).resolves.toMatchObject({ items: [{ user: { id: BOB } }], nextCursor: null });
-      await expect(service.getAccount(ALICE)).resolves.toMatchObject({ user: { username: 'alice' }, isAdmin: false, videosCount: 0 });
+      await expect(service.getAccount(ALICE)).resolves.toMatchObject({ user: { username: 'alice' }, isAdmin: false, videosCount: 0, tokenBalance: 0 });
       await expect(service.getAccount('0192f3a0-0000-7000-8000-00000000dead')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
     });
   });
@@ -200,6 +219,64 @@ describe('AdminService', () => {
       users: { total: 3, last7Days: 2 },
       videos: { total: 3, last7Days: 3, uploading: 1, processing: 0, ready: 1, failed: 1 },
       comments: { total: 1, last7Days: 1 },
+      tokens: {
+        production: { purchased: 0, refunded: 0, adjusted: 0 },
+        sandbox: { purchased: 0, refunded: 0, adjusted: 0 },
+        purchasedSince: 0,
+        inCirculation: 0,
+        unmatched: 0,
+      },
+    });
+  });
+
+  describe('jetons', () => {
+    it('donne le solde de chaque compte et les totaux du tableau de bord', async () => {
+      await wallet.recordCurrencyEvent(tokens(BOB, 500));
+      await wallet.recordCurrencyEvent(tokens(BOB, -200));
+      await wallet.recordCurrencyEvent(tokens(CAROL, 100, 'SANDBOX'));
+      await wallet.recordCurrencyEvent(tokens('$RCAnonymousID:x', 300));
+
+      const page = await service.listAccounts(null, null, 10);
+      expect(page.items.map(({ user, tokenBalance }) => [user.username, tokenBalance])).toEqual([
+        ['carol', 100],
+        ['bob', 300],
+        ['alice', 0],
+      ]);
+      await expect(service.getStats()).resolves.toMatchObject({
+        tokens: {
+          production: { purchased: 800, refunded: 200, adjusted: 0 },
+          sandbox: { purchased: 100, refunded: 0, adjusted: 0 },
+          purchasedSince: 800,
+          inCirculation: 400,
+          unmatched: 1,
+        },
+      });
+    });
+
+    it('liste le journal avec le compte crédité, filtré par compte ou « à rapprocher »', async () => {
+      await wallet.recordCurrencyEvent(tokens(BOB, 500));
+      await wallet.recordCurrencyEvent(tokens('$RCAnonymousID:x', 300));
+      await wallet.recordCurrencyEvent(tokens(CAROL, 100));
+
+      const first = await service.listWalletTransactions({}, null, 2);
+      expect(first.items.map(({ entry, user }) => [entry.amount, user?.username ?? null, entry.unmatched])).toEqual([
+        [100, 'carol', false],
+        [300, null, true],
+      ]);
+      const rest = await service.listWalletTransactions({}, first.nextCursor, 2);
+      expect(rest).toMatchObject({ items: [{ entry: { amount: 500 }, user: { username: 'bob' } }], nextCursor: null });
+      await expect(service.listWalletTransactions({ userId: BOB }, null, 10)).resolves.toMatchObject({ items: [{ entry: { amount: 500 } }] });
+      await expect(service.listWalletTransactions({ unmatched: true }, null, 10)).resolves.toMatchObject({
+        items: [{ entry: { appUserId: '$RCAnonymousID:x' }, user: null }],
+      });
+    });
+
+    it('ligne d’un compte supprimé depuis : anonyme, sans être « à rapprocher »', async () => {
+      await wallet.recordCurrencyEvent(tokens(BOB, 500));
+      await userRepository.delete(BOB);
+      const { items } = await service.listWalletTransactions({}, null, 10);
+      // L'adaptateur en mémoire ne reproduit pas le SET NULL de la base : le compte, introuvable, est absent.
+      expect(items).toMatchObject([{ entry: { unmatched: false, balanceAfter: 500 }, user: null }]);
     });
   });
 });

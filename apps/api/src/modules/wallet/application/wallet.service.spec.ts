@@ -109,4 +109,54 @@ describe('WalletService', () => {
     expect(second.items.map((t) => t.amount)).toEqual([1]);
     expect(second.nextCursor).toBeNull();
   });
+
+  describe('backoffice', () => {
+    const UNKNOWN = '0192f3a0-0000-7000-8000-0000000000ff';
+
+    it('donne les soldes de plusieurs comptes, 0 sans portefeuille', async () => {
+      await service.recordCurrencyEvent(event({ amount: 300 }));
+      const balances = await service.getBalances([ALICE, UNKNOWN, ALICE]);
+      expect([...balances]).toEqual([
+        [ALICE, 300],
+        [UNKNOWN, 0],
+      ]);
+    });
+
+    it('liste le journal complet avec les identifiants du store, filtré par compte ou « à rapprocher », page par page', async () => {
+      await service.recordCurrencyEvent(event({ amount: 100, environment: 'PRODUCTION' }));
+      await service.recordCurrencyEvent(event({ amount: 50, appUserIds: ['$RCAnonymousID:abc'] }));
+      await service.recordCurrencyEvent(event({ amount: -150 }));
+
+      const all = await service.listLedger({}, null, 2);
+      expect(all.items.map((e) => [e.kind, e.amount, e.appliedAmount, e.balanceAfter, e.unmatched])).toEqual([
+        ['refund', -150, -100, 0, false],
+        ['purchase', 50, 0, null, true],
+      ]);
+      expect(all.items[1]).toMatchObject({ userId: null, appUserId: '$RCAnonymousID:abc', storeTransactionId: expect.stringMatching(/^tx-/) });
+      const rest = await service.listLedger({}, all.nextCursor, 2);
+      expect(rest).toMatchObject({ items: [{ amount: 100, environment: 'PRODUCTION', userId: ALICE }], nextCursor: null });
+
+      expect((await service.listLedger({ userId: ALICE }, null, 10)).items.map((e) => e.amount)).toEqual([-150, 100]);
+      expect((await service.listLedger({ unmatched: true }, null, 10)).items.map((e) => e.appUserId)).toEqual(['$RCAnonymousID:abc']);
+    });
+
+    it('totalise les jetons vendus, remboursés et ajustés, production et test séparés, clients inconnus compris', async () => {
+      const recent = new Date('2026-09-27T12:00:00Z');
+      const old = new Date('2026-08-01T12:00:00Z');
+      await service.recordCurrencyEvent(event({ amount: 500, environment: 'PRODUCTION', occurredAt: old }));
+      await service.recordCurrencyEvent(event({ amount: 100, environment: 'PRODUCTION', occurredAt: recent }));
+      await service.recordCurrencyEvent(event({ amount: 200, environment: 'PRODUCTION', appUserIds: ['inconnu'] }));
+      await service.recordCurrencyEvent(event({ amount: -100, environment: 'PRODUCTION' }));
+      await service.recordCurrencyEvent(event({ amount: 30, environment: 'PRODUCTION', source: 'admin_api' }));
+      await service.recordCurrencyEvent(event({ amount: 1000 }));
+
+      await expect(service.getStats(new Date('2026-09-20T00:00:00Z'))).resolves.toEqual({
+        production: { purchased: 800, refunded: 100, adjusted: 30 },
+        sandbox: { purchased: 1000, refunded: 0, adjusted: 0 },
+        purchasedSince: 300,
+        inCirculation: 1530,
+        unmatched: 1,
+      });
+    });
+  });
 });

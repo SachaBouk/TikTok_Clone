@@ -59,5 +59,57 @@ export function appliedAmount(balance: number, amount: number): number {
   return Math.max(amount, -balance);
 }
 
+// Backoffice (ADR-004) : une ligne du journal, avec ce qui sert au rapprochement avec RevenueCat et le store.
+export interface WalletLedgerEntry {
+  id: string;
+  // Nul : compte supprimé depuis (ligne anonymisée), ou client inconnu de l'API (`unmatched`).
+  userId: string | null;
+  kind: WalletTransactionKind;
+  // Mouvement annoncé par RevenueCat.
+  amount: number;
+  // Mouvement réellement appliqué au solde (plancher à 0 ; 0 pour un client inconnu).
+  appliedAmount: number;
+  balanceAfter: number | null;
+  // Client inconnu de l'API au moment du webhook : aucun portefeuille touché, à rapprocher à la main.
+  unmatched: boolean;
+  revenuecatEventId: string;
+  appUserId: string;
+  productId: string | null;
+  storeTransactionId: string | null;
+  store: string | null;
+  environment: string;
+  occurredAt: Date;
+}
+
+// Filtres du journal du backoffice : un compte, ou les seuls mouvements à rapprocher.
+export interface LedgerFilter {
+  userId?: string;
+  unmatched?: boolean;
+}
+
+// Jetons annoncés par RevenueCat, par sorte de mouvement (montants positifs), pour un environnement.
+export interface TokenTotals {
+  // Achats (jetons vendus), clients inconnus compris : le store a encaissé.
+  purchased: number;
+  refunded: number;
+  // Ajustements depuis le tableau de bord RevenueCat (solde net, peut être négatif).
+  adjusted: number;
+}
+
+// Tableau de bord du backoffice.
+export interface WalletStats {
+  production: TokenTotals;
+  // Achats de test (Xcode, TestFlight, Test Store) : jamais payés.
+  sandbox: TokenTotals;
+  // Jetons achetés en production depuis `since`.
+  purchasedSince: number;
+  // Somme des soldes des comptes.
+  inCirculation: number;
+  // Mouvements de clients inconnus, à rapprocher.
+  unmatched: number;
+}
+
+export const PRODUCTION_ENVIRONMENT = 'PRODUCTION';
+
 export const DEFAULT_TRANSACTIONS_PAGE_SIZE = 20;
 export const MAX_TRANSACTIONS_PAGE_SIZE = 50;

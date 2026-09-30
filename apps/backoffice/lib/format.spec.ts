@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientAddress, formatDelay, withQuery } from './format';
+import { clientAddress, formatDelay, formatSigned, withQuery } from './format';
 
 describe('withQuery', () => {
   it('ne garde que les paramètres renseignés', () => {
@@ -23,5 +23,14 @@ describe('clientAddress', () => {
     expect(clientAddress(' ::1 ')).toBe('::1');
     expect(clientAddress(null)).toBeNull();
     expect(clientAddress('')).toBeNull();
+  });
+});
+
+describe('formatSigned', () => {
+  it('signe les montants, sans séparateur ambigu', () => {
+    expect(formatSigned(500)).toBe('+500');
+    expect(formatSigned(-200)).toBe('−200');
+    expect(formatSigned(0)).toBe('0');
+    expect(formatSigned(12000).replace(/\s/g, ' ')).toBe('+12 000');
   });
 });

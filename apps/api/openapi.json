@@ -4216,6 +4216,98 @@
         ]
       }
     },
+    "/admin/wallet-transactions": {
+      "get": {
+        "operationId": "listAdminWalletTransactions",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Mouvements de ce compte seulement.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "unmatched",
+            "required": false,
+            "in": "query",
+            "description": "Seulement les mouvements d’un client inconnu, à rapprocher.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminWalletTransactionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide (curseur, limite, filtre).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/comments/{id}": {
       "delete": {
         "operationId": "deleteAdminComment",
@@ -5774,6 +5866,11 @@
             "type": "integer",
             "description": "Vidéos du compte, tous statuts confondus."
           },
+          "tokenBalance": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Solde de jetons."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -5789,6 +5886,7 @@
           "followersCount",
           "followingCount",
           "videosCount",
+          "tokenBalance",
           "createdAt"
         ]
       },
@@ -5840,6 +5938,58 @@
           "failed"
         ]
       },
+      "AdminTokenTotalsResponse": {
+        "type": "object",
+        "properties": {
+          "purchased": {
+            "type": "integer",
+            "description": "Jetons vendus, clients inconnus compris."
+          },
+          "refunded": {
+            "type": "integer",
+            "description": "Jetons remboursés (annoncés par le store)."
+          },
+          "adjusted": {
+            "type": "integer",
+            "description": "Ajustements nets depuis le tableau de bord RevenueCat."
+          }
+        },
+        "required": [
+          "purchased",
+          "refunded",
+          "adjusted"
+        ]
+      },
+      "AdminTokenStatsResponse": {
+        "type": "object",
+        "properties": {
+          "production": {
+            "$ref": "#/components/schemas/AdminTokenTotalsResponse"
+          },
+          "sandbox": {
+            "$ref": "#/components/schemas/AdminTokenTotalsResponse"
+          },
+          "purchasedLast7Days": {
+            "type": "integer",
+            "description": "Jetons vendus en production sur les 7 derniers jours."
+          },
+          "inCirculation": {
+            "type": "integer",
+            "description": "Somme des soldes des comptes."
+          },
+          "unmatched": {
+            "type": "integer",
+            "description": "Mouvements d’un client inconnu de l’API, à rapprocher."
+          }
+        },
+        "required": [
+          "production",
+          "sandbox",
+          "purchasedLast7Days",
+          "inCirculation",
+          "unmatched"
+        ]
+      },
       "AdminStatsResponse": {
         "type": "object",
         "properties": {
@@ -5851,12 +6001,16 @@
           },
           "comments": {
             "$ref": "#/components/schemas/AdminCountResponse"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/AdminTokenStatsResponse"
           }
         },
         "required": [
           "users",
           "videos",
-          "comments"
+          "comments",
+          "tokens"
         ]
       },
       "AdminUserPageResponse": {
@@ -6027,6 +6181,103 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AdminCommentResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "AdminWalletTransactionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WalletTransactionKind"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Mouvement annoncé par RevenueCat."
+          },
+          "appliedAmount": {
+            "type": "integer",
+            "description": "Mouvement appliqué au solde (plancher à 0 ; 0 pour un client inconnu)."
+          },
+          "balanceAfter": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Solde après le mouvement ; null pour un client inconnu."
+          },
+          "unmatched": {
+            "type": "boolean",
+            "description": "Client inconnu de l’API au moment du webhook : aucun solde touché, à rapprocher."
+          },
+          "revenuecatEventId": {
+            "type": "string"
+          },
+          "appUserId": {
+            "type": "string",
+            "description": "Identifiant du client chez RevenueCat."
+          },
+          "productId": {
+            "type": "string",
+            "nullable": true
+          },
+          "storeTransactionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "store": {
+            "type": "string",
+            "nullable": true,
+            "example": "APP_STORE"
+          },
+          "environment": {
+            "type": "string",
+            "example": "PRODUCTION",
+            "description": "PRODUCTION ou SANDBOX."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "amount",
+          "appliedAmount",
+          "balanceAfter",
+          "unmatched",
+          "revenuecatEventId",
+          "appUserId",
+          "productId",
+          "storeTransactionId",
+          "store",
+          "environment",
+          "occurredAt"
+        ]
+      },
+      "AdminWalletTransactionPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du mouvement le plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminWalletTransactionResponse"
             }
           },
           "nextCursor": {

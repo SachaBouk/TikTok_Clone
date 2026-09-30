@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import type { VideoStatus } from '@repo/shared';
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { DEFAULT_ADMIN_PAGE_SIZE, MAX_ADMIN_PAGE_SIZE } from '../domain/admin';
 
 // Paramètres de requête validés par le ValidationPipe global (main.ts).
@@ -53,4 +53,17 @@ export class AdminCommentsQuery extends AdminPageQuery {
   @IsOptional()
   @IsUUID()
   userId?: string;
+}
+
+export class AdminWalletTransactionsQuery extends AdminPageQuery {
+  @ApiPropertyOptional({ format: 'uuid', description: 'Mouvements de ce compte seulement.' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Seulement les mouvements d’un client inconnu, à rapprocher.' })
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  unmatched?: boolean;
 }

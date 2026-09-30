@@ -10,6 +10,12 @@ export function formatNumber(value: number): string {
   return number.format(value);
 }
 
+// Montant signé (jetons) : « +500 », « −200 » (vrai signe moins), « 0 ».
+export function formatSigned(value: number): string {
+  if (value === 0) return '0';
+  return `${value > 0 ? '+' : '−'}${number.format(Math.abs(value))}`;
+}
+
 // Délai d'attente (en-tête Retry-After, en secondes) : « 30 s » sous une minute, sinon en minutes arrondies au-dessus.
 export function formatDelay(seconds: number): string {
   return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;

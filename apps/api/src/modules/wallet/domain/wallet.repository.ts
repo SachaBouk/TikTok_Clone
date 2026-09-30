@@ -1,4 +1,4 @@
-import type { ApplyResult, NewWalletEntry, WalletTransaction } from './wallet';
+import type { ApplyResult, LedgerFilter, NewWalletEntry, WalletLedgerEntry, WalletStats, WalletTransaction } from './wallet';
 
 // Port des tables wallets et wallet_transactions (ADR-006, ADR-009).
 export abstract class WalletRepository {
@@ -9,4 +9,11 @@ export abstract class WalletRepository {
   abstract apply(entry: NewWalletEntry): Promise<ApplyResult>;
   // Mouvements du compte, du plus récent au plus ancien (identifiants UUID v7), strictement avant `beforeId`.
   abstract listTransactions(userId: string, beforeId: string | null, limit: number): Promise<WalletTransaction[]>;
+
+  // Backoffice (ADR-004) : soldes de ces comptes (absents : 0).
+  abstract getBalances(userIds: string[]): Promise<Map<string, number>>;
+  // Backoffice : journal complet, filtré, du plus récent au plus ancien, strictement avant `beforeId`.
+  abstract listLedger(filter: LedgerFilter, beforeId: string | null, limit: number): Promise<WalletLedgerEntry[]>;
+  // Backoffice : totaux des jetons, achats en production depuis `since`.
+  abstract getStats(since: Date): Promise<WalletStats>;
 }

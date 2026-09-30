@@ -1,6 +1,7 @@
 import type { Comment } from '../../interactions/domain/interaction';
 import type { User } from '../../users/domain/user';
 import type { VideoDetails, VideoStatus } from '../../videos/domain/video';
+import type { WalletLedgerEntry, WalletStats } from '../../wallet/domain/wallet';
 
 // Backoffice (ADR-004). Le module n'a pas de données propres : il assemble ce que les autres modules
 // exposent par leurs services (ADR-003), pour les écrans d'administration.
@@ -10,11 +11,18 @@ export const MAX_ADMIN_PAGE_SIZE = 100;
 // Période des nouveautés du tableau de bord.
 export const RECENT_PERIOD_DAYS = 7;
 
-// Un compte, son rôle et son nombre de vidéos (tous statuts).
+// Un compte, son rôle, son nombre de vidéos (tous statuts) et son solde de jetons.
 export interface AdminAccount {
   user: User;
   isAdmin: boolean;
   videosCount: number;
+  tokenBalance: number;
+}
+
+// Une ligne du journal des jetons et le compte crédité (null : supprimé depuis, ou client inconnu).
+export interface LedgerLine {
+  entry: WalletLedgerEntry;
+  user: User | null;
 }
 
 export interface ModeratedVideo {
@@ -44,4 +52,6 @@ export interface PlatformStats {
   users: RecentCount;
   videos: RecentCount & Record<VideoStatus, number>;
   comments: RecentCount;
+  // `purchasedSince` : sur les 7 derniers jours.
+  tokens: WalletStats;
 }

@@ -1,5 +1,6 @@
 import type { UserSummaryDto } from './users.js';
 import type { VideoStatus } from './videos.js';
+import type { WalletTransactionKind } from './wallet.js';
 
 // Backoffice (ADR-004) : routes `/admin`, réservées aux comptes au rôle `admin`.
 
@@ -18,6 +19,8 @@ export interface AdminUserDto {
   followingCount: number;
   // Vidéos du compte, tous statuts confondus.
   videosCount: number;
+  // Solde de jetons (ADR-009).
+  tokenBalance: number;
   createdAt: string;
 }
 
@@ -85,8 +88,59 @@ export interface AdminVideoCountsDto extends AdminCountDto {
   failed: number;
 }
 
+// Jetons annoncés par RevenueCat pour un environnement (montants positifs, sauf les ajustements, nets).
+export interface AdminTokenTotalsDto {
+  // Jetons vendus, clients inconnus compris (le store a encaissé).
+  purchased: number;
+  refunded: number;
+  adjusted: number;
+}
+
+export interface AdminTokenStatsDto {
+  production: AdminTokenTotalsDto;
+  // Achats de test (Xcode, TestFlight, Test Store), jamais payés.
+  sandbox: AdminTokenTotalsDto;
+  // Jetons vendus en production sur les 7 derniers jours.
+  purchasedLast7Days: number;
+  // Somme des soldes des comptes.
+  inCirculation: number;
+  // Mouvements d'un client inconnu de l'API, à rapprocher à la main.
+  unmatched: number;
+}
+
 export interface AdminStatsDto {
   users: AdminCountDto;
   videos: AdminVideoCountsDto;
   comments: AdminCountDto;
+  tokens: AdminTokenStatsDto;
+}
+
+// Une ligne du journal des jetons (ADR-021), avec ce qui sert au rapprochement avec RevenueCat et le store.
+export interface AdminWalletTransactionDto {
+  id: string;
+  // Compte crédité ; absent pour un compte supprimé depuis ou un client inconnu (`unmatched`).
+  user?: UserSummaryDto;
+  kind: WalletTransactionKind;
+  // Mouvement annoncé par RevenueCat.
+  amount: number;
+  // Mouvement réellement appliqué au solde (plancher à 0 ; 0 pour un client inconnu).
+  appliedAmount: number;
+  balanceAfter: number | null;
+  // Client inconnu de l'API au moment du webhook : aucun solde touché.
+  unmatched: boolean;
+  revenuecatEventId: string;
+  // Identifiant du client chez RevenueCat.
+  appUserId: string;
+  productId: string | null;
+  storeTransactionId: string | null;
+  store: string | null;
+  // PRODUCTION ou SANDBOX.
+  environment: string;
+  occurredAt: string;
+}
+
+export interface AdminWalletTransactionPageDto {
+  // Du mouvement le plus récent au plus ancien.
+  items: AdminWalletTransactionDto[];
+  nextCursor: string | null;
 }

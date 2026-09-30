@@ -41,11 +41,17 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 
 ## Écrans
 
-- **Tableau de bord** : comptes, vidéos et commentaires (totaux et 7 derniers jours), vidéos par statut, liens vers PostHog.
-- **Comptes** : recherche par pseudo (avec ou sans `@`), nom ou identifiant ; fiche avec rôle, compteurs, vidéos récentes.
+- **Tableau de bord** : comptes, vidéos, commentaires et jetons vendus (totaux et 7 derniers jours), vidéos par statut, alerte
+  s'il y a des achats de jetons à rapprocher, liens vers PostHog.
+- **Comptes** : recherche par pseudo (avec ou sans `@`), nom ou identifiant, solde de jetons ; fiche avec rôle, compteurs,
+  vidéos récentes et derniers mouvements de jetons.
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
+- **Jetons** (ADR-032, lecture seule) : vendus, remboursés, ajustés et en circulation (production ; achats de test à part),
+  journal complet filtrable par compte ou « à rapprocher » (client RevenueCat inconnu de l'API : rien n'a été crédité).
+  Montant annoncé et appliqué, solde après, identifiants RevenueCat et store. Un crédit manuel passe par un ajustement
+  dans RevenueCat (il revient par le webhook).
 
 Suppressions confirmées dans une alerte. Une vidéo est supprimée comme par son auteur (cascade, fichiers nettoyés par l'API) ;
 un commentaire emporte sa notification. L'auteur n'est pas prévenu.
@@ -55,4 +61,5 @@ un commentaire emporte sa notification. L'auteur n'est pas prévenu.
 - Pas de suspension de compte, de signalement, ni de journal des actions de modération.
 - Rafraîchissement dédupliqué propre au processus : avec plusieurs instances du backoffice, il faudrait un magasin partagé (Redis via l'API, ou affinité de session).
 - Pas de copie des données PostHog : liens seulement.
-- Pas de protection contre la force brute sur la connexion (comme `/auth/login` de l'API).
+- Limite des échecs de connexion par IP (ADR-030) : sans `TRUST_PROXY` désignant le backoffice, tous les administrateurs partagent l'adresse du serveur Next.
+- Portefeuille en lecture seule, sans chiffre d'affaires en euros (le prix payé n'est pas gardé).

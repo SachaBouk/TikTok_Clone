@@ -23,13 +23,21 @@ export default async function DashboardPage() {
     { title: 'Comptes', count: stats.users, href: '/users' },
     { title: 'Vidéos', count: stats.videos, href: '/videos' },
     { title: 'Commentaires', count: stats.comments, href: '/comments' },
+    // Jetons vendus en production (ADR-009) ; achats de test à part, sur la page « Jetons ».
+    { title: 'Jetons vendus', count: { total: stats.tokens.production.purchased, last7Days: stats.tokens.purchasedLast7Days }, href: '/tokens' },
   ];
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Tableau de bord</h1>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {stats.tokens.unmatched > 0 && (
+        <Link href="/tokens?rapprocher=1" className="rounded-lg border border-destructive/50 p-3 text-sm text-destructive hover:bg-muted/50">
+          {formatNumber(stats.tokens.unmatched)} achat(s) de jetons d’un client inconnu, à rapprocher avec RevenueCat.
+        </Link>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ title, count, href }) => (
           <Link key={title} href={href}>
             <Card className="transition-colors hover:bg-muted/50">

@@ -1,12 +1,20 @@
 import { Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import type { AdminCommentPageDto, AdminStatsDto, AdminUserDto, AdminUserPageDto, AdminVideoDto, AdminVideoPageDto } from '@repo/shared';
+import type {
+  AdminCommentPageDto,
+  AdminStatsDto,
+  AdminUserDto,
+  AdminUserPageDto,
+  AdminVideoDto,
+  AdminVideoPageDto,
+  AdminWalletTransactionPageDto,
+} from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { AdminOnly } from '../../auth/interfaces/admin-only.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { AdminService } from '../application/admin.service';
 import { AdminErrorFilter } from './admin-error.filter';
-import { AdminCommentsQuery, AdminUsersQuery, AdminVideosQuery } from './admin.requests';
+import { AdminCommentsQuery, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
 import {
   AdminCommentPageResponse,
   AdminStatsResponse,
@@ -14,10 +22,12 @@ import {
   AdminUserResponse,
   AdminVideoPageResponse,
   AdminVideoResponse,
+  AdminWalletTransactionPageResponse,
   toAdminCommentDto,
   toAdminStatsDto,
   toAdminUserDto,
   toAdminVideoDto,
+  toAdminWalletTransactionDto,
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
@@ -94,6 +104,15 @@ export class AdminController {
   async listAdminComments(@Query() query: AdminCommentsQuery): Promise<AdminCommentPageDto> {
     const page = await this.adminService.listComments({ videoId: query.videoId, userId: query.userId }, query.cursor ?? null, query.limit);
     return { items: page.items.map(toAdminCommentDto), nextCursor: page.nextCursor };
+  }
+
+  // Journal des jetons (ADR-009, ADR-021) : tous les comptes, lignes anonymisées et clients inconnus compris.
+  @Get('wallet-transactions')
+  @ApiOkResponse({ type: AdminWalletTransactionPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminWalletTransactions(@Query() query: AdminWalletTransactionsQuery): Promise<AdminWalletTransactionPageDto> {
+    const page = await this.adminService.listWalletTransactions({ userId: query.userId, unmatched: query.unmatched }, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminWalletTransactionDto), nextCursor: page.nextCursor };
   }
 
   @Delete('comments/:id')

@@ -31,6 +31,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             <TableHead>Compte</TableHead>
             <TableHead className="text-right">Vidéos</TableHead>
             <TableHead className="text-right">Abonnés</TableHead>
+            <TableHead className="text-right">Jetons</TableHead>
             <TableHead>Inscription</TableHead>
           </TableRow>
         </TableHeader>
@@ -51,12 +52,13 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               </TableCell>
               <TableCell className="text-right tabular-nums">{formatNumber(user.videosCount)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatNumber(user.followersCount)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatNumber(user.tokenBalance)}</TableCell>
               <TableCell className="text-muted-foreground">{formatDateTime(user.createdAt)}</TableCell>
             </TableRow>
           ))}
           {page.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                 Aucun compte{q ? ` pour « ${q} »` : ''}.
               </TableCell>
             </TableRow>

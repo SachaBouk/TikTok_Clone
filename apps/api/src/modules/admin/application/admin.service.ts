@@ -8,8 +8,11 @@ import { UserNotFoundError } from '../../users/domain/user.errors';
 import type { VideosService } from '../../videos/application/videos.service';
 import type { VideoFilter } from '../../videos/domain/video';
 import { VideoNotFoundError } from '../../videos/domain/video.errors';
+import type { WalletService } from '../../wallet/application/wallet.service';
+import type { LedgerFilter } from '../../wallet/domain/wallet';
 import {
   type AdminAccount,
+  type LedgerLine,
   type ModeratedComment,
   type ModeratedVideo,
   type Page,
@@ -27,17 +30,19 @@ export class AdminService {
     private readonly videos: VideosService,
     private readonly interactions: InteractionsService,
     private readonly auth: AuthService,
+    private readonly wallet: WalletService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async getStats(): Promise<PlatformStats> {
     const since = new Date(this.now().getTime() - RECENT_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-    const [usersTotal, usersRecent, videos, commentsTotal, commentsRecent] = await Promise.all([
+    const [usersTotal, usersRecent, videos, commentsTotal, commentsRecent, tokens] = await Promise.all([
       this.users.countAccounts(),
       this.users.countAccounts(since),
       this.videos.countVideos(since),
       this.interactions.countComments(),
       this.interactions.countComments(since),
+      this.wallet.getStats(since),
     ]);
     const { byStatus } = videos;
     return {
@@ -48,6 +53,7 @@ export class AdminService {
         ...byStatus,
       },
       comments: { total: commentsTotal, last7Days: commentsRecent },
+      tokens,
     };
   }
 
@@ -94,6 +100,16 @@ export class AdminService {
     }
   }
 
+  // Journal des jetons, filtré par compte ou « à rapprocher », avec le compte crédité s'il existe encore.
+  async listWalletTransactions(filter: LedgerFilter, cursor: string | null, limit: number): Promise<Page<LedgerLine>> {
+    const page = await this.wallet.listLedger(filter, cursor, limit);
+    const users = await this.usersById(page.items.flatMap((entry) => (entry.userId ? [entry.userId] : [])));
+    return {
+      items: page.items.map((entry) => ({ entry, user: (entry.userId && users.get(entry.userId)) || null })),
+      nextCursor: page.nextCursor,
+    };
+  }
+
   async listComments(filter: CommentFilter, cursor: string | null, limit: number): Promise<Page<ModeratedComment>> {
     const rows = await this.interactions.listAllComments(filter, cursor, limit + 1);
     const page = rows.slice(0, limit);
@@ -132,8 +148,17 @@ export class AdminService {
 
   private async describeAccounts(users: User[]): Promise<AdminAccount[]> {
     const ids = users.map((user) => user.id);
-    const [adminIds, videoCounts] = await Promise.all([this.auth.findAdminIds(ids), this.videos.countVideosByAuthors(ids)]);
-    return users.map((user) => ({ user, isAdmin: adminIds.has(user.id), videosCount: videoCounts.get(user.id) ?? 0 }));
+    const [adminIds, videoCounts, balances] = await Promise.all([
+      this.auth.findAdminIds(ids),
+      this.videos.countVideosByAuthors(ids),
+      this.wallet.getBalances(ids),
+    ]);
+    return users.map((user) => ({
+      user,
+      isAdmin: adminIds.has(user.id),
+      videosCount: videoCounts.get(user.id) ?? 0,
+      tokenBalance: balances.get(user.id) ?? 0,
+    }));
   }
 
   private async usersById(ids: string[]): Promise<Map<string, User>> {

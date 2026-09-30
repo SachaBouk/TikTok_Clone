@@ -1,20 +1,25 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type {
   AdminCommentDto,
   AdminCommentPageDto,
   AdminCommentVideoDto,
   AdminCountDto,
   AdminStatsDto,
+  AdminTokenStatsDto,
+  AdminTokenTotalsDto,
   AdminUserDto,
   AdminUserPageDto,
   AdminVideoCountsDto,
   AdminVideoDto,
   AdminVideoPageDto,
+  AdminWalletTransactionDto,
+  AdminWalletTransactionPageDto,
   UserRole,
   VideoStatus,
+  WalletTransactionKind,
 } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
-import type { AdminAccount, ModeratedComment, ModeratedVideo, PlatformStats } from '../domain/admin';
+import type { AdminAccount, LedgerLine, ModeratedComment, ModeratedVideo, PlatformStats } from '../domain/admin';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -49,6 +54,9 @@ export class AdminUserResponse implements AdminUserDto {
 
   @ApiProperty({ type: 'integer', description: 'Vidéos du compte, tous statuts confondus.' })
   videosCount!: number;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Solde de jetons.' })
+  tokenBalance!: number;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -169,6 +177,36 @@ export class AdminVideoCountsResponse extends AdminCountResponse implements Admi
   failed!: number;
 }
 
+export class AdminTokenTotalsResponse implements AdminTokenTotalsDto {
+  @ApiProperty({ type: 'integer', description: 'Jetons vendus, clients inconnus compris.' })
+  purchased!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Jetons remboursés (annoncés par le store).' })
+  refunded!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Ajustements nets depuis le tableau de bord RevenueCat.' })
+  adjusted!: number;
+}
+
+// Sans description sur les objets imbriqués : elle produirait un `allOf` (voir CLAUDE.md).
+export class AdminTokenStatsResponse implements AdminTokenStatsDto {
+  @ApiProperty({ type: AdminTokenTotalsResponse })
+  production!: AdminTokenTotalsResponse;
+
+  // Achats de test (Xcode, TestFlight, Test Store).
+  @ApiProperty({ type: AdminTokenTotalsResponse })
+  sandbox!: AdminTokenTotalsResponse;
+
+  @ApiProperty({ type: 'integer', description: 'Jetons vendus en production sur les 7 derniers jours.' })
+  purchasedLast7Days!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Somme des soldes des comptes.' })
+  inCirculation!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Mouvements d’un client inconnu de l’API, à rapprocher.' })
+  unmatched!: number;
+}
+
 export class AdminStatsResponse implements AdminStatsDto {
   @ApiProperty({ type: AdminCountResponse })
   users!: AdminCountResponse;
@@ -178,11 +216,67 @@ export class AdminStatsResponse implements AdminStatsDto {
 
   @ApiProperty({ type: AdminCountResponse })
   comments!: AdminCountResponse;
+
+  @ApiProperty({ type: AdminTokenStatsResponse })
+  tokens!: AdminTokenStatsResponse;
+}
+
+export class AdminWalletTransactionResponse implements AdminWalletTransactionDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  // Absent : compte supprimé depuis, ou client inconnu (`unmatched`).
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  user?: UserSummaryResponse;
+
+  @ApiProperty({ enum: ['purchase', 'refund', 'adjustment'], enumName: 'WalletTransactionKind' })
+  kind!: WalletTransactionKind;
+
+  @ApiProperty({ type: 'integer', description: 'Mouvement annoncé par RevenueCat.' })
+  amount!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Mouvement appliqué au solde (plancher à 0 ; 0 pour un client inconnu).' })
+  appliedAmount!: number;
+
+  @ApiProperty({ type: 'integer', nullable: true, description: 'Solde après le mouvement ; null pour un client inconnu.' })
+  balanceAfter!: number | null;
+
+  @ApiProperty({ description: 'Client inconnu de l’API au moment du webhook : aucun solde touché, à rapprocher.' })
+  unmatched!: boolean;
+
+  @ApiProperty()
+  revenuecatEventId!: string;
+
+  @ApiProperty({ description: 'Identifiant du client chez RevenueCat.' })
+  appUserId!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  productId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  storeTransactionId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'APP_STORE' })
+  store!: string | null;
+
+  @ApiProperty({ example: 'PRODUCTION', description: 'PRODUCTION ou SANDBOX.' })
+  environment!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  occurredAt!: string;
+}
+
+export class AdminWalletTransactionPageResponse implements AdminWalletTransactionPageDto {
+  @ApiProperty({ type: [AdminWalletTransactionResponse], description: 'Du mouvement le plus récent au plus ancien.' })
+  items!: AdminWalletTransactionResponse[];
+
+  @ApiProperty(NEXT_CURSOR)
+  nextCursor!: string | null;
 }
 
 // Mappings explicites, champ par champ : rien n'est exposé par accident (clés de stockage, etc.).
 
-export function toAdminUserDto({ user, isAdmin, videosCount }: AdminAccount): AdminUserDto {
+export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance }: AdminAccount): AdminUserDto {
   return {
     id: user.id,
     username: user.username,
@@ -193,7 +287,27 @@ export function toAdminUserDto({ user, isAdmin, videosCount }: AdminAccount): Ad
     followersCount: user.followersCount,
     followingCount: user.followingCount,
     videosCount,
+    tokenBalance,
     createdAt: user.createdAt.toISOString(),
+  };
+}
+
+export function toAdminWalletTransactionDto({ entry, user }: LedgerLine): AdminWalletTransactionDto {
+  return {
+    id: entry.id,
+    ...(user ? { user: toUserSummary(user) } : {}),
+    kind: entry.kind,
+    amount: entry.amount,
+    appliedAmount: entry.appliedAmount,
+    balanceAfter: entry.balanceAfter,
+    unmatched: entry.unmatched,
+    revenuecatEventId: entry.revenuecatEventId,
+    appUserId: entry.appUserId,
+    productId: entry.productId,
+    storeTransactionId: entry.storeTransactionId,
+    store: entry.store,
+    environment: entry.environment,
+    occurredAt: entry.occurredAt.toISOString(),
   };
 }
 
@@ -226,7 +340,8 @@ export function toAdminCommentDto({ comment, author, video }: ModeratedComment):
 }
 
 export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
-  const { users, videos, comments } = stats;
+  const { users, videos, comments, tokens } = stats;
+  const totals = ({ purchased, refunded, adjusted }: PlatformStats['tokens']['production']) => ({ purchased, refunded, adjusted });
   return {
     users: { total: users.total, last7Days: users.last7Days },
     videos: {
@@ -238,5 +353,12 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
       failed: videos.failed,
     },
     comments: { total: comments.total, last7Days: comments.last7Days },
+    tokens: {
+      production: totals(tokens.production),
+      sandbox: totals(tokens.sandbox),
+      purchasedLast7Days: tokens.purchasedSince,
+      inCirculation: tokens.inCirculation,
+      unmatched: tokens.unmatched,
+    },
   };
 }

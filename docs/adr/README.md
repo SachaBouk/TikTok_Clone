@@ -33,6 +33,7 @@
 | [ADR-029](ADR-029-blocage-filtrage-contenus.md) | Blocage : contenus masqués dans le feed, les profils et les commentaires (complète ADR-028) | Proposé |
 | [ADR-030](ADR-030-limites-debit-connexion-partage.md) | Limites de débit : connexion et partages (complète ADR-028 et ADR-025) | Proposé |
 | [ADR-031](ADR-031-signature-webhook-revenuecat.md) | Signature HMAC du webhook RevenueCat (complète ADR-021) | Proposé |
+| [ADR-032](ADR-032-backoffice-portefeuille.md) | Backoffice : portefeuille et journal des jetons (complète ADR-019) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

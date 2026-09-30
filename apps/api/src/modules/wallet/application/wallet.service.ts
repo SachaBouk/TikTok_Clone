@@ -1,5 +1,5 @@
 import type { UsersService } from '../../users/application/users.service';
-import type { CurrencyEvent, WalletTransaction, WalletTransactionKind } from '../domain/wallet';
+import type { CurrencyEvent, LedgerFilter, WalletLedgerEntry, WalletStats, WalletTransaction, WalletTransactionKind } from '../domain/wallet';
 import type { WalletEventPublisher } from '../domain/wallet-events';
 import type { WalletRepository } from '../domain/wallet.repository';
 
@@ -14,6 +14,11 @@ export type WebhookOutcome = 'applied' | 'duplicate' | 'ignored' | 'unknownCusto
 
 export interface WalletTransactionPage {
   items: WalletTransaction[];
+  nextCursor: string | null;
+}
+
+export interface WalletLedgerPage {
+  items: WalletLedgerEntry[];
   nextCursor: string | null;
 }
 
@@ -38,6 +43,25 @@ export class WalletService {
     const rows = await this.wallets.listTransactions(userId, cursor, limit + 1);
     const items = rows.slice(0, limit);
     return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
+  }
+
+  // Backoffice (ADR-004) : soldes de ces comptes (0 sans portefeuille).
+  async getBalances(userIds: string[]): Promise<Map<string, number>> {
+    const balances = await this.wallets.getBalances([...new Set(userIds)]);
+    return new Map(userIds.map((id) => [id, balances.get(id) ?? 0]));
+  }
+
+  // Backoffice : journal complet (tous comptes, lignes anonymisées et clients inconnus compris), filtré,
+  // du plus récent au plus ancien. Curseur : identifiant du dernier mouvement reçu.
+  async listLedger(filter: LedgerFilter, cursor: string | null, limit: number): Promise<WalletLedgerPage> {
+    const rows = await this.wallets.listLedger(filter, cursor, limit + 1);
+    const items = rows.slice(0, limit);
+    return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
+  }
+
+  // Backoffice : totaux des jetons (production et test séparés), achats en production depuis `since`.
+  getStats(since: Date): Promise<WalletStats> {
+    return this.wallets.getStats(since);
   }
 
   // Mouvement de jetons annoncé par RevenueCat. Idempotent : un webhook rejoué n'est appliqué qu'une fois.
