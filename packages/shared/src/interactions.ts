@@ -69,6 +69,16 @@ export interface UserRelationshipDto {
   blockedByMe: boolean;
 }
 
+// Relations du compte connecté avec plusieurs comptes (centre d'activité : « Suivre en retour »).
+export interface UserRelationshipEntryDto extends UserRelationshipDto {
+  userId: string;
+}
+
+export interface UserRelationshipListDto {
+  // Dans l'ordre demandé, sans doublon.
+  items: UserRelationshipEntryDto[];
+}
+
 // Historique des commentaires du compte connecté (centre d'activités, ADR-016). Privé.
 
 // Vidéo commentée : miniature et auteur, pour la liste (comme la vidéo d'une notification).

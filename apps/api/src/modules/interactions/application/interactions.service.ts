@@ -277,6 +277,24 @@ export class InteractionsService {
     };
   }
 
+  // Relations avec plusieurs comptes à la fois (centre d'activité : « Suivre en retour » sur les nouveaux abonnés),
+  // dans l'ordre demandé et sans doublon. Mêmes règles que `getRelationship` ; un identifiant inconnu (compte
+  // supprimé depuis) donne une relation vide, sans erreur : la liste affichée peut être en retard sur la base.
+  async getRelationships(viewerId: string, userIds: string[]): Promise<(Relationship & { userId: string })[]> {
+    const ids = [...new Set(userIds)];
+    if (ids.length === 0) return [];
+    const [follows, blocks] = await Promise.all([
+      this.interactions.findFollowRelations(viewerId, ids),
+      this.interactions.findBlocks(viewerId, ids),
+    ]);
+    return ids.map((userId) => ({
+      userId,
+      following: follows.following.has(userId),
+      followedBy: follows.followedBy.has(userId),
+      blockedByMe: blocks.blockedByMe.has(userId),
+    }));
+  }
+
   // Pour le module feed : vidéos likées, mises en favori ou republiées par `userId`, de la plus récente action
   // à la plus ancienne, strictement après `after`. Vidéos non filtrées : le feed ne garde que les publiées.
   listReactedVideos(kind: VideoReaction, userId: string, after: ReactionPosition | null, limit: number): Promise<ReactionPosition[]> {

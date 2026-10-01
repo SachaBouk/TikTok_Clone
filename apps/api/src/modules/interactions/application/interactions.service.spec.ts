@@ -408,6 +408,26 @@ describe('InteractionsService', () => {
       await expect(service.getRelationship('alice', 'alice')).resolves.toEqual({ following: false, followedBy: false, blockedByMe: false });
       await expect(service.getRelationship('alice', 'inconnu')).rejects.toBeInstanceOf(TargetUserNotFoundError);
     });
+
+    it('par lot (« Suivre en retour ») : dans l’ordre demandé, sans doublon, inconnu et soi-même sans erreur', async () => {
+      await service.setFollow('bob', 'alice', true);
+      await service.setFollow('carol', 'alice', true);
+      await service.setFollow('alice', 'carol', true);
+
+      await expect(service.getRelationships('alice', ['carol', 'bob', 'carol', 'inconnu', 'alice'])).resolves.toEqual([
+        { userId: 'carol', following: true, followedBy: true, blockedByMe: false },
+        { userId: 'bob', following: false, followedBy: true, blockedByMe: false },
+        { userId: 'inconnu', following: false, followedBy: false, blockedByMe: false },
+        { userId: 'alice', following: false, followedBy: false, blockedByMe: false },
+      ]);
+
+      // Bloquer retire le follow : plus de « Suivre en retour ».
+      await service.setBlock('alice', 'bob', true);
+      await expect(service.getRelationships('alice', ['bob'])).resolves.toEqual([
+        { userId: 'bob', following: false, followedBy: false, blockedByMe: true },
+      ]);
+      await expect(service.getRelationships('alice', [])).resolves.toEqual([]);
+    });
   });
 
   describe('blocage', () => {

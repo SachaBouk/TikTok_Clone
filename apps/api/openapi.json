@@ -1919,6 +1919,63 @@
         ]
       }
     },
+    "/users/me/relationships": {
+      "get": {
+        "operationId": "getRelationships",
+        "parameters": [
+          {
+            "name": "userIds",
+            "required": true,
+            "in": "query",
+            "description": "Identifiants des comptes, paramètre répété (`?userIds=…&userIds=…`).",
+            "schema": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRelationshipListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Aucun identifiant, plus de 50, ou identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
     "/users/{username}/followers": {
       "get": {
         "operationId": "listFollowers",
@@ -5100,6 +5157,48 @@
           "following",
           "followedBy",
           "blockedByMe"
+        ]
+      },
+      "UserRelationshipEntryResponse": {
+        "type": "object",
+        "properties": {
+          "following": {
+            "type": "boolean",
+            "description": "Le compte connecté suit ce compte."
+          },
+          "followedBy": {
+            "type": "boolean",
+            "description": "Ce compte suit le compte connecté."
+          },
+          "blockedByMe": {
+            "type": "boolean",
+            "description": "Le compte connecté a bloqué ce compte."
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "following",
+          "followedBy",
+          "blockedByMe",
+          "userId"
+        ]
+      },
+      "UserRelationshipListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Dans l’ordre demandé, sans doublon.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserRelationshipEntryResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "FollowViewerStateResponse": {

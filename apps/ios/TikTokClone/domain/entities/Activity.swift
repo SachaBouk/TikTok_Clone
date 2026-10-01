@@ -26,6 +26,9 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
     let comment: Comment?
     let read: Bool
     let createdAt: Date
+    // Abonnement : relation du compte connecté avec l'auteur (« Suivre en retour »), lue à part (module interactions,
+    // ADR-036) ; nil tant qu'elle n'est pas connue, et pour les autres types.
+    var actorRelationship: Relationship? = nil
 
     // Texte affiché après le nom de l'auteur de l'action.
     var summary: String {
@@ -59,8 +62,15 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
     // Notification la plus récente : marquage lu.
     let latestID: String
     let createdAt: Date
+    // Abonnement d'un seul compte : relation avec lui (« Suivre en retour »), comme `ActivityNotification`.
+    var actorRelationship: Relationship? = nil
 
     var id: String { key }
+
+    // Groupe affiché avec le bouton « Suivre en retour » : un abonnement d'un seul compte.
+    var followBackActor: UserSummary? {
+        kind == .follow && count == 1 ? actors.first : nil
+    }
 
     // Liste complète du groupe (toucher un groupe de plusieurs notifications) ; nil pour un commentaire.
     var filter: ActivityFilter? {
@@ -111,7 +121,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
             return ActivityGroup(
                 key: key(for: notification), kind: notification.kind, actors: [notification.actor], count: 1,
                 video: notification.video, comment: notification.comment, read: notification.read,
-                latestID: notification.id, createdAt: notification.createdAt
+                latestID: notification.id, createdAt: notification.createdAt, actorRelationship: notification.actorRelationship
             )
         }
         let actors = [notification.actor] + existing.actors.filter { $0.id != notification.actor.id }

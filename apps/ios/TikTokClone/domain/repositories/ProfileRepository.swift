@@ -24,6 +24,8 @@ protocol AvatarUploadTransport: Sendable {
 // Port des relations entre comptes (module interactions) : relation, abonnés, abonnements, blocage.
 protocol RelationshipRepository: Sendable {
     func relationship(username: String) async throws -> Relationship
+    // Relations avec plusieurs comptes (50 au plus), par identifiant ; un compte inconnu a une relation vide.
+    func relationships(userIDs: [String]) async throws -> [String: Relationship]
     func follows(_ kind: FollowListKind, username: String, cursor: String?) async throws -> FollowPage
     // Idempotent. Bloquer supprime les follows dans les deux sens.
     func setBlocked(_ blocked: Bool, username: String) async throws

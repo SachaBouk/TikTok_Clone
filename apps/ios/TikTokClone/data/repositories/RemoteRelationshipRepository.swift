@@ -18,6 +18,16 @@ struct RemoteRelationshipRepository: RelationshipRepository {
         }
     }
 
+    func relationships(userIDs: [String]) async throws -> [String: Relationship] {
+        switch try await mappingErrors({ try await client.getRelationships(query: .init(userIds: userIDs)) }) {
+        case .ok(let ok):
+            let items = try ok.body.json.items
+            return Dictionary(items.map { ($0.userId, Relationship(following: $0.following, followedBy: $0.followedBy, blockedByMe: $0.blockedByMe)) }) { first, _ in first }
+        case .unauthorized: throw AppError.sessionExpired
+        case .badRequest, .undocumented: throw AppError.unexpected
+        }
+    }
+
     func follows(_ kind: FollowListKind, username: String, cursor: String?) async throws -> FollowPage {
         let dto: Components.Schemas.FollowPageResponse
         switch kind {

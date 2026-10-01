@@ -82,3 +82,5 @@ export const DEFAULT_COMMENTS_PAGE_SIZE = 20;
 export const MAX_COMMENTS_PAGE_SIZE = 50;
 export const DEFAULT_FOLLOWS_PAGE_SIZE = 20;
 export const MAX_FOLLOWS_PAGE_SIZE = 50;
+// Relations lues en une fois (une page du centre d'activité : 50 notifications au plus).
+export const MAX_RELATIONSHIP_IDS = 50;

@@ -92,12 +92,16 @@ struct ActivityDataTests {
 @Suite("Centre d'activité : modèle partagé")
 struct ActivityModelTests {
     let repository = FakeActivityRepository()
+    let relationships = FakeRelationshipRepository()
+
+    var actorRelationships: LoadActorRelationshipsUseCase { LoadActorRelationshipsUseCase(relationships: relationships) }
 
     func makeModel(signedIn: Bool = true) async -> (ActivityModel, SessionStore) {
         let session = makeSession(auth: FakeAuthRepository(hasSession: signedIn))
         await session.restore()
         let model = ActivityModel(
-            loadGroups: LoadActivityGroupsUseCase(activity: repository),
+            loadGroups: LoadActivityGroupsUseCase(activity: repository, actorRelationships: actorRelationships),
+            loadActorRelationships: actorRelationships,
             countUnread: CountUnreadActivityUseCase(activity: repository),
             markRead: MarkActivityReadUseCase(activity: repository),
             session: session,
@@ -208,9 +212,71 @@ struct ActivityModelTests {
         repository.add(.sample("n1", actor: .alice))
         repository.add(.sample("n2", videoID: "v2"))
         repository.add(.sample("n3", actor: .bob))
-        let page = try await LoadActivityGroupUseCase(activity: repository)(ActivityFilter(kind: .like, videoID: "v1"), cursor: nil)
+        let page = try await LoadActivityGroupUseCase(activity: repository, actorRelationships: actorRelationships)(
+            ActivityFilter(kind: .like, videoID: "v1"), cursor: nil
+        )
         #expect(page.notifications.map(\.id) == ["n3", "n1"])
         #expect(repository.filters == [ActivityFilter(kind: .like, videoID: "v1")])
+        // Pas d'abonnement dans la page : aucune relation lue.
+        #expect(relationships.calls.isEmpty)
+    }
+
+    @Test("« Suivre en retour » : relation lue pour un abonnement d'un seul compte, pas pour un groupe de plusieurs")
+    func followBackGroups() async throws {
+        let followsMe = Relationship(following: false, followedBy: true, blockedByMe: false)
+        relationships.state.withLock { $0.relationshipsByID[UserSummary.bob.id] = followsMe }
+        repository.add(.sample("n1"))
+        repository.add(.sample("n2", kind: .follow, actor: .bob))
+        let load = LoadActivityGroupsUseCase(activity: repository, actorRelationships: actorRelationships)
+
+        let page = try await load(cursor: nil)
+        #expect(page.groups.first { $0.key == "follow" }?.actorRelationship == followsMe)
+        #expect(page.groups.first { $0.kind == .like }?.actorRelationship == nil)
+        #expect(relationships.calls == ["relationships-\(UserSummary.bob.id)"])
+
+        // Deux abonnés : le groupe n'a pas de bouton (sa liste complète en a un par ligne).
+        repository.add(.sample("n3", kind: .follow, actor: .alice))
+        let grouped = try await load(cursor: nil)
+        #expect(grouped.groups.first { $0.key == "follow" }?.followBackActor == nil)
+        #expect(relationships.calls.count == 1)
+
+        let list = try await LoadActivityGroupUseCase(activity: repository, actorRelationships: actorRelationships)(
+            ActivityFilter(kind: .follow, videoID: nil), cursor: nil
+        )
+        #expect(list.notifications.map(\.actorRelationship) == [.empty, followsMe])
+    }
+
+    @Test("« Suivre en retour » : relation illisible, la page s'affiche sans bouton")
+    func followBackFailure() async throws {
+        relationships.fail(with: .network)
+        repository.add(.sample("n1", kind: .follow, actor: .bob))
+        let page = try await LoadActivityGroupsUseCase(activity: repository, actorRelationships: actorRelationships)(cursor: nil)
+        #expect(page.groups.map(\.key) == ["follow"])
+        #expect(page.groups.first?.actorRelationship == nil)
+    }
+
+    @Test("« Suivre en retour » : abonnement reçu en direct, relation lue ensuite")
+    func followBackLive() async {
+        let followsMe = Relationship(following: false, followedBy: true, blockedByMe: false)
+        relationships.state.withLock { $0.relationshipsByID[UserSummary.bob.id] = followsMe }
+        repository.add(.sample("n1", read: true))
+        let (model, _) = await makeModel()
+        await model.reload()
+        repository.add(.sample("n2", kind: .follow, actor: .bob))
+        model.received(.sample("n2", kind: .follow, actor: .bob), unreadCount: 1)
+        #expect(await eventually { model.list.items.first?.actorRelationship == followsMe })
+        #expect(model.list.items.first?.key == "follow")
+    }
+
+    @Test("bouton d'un abonnement : « Suivre en retour », « Ami(e)s », rien pour un compte bloqué")
+    func followBackStatus() {
+        let followsMe = Relationship(following: false, followedBy: true, blockedByMe: false)
+        #expect(followsMe.followBackStatus(following: false) == .followBack)
+        #expect(followsMe.followBackStatus(following: true) == .friends)
+        #expect(followsMe.followBackStatus(following: false)?.title == "Suivre en retour")
+        // Il ne me suit plus (désabonné depuis le chargement) : « Suivre ».
+        #expect(Relationship.empty.followBackStatus(following: false) == .follow)
+        #expect(Relationship(following: false, followedBy: false, blockedByMe: true).followBackStatus(following: false) == nil)
     }
 
     @Test("badge seul (retrait d'un like), déconnexion : tout est oublié")

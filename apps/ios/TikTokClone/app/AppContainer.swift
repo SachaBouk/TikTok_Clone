@@ -85,7 +85,8 @@ final class AppContainer {
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
         activity = ActivityModel(
-            loadGroups: LoadActivityGroupsUseCase(activity: activityRepository),
+            loadGroups: LoadActivityGroupsUseCase(activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships)),
+            loadActorRelationships: LoadActorRelationshipsUseCase(relationships: relationships),
             countUnread: CountUnreadActivityUseCase(activity: activityRepository),
             markRead: MarkActivityReadUseCase(activity: activityRepository),
             session: session
@@ -194,7 +195,7 @@ final class AppContainer {
 
     // Liste complète d'un groupe du centre d'activité.
     func makeActivityGroupList(_ filter: ActivityFilter) -> PagedList<ActivityNotification> {
-        let load = LoadActivityGroupUseCase(activity: activityRepository)
+        let load = LoadActivityGroupUseCase(activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships))
         return PagedList(session: session) { cursor in
             let page = try await load(filter, cursor: cursor)
             return (page.notifications, page.nextCursor)

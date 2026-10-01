@@ -12,6 +12,8 @@ import type {
   InteractionStateDto,
   ShareResultDto,
   UserRelationshipDto,
+  UserRelationshipEntryDto,
+  UserRelationshipListDto,
 } from '@repo/shared';
 import { UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 
@@ -97,6 +99,16 @@ export class UserRelationshipResponse implements UserRelationshipDto {
 
   @ApiProperty({ description: 'Le compte connecté a bloqué ce compte.' })
   blockedByMe!: boolean;
+}
+
+export class UserRelationshipEntryResponse extends UserRelationshipResponse implements UserRelationshipEntryDto {
+  @ApiProperty({ format: 'uuid' })
+  userId!: string;
+}
+
+export class UserRelationshipListResponse implements UserRelationshipListDto {
+  @ApiProperty({ type: [UserRelationshipEntryResponse], description: 'Dans l’ordre demandé, sans doublon.' })
+  items!: UserRelationshipEntryResponse[];
 }
 
 export class CommentedVideoResponse implements CommentedVideoDto {

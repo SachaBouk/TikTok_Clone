@@ -137,6 +137,7 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 
 - Ligne « Activité » de la boîte de réception : activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
 - Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
+- « Suivre en retour » (ADR-036) : sur l'abonnement d'un seul compte et sur chaque ligne de « Nouveaux abonnés », puis « Ami(e)s » (toucher à nouveau : ne plus suivre). La relation est lue à part, une requête par page (`getRelationships`).
 - Une notification reçue en direct rejoint son groupe, qui remonte en tête.
 - Badge de l'onglet : notifications non lues, mis à jour en direct par le WebSocket (`notificationCreated`, `unreadNotificationsChanged`) et relu à chaque reconnexion.
 - Afficher le centre d'activité marque lu ce qui y apparaît (`markNotificationsRead` avec la plus récente affichée) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché. Les nouvelles lignes restent mises en avant jusqu'au prochain chargement.
@@ -245,6 +246,7 @@ case .data: break
   3. `setMyAvatar(body: .json(.init(avatarId: upload.avatarId)))` renvoie le profil avec `avatarUrl`. `.badRequest` si le fichier est absent ou n'est pas une vraie image du type annoncé.
 - `removeMyAvatar` : retour à l'avatar par défaut (`avatarUrl` nil).
 - Écran de profil d'un autre compte : `getProfile` + `getRelationship` (connecté : `following`, `followedBy`, `blockedByMe`) + les grilles.
+- Relations avec plusieurs comptes : `getRelationships(query: .init(userIds: [...]))` (1 à 50), `items` dans l'ordre demandé ; identifiant inconnu → relation vide.
 - Grilles, avec les mêmes éléments que le feed (`FeedItemResponse`, même lecteur) et `nextCursor` : `listAccountVideos` et `listReposts` (publiques), `listMyFavorites` et `listMyLikes` (privés, son propre profil uniquement).
 - Sur son propre profil, `listMyPendingVideos` donne en tête de grille les vidéos `.processing` (« en cours de publication ») et `.failed` ; l'événement `videoProcessed` les fait passer dans `listAccountVideos`.
 - Supprimer une de ses vidéos : `deleteVideo` (`.noContent`), quel que soit son statut, y compris pendant l'envoi. Retirer la vidéo de la grille et du lecteur ; les autres la voient disparaître du feed, et un message qui la partageait la montre indisponible.

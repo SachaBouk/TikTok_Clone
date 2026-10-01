@@ -6,6 +6,8 @@ import Synchronization
 final class FakeRelationshipRepository: RelationshipRepository {
     struct State {
         var relationships: [String: Relationship] = [:]
+        // Relations par identifiant (`relationships(userIDs:)`).
+        var relationshipsByID: [String: Relationship] = [:]
         var follows: [FollowListKind: [FollowEntry]] = [:]
         var blocked: [UserSummary] = []
         var calls: [String] = []
@@ -22,6 +24,14 @@ final class FakeRelationshipRepository: RelationshipRepository {
             $0.calls.append("relationship-\(username)")
             if let error = $0.error { throw error }
             return $0.relationships[username] ?? .empty
+        }
+    }
+
+    func relationships(userIDs: [String]) async throws -> [String: Relationship] {
+        try state.withLock { state in
+            state.calls.append("relationships-\(userIDs.sorted().joined(separator: ","))")
+            if let error = state.error { throw error }
+            return Dictionary(uniqueKeysWithValues: userIDs.map { ($0, state.relationshipsByID[$0] ?? .empty) })
         }
     }
 

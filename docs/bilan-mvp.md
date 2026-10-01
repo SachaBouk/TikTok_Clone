@@ -13,7 +13,7 @@ Trois points dépendent de comptes externes que le projet n'a pas encore :
 
 ## Méthode
 
-- **Tests automatisés** : 248 tests pour l'API, 14 pour le worker (FFmpeg réel), 10 pour le backoffice et 201 pour l'app iOS (Swift Testing), tous verts.
+- **Tests automatisés** : 249 tests pour l'API, 14 pour le worker (FFmpeg réel), 10 pour le backoffice et 206 pour l'app iOS (Swift Testing), tous verts.
 - **Intégration continue** : deux workflows GitHub Actions.
   - `ci.yml` : typecheck, tests, build, contrat OpenAPI, migrations sur une base vierge, images Docker.
   - `ios.yml` : app iOS sur l'image Xcode 27, avec les versions du `Package.resolved`.
@@ -41,9 +41,10 @@ Suppression du compte (exigence Apple) : faite, et vérifiée au parcours 11. El
 
 ### Au-delà du périmètre
 
-Ajouts décidés pendant la réalisation (ADR 017 à 035) :
+Ajouts décidés pendant la réalisation (ADR 017 à 036) :
 - **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032).
 - **Blocage** : actions interdites dans les deux sens, contenus masqués (ADR-029, proposé).
+- **« Suivre en retour »** dans le centre d'activité (ADR-036, proposé).
 - **Sécurité** : limites de débit de la connexion et des partages (ADR-030), signature HMAC du webhook (ADR-031).
 - **Confidentialité** : position GPS et appareil retirés des vidéos avant l'envoi (ADR-035, proposé).
 - **Notifications push** côté API (APNs, testées contre un faux serveur).
@@ -111,7 +112,6 @@ Consignées au fil des étapes, détaillées dans `CLAUDE.md` :
   - pas de cache hors ligne, de recherche de destinataire ni de renvoi d'un message en échec.
 - **Profil et activité** :
   - profil relu seulement à l'ouverture ;
-  - pas de « Suivre en retour » dans l'activité ;
   - groupe de notifications non recalculé après un retrait.
 - **Mesure d'audience** :
   - le premier lancement n'est pas compté ;

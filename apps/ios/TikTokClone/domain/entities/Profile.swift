@@ -12,6 +12,12 @@ struct Relationship: Equatable, Sendable {
 
     // Pas `.none` : confondu avec Optional.none sur un `Relationship?`.
     static let empty = Relationship(following: false, followedBy: false, blockedByMe: false)
+
+    // Bouton d'une notification d'abonnement (« Suivre en retour », puis « Ami(e)s ») ; `following` : l'état
+    // superposé aux changements faits depuis le chargement. Pas de bouton pour un compte bloqué.
+    func followBackStatus(following: Bool) -> FollowStatus? {
+        blockedByMe ? nil : FollowStatus(following: following, followedBy: followedBy)
+    }
 }
 
 // Libellé du bouton d'abonnement, comme TikTok.

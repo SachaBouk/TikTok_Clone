@@ -1,12 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import {
   DEFAULT_COMMENTS_PAGE_SIZE,
   DEFAULT_FOLLOWS_PAGE_SIZE,
   MAX_COMMENT_LENGTH,
   MAX_COMMENTS_PAGE_SIZE,
   MAX_FOLLOWS_PAGE_SIZE,
+  MAX_RELATIONSHIP_IDS,
 } from '../domain/interaction';
 
 // Corps et paramètres de requête validés par le ValidationPipe global (main.ts).
@@ -48,4 +49,21 @@ export class FollowsQuery {
   @Min(1)
   @Max(MAX_FOLLOWS_PAGE_SIZE)
   limit: number = DEFAULT_FOLLOWS_PAGE_SIZE;
+}
+
+export class RelationshipsQuery {
+  @ApiProperty({
+    type: [String],
+    format: 'uuid',
+    minItems: 1,
+    maxItems: MAX_RELATIONSHIP_IDS,
+    description: 'Identifiants des comptes, paramètre répété (`?userIds=…&userIds=…`).',
+  })
+  // Un seul identifiant arrive en chaîne, plusieurs en tableau.
+  @Transform(({ value }) => (typeof value === 'string' ? [value] : value))
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_RELATIONSHIP_IDS)
+  @IsUUID('all', { each: true })
+  userIds!: string[];
 }

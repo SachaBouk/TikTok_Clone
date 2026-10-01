@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import TikTokAPI
 @testable import TikTokClone
@@ -85,6 +86,27 @@ struct ProfileDataTests {
         try await repository.setBlocked(false, username: "bob")
         #expect(try await repository.blockedUsers().map(\.username) == ["bob"])
         #expect(log.operations == ["getRelationship", "blockUser", "unblockUser", "listBlockedUsers"])
+    }
+
+    @Test("relations par lot (« Suivre en retour ») : identifiants répétés dans la requête ; 401 → session expirée")
+    func relationshipsBatch() async throws {
+        let path = Mutex<String?>(nil)
+        let repository = RemoteRelationshipRepository(client: makeClient(transport: MockTransport { request, _ in
+            path.withLock { $0 = request.path }
+            let u1 = #"{"userId":"u1","following":false,"followedBy":true,"blockedByMe":false}"#
+            let u2 = #"{"userId":"u2","following":true,"followedBy":true,"blockedByMe":false}"#
+            return json(.ok, #"{"items":["# + u1 + "," + u2 + "]}")
+        }))
+        let relationships = try await repository.relationships(userIDs: ["u1", "u2"])
+        #expect(relationships == [
+            "u1": Relationship(following: false, followedBy: true, blockedByMe: false),
+            "u2": Relationship(following: true, followedBy: true, blockedByMe: false),
+        ])
+        #expect(path.withLock { $0 }?.hasSuffix("/users/me/relationships?userIds=u1&userIds=u2") == true)
+        await #expect(throws: AppError.sessionExpired) {
+            try await RemoteRelationshipRepository(client: makeClient(transport: MockTransport { _, _ in json(.unauthorized, errorJSON(401, "x")) }))
+                .relationships(userIDs: ["u1"])
+        }
     }
 
     @Test("listes de vidéos : chaque liste appelle sa route ; historique effaçable")

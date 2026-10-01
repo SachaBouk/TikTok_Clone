@@ -6,11 +6,13 @@ import SwiftUI
 // - Toucher un groupe de plusieurs notifications : sa liste complète, une ligne par notification.
 // - Toucher une notification seule : la vidéo concernée, ou le profil pour un abonnement.
 // - Toucher la photo : le profil de l'auteur (la liste complète pour un groupe).
+// - Abonnement d'un seul compte (et chaque abonnement de la liste complète) : bouton « Suivre en retour ».
 struct ActivityView: View {
     let container: AppContainer
     @Environment(\.isTabActive) private var isTabActive
     @State private var openedProfile: ProfileRoute?
     @State private var openedGroup: ActivityFilter?
+    @State private var followError: String?
     // Écran au premier plan de sa pile (pas d'écran poussé par-dessus).
     @State private var isOnScreen = false
     @Environment(\.scenePhase) private var scenePhase
@@ -20,7 +22,12 @@ struct ActivityView: View {
     var body: some View {
         List {
             ForEach(activity.list.items) { group in
-                ActivityGroupRow(group: group, open: { open(group) }, openActor: { openActor(of: group) })
+                ActivityGroupRow(
+                    group: group,
+                    follow: group.followBackActor.flatMap { followBack.control(for: $0, relationship: group.actorRelationship, error: $followError) },
+                    open: { open(group) },
+                    openActor: { openActor(of: group) }
+                )
                     .listRowBackground(group.read ? nil : Color.accentColor.opacity(0.08))
                     .onAppear { Task { await activity.list.loadMore(ifNeededAfter: group) } }
             }
@@ -45,6 +52,7 @@ struct ActivityView: View {
             ActivityGroupView(filter: filter, list: container.makeActivityGroupList(filter), container: container)
         }
         .refreshable { await activity.reload() }
+        .followBackAlert($followError)
         // Marquer lu seulement ce qui est réellement affiché : onglet sélectionné, app au premier plan,
         // et aucun écran poussé par-dessus.
         .onAppear { isOnScreen = true }
@@ -53,6 +61,10 @@ struct ActivityView: View {
             activity.setVisible(visible)
         }
         .accessibilityIdentifier("inbox.activity")
+    }
+
+    private var followBack: FollowBack {
+        FollowBack(interactions: container.videoInteractions, session: container.session)
     }
 
     private func open(_ group: ActivityGroup) {
@@ -80,6 +92,7 @@ struct ActivityGroupView: View {
     @State private var list: PagedList<ActivityNotification>
     let container: AppContainer
     @State private var openedProfile: ProfileRoute?
+    @State private var followError: String?
 
     init(filter: ActivityFilter, list: PagedList<ActivityNotification>, container: AppContainer) {
         self.filter = filter
@@ -92,6 +105,9 @@ struct ActivityGroupView: View {
             ForEach(list.items) { notification in
                 ActivityRow(
                     notification: notification,
+                    follow: notification.kind == .follow
+                        ? followBack.control(for: notification.actor, relationship: notification.actorRelationship, error: $followError)
+                        : nil,
                     openProfile: { openedProfile = ProfileRoute(username: $0) },
                     openVideo: { container.router.presentedVideo = AppRouter.VideoRoute(id: $0) }
                 )
@@ -112,13 +128,57 @@ struct ActivityGroupView: View {
         }
         .task { await list.loadFirstIfNeeded() }
         .refreshable { await list.loadFirst() }
+        .followBackAlert($followError)
         .accessibilityIdentifier("activity.group")
+    }
+
+    private var followBack: FollowBack {
+        FollowBack(interactions: container.videoInteractions, session: container.session)
+    }
+}
+
+// « Suivre en retour » d'une notification d'abonnement (ADR-036) : relation lue avec la page, superposée aux
+// changements faits depuis (profil, listes, feed) par `VideoInteractionsModel`. Même bouton que les listes
+// d'abonnés : « Suivre en retour », puis « Ami(e)s » (toucher à nouveau : ne plus suivre).
+// Pas de bouton tant que la relation n'est pas connue, pour son propre compte ni pour un compte bloqué.
+@MainActor
+struct FollowBack {
+    struct Control {
+        let status: FollowStatus
+        let toggle: () -> Void
+    }
+
+    let interactions: VideoInteractionsModel
+    let session: SessionStore
+
+    func control(for actor: UserSummary, relationship: Relationship?, error: Binding<String?>) -> Control? {
+        guard let relationship, actor.id != session.profile?.id, !interactions.blockedUserIDs.contains(actor.id),
+              let status = relationship.followBackStatus(following: interactions.isFollowing(actor.id, loaded: relationship.following))
+        else { return nil }
+        return Control(status: status) {
+            Task {
+                if case .failed(let message) = await interactions.setFollowing(actor, active: !status.isFollowing, wasFollowing: status.isFollowing) {
+                    error.wrappedValue = message
+                }
+            }
+        }
+    }
+}
+
+private extension View {
+    func followBackAlert(_ message: Binding<String?>) -> some View {
+        alert("Abonnements", isPresented: Binding(get: { message.wrappedValue != nil }, set: { if !$0 { message.wrappedValue = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message.wrappedValue ?? "")
+        }
     }
 }
 
 // Un groupe : photos des deux auteurs les plus récents, texte, miniature de la vidéo.
 private struct ActivityGroupRow: View {
     let group: ActivityGroup
+    let follow: FollowBack.Control?
     let open: () -> Void
     let openActor: () -> Void
 
@@ -139,12 +199,14 @@ private struct ActivityGroupRow: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    ActivityTrailing(video: group.video)
+                    if follow == nil { ActivityTrailing(video: group.video) }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("activity.row")
+
+            if let follow { FollowButton(status: follow.status, action: follow.toggle) }
         }
         .padding(.vertical, 4)
     }
@@ -155,6 +217,7 @@ private struct ActivityGroupRow: View {
 // prend toute la largeur de la ligne.
 private struct ActivityRow: View {
     let notification: ActivityNotification
+    let follow: FollowBack.Control?
     let openProfile: (String) -> Void
     let openVideo: (String) -> Void
 
@@ -177,12 +240,14 @@ private struct ActivityRow: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    ActivityTrailing(video: notification.video)
+                    if follow == nil { ActivityTrailing(video: notification.video) }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("activity.notification")
+
+            if let follow { FollowButton(status: follow.status, action: follow.toggle) }
         }
         .padding(.vertical, 4)
     }

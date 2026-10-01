@@ -18,6 +18,7 @@ import type {
   InteractionStateDto,
   ShareResultDto,
   UserRelationshipDto,
+  UserRelationshipListDto,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
@@ -25,7 +26,7 @@ import { Public } from '../../auth/interfaces/public.decorator';
 import { toUserSummary } from '../../users/interfaces/user-summary.response';
 import { InteractionsService, type CommentHistoryPage, type CommentWithAuthor, type FollowPage } from '../application/interactions.service';
 import { InteractionErrorFilter } from './interaction-error.filter';
-import { CommentsQuery, CreateCommentRequest, FollowsQuery } from './interactions.requests';
+import { CommentsQuery, CreateCommentRequest, FollowsQuery, RelationshipsQuery } from './interactions.requests';
 import {
   BlockedUsersResponse,
   CommentHistoryPageResponse,
@@ -34,6 +35,7 @@ import {
   FollowPageResponse,
   InteractionStateResponse,
   ShareResultResponse,
+  UserRelationshipListResponse,
   UserRelationshipResponse,
 } from './interactions.responses';
 
@@ -226,6 +228,19 @@ export class InteractionsController {
   async getRelationship(@CurrentUser() user: AuthenticatedUser, @Param('username') username: string): Promise<UserRelationshipDto> {
     const relationship = await this.interactions.getRelationship(user.userId, username);
     return { following: relationship.following, followedBy: relationship.followedBy, blockedByMe: relationship.blockedByMe };
+  }
+
+  // Relations avec plusieurs comptes (centre d'activité : « Suivre en retour » sur les nouveaux abonnés).
+  // Un identifiant inconnu donne une relation vide, sans erreur.
+  @Get('users/me/relationships')
+  @ApiOkResponse({ type: UserRelationshipListResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Aucun identifiant, plus de 50, ou identifiant invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  async getRelationships(@CurrentUser() user: AuthenticatedUser, @Query() query: RelationshipsQuery): Promise<UserRelationshipListDto> {
+    const relationships = await this.interactions.getRelationships(user.userId, query.userIds);
+    return {
+      items: relationships.map((r) => ({ userId: r.userId, following: r.following, followedBy: r.followedBy, blockedByMe: r.blockedByMe })),
+    };
   }
 
   // Listes publiques (mode invité compris) ; `viewer` n'est renseigné que pour un compte connecté.
