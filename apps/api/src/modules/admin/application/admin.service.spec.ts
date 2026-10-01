@@ -8,6 +8,9 @@ import { InMemoryRefreshTokenRepository } from '../../auth/infrastructure/in-mem
 import { InteractionsService } from '../../interactions/application/interactions.service';
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
 import { NotificationsService } from '../../notifications/application/notifications.service';
+import { RealtimeService } from '../../realtime/application/realtime.service';
+import { AccessTokenVerifier } from '../../realtime/domain/access-token-verifier';
+import { InMemoryRealtimeBus } from '../../realtime/infrastructure/in-memory-realtime-bus';
 import { InMemoryNotificationPublisher } from '../../notifications/infrastructure/in-memory-notification-publisher';
 import { InMemoryNotificationRepository } from '../../notifications/infrastructure/in-memory-notification.repository';
 import { UsersService } from '../../users/application/users.service';
@@ -26,9 +29,13 @@ import { WalletService } from '../../wallet/application/wallet.service';
 import type { CurrencyEvent } from '../../wallet/domain/wallet';
 import { InMemoryWalletEventPublisher } from '../../wallet/infrastructure/in-memory-wallet-event-publisher';
 import { InMemoryWalletRepository } from '../../wallet/infrastructure/in-memory-wallet.repository';
-import { AdminTargetNotFoundError } from '../domain/admin.errors';
+import { AdminActionRefusedError, AdminTargetNotFoundError } from '../domain/admin.errors';
 import { AdminService } from './admin.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -83,6 +90,8 @@ describe('AdminService', () => {
   let interactions: InteractionsService;
   let wallet: WalletService;
   let service: AdminService;
+  let bus: InMemoryRealtimeBus;
+  let refreshTokens: InMemoryRefreshTokenRepository;
 
   let eventSequence = 0;
   const tokens = (appUserId: string, amount: number, environment = 'PRODUCTION'): CurrencyEvent => ({
@@ -111,22 +120,62 @@ describe('AdminService', () => {
     ]);
     videoRepository = new InMemoryVideoRepository(() => NOW);
     accounts = new InMemoryAuthAccountRepository();
+    // Les comptes existent aussi côté auth (même table `users`, colonnes propres à chaque module).
+    for (const [id, username] of [[ALICE, 'alice'], [BOB, 'bob'], [CAROL, 'carol']]) {
+      accounts.accounts.push({ id: id!, email: `${username}@test.local`, passwordHash: null, appleSub: null, username: username!, displayName: username! });
+    }
+    refreshTokens = new InMemoryRefreshTokenRepository();
+    bus = new InMemoryRealtimeBus();
     cleanup = new InMemoryVideoCleanupQueue();
-    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), () => NOW);
+    suspended = new InMemorySuspendedAccounts();
+    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended, () => NOW);
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), cleanup, () => NOW);
-    const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter());
+    const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher(), suspended);
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter(), suspended);
     const auth = new AuthService(
       accounts,
-      new InMemoryRefreshTokenRepository(),
+      refreshTokens,
       new UnusedHasher(),
       new UnusedIssuer(),
       new UnusedApple(),
       { accessTokenTtlSeconds: 900, refreshTokenTtlDays: 30 },
       new InMemoryRateLimiter(),
+      suspended,
+      () => NOW,
     );
     wallet = new WalletService(new InMemoryWalletRepository(), users, new InMemoryWalletEventPublisher(), { rejectSandbox: false });
-    service = new AdminService(users, videos, interactions, auth, wallet, () => NOW);
+    const realtime = new RealtimeService(bus, new (class extends AccessTokenVerifier {
+      async verify() {
+        return null;
+      }
+    })());
+    service = new AdminService(users, videos, interactions, auth, wallet, realtime, () => NOW);
+  });
+
+  describe('suspension (ADR-037)', () => {
+    it('suspend un compte : fiche à jour, connexions fermées, statistiques ; la levée efface tout', async () => {
+      accounts.adminIds.add(CAROL);
+      const account = await service.suspendAccount(CAROL, BOB, '  Spam répété ');
+      expect(account.suspension).toEqual({ suspendedAt: NOW, reason: 'Spam répété', suspendedBy: expect.objectContaining({ id: CAROL }) });
+      expect(bus.published).toEqual([{ userId: BOB, disconnect: true }]);
+      await expect(suspended.has(BOB)).resolves.toBe(true);
+      expect((await service.getStats()).users.suspended).toBe(1);
+      expect((await service.listAccounts(null, null, 10)).items.find((a) => a.user.id === BOB)?.suspension).not.toBeNull();
+
+      await expect(service.liftSuspension(BOB)).resolves.toMatchObject({ suspension: null });
+      await expect(suspended.has(BOB)).resolves.toBe(false);
+      expect((await service.getStats()).users.suspended).toBe(0);
+    });
+
+    it("refuse un administrateur ou soi-même (409) ; compte inconnu (404) ; rien n'est fermé", async () => {
+      accounts.adminIds.add(CAROL);
+      accounts.adminIds.add(ALICE);
+      await expect(service.suspendAccount(CAROL, ALICE, 'Motif')).rejects.toBeInstanceOf(AdminActionRefusedError);
+      await expect(service.suspendAccount(CAROL, CAROL, 'Motif')).rejects.toBeInstanceOf(AdminActionRefusedError);
+      await expect(service.suspendAccount(CAROL, '0192f3a0-0000-7000-8000-0000000000ff', 'Motif')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      await expect(service.liftSuspension('0192f3a0-0000-7000-8000-0000000000ff')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      expect(bus.published).toEqual([]);
+    });
   });
 
   describe('comptes', () => {
@@ -216,7 +265,7 @@ describe('AdminService', () => {
     await interactions.addComment(BOB, video, 'Bravo');
 
     await expect(service.getStats()).resolves.toEqual({
-      users: { total: 3, last7Days: 2 },
+      users: { total: 3, last7Days: 2, suspended: 0 },
       videos: { total: 3, last7Days: 3, uploading: 1, processing: 0, ready: 1, failed: 1 },
       comments: { total: 1, last7Days: 1 },
       tokens: {

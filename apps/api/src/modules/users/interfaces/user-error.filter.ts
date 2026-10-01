@@ -4,11 +4,19 @@ import {
   Catch,
   ConflictException,
   ExceptionFilter,
+  GoneException,
   HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { AvatarNotUploadedError, InvalidAvatarError, InvalidProfileError, UserError, UsernameTakenError } from '../domain/user.errors';
+import {
+  AvatarNotUploadedError,
+  InvalidAvatarError,
+  InvalidProfileError,
+  ProfileSuspendedError,
+  UserError,
+  UsernameTakenError,
+} from '../domain/user.errors';
 
 // Traduit les erreurs métier du module en réponses HTTP (ADR-003).
 @Catch(UserError)
@@ -24,6 +32,7 @@ function toHttpException(error: UserError): HttpException {
   if (error instanceof InvalidProfileError || error instanceof InvalidAvatarError || error instanceof AvatarNotUploadedError) {
     return new BadRequestException(error.message);
   }
+  if (error instanceof ProfileSuspendedError) return new GoneException(error.message);
   // UserNotFoundError
   return new NotFoundException(error.message);
 }

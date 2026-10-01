@@ -8,3 +8,11 @@ export class AdminTargetNotFoundError extends AdminError {
     this.name = 'AdminTargetNotFoundError';
   }
 }
+
+// Action refusée par une règle d'un autre module (suspendre un administrateur, ADR-037) : 409.
+export class AdminActionRefusedError extends AdminError {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'AdminActionRefusedError';
+  }
+}

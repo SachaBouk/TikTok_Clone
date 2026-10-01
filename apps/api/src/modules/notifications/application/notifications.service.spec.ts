@@ -13,6 +13,10 @@ import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-vide
 import { InMemoryNotificationPublisher } from '../infrastructure/in-memory-notification-publisher';
 import { InMemoryNotificationRepository } from '../infrastructure/in-memory-notification.repository';
 import { NotificationsService } from './notifications.service';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -45,7 +49,8 @@ describe('NotificationsService', () => {
     repository = new InMemoryNotificationRepository();
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     publisher = new InMemoryNotificationPublisher();
-    service = new NotificationsService(repository, new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup()), videos, publisher, () => readAt);
+    suspended = new InMemorySuspendedAccounts();
+    service = new NotificationsService(repository, new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended), videos, publisher, suspended, () => readAt);
 
     const created = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
     Object.assign(videoRepository.videos.get(created.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 'miniature.jpg' });
@@ -208,6 +213,24 @@ describe('NotificationsService', () => {
       const page = await service.list('bob', null, 20, { type: 'like', videoId: video });
       expect(page.items.map((i) => i.actor.id)).toEqual(['carol', 'alice']);
       expect((await service.list('bob', null, 20, { type: 'follow' })).items).toHaveLength(1);
+    });
+  });
+
+  describe('suspension (ADR-037)', () => {
+    it("les notifications d'un compte suspendu ne sont ni listées, ni regroupées, ni comptées ; elles reviennent à la levée", async () => {
+      await service.notify(like('alice'));
+      await service.notify(like('carol'));
+      await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
+      await suspended.add('carol');
+
+      expect((await service.list('bob', null, 10)).items.map((i) => i.actor.id)).toEqual(['alice']);
+      const groups = (await service.listGroups('bob', null, 10)).items;
+      expect(groups.map((g) => [g.group.latest.type, g.group.count, g.actors.map((a) => a.id)])).toEqual([['like', 1, ['alice']]]);
+      await expect(service.unreadCount('bob')).resolves.toBe(1);
+
+      await suspended.remove('carol');
+      await expect(service.unreadCount('bob')).resolves.toBe(3);
+      expect((await service.listGroups('bob', null, 10)).items.map((g) => g.group.count)).toEqual([1, 2]);
     });
   });
 

@@ -5,8 +5,10 @@ import type {
   AdminCommentVideoDto,
   AdminCountDto,
   AdminStatsDto,
+  AdminSuspensionDto,
   AdminTokenStatsDto,
   AdminTokenTotalsDto,
+  AdminUserCountsDto,
   AdminUserDto,
   AdminUserPageDto,
   AdminVideoCountsDto,
@@ -25,6 +27,17 @@ import type { AdminAccount, LedgerLine, ModeratedComment, ModeratedVideo, Platfo
 
 const VIDEO_STATUS = { enum: ['uploading', 'processing', 'ready', 'failed'], enumName: 'VideoStatus' };
 const NEXT_CURSOR = { type: String, nullable: true, description: 'À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus.' };
+
+export class AdminSuspensionResponse implements AdminSuspensionDto {
+  @ApiProperty({ format: 'date-time' })
+  suspendedAt!: string;
+
+  @ApiProperty({ description: 'Motif interne, saisi par l’administrateur.' })
+  reason!: string;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  suspendedBy?: UserSummaryResponse;
+}
 
 export class AdminUserResponse implements AdminUserDto {
   @ApiProperty({ format: 'uuid' })
@@ -60,6 +73,10 @@ export class AdminUserResponse implements AdminUserDto {
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
+
+  // Absente si le compte n'est pas suspendu (pas de description : voir CLAUDE.md, objet imbriqué facultatif).
+  @ApiPropertyOptional({ type: AdminSuspensionResponse })
+  suspension?: AdminSuspensionResponse;
 }
 
 export class AdminUserPageResponse implements AdminUserPageDto {
@@ -207,9 +224,14 @@ export class AdminTokenStatsResponse implements AdminTokenStatsDto {
   unmatched!: number;
 }
 
+export class AdminUserCountsResponse extends AdminCountResponse implements AdminUserCountsDto {
+  @ApiProperty({ type: 'integer', description: 'Comptes suspendus en ce moment.' })
+  suspended!: number;
+}
+
 export class AdminStatsResponse implements AdminStatsDto {
-  @ApiProperty({ type: AdminCountResponse })
-  users!: AdminCountResponse;
+  @ApiProperty({ type: AdminUserCountsResponse })
+  users!: AdminUserCountsResponse;
 
   @ApiProperty({ type: AdminVideoCountsResponse })
   videos!: AdminVideoCountsResponse;
@@ -276,7 +298,7 @@ export class AdminWalletTransactionPageResponse implements AdminWalletTransactio
 
 // Mappings explicites, champ par champ : rien n'est exposé par accident (clés de stockage, etc.).
 
-export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance }: AdminAccount): AdminUserDto {
+export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance, suspension }: AdminAccount): AdminUserDto {
   return {
     id: user.id,
     username: user.username,
@@ -289,6 +311,15 @@ export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance }: Adm
     videosCount,
     tokenBalance,
     createdAt: user.createdAt.toISOString(),
+    ...(suspension
+      ? {
+          suspension: {
+            suspendedAt: suspension.suspendedAt.toISOString(),
+            reason: suspension.reason,
+            ...(suspension.suspendedBy ? { suspendedBy: toUserSummary(suspension.suspendedBy) } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -343,7 +374,7 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
   const { users, videos, comments, tokens } = stats;
   const totals = ({ purchased, refunded, adjusted }: PlatformStats['tokens']['production']) => ({ purchased, refunded, adjusted });
   return {
-    users: { total: users.total, last7Days: users.last7Days },
+    users: { total: users.total, last7Days: users.last7Days, suspended: users.suspended },
     videos: {
       total: videos.total,
       last7Days: videos.last7Days,

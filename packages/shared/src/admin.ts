@@ -22,6 +22,21 @@ export interface AdminUserDto {
   // Solde de jetons (ADR-009).
   tokenBalance: number;
   createdAt: string;
+  // Suspension en cours (ADR-037) ; absente si le compte n'est pas suspendu.
+  suspension?: AdminSuspensionDto;
+}
+
+// Suspension d'un compte par un administrateur (ADR-037), jusqu'à sa levée.
+export interface AdminSuspensionDto {
+  suspendedAt: string;
+  // Motif interne : la personne suspendue voit un message générique.
+  reason: string;
+  // Administrateur auteur ; absent s'il a supprimé son compte depuis.
+  suspendedBy?: UserSummaryDto;
+}
+
+export interface AdminSuspendUserDto {
+  reason: string;
 }
 
 export interface AdminUserPageDto {
@@ -108,8 +123,13 @@ export interface AdminTokenStatsDto {
   unmatched: number;
 }
 
+export interface AdminUserCountsDto extends AdminCountDto {
+  // Comptes suspendus en ce moment (ADR-037).
+  suspended: number;
+}
+
 export interface AdminStatsDto {
-  users: AdminCountDto;
+  users: AdminUserCountsDto;
   videos: AdminVideoCountsDto;
   comments: AdminCountDto;
   tokens: AdminTokenStatsDto;

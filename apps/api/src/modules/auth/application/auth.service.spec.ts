@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { AccessTokenIssuer } from '../domain/access-token-issuer';
 import { AppleIdentityVerifier, type AppleIdentity } from '../domain/apple-identity-verifier';
 import {
+  AccountSuspendedError,
+  CannotSuspendAdminError,
   EmailAlreadyUsedError,
   InvalidAppleTokenError,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
@@ -14,6 +17,7 @@ import { PasswordHasher } from '../domain/password-hasher';
 import { InMemoryAuthAccountRepository } from '../infrastructure/in-memory-auth-account.repository';
 import { InMemoryRefreshTokenRepository } from '../infrastructure/in-memory-refresh-token.repository';
 import { AuthService } from './auth.service';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 
 // Faux adaptateurs : rapides et déterministes (le vrai scrypt est testé à part).
 class FakePasswordHasher extends PasswordHasher {
@@ -52,6 +56,7 @@ describe('AuthService', () => {
   let apple: FakeAppleVerifier;
   let now: Date;
   let limiter: InMemoryRateLimiter;
+  let suspended: InMemorySuspendedAccounts;
   let service: AuthService;
 
   beforeEach(() => {
@@ -60,6 +65,7 @@ describe('AuthService', () => {
     apple = new FakeAppleVerifier();
     now = new Date('2026-01-01T00:00:00Z');
     limiter = new InMemoryRateLimiter(() => now.getTime());
+    suspended = new InMemorySuspendedAccounts();
     service = new AuthService(
       accounts,
       refreshTokens,
@@ -68,6 +74,7 @@ describe('AuthService', () => {
       apple,
       { accessTokenTtlSeconds: 900, refreshTokenTtlDays: 30 },
       limiter,
+      suspended,
       () => now,
     );
   });
@@ -257,6 +264,76 @@ describe('AuthService', () => {
       await expect(service.isAdmin(id)).resolves.toBe(true);
       accounts.adminIds.delete(id);
       await expect(service.isAdmin(id)).resolves.toBe(false);
+    });
+  });
+
+  describe('suspension (ADR-037)', () => {
+    async function aliceAndAdmin() {
+      const session = await service.register(registration);
+      await service.register({ ...registration, email: 'admin@example.com', username: 'admin' });
+      const [alice, admin] = accounts.accounts;
+      accounts.adminIds.add(admin!.id);
+      return { session, alice: alice!.id, admin: admin!.id };
+    }
+
+    it('refuse la connexion après le bon mot de passe seulement, révoque les sessions et les access tokens', async () => {
+      const { session, alice, admin } = await aliceAndAdmin();
+      const suspension = await service.suspend(alice, admin, '  Spam répété  ');
+      expect(suspension).toEqual({ userId: alice, suspendedAt: now, reason: 'Spam répété', suspendedBy: admin });
+
+      await expect(service.login('alice@example.com', 'motdepasse')).rejects.toBeInstanceOf(AccountSuspendedError);
+      // Mauvais mot de passe : rien ne révèle la suspension.
+      await expect(service.login('alice@example.com', 'faux')).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.refresh(session.refreshToken)).rejects.toBeInstanceOf(InvalidRefreshTokenError);
+      await expect(service.verifyAccessToken(session.accessToken)).resolves.toBeNull();
+      await expect(service.isSuspended(alice)).resolves.toBe(true);
+      await expect(service.getSuspensions([alice, admin])).resolves.toEqual(new Map([[alice, suspension]]));
+      await expect(service.countSuspended()).resolves.toBe(1);
+    });
+
+    it('levée : connexion permise, access tokens acceptés ; idempotente', async () => {
+      const { alice, admin } = await aliceAndAdmin();
+      await service.suspend(alice, admin, 'Spam');
+      await service.liftSuspension(alice);
+      await service.liftSuspension(alice);
+      const session = await service.login('alice@example.com', 'motdepasse');
+      await expect(service.verifyAccessToken(session.accessToken)).resolves.toMatchObject({ userId: alice });
+      await expect(service.countSuspended()).resolves.toBe(0);
+    });
+
+    it('un compte déjà suspendu garde sa première suspension', async () => {
+      const { alice, admin } = await aliceAndAdmin();
+      const first = await service.suspend(alice, admin, 'Premier motif');
+      now = new Date('2026-01-02T00:00:00Z');
+      await expect(service.suspend(alice, admin, 'Second motif')).resolves.toEqual(first);
+    });
+
+    it('refuse un administrateur, soi-même, un motif vide ou trop long ; compte inconnu → null', async () => {
+      const { alice, admin } = await aliceAndAdmin();
+      await expect(service.suspend(admin, alice, 'Motif')).rejects.toBeInstanceOf(CannotSuspendAdminError);
+      await expect(service.suspend(alice, alice, 'Motif')).rejects.toBeInstanceOf(CannotSuspendAdminError);
+      await expect(service.suspend(alice, admin, '   ')).rejects.toBeInstanceOf(InvalidSuspensionReasonError);
+      await expect(service.suspend(alice, admin, 'x'.repeat(501))).rejects.toBeInstanceOf(InvalidSuspensionReasonError);
+      await expect(service.suspend('inconnu', admin, 'Motif')).resolves.toBeNull();
+      await expect(service.isSuspended(alice)).resolves.toBe(false);
+    });
+
+    it('Sign in with Apple : refusé pour un compte suspendu', async () => {
+      apple.identities.set('jeton', { sub: 'apple-1', email: null });
+      await service.loginWithApple({ identityToken: 'jeton' });
+      await service.register({ ...registration, email: 'admin@example.com', username: 'admin' });
+      const [appleAccount, admin] = accounts.accounts;
+      accounts.adminIds.add(admin!.id);
+      await service.suspend(appleAccount!.id, admin!.id, 'Spam');
+      await expect(service.loginWithApple({ identityToken: 'jeton' })).rejects.toBeInstanceOf(AccountSuspendedError);
+    });
+
+    it('au démarrage, le registre est reconstruit depuis la base', async () => {
+      const { alice, admin } = await aliceAndAdmin();
+      await service.suspend(alice, admin, 'Spam');
+      await suspended.replaceAll(['fantome']);
+      await expect(service.syncSuspendedAccounts()).resolves.toBe(1);
+      await expect(suspended.all()).resolves.toEqual(new Set([alice]));
     });
   });
 });

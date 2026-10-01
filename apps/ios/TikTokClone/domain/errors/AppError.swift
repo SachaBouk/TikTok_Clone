@@ -14,6 +14,10 @@ enum AppError: Error, Equatable, Sendable {
     case rateLimited(retryAfter: Int)
     // Trop d'échecs de connexion récents pour cet email ou cette adresse (ADR-030) : réessayer après ce nombre de secondes.
     case tooManyLoginAttempts(retryAfter: Int)
+    // Son propre compte, suspendu par un administrateur (ADR-037) : connexion refusée (403), sans motif.
+    case accountSuspended
+    // Le profil d'un compte suspendu n'est plus lisible (410).
+    case profileSuspended
     // API injoignable (réseau, serveur arrêté).
     case network
     // Réponse inattendue.
@@ -30,6 +34,8 @@ enum AppError: Error, Equatable, Sendable {
         case .rateLimited(let seconds): "Trop de messages envoyés. Réessaie dans \(seconds) s."
         case .tooManyLoginAttempts(let seconds):
             "Trop de tentatives de connexion. Réessaie dans \(seconds < 60 ? "\(seconds) s" : "\((seconds + 59) / 60) min")."
+        case .accountSuspended: "Ton compte est suspendu."
+        case .profileSuspended: "Ce compte a été suspendu."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
         }

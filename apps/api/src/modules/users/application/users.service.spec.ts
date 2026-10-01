@@ -4,6 +4,7 @@ import {
   AvatarNotUploadedError,
   InvalidAvatarError,
   InvalidProfileError,
+  ProfileSuspendedError,
   UserNotFoundError,
   UsernameTakenError,
 } from '../domain/user.errors';
@@ -11,6 +12,10 @@ import { InMemoryAccountContentCleanup } from '../infrastructure/in-memory-accou
 import { InMemoryAvatarStorage } from '../infrastructure/in-memory-avatar-storage';
 import { InMemoryUserRepository } from '../infrastructure/in-memory-user.repository';
 import { UsersService } from './users.service';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 const alice: User = {
   id: '0192f3a0-0000-7000-8000-000000000001',
@@ -37,7 +42,8 @@ describe('UsersService', () => {
   beforeEach(() => {
     avatars = new InMemoryAvatarStorage();
     contentCleanup = new InMemoryAccountContentCleanup();
-    service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }]), avatars, contentCleanup, () => NOW);
+    suspended = new InMemorySuspendedAccounts();
+    service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }]), avatars, contentCleanup, suspended, () => NOW);
   });
 
   // Ce que fait l'app : demande l'URL signée, envoie le fichier, renvoie l'identifiant.
@@ -62,6 +68,14 @@ describe('UsersService', () => {
 
     it('lève UserNotFoundError pour un identifiant inconnu', async () => {
       await expect(service.getById('inconnu')).rejects.toBeInstanceOf(UserNotFoundError);
+    });
+
+    it('profil public : illisible pour un compte suspendu (ADR-037), qui reste trouvable par les autres modules', async () => {
+      await expect(service.getPublicProfile('alice')).resolves.toEqual(alice);
+      await suspended.add(alice.id);
+      await expect(service.getPublicProfile('alice')).rejects.toBeInstanceOf(ProfileSuspendedError);
+      await expect(service.getByUsername('alice')).resolves.toEqual(alice);
+      await expect(service.getPublicProfile('carol')).rejects.toBeInstanceOf(UserNotFoundError);
     });
   });
 
@@ -204,7 +218,8 @@ describe('UsersService', () => {
     const carol: User = { ...alice, id: '0192f3a0-0000-7000-8000-000000000003', username: 'carol.b', displayName: 'Carole Bernard', createdAt: NOW };
 
     beforeEach(() => {
-      service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }, { ...carol }]), avatars, contentCleanup, () => NOW);
+      suspended = new InMemorySuspendedAccounts();
+      service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }, { ...carol }]), avatars, contentCleanup, suspended, () => NOW);
     });
 
     it('liste tous les comptes du plus récent au plus ancien, par pages', async () => {

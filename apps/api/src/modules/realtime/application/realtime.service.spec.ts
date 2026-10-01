@@ -69,6 +69,22 @@ describe('RealtimeService', () => {
     expect(bus.published).toEqual([{ userId: 'alice', event: badge(3) }]);
   });
 
+  it('ferme toutes les connexions d’un compte suspendu (ADR-037), et seulement les siennes', async () => {
+    const phone = new FakeConnection();
+    const tablet = new FakeConnection();
+    const other = new FakeConnection();
+    service.attach(phone, { userId: 'alice', expiresAt: in15min });
+    service.attach(tablet, { userId: 'alice', expiresAt: in15min });
+    service.attach(other, { userId: 'bob', expiresAt: in15min });
+
+    await service.disconnectUser('alice');
+
+    expect(phone.closed).toEqual({ code: 4001, reason: 'Session révoquée' });
+    expect(tablet.closed).toEqual({ code: 4001, reason: 'Session révoquée' });
+    expect(other.closed).toBeNull();
+    expect(bus.published).toEqual([{ userId: 'alice', disconnect: true }]);
+  });
+
   it('ne remet plus rien à une connexion fermée', async () => {
     const phone = new FakeConnection();
     const detach = service.attach(phone, { userId: 'alice', expiresAt: in15min });

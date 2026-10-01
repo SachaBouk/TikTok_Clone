@@ -104,7 +104,7 @@ export class MessagingService {
     return this.page(userId, rows, limit);
   }
 
-  // Demandes reçues en attente. Celles des comptes bloqués (dans un sens ou l'autre) sont masquées :
+  // Demandes reçues en attente. Celles des comptes bloqués (dans un sens ou l'autre) ou suspendus sont masquées :
   // une page peut alors être plus courte, la pagination continue.
   async listRequests(userId: string, cursor: string | null, limit: number): Promise<ConversationPage> {
     const rows = await this.conversations.listRequests(userId, cursor, limit + 1);
@@ -140,7 +140,7 @@ export class MessagingService {
     // Vidéo introuvable aussi quand son auteur et l'expéditeur se sont bloqués : l'expéditeur ne la voit pas.
     if (sharedVideoId) {
       const [video] = await this.videos.getPublishedVideos([sharedVideoId]);
-      if (!video || (await this.interactions.getBlockedAccountIds(userId)).has(video.userId)) throw new SharedVideoNotFoundError(sharedVideoId);
+      if (!video || (await this.interactions.getHiddenAccountIds(userId)).has(video.userId)) throw new SharedVideoNotFoundError(sharedVideoId);
     }
 
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
@@ -318,12 +318,12 @@ export class MessagingService {
     });
   }
 
-  // Vidéos partagées, telles que `viewerId` les voit : celle d'un compte bloqué dans un sens ou dans l'autre
+  // Vidéos partagées, telles que `viewerId` les voit : celle d'un compte bloqué dans un sens ou dans l'autre, ou suspendu,
   // est indisponible, comme dans le feed (blocages lus seulement s'il y a des vidéos).
   private async withVideos(viewerId: string, messages: Message[]): Promise<MessageItem[]> {
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
     const [published, hidden] = videoIds.length
-      ? await Promise.all([this.videos.getPublishedVideos(videoIds), this.interactions.getBlockedAccountIds(viewerId)])
+      ? await Promise.all([this.videos.getPublishedVideos(videoIds), this.interactions.getHiddenAccountIds(viewerId)])
       : [[], new Set<string>()];
     const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));

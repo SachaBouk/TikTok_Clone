@@ -8,6 +8,7 @@ import type { CurrencyEvent } from '../domain/wallet';
 import { InMemoryWalletEventPublisher } from '../infrastructure/in-memory-wallet-event-publisher';
 import { InMemoryWalletRepository } from '../infrastructure/in-memory-wallet.repository';
 import { WalletService } from './wallet.service';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 
 const ALICE = '0192f3a0-0000-7000-8000-00000000000a';
 const alice: User = {
@@ -43,7 +44,7 @@ describe('WalletService', () => {
   function build(rejectSandbox = false) {
     wallets = new InMemoryWalletRepository();
     events = new InMemoryWalletEventPublisher();
-    const users = new UsersService(new InMemoryUserRepository([alice]), new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
+    const users = new UsersService(new InMemoryUserRepository([alice]), new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemorySuspendedAccounts());
     service = new WalletService(wallets, users, events, { rejectSandbox });
   }
 

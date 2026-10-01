@@ -9,8 +9,8 @@ type Query = Record<string, string | number | undefined | null>;
 
 // Client de l'API REST pour les models (ADR-004), côté serveur uniquement : il envoie l'access token de
 // la session. Le proxy l'a rafraîchi avant la requête. Session refusée (401) ou rôle retiré (403) :
-// fin de session. Les autres erreurs remontent en ApiError.
-export async function apiRequest<T>(method: 'GET' | 'DELETE', path: string, query: Query = {}): Promise<T> {
+// fin de session. Les autres erreurs remontent en ApiError. `body` : corps JSON (PUT).
+export async function apiRequest<T>(method: 'GET' | 'DELETE' | 'PUT', path: string, query: Query = {}, body?: unknown): Promise<T> {
   const accessToken = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!accessToken) redirect('/auth/fin?raison=session');
 
@@ -18,7 +18,12 @@ export async function apiRequest<T>(method: 'GET' | 'DELETE', path: string, quer
   for (const [name, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(name, String(value));
   }
-  const response = await fetch(url, { method, headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
+  const response = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    cache: 'no-store',
+  });
 
   if (response.status === 401) redirect('/auth/fin?raison=session');
   if (response.status === 403) redirect('/auth/fin?raison=acces');

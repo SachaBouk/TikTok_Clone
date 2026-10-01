@@ -61,10 +61,17 @@ export class PrismaNotificationRepository extends NotificationRepository {
     return recipients.map((r) => r.userId);
   }
 
-  async listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]> {
+  async listForRecipient(
+    recipientId: string,
+    filter: NotificationFilter,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+  ): Promise<Notification[]> {
     const rows = await this.prisma.notification.findMany({
       where: {
         userId: recipientId,
+        ...(excludedActorIds.length ? { actorId: { notIn: excludedActorIds } } : {}),
         ...(filter.type ? { type: filter.type } : {}),
         ...(filter.videoId ? { videoId: filter.videoId } : {}),
         ...(beforeId ? { id: { lt: beforeId } } : {}),
@@ -79,8 +86,9 @@ export class PrismaNotificationRepository extends NotificationRepository {
   // Regroupement en SQL, sur les seules notifications du compte (index `user_id`) : une ligne par groupe, avec
   // la notification la plus récente (UUID v7 : l'ordre du texte est l'ordre du temps), le nombre, l'état de
   // lecture et les auteurs les plus récents. Les notifications les plus récentes sont ensuite relues par Prisma.
-  async listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]> {
+  async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
     const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
+    const excluded = excludedActorIds.length ? Prisma.sql`AND actor_id <> ALL(${excludedActorIds}::uuid[])` : Prisma.empty;
     const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] }[]>`
       WITH grouped AS (
         SELECT max(notification_id::text)::uuid AS latest_id,
@@ -88,7 +96,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
                bool_or(read_at IS NULL) AS unread,
                (array_agg(actor_id::text ORDER BY notification_id DESC))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
         FROM notifications
-        WHERE user_id = ${recipientId}::uuid
+        WHERE user_id = ${recipientId}::uuid ${excluded}
         GROUP BY type,
                  CASE WHEN type IN ('like', 'repost') THEN video_id END,
                  CASE WHEN type = 'comment' THEN notification_id END
@@ -110,8 +118,10 @@ export class PrismaNotificationRepository extends NotificationRepository {
     });
   }
 
-  countUnread(recipientId: string): Promise<number> {
-    return this.prisma.notification.count({ where: { userId: recipientId, readAt: null } });
+  countUnread(recipientId: string, excludedActorIds: string[]): Promise<number> {
+    return this.prisma.notification.count({
+      where: { userId: recipientId, readAt: null, ...(excludedActorIds.length ? { actorId: { notIn: excludedActorIds } } : {}) },
+    });
   }
 
   async markRead(recipientId: string, upToId: string | null, readAt: Date): Promise<void> {

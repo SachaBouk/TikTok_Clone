@@ -20,13 +20,16 @@ private func client(_ respond: @escaping @Sendable (String) -> (HTTPResponse, HT
 
 @Suite("Profil : dépôts distants")
 struct ProfileDataTests {
-    @Test("profil public ; 404 → introuvable")
+    @Test("profil public ; 404 → introuvable ; 410 → compte suspendu (ADR-037)")
     func profile() async throws {
         let profile = try await RemoteProfileRepository(client: client { _ in json(.ok, bobJSON) }).profile(username: "bob")
         #expect(profile.username == "bob")
         #expect(profile.bio == nil)
         await #expect(throws: AppError.notFound) {
             try await RemoteProfileRepository(client: client { _ in json(.notFound, errorJSON(404, "x")) }).profile(username: "x")
+        }
+        await #expect(throws: AppError.profileSuspended) {
+            try await RemoteProfileRepository(client: client { _ in json(.gone, errorJSON(410, "Compte suspendu : @x")) }).profile(username: "x")
         }
     }
 

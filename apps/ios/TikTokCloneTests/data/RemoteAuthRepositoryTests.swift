@@ -31,6 +31,15 @@ struct RemoteAuthRepositoryTests {
         #expect(store.load() == nil)
     }
 
+    @Test("compte suspendu (ADR-037) : 403 → message générique, rien d'enregistré")
+    func loginSuspended() async {
+        await #expect(throws: AppError.accountSuspended) {
+            try await repository { _ in json(.forbidden, errorJSON(403, "Compte suspendu")) }.login(email: "a@b.c", password: "motdepasse")
+        }
+        #expect(store.load() == nil)
+        #expect(AppError.accountSuspended.message == "Ton compte est suspendu.")
+    }
+
     @Test("trop d'échecs de connexion : 429 → délai de l'en-tête Retry-After, message en minutes")
     func loginTooManyAttempts() async {
         await #expect(throws: AppError.tooManyLoginAttempts(retryAfter: 840)) {

@@ -1,5 +1,7 @@
 import type { AuthService } from '../../auth/application/auth.service';
+import { CannotSuspendAdminError } from '../../auth/domain/auth.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { RealtimeService } from '../../realtime/application/realtime.service';
 import type { CommentFilter } from '../../interactions/domain/interaction';
 import { CommentNotFoundError } from '../../interactions/domain/interaction.errors';
 import type { UsersService } from '../../users/application/users.service';
@@ -19,7 +21,7 @@ import {
   type PlatformStats,
   RECENT_PERIOD_DAYS,
 } from '../domain/admin';
-import { AdminTargetNotFoundError } from '../domain/admin.errors';
+import { AdminActionRefusedError, AdminTargetNotFoundError } from '../domain/admin.errors';
 
 // Service applicatif du backoffice (ADR-004). Sans données propres : il lit et modère via les services
 // exportés des autres modules (ADR-003), qui portent les règles (suppression d'une vidéo, cascade…).
@@ -31,14 +33,16 @@ export class AdminService {
     private readonly interactions: InteractionsService,
     private readonly auth: AuthService,
     private readonly wallet: WalletService,
+    private readonly realtime: RealtimeService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async getStats(): Promise<PlatformStats> {
     const since = new Date(this.now().getTime() - RECENT_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-    const [usersTotal, usersRecent, videos, commentsTotal, commentsRecent, tokens] = await Promise.all([
+    const [usersTotal, usersRecent, usersSuspended, videos, commentsTotal, commentsRecent, tokens] = await Promise.all([
       this.users.countAccounts(),
       this.users.countAccounts(since),
+      this.auth.countSuspended(),
       this.videos.countVideos(since),
       this.interactions.countComments(),
       this.interactions.countComments(since),
@@ -46,7 +50,7 @@ export class AdminService {
     ]);
     const { byStatus } = videos;
     return {
-      users: { total: usersTotal, last7Days: usersRecent },
+      users: { total: usersTotal, last7Days: usersRecent, suspended: usersSuspended },
       videos: {
         total: byStatus.uploading + byStatus.processing + byStatus.ready + byStatus.failed,
         last7Days: videos.createdSince,
@@ -67,6 +71,28 @@ export class AdminService {
   async getAccount(userId: string): Promise<AdminAccount> {
     const [account] = await this.describeAccounts([await this.account(userId)]);
     return account!;
+  }
+
+  // Suspension (ADR-037) : les règles sont dans auth (motif obligatoire, pas d'administrateur, sessions révoquées) ;
+  // ici, la fermeture des WebSocket du compte, que auth ne peut pas faire (realtime dépend de auth). Un compte déjà
+  // suspendu garde sa suspension. La personne n'est pas prévenue autrement qu'au moment où l'app se reconnecte.
+  async suspendAccount(adminId: string, userId: string, reason: string): Promise<AdminAccount> {
+    await this.account(userId);
+    try {
+      if (!(await this.auth.suspend(userId, adminId, reason))) throw new AdminTargetNotFoundError('Compte', userId);
+    } catch (error) {
+      if (error instanceof CannotSuspendAdminError) throw new AdminActionRefusedError(error.message);
+      throw error;
+    }
+    await this.realtime.disconnectUser(userId);
+    return this.getAccount(userId);
+  }
+
+  // Levée : le compte peut se reconnecter, ses contenus réapparaissent. Idempotent.
+  async liftSuspension(userId: string): Promise<AdminAccount> {
+    await this.account(userId);
+    await this.auth.liftSuspension(userId);
+    return this.getAccount(userId);
   }
 
   async listVideos(filter: VideoFilter, cursor: string | null, limit: number): Promise<Page<ModeratedVideo>> {
@@ -148,17 +174,25 @@ export class AdminService {
 
   private async describeAccounts(users: User[]): Promise<AdminAccount[]> {
     const ids = users.map((user) => user.id);
-    const [adminIds, videoCounts, balances] = await Promise.all([
+    const [adminIds, videoCounts, balances, suspensions] = await Promise.all([
       this.auth.findAdminIds(ids),
       this.videos.countVideosByAuthors(ids),
       this.wallet.getBalances(ids),
+      this.auth.getSuspensions(ids),
     ]);
-    return users.map((user) => ({
-      user,
-      isAdmin: adminIds.has(user.id),
-      videosCount: videoCounts.get(user.id) ?? 0,
-      tokenBalance: balances.get(user.id) ?? 0,
-    }));
+    const moderators = await this.usersById([...suspensions.values()].flatMap((s) => (s.suspendedBy ? [s.suspendedBy] : [])));
+    return users.map((user) => {
+      const suspension = suspensions.get(user.id);
+      return {
+        user,
+        isAdmin: adminIds.has(user.id),
+        videosCount: videoCounts.get(user.id) ?? 0,
+        tokenBalance: balances.get(user.id) ?? 0,
+        suspension: suspension
+          ? { suspendedAt: suspension.suspendedAt, reason: suspension.reason, suspendedBy: moderators.get(suspension.suspendedBy ?? '') ?? null }
+          : null,
+      };
+    });
   }
 
   private async usersById(ids: string[]): Promise<Map<string, User>> {

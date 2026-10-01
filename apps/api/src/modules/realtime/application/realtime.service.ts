@@ -58,6 +58,12 @@ export class RealtimeService {
     return this.bus.publish({ userId, event });
   }
 
+  // Ferme toutes les connexions du compte, sur toutes les instances (suspension, ADR-037). Code 4001 : l'app tente
+  // de rafraîchir sa session, refusée, et repasse en invité. Au mieux, comme les événements.
+  disconnectUser(userId: string): Promise<void> {
+    return this.bus.publish({ userId, disconnect: true });
+  }
+
   // Un module traite un type de message de l'app (ex. messaging : `typing`). Le module realtime ne dépend
   // ainsi d'aucun module émetteur.
   onClientMessage(event: string, handler: ClientMessageHandler): void {
@@ -100,10 +106,14 @@ export class RealtimeService {
     return count;
   }
 
-  private deliver({ userId, event }: RealtimeMessage): void {
-    const own = this.connections.get(userId);
+  private deliver(message: RealtimeMessage): void {
+    const own = this.connections.get(message.userId);
     if (!own) return;
-    const payload = JSON.stringify(event);
+    if ('disconnect' in message) {
+      for (const connection of [...own]) connection.close(CLOSE_SESSION_EXPIRED, 'Session révoquée');
+      return;
+    }
+    const payload = JSON.stringify(message.event);
     for (const connection of own) connection.send(payload);
   }
 }

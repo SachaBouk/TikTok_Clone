@@ -11,12 +11,20 @@ export abstract class NotificationRepository {
   // Supprime les notifications échangées entre deux comptes (blocage). Renvoie les destinataires touchés.
   abstract removeBetween(userId: string, otherId: string): Promise<string[]>;
 
+  // Lectures : sans les notifications des auteurs `excludedActorIds` (comptes suspendus, ADR-037), qui ne comptent
+  // ni dans les groupes ni dans le badge.
   // Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné (identifiants UUID v7, ordonnés).
-  abstract listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]>;
+  abstract listForRecipient(
+    recipientId: string,
+    filter: NotificationFilter,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+  ): Promise<Notification[]>;
   // Groupes (voir `groupKey`), du plus récemment actif au plus ancien : ceux dont la notification la plus récente
   // est strictement avant `beforeId`. `recentActorIds` : `GROUP_ACTORS_SHOWN` au plus.
-  abstract listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]>;
-  abstract countUnread(recipientId: string): Promise<number>;
+  abstract listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]>;
+  abstract countUnread(recipientId: string, excludedActorIds: string[]): Promise<number>;
   // Marque lues les notifications non lues de `recipientId` jusqu'à `upToId` inclus (toutes s'il est null).
   abstract markRead(recipientId: string, upToId: string | null, readAt: Date): Promise<void>;
 }

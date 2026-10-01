@@ -11,6 +11,7 @@ import type {
 } from '../domain/notification';
 import type { NotificationPublisher } from '../domain/notification-publisher';
 import type { NotificationRepository } from '../domain/notification.repository';
+import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
 export interface NotificationPage {
   items: NotificationWithContext[];
@@ -34,6 +35,7 @@ export class NotificationsService {
     private readonly users: UsersService,
     private readonly videos: VideosService,
     private readonly publisher: NotificationPublisher,
+    private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -45,7 +47,7 @@ export class NotificationsService {
     const created = await this.notifications.add(event);
     if (!created) return;
     const [item] = await this.withContext([created]);
-    if (item) await this.publisher.notificationCreated(item, await this.notifications.countUnread(event.recipientId));
+    if (item) await this.publisher.notificationCreated(item, await this.countUnread(event.recipientId));
   }
 
   // Unlike, retrait d'une republication, unfollow : la notification disparaît, lue ou non.
@@ -64,7 +66,7 @@ export class NotificationsService {
   // (UUID v7, ordonné dans le temps) : stable même si d'autres arrivent pendant le scroll.
   // `filter` : les notifications d'un groupe (sa liste complète).
   async list(recipientId: string, cursor: string | null, limit: number, filter: NotificationFilter = {}): Promise<NotificationPage> {
-    const rows = await this.notifications.listForRecipient(recipientId, filter, cursor, limit + 1);
+    const rows = await this.notifications.listForRecipient(recipientId, filter, cursor, limit + 1, await this.excludedActors());
     const page = rows.slice(0, limit);
     return {
       items: await this.withContext(page),
@@ -76,7 +78,7 @@ export class NotificationsService {
   // reçu. Un groupe qui reçoit une nouvelle notification pendant le scroll remonte en tête : il peut alors
   // manquer dans les pages suivantes (l'app recharge la première page à chaque nouvelle notification).
   async listGroups(recipientId: string, cursor: string | null, limit: number): Promise<NotificationGroupPage> {
-    const rows = await this.notifications.listGroups(recipientId, cursor, limit + 1);
+    const rows = await this.notifications.listGroups(recipientId, cursor, limit + 1, await this.excludedActors());
     const page = rows.slice(0, limit);
     return {
       items: await this.groupsWithContext(page),
@@ -85,7 +87,7 @@ export class NotificationsService {
   }
 
   unreadCount(recipientId: string): Promise<number> {
-    return this.notifications.countUnread(recipientId);
+    return this.countUnread(recipientId);
   }
 
   // À l'ouverture du centre d'activité : l'app envoie la notification la plus récente qu'elle affiche.
@@ -96,8 +98,18 @@ export class NotificationsService {
     return this.publishUnreadCount(recipientId);
   }
 
+  // Les notifications des comptes suspendus (ADR-037) ne sont ni listées ni comptées ; elles réapparaissent à la
+  // levée de la suspension. Le badge n'est pas renvoyé en direct au moment de la suspension : il est relu ensuite.
+  private async excludedActors(): Promise<string[]> {
+    return [...(await this.suspended.all())];
+  }
+
+  private async countUnread(recipientId: string): Promise<number> {
+    return this.notifications.countUnread(recipientId, await this.excludedActors());
+  }
+
   private async publishUnreadCount(recipientId: string): Promise<number> {
-    const unreadCount = await this.notifications.countUnread(recipientId);
+    const unreadCount = await this.countUnread(recipientId);
     await this.publisher.unreadCountChanged(recipientId, unreadCount);
     return unreadCount;
   }

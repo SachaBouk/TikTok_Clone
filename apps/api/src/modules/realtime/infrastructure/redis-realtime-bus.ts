@@ -20,7 +20,8 @@ export class RedisRealtimeBus extends RealtimeBus {
     try {
       await this.redis.publish(CHANNEL, JSON.stringify(message));
     } catch (error) {
-      this.logger.warn(`Événement ${message.event.event} non diffusé : ${(error as Error).message}`);
+      const what = 'event' in message ? `Événement ${message.event.event}` : `Fermeture des connexions de ${message.userId}`;
+      this.logger.warn(`${what} non diffusée : ${(error as Error).message}`);
     }
   }
 

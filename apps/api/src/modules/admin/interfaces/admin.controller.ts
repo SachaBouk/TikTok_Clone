@@ -1,5 +1,13 @@
-import { Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Query, UseFilters } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Put, Query, UseFilters } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import type {
   AdminCommentPageDto,
   AdminStatsDto,
@@ -14,7 +22,7 @@ import { AdminOnly } from '../../auth/interfaces/admin-only.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { AdminService } from '../application/admin.service';
 import { AdminErrorFilter } from './admin-error.filter';
-import { AdminCommentsQuery, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
+import { AdminCommentsQuery, AdminSuspendRequest, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
 import {
   AdminCommentPageResponse,
   AdminStatsResponse,
@@ -70,6 +78,28 @@ export class AdminController {
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte introuvable.' })
   async getAdminUser(@Param('id', ParseUUIDPipe) id: string): Promise<AdminUserDto> {
     return toAdminUserDto(await this.adminService.getAccount(id));
+  }
+
+  // Suspension (ADR-037) : connexion refusée, sessions et WebSocket fermés, contenus masqués jusqu'à la levée.
+  @Put('users/:id/suspension')
+  @ApiOkResponse({ type: AdminUserResponse, description: 'Le compte, suspendu (suspension inchangée s’il l’était déjà).' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant ou motif invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte introuvable.' })
+  @ApiConflictResponse({ type: ErrorResponse, description: 'Compte administrateur (retirer d’abord son rôle), ou son propre compte.' })
+  async suspendAdminUser(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AdminSuspendRequest,
+  ): Promise<AdminUserDto> {
+    return toAdminUserDto(await this.adminService.suspendAccount(admin.userId, id, body.reason));
+  }
+
+  @Delete('users/:id/suspension')
+  @ApiOkResponse({ type: AdminUserResponse, description: 'Le compte, suspension levée (idempotent).' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte introuvable.' })
+  async liftAdminUserSuspension(@Param('id', ParseUUIDPipe) id: string): Promise<AdminUserDto> {
+    return toAdminUserDto(await this.adminService.liftSuspension(id));
   }
 
   @Get('videos')

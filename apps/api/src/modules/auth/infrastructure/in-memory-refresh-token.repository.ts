@@ -26,4 +26,10 @@ export class InMemoryRefreshTokenRepository extends RefreshTokenRepository {
       if (token.familyId === familyId && token.revokedAt === null) token.revokedAt = at;
     }
   }
+
+  async revokeAllForUser(userId: string, at: Date): Promise<void> {
+    for (const token of this.tokens) {
+      if (token.userId === userId && token.revokedAt === null) token.revokedAt = at;
+    }
+  }
 }

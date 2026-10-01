@@ -11,12 +11,20 @@ export const MAX_ADMIN_PAGE_SIZE = 100;
 // Période des nouveautés du tableau de bord.
 export const RECENT_PERIOD_DAYS = 7;
 
-// Un compte, son rôle, son nombre de vidéos (tous statuts) et son solde de jetons.
+// Un compte, son rôle, son nombre de vidéos (tous statuts), son solde de jetons et sa suspension en cours.
 export interface AdminAccount {
   user: User;
   isAdmin: boolean;
   videosCount: number;
   tokenBalance: number;
+  suspension: AccountModeration | null;
+}
+
+// Suspension en cours (ADR-037), avec l'administrateur auteur (null s'il a supprimé son compte depuis).
+export interface AccountModeration {
+  suspendedAt: Date;
+  reason: string;
+  suspendedBy: User | null;
 }
 
 // Une ligne du journal des jetons et le compte crédité (null : supprimé depuis, ou client inconnu).
@@ -49,7 +57,7 @@ export interface RecentCount {
 }
 
 export interface PlatformStats {
-  users: RecentCount;
+  users: RecentCount & { suspended: number };
   videos: RecentCount & Record<VideoStatus, number>;
   comments: RecentCount;
   // `purchasedSince` : sur les 7 derniers jours.

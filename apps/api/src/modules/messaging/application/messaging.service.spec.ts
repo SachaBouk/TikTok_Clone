@@ -33,6 +33,10 @@ import { InMemoryConversationRepository } from '../infrastructure/in-memory-conv
 import { InMemoryMessagingEventPublisher } from '../infrastructure/in-memory-messaging-event-publisher';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { MessagingService } from './messaging.service';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -71,10 +75,11 @@ describe('MessagingService', () => {
     clock = Date.UTC(2026, 8, 25, 10, 0, 0);
     const userRepository = new InMemoryUserRepository(['alice', 'bob', 'carol', ...EXTRA_USERS].map(user));
     videoRepository = new InMemoryVideoRepository();
-    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
+    suspended = new InMemorySuspendedAccounts();
+    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
-    const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter());
+    const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher(), suspended);
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter(), suspended);
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();
     service = new MessagingService(conversations, users, interactions, videos, events, new InMemoryRateLimiter(() => clock), () => clock);
@@ -223,6 +228,26 @@ describe('MessagingService', () => {
       events.events.length = 0;
       await service.typing('alice', withBob);
       expect(eventsOf('typing')).toEqual([]);
+    });
+  });
+
+  describe('suspension (ADR-037)', () => {
+    it("plus d'envoi vers un compte suspendu, ses demandes disparaissent ; historique lisible, rien ne dit « suspendu »", async () => {
+      const id = await open('alice', 'bob');
+      await send('bob', id, 'avant');
+      const request = await open('carol', 'alice');
+      await send('carol', request, 'spam');
+      await suspended.add('bob');
+      await suspended.add('carol');
+
+      await expect(send('alice', id, 'x')).rejects.toBeInstanceOf(BlockedConversationError);
+      expect(await service.getConversation('alice', id)).toMatchObject({ canSend: false, blockedByMe: false });
+      expect((await service.listMessages('alice', id, null, 10)).items.map((i) => i.message.content)).toEqual(['avant']);
+      expect((await service.listRequests('alice', null, 10)).items).toEqual([]);
+      await expect(service.badges('alice')).resolves.toMatchObject({ pendingRequests: 0 });
+
+      await suspended.remove('bob');
+      expect(await service.getConversation('alice', id)).toMatchObject({ canSend: true });
     });
   });
 

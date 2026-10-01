@@ -19,6 +19,7 @@ struct RemoteProfileRepository: ProfileRepository {
         switch try await mappingErrors({ try await client.getProfile(path: .init(username: username)) }) {
         case .ok(let ok): return UserProfile(try ok.body.json)
         case .notFound: throw AppError.notFound
+        case .gone: throw AppError.profileSuspended
         case .undocumented: throw AppError.unexpected
         }
     }

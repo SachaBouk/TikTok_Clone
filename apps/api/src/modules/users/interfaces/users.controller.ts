@@ -3,6 +3,7 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiGoneResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -98,8 +99,9 @@ export class UsersController {
   @Get(':username')
   @ApiOkResponse({ type: UserProfileResponse })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Pseudo inconnu.' })
+  @ApiGoneResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037).' })
   async getProfile(@Param('username') username: string): Promise<UserProfileDto> {
-    return toProfileDto(await this.usersService.getByUsername(username));
+    return toProfileDto(await this.usersService.getPublicProfile(username));
   }
 }
 

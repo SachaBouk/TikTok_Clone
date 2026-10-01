@@ -37,3 +37,11 @@ export class InvalidAvatarError extends UserError {
     this.name = 'InvalidAvatarError';
   }
 }
+
+// Compte suspendu par un administrateur (ADR-037) : son profil public n'est plus lisible (410).
+export class ProfileSuspendedError extends UserError {
+  constructor(username: string) {
+    super(`Compte suspendu : @${username}`);
+    this.name = 'ProfileSuspendedError';
+  }
+}

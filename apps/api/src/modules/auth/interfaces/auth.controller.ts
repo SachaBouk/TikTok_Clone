@@ -6,6 +6,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
+  ApiForbiddenResponse,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -37,6 +38,7 @@ export class AuthController {
   @HttpCode(200)
   @ApiOkResponse({ type: AuthTokensResponse })
   @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Email ou mot de passe incorrect.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037), après vérification de l’identité.' })
   @ApiTooManyRequestsResponse({
     type: ErrorResponse,
     description: 'Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
@@ -52,6 +54,7 @@ export class AuthController {
   @ApiOkResponse({ type: AuthTokensResponse, description: 'Compte créé à la première connexion.' })
   @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Identity token Apple invalide.' })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Email Apple déjà utilisé par un compte email.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037).' })
   async loginWithApple(@Body() body: AppleLoginRequest): Promise<AuthTokensDto> {
     return toTokensDto(await this.auth.loginWithApple(body));
   }

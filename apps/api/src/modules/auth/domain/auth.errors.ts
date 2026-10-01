@@ -49,3 +49,27 @@ export class TooManyLoginAttemptsError extends AuthError {
 function formatDelay(seconds: number): string {
   return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;
 }
+
+// Compte suspendu par un administrateur (ADR-037) : 403 à la connexion, avec un message générique (le motif reste
+// interne). Levée seulement après vérification du mot de passe : la suspension n'est révélée qu'au titulaire.
+export class AccountSuspendedError extends AuthError {
+  constructor() {
+    super('Compte suspendu');
+    this.name = 'AccountSuspendedError';
+  }
+}
+
+// Un administrateur ne peut pas être suspendu (retirer d'abord son rôle), ni se suspendre lui-même.
+export class CannotSuspendAdminError extends AuthError {
+  constructor() {
+    super('Un administrateur ne peut pas être suspendu');
+    this.name = 'CannotSuspendAdminError';
+  }
+}
+
+export class InvalidSuspensionReasonError extends AuthError {
+  constructor(maxLength: number) {
+    super(`Le motif de la suspension est obligatoire (${maxLength} caractères au plus)`);
+    this.name = 'InvalidSuspensionReasonError';
+  }
+}

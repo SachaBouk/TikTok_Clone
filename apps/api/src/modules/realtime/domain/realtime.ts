@@ -16,17 +16,16 @@ export interface RealtimeConnection {
   close(code: number, reason: string): void;
 }
 
-// Événement adressé à tous les appareils connectés d'un compte, sur toutes les instances de l'API.
-export interface RealtimeMessage {
-  userId: string;
-  event: RealtimeEventDto;
-}
+// Message du bus, adressé à tous les appareils connectés d'un compte, sur toutes les instances de l'API : un
+// événement, ou la fermeture de ses connexions (compte suspendu, ADR-037).
+export type RealtimeMessage = { userId: string; event: RealtimeEventDto } | { userId: string; disconnect: true };
 
 // Chemin du WebSocket, sur le port de l'API : ws://<hôte>:3000/realtime.
 export const REALTIME_PATH = '/realtime';
 
 // Codes de fermeture (4000-4999 : réservés aux applications).
 // Access token expiré : l'app rafraîchit sa paire de tokens (POST /auth/refresh) et se reconnecte.
+// Aussi pour un compte suspendu (ADR-037) : le rafraîchissement échoue alors, et l'app repasse en invité.
 export const CLOSE_SESSION_EXPIRED = 4001;
 // Arrêt ou redémarrage de l'instance (code standard « going away ») : l'app se reconnecte.
 export const CLOSE_GOING_AWAY = 1001;

@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
+import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { AuthService } from './application/auth.service';
 import { AuthConfig } from './auth.config';
 import { AccessTokenIssuer } from './domain/access-token-issuer';
@@ -15,6 +16,7 @@ import { JwtAccessTokenIssuer } from './infrastructure/jwt-access-token-issuer';
 import { PrismaAuthAccountRepository } from './infrastructure/prisma-auth-account.repository';
 import { PrismaRefreshTokenRepository } from './infrastructure/prisma-refresh-token.repository';
 import { ScryptPasswordHasher } from './infrastructure/scrypt-password-hasher';
+import { SuspendedAccountsSync } from './infrastructure/suspended-accounts-sync';
 import { AuthController } from './interfaces/auth.controller';
 import { JwtAuthGuard } from './interfaces/jwt-auth.guard';
 import { JwtStrategy } from './interfaces/jwt.strategy';
@@ -57,6 +59,7 @@ import { JwtStrategy } from './interfaces/jwt.strategy';
         apple: AppleIdentityVerifier,
         config: AuthConfig,
         rateLimiter: RateLimiter,
+        suspended: SuspendedAccounts,
       ) =>
         new AuthService(
           accounts,
@@ -66,10 +69,12 @@ import { JwtStrategy } from './interfaces/jwt.strategy';
           apple,
           { accessTokenTtlSeconds: config.accessTokenTtlSeconds, refreshTokenTtlDays: config.refreshTokenTtlDays },
           rateLimiter,
+          suspended,
         ),
-      inject: [AuthAccountRepository, RefreshTokenRepository, PasswordHasher, AccessTokenIssuer, AppleIdentityVerifier, AuthConfig, RateLimiter],
+      inject: [AuthAccountRepository, RefreshTokenRepository, PasswordHasher, AccessTokenIssuer, AppleIdentityVerifier, AuthConfig, RateLimiter, SuspendedAccounts],
     },
     JwtStrategy,
+    SuspendedAccountsSync,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
   exports: [AuthService],

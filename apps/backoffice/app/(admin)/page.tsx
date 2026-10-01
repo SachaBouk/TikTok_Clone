@@ -20,7 +20,8 @@ const POSTHOG_LINKS = [
 export default async function DashboardPage() {
   const stats = await getStats();
   const cards = [
-    { title: 'Comptes', count: stats.users, href: '/users' },
+    // Comptes suspendus (ADR-037) : rappelés sous le total.
+    { title: 'Comptes', count: stats.users, href: '/users', note: stats.users.suspended > 0 ? `${formatNumber(stats.users.suspended)} suspendu(s)` : null },
     { title: 'Vidéos', count: stats.videos, href: '/videos' },
     { title: 'Commentaires', count: stats.comments, href: '/comments' },
     // Jetons vendus en production (ADR-009) ; achats de test à part, sur la page « Jetons ».
@@ -38,14 +39,17 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(({ title, count, href }) => (
+        {cards.map(({ title, count, href, note }) => (
           <Link key={title} href={href}>
             <Card className="transition-colors hover:bg-muted/50">
               <CardHeader>
                 <CardDescription>{title}</CardDescription>
                 <CardTitle className="text-3xl tabular-nums">{formatNumber(count.total)}</CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">+{formatNumber(count.last7Days)} sur 7 jours</CardContent>
+              <CardContent className="text-sm text-muted-foreground">
+                +{formatNumber(count.last7Days)} sur 7 jours
+                {note && <span className="text-destructive"> · {note}</span>}
+              </CardContent>
             </Card>
           </Link>
         ))}

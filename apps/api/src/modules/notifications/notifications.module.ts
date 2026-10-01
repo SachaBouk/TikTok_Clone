@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { PushModule } from '../push/push.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { UsersService } from '../users/application/users.service';
@@ -23,9 +24,14 @@ import { NotificationsController } from './interfaces/notifications.controller';
     { provide: NotificationPublisher, useClass: AppNotificationPublisher },
     {
       provide: NotificationsService,
-      useFactory: (notifications: NotificationRepository, users: UsersService, videos: VideosService, publisher: NotificationPublisher) =>
-        new NotificationsService(notifications, users, videos, publisher),
-      inject: [NotificationRepository, UsersService, VideosService, NotificationPublisher],
+      useFactory: (
+        notifications: NotificationRepository,
+        users: UsersService,
+        videos: VideosService,
+        publisher: NotificationPublisher,
+        suspended: SuspendedAccounts,
+      ) => new NotificationsService(notifications, users, videos, publisher, suspended),
+      inject: [NotificationRepository, UsersService, VideosService, NotificationPublisher, SuspendedAccounts],
     },
   ],
   exports: [NotificationsService],

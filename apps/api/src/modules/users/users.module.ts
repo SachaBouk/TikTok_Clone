@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StorageConfig } from '../../storage/storage.config';
+import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { VideosModule } from '../videos/videos.module';
 import { UsersService } from './application/users.service';
 import { AccountContentCleanup } from './domain/account-content-cleanup';
@@ -22,9 +23,9 @@ import { UsersController } from './interfaces/users.controller';
     { provide: AccountContentCleanup, useClass: VideoFilesAccountCleanup },
     {
       provide: UsersService,
-      useFactory: (users: UserRepository, avatars: AvatarStorage, contentCleanup: AccountContentCleanup) =>
-        new UsersService(users, avatars, contentCleanup),
-      inject: [UserRepository, AvatarStorage, AccountContentCleanup],
+      useFactory: (users: UserRepository, avatars: AvatarStorage, contentCleanup: AccountContentCleanup, suspended: SuspendedAccounts) =>
+        new UsersService(users, avatars, contentCleanup, suspended),
+      inject: [UserRepository, AvatarStorage, AccountContentCleanup, SuspendedAccounts],
     },
   ],
   exports: [UsersService],

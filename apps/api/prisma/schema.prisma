@@ -46,6 +46,13 @@ model User {
   avatarUrl      String?  @map("avatar_url")
   bio            String?
   role           UserRole @default(user)
+  // Suspension par un administrateur (ADR-037), propriété du module auth : connexion refusée, contenus masqués.
+  // Les trois colonnes sont remplies ou vides ensemble (CHECK écrit à la main), sauf `suspended_by`, mis à nul si
+  // l'administrateur supprime son compte.
+  suspendedAt      DateTime? @map("suspended_at")
+  // Motif interne, visible des seuls administrateurs.
+  suspensionReason String?   @map("suspension_reason")
+  suspendedById    String?   @map("suspended_by") @db.Uuid
   // Compteurs dénormalisés, maintenus par les services applicatifs.
   followersCount Int      @default(0) @map("followers_count")
   followingCount Int      @default(0) @map("following_count")
@@ -72,8 +79,12 @@ model User {
   blocksReceived           Block[]                   @relation("Blocked")
   conversationRequests     Conversation[]            @relation("ConversationRequestSender")
   pushDevices              PushDevice[]
+  suspendedBy              User?                     @relation("SuspendedBy", fields: [suspendedById], references: [id], onDelete: SetNull)
+  suspensionsMade          User[]                    @relation("SuspendedBy")
   walletTransactions       WalletTransaction[]
 
+  // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
+  @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
   @@map("users")
 }
 

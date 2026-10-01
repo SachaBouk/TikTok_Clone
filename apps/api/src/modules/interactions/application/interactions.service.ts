@@ -30,6 +30,7 @@ import {
 import { SHARE_DEDUP_SECONDS } from '../domain/interaction';
 import type { InteractionRepository } from '../domain/interaction.repository';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
+import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
 export interface InteractionState {
   active: boolean;
@@ -88,12 +89,15 @@ export class InteractionsService {
     private readonly users: UsersService,
     private readonly notifications: NotificationsService,
     private readonly rateLimiter: RateLimiter,
+    private readonly suspended: SuspendedAccounts,
   ) {}
 
   // Like, favori ou republication (`active`), ou leur retrait. Idempotent. Seulement sur une vidéo publiée.
   // Un favori ne notifie pas l'auteur (pas de type `favorite` dans le centre d'activité, ADR-006).
   async setReaction(userId: string, videoId: string, kind: VideoReaction, active: boolean): Promise<InteractionState> {
     const { userId: authorId } = await this.publishedVideo(videoId);
+    // Compte suspendu (ADR-037) : sa vidéo est introuvable ; retirer une réaction reste possible.
+    if (active) await this.assertNotSuspended(authorId, videoId);
     // Blocage : ni like ni republication (visibles et notifiés). Le favori, privé, reste possible ;
     // retirer une réaction aussi.
     if (active && kind !== 'favorite') await this.assertNotBlocked(userId, authorId);
@@ -140,6 +144,7 @@ export class InteractionsService {
   // inchangé, sans erreur. Le dédoublonnage n'est posé que pour une vidéo publiée.
   async share(videoId: string, sharer: Sharer): Promise<number> {
     const video = await this.publishedVideo(videoId);
+    await this.assertNotSuspended(video.userId, videoId);
     const who = 'userId' in sharer ? `user:${sharer.userId}` : `ip:${sharer.ip}`;
     if (!(await this.rateLimiter.once(`share:${videoId}:${who}`, SHARE_DEDUP_SECONDS))) return video.sharesCount;
     const sharesCount = await this.videos.recordShare(videoId);
@@ -151,6 +156,8 @@ export class InteractionsService {
   async setFollow(followerId: string, username: string, active: boolean): Promise<InteractionState> {
     const target = await this.userByUsername(username);
     if (target.id === followerId) throw new CannotFollowYourselfError();
+    // Compte suspendu (ADR-037) : introuvable pour un nouvel abonnement ; se désabonner reste possible.
+    if (active && (await this.suspended.has(target.id))) throw new TargetUserNotFoundError(username);
     if (active) await this.assertNotBlocked(followerId, target.id);
     if (active) await this.interactions.follow(followerId, target.id);
     else await this.interactions.unfollow(followerId, target.id);
@@ -201,6 +208,7 @@ export class InteractionsService {
     const text = content.trim();
     if (!text) throw new EmptyCommentError();
     const video = await this.publishedVideo(videoId);
+    await this.assertNotSuspended(video.userId, videoId);
     await this.assertNotBlocked(userId, video.userId);
     const comment = await this.interactions.createComment({ videoId, userId, content: text });
     await this.notifications.notify({
@@ -347,15 +355,20 @@ export class InteractionsService {
     return ids.flatMap((id) => users.get(id) ?? []);
   }
 
-  // Pour le module messaging : blocages entre `userId` et ces comptes, dans les deux sens.
-  getBlocks(userId: string, userIds: string[]): Promise<BlockRelations> {
-    return this.interactions.findBlocks(userId, [...new Set(userIds)]);
+  // Pour le module messaging : blocages entre `userId` et ces comptes, dans les deux sens. Un compte suspendu
+  // (ADR-037) compte comme un compte qui a bloqué `userId` : impossible de lui écrire, ses demandes disparaissent,
+  // l'historique reste lisible. `blockedMe` n'est jamais révélé à l'app : rien ne dit qu'il s'agit d'une suspension.
+  async getBlocks(userId: string, userIds: string[]): Promise<BlockRelations> {
+    const ids = [...new Set(userIds)];
+    const [blocks, suspended] = await Promise.all([this.interactions.findBlocks(userId, ids), this.suspended.all()]);
+    return { blockedByMe: blocks.blockedByMe, blockedMe: new Set([...blocks.blockedMe, ...ids.filter((id) => suspended.has(id))]) };
   }
 
-  // Pour les modules feed et messaging : comptes bloqués par `userId` ou qui l'ont bloqué. Leurs contenus
-  // (vidéos, commentaires, présence dans les listes) sont masqués à `userId`, dans les deux sens.
-  getBlockedAccountIds(userId: string): Promise<Set<string>> {
-    return this.interactions.findBlockedEitherWay(userId);
+  // Pour les modules feed et messaging : comptes dont les contenus (vidéos, commentaires, présence dans les listes)
+  // sont masqués au lecteur. Pour tous, invités compris : les comptes suspendus (ADR-037). Pour un compte connecté,
+  // en plus : ceux qu'il a bloqués ou qui l'ont bloqué (ADR-029).
+  getHiddenAccountIds(viewerId: string | null | undefined): Promise<Set<string>> {
+    return this.hiddenAccounts(viewerId);
   }
 
   // Pour le module messaging : parmi `userIds`, les abonnés mutuels de `userId` (seuls autorisés à s'écrire).
@@ -363,9 +376,18 @@ export class InteractionsService {
     return this.interactions.findMutualFollows(userId, [...new Set(userIds)]);
   }
 
-  // Comptes à masquer au compte connecté ; aucun en mode invité.
+  // Comptes à masquer au lecteur : suspendus pour tous, et bloqués dans un sens ou dans l'autre s'il est connecté.
   private async hiddenAccounts(viewerId: string | null | undefined): Promise<Set<string>> {
-    return viewerId ? this.interactions.findBlockedEitherWay(viewerId) : new Set();
+    const [suspended, blocked] = await Promise.all([
+      this.suspended.all(),
+      viewerId ? this.interactions.findBlockedEitherWay(viewerId) : new Set<string>(),
+    ]);
+    return new Set([...suspended, ...blocked]);
+  }
+
+  // Vidéo d'un compte suspendu : introuvable pour une nouvelle réaction, un commentaire ou un partage (ADR-037).
+  private async assertNotSuspended(authorId: string, videoId: string): Promise<void> {
+    if (await this.suspended.has(authorId)) throw new VideoNotAvailableError(videoId);
   }
 
   // Sur ses propres vidéos, pas de blocage possible (on ne se bloque pas soi-même).

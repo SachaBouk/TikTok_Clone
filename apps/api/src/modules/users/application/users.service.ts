@@ -20,10 +20,12 @@ import {
   AvatarNotUploadedError,
   InvalidAvatarError,
   InvalidProfileError,
+  ProfileSuspendedError,
   UserNotFoundError,
   UsernameTakenError,
 } from '../domain/user.errors';
 import type { UserRepository } from '../domain/user.repository';
+import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
 export interface ProfileUpdate {
   username?: string;
@@ -49,12 +51,21 @@ export class UsersService {
     private readonly users: UserRepository,
     private readonly avatars: AvatarStorage,
     private readonly contentCleanup: AccountContentCleanup,
+    private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async getById(id: string): Promise<User> {
     const user = await this.users.findById(id);
     if (!user) throw new UserNotFoundError(id);
+    return user;
+  }
+
+  // Profil public (`GET /users/:username`) : celui d'un compte suspendu n'est plus lisible (ADR-037). Les autres
+  // lectures par pseudo (`getByUsername`) le trouvent toujours : chaque module décide de ce qu'il en montre.
+  async getPublicProfile(username: string): Promise<User> {
+    const user = await this.getByUsername(username);
+    if (await this.suspended.has(user.id)) throw new ProfileSuspendedError(username);
     return user;
   }
 

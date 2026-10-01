@@ -43,16 +43,22 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return [...recipients];
   }
 
-  async listForRecipient(recipientId: string, filter: NotificationFilter, beforeId: string | null, limit: number): Promise<Notification[]> {
-    return this.newestFirst(recipientId)
+  async listForRecipient(
+    recipientId: string,
+    filter: NotificationFilter,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+  ): Promise<Notification[]> {
+    return this.newestFirst(recipientId, excludedActorIds)
       .filter((n) => (!filter.type || n.type === filter.type) && (!filter.videoId || n.videoId === filter.videoId))
       .filter((n) => !beforeId || n.id < beforeId)
       .slice(0, limit);
   }
 
-  async listGroups(recipientId: string, beforeId: string | null, limit: number): Promise<NotificationGroup[]> {
+  async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
     const groups = new Map<string, NotificationGroup>();
-    for (const n of this.newestFirst(recipientId)) {
+    for (const n of this.newestFirst(recipientId, excludedActorIds)) {
       const group = groups.get(groupKey(n));
       if (!group) {
         groups.set(groupKey(n), { latest: n, count: 1, unread: !n.readAt, recentActorIds: [n.actorId] });
@@ -65,12 +71,14 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return [...groups.values()].filter((g) => !beforeId || g.latest.id < beforeId).slice(0, limit);
   }
 
-  private newestFirst(recipientId: string): Notification[] {
-    return [...this.notifications.values()].filter((n) => n.recipientId === recipientId).sort((a, b) => (a.id < b.id ? 1 : -1));
+  private newestFirst(recipientId: string, excludedActorIds: string[] = []): Notification[] {
+    return [...this.notifications.values()]
+      .filter((n) => n.recipientId === recipientId && !excludedActorIds.includes(n.actorId))
+      .sort((a, b) => (a.id < b.id ? 1 : -1));
   }
 
-  async countUnread(recipientId: string): Promise<number> {
-    return [...this.notifications.values()].filter((n) => n.recipientId === recipientId && !n.readAt).length;
+  async countUnread(recipientId: string, excludedActorIds: string[]): Promise<number> {
+    return this.newestFirst(recipientId, excludedActorIds).filter((n) => !n.readAt).length;
   }
 
   async markRead(recipientId: string, upToId: string | null, readAt: Date): Promise<void> {

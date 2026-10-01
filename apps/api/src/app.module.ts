@@ -13,10 +13,11 @@ import { UsersModule } from './modules/users/users.module';
 import { VideosModule } from './modules/videos/videos.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { SuspensionModule } from './suspension/suspension.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, RateLimitModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, WalletModule, AdminModule],
+  imports: [PrismaModule, RedisModule, RateLimitModule, SuspensionModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, WalletModule, AdminModule],
   controllers: [HealthController],
 })
 export class AppModule {}

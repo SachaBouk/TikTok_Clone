@@ -23,6 +23,10 @@ import { seededShuffle } from '../domain/seeded-shuffle';
 import { InMemoryFeedSnapshotStore } from '../infrastructure/in-memory-feed-snapshot.store';
 import { FeedService } from './feed.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -72,9 +76,10 @@ describe('FeedService', () => {
     users = new InMemoryUserRepository([user('alice'), user('bob'), user('dave')]);
     snapshots = new InMemoryFeedSnapshotStore();
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
-    const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
-    const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher());
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications, new InMemoryRateLimiter());
+    suspended = new InMemorySuspendedAccounts();
+    const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
+    const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher(), suspended);
+    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications, new InMemoryRateLimiter(), suspended);
     feed = new FeedService(snapshots, videos, usersService, interactions);
   });
 
@@ -312,6 +317,23 @@ describe('FeedService', () => {
       for (const id of [processing, deleted, 'inconnue']) {
         await expect(feed.getItem(id, 'bob')).rejects.toBeInstanceOf(FeedItemNotFoundError);
       }
+    });
+  });
+
+  describe('suspension (ADR-037)', () => {
+    it('retire du feed, de la vidéo seule et des grilles les vidéos d’un compte suspendu, pour tous', async () => {
+      const bobs = await Promise.all(Array.from({ length: 2 }, () => publish('bob')));
+      const others = await Promise.all(Array.from({ length: 2 }, () => publish('dave')));
+      await suspended.add('bob');
+
+      expect((await scrollAll(3)).flat().sort()).toEqual([...others].sort());
+      const page = await feed.getPage(undefined, 10, 'alice');
+      expect(page.items.map((i) => i.video.id).sort()).toEqual([...others].sort());
+      await expect(feed.getItem(bobs[0]!, null)).rejects.toBeInstanceOf(FeedItemNotFoundError);
+      await expect(feed.listAuthorVideos('bob', undefined, 10, null)).resolves.toMatchObject({ items: [] });
+
+      await suspended.remove('bob');
+      await expect(feed.getItem(bobs[0]!, null)).resolves.toMatchObject({ video: { id: bobs[0] } });
     });
   });
 

@@ -45,6 +45,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <span className="flex items-center gap-2 font-medium">
                       {user.displayName}
                       {user.role === 'admin' && <Badge variant="secondary">Admin</Badge>}
+                      {user.suspension && <Badge variant="destructive">Suspendu</Badge>}
                     </span>
                     <span className="text-muted-foreground">@{user.username}</span>
                   </span>

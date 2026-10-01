@@ -3,8 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/lib/api-error';
+import { MAX_SUSPENSION_REASON_LENGTH } from '@/lib/moderation-rules';
 import { safeReturnPath } from '@/lib/session-cookies';
 import * as comments from '@/models/comments.model';
+import * as users from '@/models/users.model';
 import * as videos from '@/models/videos.model';
 
 // Controllers de la modération (ADR-004). Une Server Action est un point d'entrée public : l'identifiant
@@ -34,13 +36,33 @@ export async function removeComment(commentId: string): Promise<ActionResult> {
   return { error: null };
 }
 
+// Suspension d'un compte : connexion refusée, sessions fermées, contenus masqués jusqu'à la levée.
+export async function suspendAccount(userId: string, reason: string): Promise<ActionResult> {
+  if (!UUID.test(userId)) return { error: 'Identifiant de compte invalide.' };
+  const text = reason.trim();
+  if (!text) return { error: 'Le motif est obligatoire.' };
+  if (text.length > MAX_SUSPENSION_REASON_LENGTH) return { error: `Le motif fait au plus ${MAX_SUSPENSION_REASON_LENGTH} caractères.` };
+  const failure = await attempt(() => users.suspendUser(userId, text).then(() => undefined), 'Ce compte a été supprimé.', 'la suspension');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
+export async function liftAccountSuspension(userId: string): Promise<ActionResult> {
+  if (!UUID.test(userId)) return { error: 'Identifiant de compte invalide.' };
+  const failure = await attempt(() => users.liftSuspension(userId).then(() => undefined), 'Ce compte a été supprimé.', 'la levée');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
 // Erreur de l'API traduite en message ; toute autre exception (dont les redirections de fin de session) remonte.
-async function attempt(action: () => Promise<void>, notFound: string): Promise<ActionResult | null> {
+async function attempt(action: () => Promise<void>, notFound: string, what = 'la suppression'): Promise<ActionResult | null> {
   try {
     await action();
     return null;
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    return { error: error.status === 404 ? notFound : `L’API a refusé la suppression : ${error.message}` };
+    return { error: error.status === 404 ? notFound : `L’API a refusé ${what} : ${error.message}` };
   }
 }

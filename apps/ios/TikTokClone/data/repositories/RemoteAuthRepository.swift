@@ -12,6 +12,7 @@ struct RemoteAuthRepository: AuthRepository {
         switch output {
         case .ok(let ok): try save(try ok.body.json)
         case .unauthorized: throw AppError.invalidCredentials
+        case .forbidden: throw AppError.accountSuspended
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .tooManyRequests(let error): throw AppError.tooManyLoginAttempts(retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .undocumented: throw AppError.unexpected

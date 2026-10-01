@@ -1,6 +1,24 @@
-import { ArgumentsHost, Catch, ConflictException, ExceptionFilter, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  BadRequestException,
+  Catch,
+  ConflictException,
+  ExceptionFilter,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Response } from 'express';
-import { AuthError, EmailAlreadyUsedError, TooManyLoginAttemptsError, UsernameAlreadyUsedError } from '../domain/auth.errors';
+import {
+  AccountSuspendedError,
+  AuthError,
+  CannotSuspendAdminError,
+  EmailAlreadyUsedError,
+  InvalidSuspensionReasonError,
+  TooManyLoginAttemptsError,
+  UsernameAlreadyUsedError,
+} from '../domain/auth.errors';
 
 // Traduit les erreurs métier du module en réponses HTTP (ADR-003 : pas de logique HTTP dans le domaine).
 // 429 porte l'en-tête Retry-After.
@@ -18,9 +36,11 @@ function toHttpException(error: AuthError): HttpException {
   if (error instanceof TooManyLoginAttemptsError) {
     return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
   }
-  if (error instanceof EmailAlreadyUsedError || error instanceof UsernameAlreadyUsedError) {
+  if (error instanceof EmailAlreadyUsedError || error instanceof UsernameAlreadyUsedError || error instanceof CannotSuspendAdminError) {
     return new ConflictException(error.message);
   }
+  if (error instanceof AccountSuspendedError) return new ForbiddenException(error.message);
+  if (error instanceof InvalidSuspensionReasonError) return new BadRequestException(error.message);
   // InvalidCredentialsError, InvalidRefreshTokenError, InvalidAppleTokenError
   return new UnauthorizedException(error.message);
 }

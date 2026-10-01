@@ -1,13 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ConfirmAction } from '@/components/confirm-action';
+import { SuspendAccount } from '@/components/suspend-account';
 import { Thumbnail } from '@/components/thumbnail';
 import { UserAvatar } from '@/components/user-avatar';
 import { VideoStatusBadge } from '@/components/video-status-badge';
 import { WalletTransactionsTable } from '@/components/wallet-transactions-table';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { liftAccountSuspension } from '@/controllers/moderation.actions';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { getUser } from '@/models/users.model';
 import { listVideos } from '@/models/videos.model';
@@ -44,13 +48,40 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             {user.displayName}
             {user.role === 'admin' && <Badge variant="secondary">Admin</Badge>}
+            {user.suspension && <Badge variant="destructive">Suspendu</Badge>}
           </h1>
           <p className="text-muted-foreground">@{user.username}</p>
         </div>
         <Button variant="outline" asChild>
           <Link href={`/comments?userId=${user.id}`}>Ses commentaires</Link>
         </Button>
+        {/* Un administrateur ne peut pas être suspendu : retirer d'abord son rôle (pnpm admin:revoke). */}
+        {!user.suspension && user.role !== 'admin' && <SuspendAccount userId={user.id} username={user.username} />}
       </div>
+
+      {user.suspension && (
+        <Alert variant="destructive">
+          <AlertTitle>
+            Compte suspendu le {formatDateTime(user.suspension.suspendedAt)}
+            {user.suspension.suspendedBy ? ` par @${user.suspension.suspendedBy.username}` : ''}
+          </AlertTitle>
+          <AlertDescription className="flex flex-col gap-3">
+            <p>Motif : {user.suspension.reason}</p>
+            <p>Connexion refusée ; profil, vidéos, commentaires et messages masqués aux autres. Rien n’a été supprimé.</p>
+            <div>
+              <ConfirmAction
+                label="Lever la suspension"
+                title={`Lever la suspension de @${user.username} ?`}
+                description="Le compte pourra se reconnecter, et ses contenus réapparaissent aussitôt."
+                confirmLabel="Lever la suspension"
+                pendingLabel="Levée…"
+                destructive={false}
+                action={liftAccountSuspension.bind(null, user.id)}
+              />
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardContent className="grid gap-4 sm:grid-cols-4">

@@ -27,6 +27,10 @@ import {
 import { InMemoryInteractionRepository } from '../infrastructure/in-memory-interaction.repository';
 import { InteractionsService } from './interactions.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
+import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+
+// Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
+let suspended = new InMemorySuspendedAccounts();
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -54,7 +58,7 @@ describe('InteractionsService', () => {
 
   // Notifications reçues, résumées en « type:acteur ».
   const received = async (recipientId: string) =>
-    (await notificationRepository.listForRecipient(recipientId, {}, null, 100)).map((n) => `${n.type}:${n.actorId}`);
+    (await notificationRepository.listForRecipient(recipientId, {}, null, 100, [])).map((n) => `${n.type}:${n.actorId}`);
 
   async function createVideo(status: 'ready' | 'processing' = 'ready') {
     const created = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
@@ -65,10 +69,11 @@ describe('InteractionsService', () => {
   beforeEach(async () => {
     videoRepository = new InMemoryVideoRepository();
     const userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol')]);
-    users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
+    suspended = new InMemorySuspendedAccounts();
+    users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
     const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
     notificationRepository = new InMemoryNotificationRepository();
-    const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher());
+    const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
     clock = Date.UTC(2026, 0, 1);
     service = new InteractionsService(
       new InMemoryInteractionRepository(videoRepository, userRepository),
@@ -76,6 +81,7 @@ describe('InteractionsService', () => {
       users,
       notifications,
       new InMemoryRateLimiter(() => clock),
+      suspended,
     );
     video = await createVideo();
   });
@@ -239,11 +245,12 @@ describe('InteractionsService', () => {
 
     beforeEach(async () => {
       userRepository = new InMemoryUserRepository([1, 2, 3, 4, 5].map((n) => ({ ...user(id(n)), username: `u${n}` })));
-      const usersService = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup());
+      suspended = new InMemorySuspendedAccounts();
+      const usersService = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
       const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
-      const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher());
+      const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher(), suspended);
       repository = new InMemoryInteractionRepository(videoRepository, userRepository);
-      lists = new InteractionsService(repository, videos, usersService, notifications, new InMemoryRateLimiter());
+      lists = new InteractionsService(repository, videos, usersService, notifications, new InMemoryRateLimiter(), suspended);
       // u2, u3, u4, u5 suivent u1, dans cet ordre ; u1 suit u3 ; u2 suit u5.
       for (const n of [2, 3, 4, 5]) await lists.setFollow(id(n), 'u1', true);
       await lists.setFollow(id(1), 'u3', true);
@@ -479,8 +486,8 @@ describe('InteractionsService', () => {
     it('donne les comptes bloqués dans un sens ou dans l’autre', async () => {
       await service.setBlock('alice', 'bob', true);
       await service.setBlock('carol', 'alice', true);
-      await expect(service.getBlockedAccountIds('alice')).resolves.toEqual(new Set(['bob', 'carol']));
-      await expect(service.getBlockedAccountIds('bob')).resolves.toEqual(new Set(['alice']));
+      await expect(service.getHiddenAccountIds('alice')).resolves.toEqual(new Set(['bob', 'carol']));
+      await expect(service.getHiddenAccountIds('bob')).resolves.toEqual(new Set(['alice']));
     });
 
     it("masque les commentaires d'un compte bloqué, dans les deux sens, et pas aux autres ni en invité", async () => {
@@ -531,6 +538,59 @@ describe('InteractionsService', () => {
     expect([...seen.favoritedVideoIds]).toEqual([other]);
     expect([...seen.followedUserIds]).toEqual(['bob']);
     expect(seen.repostedVideoIds.size).toBe(0);
+  });
+
+  describe('suspension (ADR-037)', () => {
+    it('masque un compte suspendu à tous, invités compris, en plus des blocages du lecteur', async () => {
+      await suspended.add('bob');
+      await service.setBlock('alice', 'carol', true);
+      await expect(service.getHiddenAccountIds(null)).resolves.toEqual(new Set(['bob']));
+      await expect(service.getHiddenAccountIds('alice')).resolves.toEqual(new Set(['bob', 'carol']));
+    });
+
+    it('commentaires : ceux du compte suspendu disparaissent pour tous ; sur sa vidéo, introuvables', async () => {
+      const other = await videoRepository.create({ userId: 'carol', description: null, rawKey: 'k2', uploadId: 'u2', rawSize: 1 });
+      Object.assign(videoRepository.videos.get(other.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 't' });
+      await service.addComment('alice', other.id, 'Alice');
+      await service.addComment('bob', other.id, 'Bob');
+      await suspended.add('bob');
+      const contents = async (viewer: string | null) => (await service.listComments(other.id, null, 10, viewer)).items.map((i) => i.comment.content);
+      await expect(contents(null)).resolves.toEqual(['Alice']);
+      await expect(contents('carol')).resolves.toEqual(['Alice']);
+      await expect(service.listComments(video, null, 10, null)).rejects.toBeInstanceOf(VideoNotAvailableError);
+    });
+
+    it('refuse les nouvelles actions vers le compte suspendu ; retirer et se désabonner restent possibles', async () => {
+      await service.setReaction('alice', video, 'like', true);
+      await service.setFollow('alice', 'bob', true);
+      await suspended.add('bob');
+
+      await expect(service.setReaction('carol', video, 'like', true)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.setReaction('carol', video, 'favorite', true)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.addComment('carol', video, 'Coucou')).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.share(video, { userId: 'carol' })).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.setFollow('carol', 'bob', true)).rejects.toBeInstanceOf(TargetUserNotFoundError);
+      await expect(service.setReaction('alice', video, 'like', false)).resolves.toMatchObject({ active: false });
+      await expect(service.setFollow('alice', 'bob', false)).resolves.toMatchObject({ active: false });
+    });
+
+    it("listes d'abonnés : le compte suspendu en est retiré, et ses listes sont vides", async () => {
+      await service.setFollow('bob', 'alice', true);
+      await service.setFollow('carol', 'alice', true);
+      await service.setFollow('alice', 'bob', true);
+      await suspended.add('bob');
+      const names = async (direction: 'followers' | 'following', username: string) =>
+        (await service.listFollows(direction, username, undefined, null, 10)).items.map((i) => i.user.username);
+      await expect(names('followers', 'alice')).resolves.toEqual(['carol']);
+      await expect(names('followers', 'bob')).resolves.toEqual([]);
+      await suspended.remove('bob');
+      await expect(names('followers', 'alice')).resolves.toEqual(['carol', 'bob']);
+    });
+
+    it('messagerie : un compte suspendu compte comme un compte qui a bloqué le lecteur', async () => {
+      await suspended.add('bob');
+      await expect(service.getBlocks('alice', ['bob', 'carol'])).resolves.toEqual({ blockedByMe: new Set(), blockedMe: new Set(['bob']) });
+    });
   });
 
   describe('backoffice (ADR-004)', () => {

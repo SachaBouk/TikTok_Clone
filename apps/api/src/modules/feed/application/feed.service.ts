@@ -173,9 +173,10 @@ export class FeedService {
     return snapshot;
   }
 
-  // Comptes dont les vidéos sont masquées au compte connecté (blocage, dans un sens ou dans l'autre) ; aucun en invité.
-  private async hiddenAccounts(viewerId: string | null): Promise<Set<string>> {
-    return viewerId ? this.interactions.getBlockedAccountIds(viewerId) : new Set();
+  // Comptes dont les vidéos sont masquées : suspendus pour tous (ADR-037), et bloqués dans un sens ou dans l'autre
+  // pour un compte connecté (ADR-029).
+  private hiddenAccounts(viewerId: string | null): Promise<Set<string>> {
+    return this.interactions.getHiddenAccountIds(viewerId);
   }
 
   // Remet les vidéos dans l'ordre de la page. Une vidéo supprimée (ou son auteur) depuis la photo est

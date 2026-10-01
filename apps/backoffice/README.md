@@ -41,10 +41,14 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 
 ## Écrans
 
-- **Tableau de bord** : comptes, vidéos, commentaires et jetons vendus (totaux et 7 derniers jours), vidéos par statut, alerte
-  s'il y a des achats de jetons à rapprocher, liens vers PostHog.
+- **Tableau de bord** : comptes (dont suspendus), vidéos, commentaires et jetons vendus (totaux et 7 derniers jours), vidéos par
+  statut, alerte s'il y a des achats de jetons à rapprocher, liens vers PostHog.
 - **Comptes** : recherche par pseudo (avec ou sans `@`), nom ou identifiant, solde de jetons ; fiche avec rôle, compteurs,
   vidéos récentes et derniers mouvements de jetons.
+- **Suspension** (ADR-037) : bouton « Suspendre » de la fiche d'un compte (pas pour un administrateur), avec un motif interne
+  obligatoire (500 caractères au plus, jamais montré à la personne). Le compte est déconnecté de ses appareils, ne peut plus
+  se connecter, et ses contenus disparaissent pour les autres jusqu'à la levée ; rien n'est supprimé. Encadré « Compte
+  suspendu » (date, auteur, motif) et « Lever la suspension » ; badge « Suspendu » dans la liste.
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
@@ -58,7 +62,8 @@ un commentaire emporte sa notification. L'auteur n'est pas prévenu.
 
 ## Limites
 
-- Pas de suspension de compte, de signalement, ni de journal des actions de modération.
+- Pas de signalement, ni de journal des actions de modération.
+- Pas de liste des comptes suspendus : on les retrouve par la recherche (pseudo, nom).
 - Rafraîchissement dédupliqué propre au processus : avec plusieurs instances du backoffice, il faudrait un magasin partagé (Redis via l'API, ou affinité de session).
 - Pas de copie des données PostHog : liens seulement.
 - Limite des échecs de connexion par IP (ADR-030) : sans `TRUST_PROXY` désignant le backoffice, tous les administrateurs partagent l'adresse du serveur Next.

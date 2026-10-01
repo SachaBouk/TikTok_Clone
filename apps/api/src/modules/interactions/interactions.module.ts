@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
+import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersService } from '../users/application/users.service';
@@ -28,8 +29,9 @@ import { InteractionsController } from './interfaces/interactions.controller';
         users: UsersService,
         notifications: NotificationsService,
         rateLimiter: RateLimiter,
-      ) => new InteractionsService(interactions, videos, users, notifications, rateLimiter),
-      inject: [InteractionRepository, VideosService, UsersService, NotificationsService, RateLimiter],
+        suspended: SuspendedAccounts,
+      ) => new InteractionsService(interactions, videos, users, notifications, rateLimiter, suspended),
+      inject: [InteractionRepository, VideosService, UsersService, NotificationsService, RateLimiter, SuspendedAccounts],
     },
   ],
   exports: [InteractionsService],

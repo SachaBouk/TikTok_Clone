@@ -20,4 +20,6 @@ export abstract class RefreshTokenRepository {
   // Renvoie false si un autre appel l'a révoqué avant (deux rotations concurrentes du même token).
   abstract revoke(id: string, at: Date): Promise<boolean>;
   abstract revokeFamily(familyId: string, at: Date): Promise<void>;
+  // Toutes les sessions du compte (suspension, ADR-037).
+  abstract revokeAllForUser(userId: string, at: Date): Promise<void>;
 }

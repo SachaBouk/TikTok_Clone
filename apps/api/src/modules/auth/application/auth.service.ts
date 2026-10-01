@@ -1,14 +1,23 @@
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { AccessTokenIssuer, VerifiedAccessToken } from '../domain/access-token-issuer';
-import type { AuthAccount, AuthTokens } from '../domain/auth-account';
+import { type AccountSuspension, type AuthAccount, type AuthTokens, MAX_SUSPENSION_REASON_LENGTH } from '../domain/auth-account';
 import type { AuthAccountRepository } from '../domain/auth-account.repository';
 import type { AppleIdentityVerifier } from '../domain/apple-identity-verifier';
-import { InvalidCredentialsError, InvalidRefreshTokenError, TooManyLoginAttemptsError, UsernameAlreadyUsedError } from '../domain/auth.errors';
+import {
+  AccountSuspendedError,
+  CannotSuspendAdminError,
+  InvalidCredentialsError,
+  InvalidRefreshTokenError,
+  InvalidSuspensionReasonError,
+  TooManyLoginAttemptsError,
+  UsernameAlreadyUsedError,
+} from '../domain/auth.errors';
 import { LOGIN_EMAIL_RATE_LIMITS, LOGIN_IP_RATE_LIMITS } from '../domain/login-rules';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { RESERVED_USERNAMES } from '../../users/domain/profile-rules';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
+import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
 export interface AuthSettings {
   accessTokenTtlSeconds: number;
@@ -34,6 +43,8 @@ const DEFAULT_DISPLAY_NAME = 'Utilisateur';
 // Service applicatif du module auth (ADR-003, ADR-010).
 // Refresh tokens : opaques (256 bits aléatoires), seul leur SHA-256 est stocké, rotation à chaque usage.
 // Un token déjà utilisé qui revient est traité comme un vol : toute la session (famille) est révoquée.
+// Suspension (ADR-037) : connexion refusée (403), sessions révoquées, et chaque access token d'un compte suspendu
+// est refusé, sur une route (JwtStrategy) comme au handshake WebSocket, d'après le registre partagé.
 export class AuthService {
   constructor(
     private readonly accounts: AuthAccountRepository,
@@ -43,6 +54,7 @@ export class AuthService {
     private readonly apple: AppleIdentityVerifier,
     private readonly settings: AuthSettings,
     private readonly rateLimiter: RateLimiter,
+    private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -81,6 +93,7 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
     await this.rateLimiter.reset(emailKey, LOGIN_EMAIL_RATE_LIMITS);
+    await this.assertNotSuspended(account.id);
     return this.startSession(account.id);
   }
 
@@ -91,6 +104,7 @@ export class AuthService {
     const account =
       (await this.accounts.findByAppleSub(identity.sub)) ??
       (await this.createAppleAccount(identity.sub, identity.email, input.displayName));
+    await this.assertNotSuspended(account.id);
     return this.startSession(account.id);
   }
 
@@ -104,6 +118,8 @@ export class AuthService {
       throw new InvalidRefreshTokenError();
     }
     if (token.expiresAt <= now) throw new InvalidRefreshTokenError();
+    // Ses sessions sont révoquées à la suspension ; ceci couvre une rotation commencée au même moment.
+    if (await this.suspended.has(token.userId)) throw new InvalidRefreshTokenError();
 
     // Deux rotations concurrentes du même token : seule la première gagne, la seconde est une réutilisation.
     if (!(await this.refreshTokens.revoke(token.id, now))) {
@@ -114,8 +130,51 @@ export class AuthService {
   }
 
   // Pour les connexions hors HTTP (WebSocket, ADR-011) : compte et expiration du token, ou null s'il est invalide.
-  verifyAccessToken(accessToken: string): Promise<VerifiedAccessToken | null> {
-    return this.accessTokens.verify(accessToken);
+  async verifyAccessToken(accessToken: string): Promise<VerifiedAccessToken | null> {
+    const verified = await this.accessTokens.verify(accessToken);
+    return verified && !(await this.suspended.has(verified.userId)) ? verified : null;
+  }
+
+  // Compte suspendu (registre Redis, sans lecture de la base) : ses access tokens sont refusés.
+  isSuspended(userId: string): Promise<boolean> {
+    return this.suspended.has(userId);
+  }
+
+  // Suspension par un administrateur (ADR-037) : enregistrée en base, ajoutée au registre partagé (contenus masqués,
+  // requêtes refusées), puis toutes les sessions sont révoquées. La fermeture des WebSocket revient à l'appelant
+  // (module admin), auth ne dépendant pas de realtime. Un compte déjà suspendu garde sa suspension (date, motif,
+  // auteur). Un administrateur ne peut pas être suspendu, ni soi-même. Null si le compte n'existe pas.
+  async suspend(userId: string, adminId: string, reason: string): Promise<AccountSuspension | null> {
+    const text = reason.trim();
+    if (!text || text.length > MAX_SUSPENSION_REASON_LENGTH) throw new InvalidSuspensionReasonError(MAX_SUSPENSION_REASON_LENGTH);
+    if (userId === adminId || (await this.isAdmin(userId))) throw new CannotSuspendAdminError();
+    const suspension = await this.accounts.suspend({ userId, suspendedAt: this.now(), reason: text, suspendedBy: adminId });
+    if (!suspension) return null;
+    await this.suspended.add(userId);
+    await this.refreshTokens.revokeAllForUser(userId, this.now());
+    return suspension;
+  }
+
+  // Levée : le compte peut se reconnecter, ses contenus réapparaissent. Idempotent.
+  async liftSuspension(userId: string): Promise<void> {
+    await this.accounts.liftSuspension(userId);
+    await this.suspended.remove(userId);
+  }
+
+  // Suspensions en cours parmi `ids` (backoffice), lues en base.
+  getSuspensions(ids: string[]): Promise<Map<string, AccountSuspension>> {
+    return this.accounts.findSuspensions([...new Set(ids)]);
+  }
+
+  countSuspended(): Promise<number> {
+    return this.accounts.countSuspended();
+  }
+
+  // Au démarrage de l'API : le registre Redis est reconstruit depuis la base, qui fait foi.
+  async syncSuspendedAccounts(): Promise<number> {
+    const ids = await this.accounts.listSuspendedIds();
+    await this.suspended.replaceAll(ids);
+    return ids.length;
   }
 
   // Rôle administrateur (ADR-004), relu en base à chaque requête d'administration : un rôle retiré
@@ -150,6 +209,11 @@ export class AuthService {
         if (!(error instanceof UsernameAlreadyUsedError) || attempt >= APPLE_USERNAME_ATTEMPTS) throw error;
       }
     }
+  }
+
+  // Lu en base (source de vérité) : la connexion ne dépend pas du registre.
+  private async assertNotSuspended(userId: string): Promise<void> {
+    if ((await this.accounts.findSuspensions([userId])).has(userId)) throw new AccountSuspendedError();
   }
 
   private startSession(userId: string): Promise<AuthTokens> {

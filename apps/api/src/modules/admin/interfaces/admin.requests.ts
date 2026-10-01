@@ -1,7 +1,8 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import type { VideoStatus } from '@repo/shared';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { AdminSuspendUserDto, VideoStatus } from '@repo/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { MAX_SUSPENSION_REASON_LENGTH } from '../../auth/domain/auth-account';
 import { DEFAULT_ADMIN_PAGE_SIZE, MAX_ADMIN_PAGE_SIZE } from '../domain/admin';
 
 // Paramètres de requête validés par le ValidationPipe global (main.ts).
@@ -66,4 +67,13 @@ export class AdminWalletTransactionsQuery extends AdminPageQuery {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   unmatched?: boolean;
+}
+
+// Suspension d'un compte (ADR-037) : motif interne obligatoire, nettoyé par le service.
+export class AdminSuspendRequest implements AdminSuspendUserDto {
+  @ApiProperty({ minLength: 1, maxLength: MAX_SUSPENSION_REASON_LENGTH, example: 'Spam répété dans les commentaires' })
+  @IsString()
+  @MaxLength(MAX_SUSPENSION_REASON_LENGTH)
+  @Matches(/\S/, { message: 'Le motif est obligatoire' })
+  reason!: string;
 }

@@ -21,3 +21,16 @@ export interface AuthTokens {
   accessTokenExpiresIn: number;
   refreshToken: string;
 }
+
+// Suspension d'un compte par un administrateur (ADR-037) : connexion refusée, sessions révoquées, contenus masqués.
+// Elle dure jusqu'à sa levée par un administrateur.
+export interface AccountSuspension {
+  userId: string;
+  suspendedAt: Date;
+  // Motif interne, visible des seuls administrateurs (la personne suspendue voit un message générique).
+  reason: string;
+  // Administrateur auteur de la suspension ; nul s'il a supprimé son compte depuis.
+  suspendedBy: string | null;
+}
+
+export const MAX_SUSPENSION_REASON_LENGTH = 500;

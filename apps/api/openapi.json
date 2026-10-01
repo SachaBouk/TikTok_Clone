@@ -120,6 +120,16 @@
               }
             }
           },
+          "403": {
+            "description": "Compte suspendu par un administrateur (ADR-037), après vérification de l’identité.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).",
             "headers": {
@@ -183,6 +193,16 @@
           },
           "401": {
             "description": "Identity token Apple invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte suspendu par un administrateur (ADR-037).",
             "content": {
               "application/json": {
                 "schema": {
@@ -624,6 +644,16 @@
           },
           "404": {
             "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Compte suspendu par un administrateur (ADR-037).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3958,6 +3988,164 @@
         ]
       }
     },
+    "/admin/users/{id}/suspension": {
+      "put": {
+        "operationId": "suspendAdminUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSuspendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le compte, suspendu (suspension inchangée s’il l’était déjà).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant ou motif invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte introuvable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Compte administrateur (retirer d’abord son rôle), ou son propre compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "delete": {
+        "operationId": "liftAdminUserSuspension",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Le compte, suspension levée (idempotent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte introuvable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/videos": {
       "get": {
         "operationId": "listAdminVideos",
@@ -5930,6 +6118,26 @@
           "admin"
         ]
       },
+      "AdminSuspensionResponse": {
+        "type": "object",
+        "properties": {
+          "suspendedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Motif interne, saisi par l’administrateur."
+          },
+          "suspendedBy": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "suspendedAt",
+          "reason"
+        ]
+      },
       "AdminUserResponse": {
         "type": "object",
         "properties": {
@@ -5973,6 +6181,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "suspension": {
+            "$ref": "#/components/schemas/AdminSuspensionResponse"
           }
         },
         "required": [
@@ -5989,7 +6200,7 @@
           "createdAt"
         ]
       },
-      "AdminCountResponse": {
+      "AdminUserCountsResponse": {
         "type": "object",
         "properties": {
           "total": {
@@ -5998,11 +6209,16 @@
           "last7Days": {
             "type": "integer",
             "description": "Créés sur les 7 derniers jours."
+          },
+          "suspended": {
+            "type": "integer",
+            "description": "Comptes suspendus en ce moment."
           }
         },
         "required": [
           "total",
-          "last7Days"
+          "last7Days",
+          "suspended"
         ]
       },
       "AdminVideoCountsResponse": {
@@ -6035,6 +6251,22 @@
           "processing",
           "ready",
           "failed"
+        ]
+      },
+      "AdminCountResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "last7Days": {
+            "type": "integer",
+            "description": "Créés sur les 7 derniers jours."
+          }
+        },
+        "required": [
+          "total",
+          "last7Days"
         ]
       },
       "AdminTokenTotalsResponse": {
@@ -6093,7 +6325,7 @@
         "type": "object",
         "properties": {
           "users": {
-            "$ref": "#/components/schemas/AdminCountResponse"
+            "$ref": "#/components/schemas/AdminUserCountsResponse"
           },
           "videos": {
             "$ref": "#/components/schemas/AdminVideoCountsResponse"
@@ -6131,6 +6363,20 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "AdminSuspendRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "example": "Spam répété dans les commentaires"
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "AdminVideoResponse": {
