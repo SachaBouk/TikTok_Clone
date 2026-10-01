@@ -84,6 +84,8 @@ model User {
   reportsMade              Report[]                  @relation("Reporter")
   reportsReceived          Report[]                  @relation("ReportTargetUser")
   reportsResolved          Report[]                  @relation("ReportResolver")
+  moderationActionsMade    ModerationAction[]        @relation("ModerationAdmin")
+  moderationActionsAbout   ModerationAction[]        @relation("ModerationTargetUser")
   walletTransactions       WalletTransaction[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
@@ -317,6 +319,9 @@ enum NotificationType {
   comment
   follow
   repost
+  // Modération (ADR-038), sans auteur : décision sur un signalement, contenu retiré par un administrateur.
+  reportResolved @map("report_resolved")
+  contentRemoved @map("content_removed")
 
   @@map("notification_type")
 }
@@ -325,8 +330,8 @@ model Notification {
   id          String           @id @default(uuid(7)) @map("notification_id") @db.Uuid
   // Destinataire.
   userId      String           @map("user_id") @db.Uuid
-  // Auteur de l'action.
-  actorId     String           @map("actor_id") @db.Uuid
+  // Auteur de l'action ; nul pour une notification de modération (CHECK écrit à la main).
+  actorId     String?          @map("actor_id") @db.Uuid
   type        NotificationType
   // Renseignés selon le type (nuls pour un follow).
   videoId     String?          @map("video_id") @db.Uuid
@@ -335,11 +340,16 @@ model Notification {
   // (ADR-003). Pas de décalage possible : un commentaire ne se modifie pas, et sa suppression supprime
   // la notification (cascade).
   commentText String?          @map("comment_text")
+  // Modération (ADR-038) : contenu concerné, motif (contenu retiré), décision (signalement examiné), texte copié.
+  moderationTargetType ReportTargetType? @map("moderation_target_type")
+  moderationReason     ReportReason?     @map("moderation_reason")
+  moderationOutcome    ReportResolution? @map("moderation_outcome")
+  moderationExcerpt    String?           @map("moderation_excerpt")
   readAt      DateTime?        @map("read_at")
   createdAt   DateTime         @default(now()) @map("created_at")
 
   user    User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  actor   User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  actor   User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
   video   Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
   comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
@@ -471,6 +481,7 @@ enum ReportTargetType {
   video
   comment
   account
+  message
 
   @@map("report_target_type")
 }
@@ -491,6 +502,9 @@ enum ReportResolution {
   contentRemoved   @map("content_removed")
   accountSuspended @map("account_suspended")
   dismissed
+  // Clos automatiquement (triggers) : contenu supprimé par son auteur, compte supprimé.
+  contentDeleted   @map("content_deleted")
+  accountDeleted   @map("account_deleted")
 
   @@map("report_resolution")
 }
@@ -502,8 +516,10 @@ model Report {
   targetType   ReportTargetType @map("target_type")
   // Vidéo, commentaire ou compte signalé. Pas de clé étrangère : le signalement survit à la suppression du contenu.
   targetId     String           @map("target_id") @db.Uuid
-  // Compte visé (auteur de la vidéo ou du commentaire, ou le compte lui-même) : sa suppression emporte les signalements.
-  targetUserId String           @map("target_user_id") @db.Uuid
+  // Compte visé (auteur du contenu, ou le compte lui-même) ; nul s'il a été supprimé depuis (signalement gardé, anonymisé).
+  targetUserId   String?          @map("target_user_id") @db.Uuid
+  // Pseudo du compte visé au moment du signalement, pour l'historique.
+  targetUsername String           @map("target_username")
   reason       ReportReason
   // Précision facultative de la personne qui signale (500 caractères au plus).
   details      String?
@@ -516,7 +532,7 @@ model Report {
   resolvedById String?          @map("resolved_by") @db.Uuid
 
   reporter   User? @relation("Reporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  targetUser User  @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  targetUser User? @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
   resolvedBy User? @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   // Un seul signalement ouvert par personne et par cible.
@@ -526,4 +542,43 @@ model Report {
   // File de modération : signalements ouverts, du plus récent au plus ancien.
   @@index([id], map: "reports_open_idx", where: raw("resolution IS NULL"))
   @@map("reports")
+}
+
+// ─── Journal de modération (ADR-038) ─────────────────────────────────────────
+
+enum ModerationActionType {
+  videoRemoved     @map("video_removed")
+  commentRemoved   @map("comment_removed")
+  messageRemoved   @map("message_removed")
+  accountSuspended @map("account_suspended")
+  suspensionLifted @map("suspension_lifted")
+  reportsDismissed @map("reports_dismissed")
+
+  @@map("moderation_action_type")
+}
+
+// Une action d'un administrateur. Les pseudos et le texte sont copiés : le journal survit à la suppression des comptes
+// et des contenus.
+model ModerationAction {
+  id             String               @id @default(uuid(7)) @map("action_id") @db.Uuid
+  adminId        String?              @map("admin_id") @db.Uuid
+  adminUsername  String               @map("admin_username")
+  action         ModerationActionType
+  targetType     ReportTargetType     @map("target_type")
+  targetId       String               @map("target_id") @db.Uuid
+  targetUserId   String?              @map("target_user_id") @db.Uuid
+  targetUsername String?              @map("target_username")
+  // Motif de la liste (contenu retiré), ou texte libre (suspension).
+  reason         ReportReason?
+  note           String?
+  excerpt        String?
+  // Signalements ouverts clos par cette action.
+  reportsClosed  Int                  @default(0) @map("reports_closed")
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  admin      User? @relation("ModerationAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  targetUser User? @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([targetUserId, id])
+  @@map("moderation_actions")
 }

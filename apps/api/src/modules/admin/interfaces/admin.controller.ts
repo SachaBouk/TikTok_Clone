@@ -11,6 +11,7 @@ import {
 } from '@nestjs/swagger';
 import type {
   AdminCommentPageDto,
+  AdminModerationActionPageDto,
   AdminReportTargetDetailDto,
   AdminReportTargetPageDto,
   AdminStatsDto,
@@ -26,9 +27,20 @@ import { AdminOnly } from '../../auth/interfaces/admin-only.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { AdminService } from '../application/admin.service';
 import { AdminErrorFilter } from './admin-error.filter';
-import { AdminCommentsQuery, AdminReportsQuery, AdminSuspendRequest, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
+import {
+  AdminCommentsQuery,
+  AdminModerationActionsQuery,
+  AdminRemovalQuery,
+  AdminReportsQuery,
+  AdminSuspendRequest,
+  AdminUsersQuery,
+  AdminVideosQuery,
+  AdminWalletTransactionsQuery,
+} from './admin.requests';
+import { REPORT_TARGET_TYPES } from '../../reports/domain/report';
 import {
   AdminCommentPageResponse,
+  AdminModerationActionPageResponse,
   AdminReportTargetDetailResponse,
   AdminReportTargetPageResponse,
   AdminStatsResponse,
@@ -38,6 +50,7 @@ import {
   AdminVideoResponse,
   AdminWalletTransactionPageResponse,
   toAdminCommentDto,
+  toAdminModerationActionDto,
   toAdminReportTargetDetailDto,
   toAdminReportTargetDto,
   toAdminStatsDto,
@@ -47,8 +60,9 @@ import {
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
-const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account' });
-const TARGET_TYPE_PARAM = { name: 'targetType', enum: ['video', 'comment', 'account'], enumName: 'ReportTargetType' };
+const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account', message: 'message' });
+const TARGET_TYPE_PARAM = { name: 'targetType', enum: REPORT_TARGET_TYPES, enumName: 'ReportTargetType' };
+const REMOVAL_REFUSED = { type: ErrorResponse, description: 'Identifiant ou motif invalide.' };
 
 // Routes du backoffice (ADR-004), toutes réservées aux administrateurs (@AdminOnly : 403 sinon).
 // Couche `interfaces/` : traduit HTTP ↔ service applicatif, sans logique métier (ADR-003).
@@ -108,8 +122,8 @@ export class AdminController {
   @ApiOkResponse({ type: AdminUserResponse, description: 'Le compte, suspension levée (idempotent).' })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte introuvable.' })
-  async liftAdminUserSuspension(@Param('id', ParseUUIDPipe) id: string): Promise<AdminUserDto> {
-    return toAdminUserDto(await this.adminService.liftSuspension(id));
+  async liftAdminUserSuspension(@CurrentUser() admin: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<AdminUserDto> {
+    return toAdminUserDto(await this.adminService.liftSuspension(admin.userId, id));
   }
 
   @Get('videos')
@@ -131,11 +145,39 @@ export class AdminController {
   // Retrait par modération, quel que soit le statut : suppression réelle, fichiers nettoyés ensuite.
   @Delete('videos/:id')
   @HttpCode(204)
-  @ApiNoContentResponse({ description: 'Vidéo supprimée, avec ses likes, commentaires et notifications.' })
-  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNoContentResponse({ description: 'Vidéo supprimée, avec ses likes, commentaires et notifications ; auteur prévenu avec le motif.' })
+  @ApiBadRequestResponse(REMOVAL_REFUSED)
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo introuvable ou déjà supprimée.' })
-  async deleteAdminVideo(@CurrentUser() admin: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.adminService.removeVideo(admin.userId, id);
+  async deleteAdminVideo(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AdminRemovalQuery,
+  ): Promise<void> {
+    await this.adminService.removeVideo(admin.userId, id, query.reason);
+  }
+
+  // Retrait d'un message signalé (ADR-038), pour les deux participants ; l'expéditeur est prévenu avec le motif.
+  @Delete('messages/:id')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Message retiré pour les deux participants ; expéditeur prévenu avec le motif.' })
+  @ApiBadRequestResponse(REMOVAL_REFUSED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Message introuvable ou déjà retiré.' })
+  async deleteAdminMessage(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AdminRemovalQuery,
+  ): Promise<void> {
+    await this.adminService.removeMessage(admin.userId, id, query.reason);
+  }
+
+  // Journal de modération (ADR-038) : toutes les actions des administrateurs, ou celles sur un compte.
+  @Get('moderation-actions')
+  @ApiOkResponse({ type: AdminModerationActionPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminModerationActions(@Query() query: AdminModerationActionsQuery): Promise<AdminModerationActionPageDto> {
+    const page = await this.adminService.listModerationActions({ targetUserId: query.userId }, query.cursor ?? null, query.limit);
+    const users = await this.adminService.usersByIds(page.items.flatMap((a) => [a.adminId, a.targetUserId].filter((id): id is string => !!id)));
+    return { items: page.items.map((action) => toAdminModerationActionDto(action, users)), nextCursor: page.nextCursor };
   }
 
   @Get('comments')
@@ -157,11 +199,15 @@ export class AdminController {
 
   @Delete('comments/:id')
   @HttpCode(204)
-  @ApiNoContentResponse({ description: 'Commentaire supprimé, avec sa notification.' })
-  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
+  @ApiNoContentResponse({ description: 'Commentaire supprimé, avec sa notification ; auteur prévenu avec le motif.' })
+  @ApiBadRequestResponse(REMOVAL_REFUSED)
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire introuvable ou déjà supprimé.' })
-  async deleteAdminComment(@CurrentUser() admin: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.adminService.removeComment(admin.userId, id);
+  async deleteAdminComment(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AdminRemovalQuery,
+  ): Promise<void> {
+    await this.adminService.removeComment(admin.userId, id, query.reason);
   }
 
   // File des signalements (ADR-038), groupés par cible. Supprimer le contenu (routes ci-dessus) ou suspendre le compte

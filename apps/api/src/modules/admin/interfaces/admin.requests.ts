@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { AdminSuspendUserDto, VideoStatus } from '@repo/shared';
+import type { AdminSuspendUserDto, ReportReason, VideoStatus } from '@repo/shared';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { MAX_SUSPENSION_REASON_LENGTH } from '../../auth/domain/auth-account';
+import { REPORT_REASONS } from '../../reports/domain/report';
 import { DEFAULT_ADMIN_PAGE_SIZE, MAX_ADMIN_PAGE_SIZE } from '../domain/admin';
 
 // Paramètres de requête validés par le ValidationPipe global (main.ts).
@@ -80,3 +81,18 @@ export class AdminSuspendRequest implements AdminSuspendUserDto {
 
 // File des signalements (ADR-038) : curseur = `latestReportId` interne, renvoyé tel quel dans `nextCursor`.
 export class AdminReportsQuery extends AdminPageQuery {}
+
+// Retrait d'un contenu par modération (ADR-038) : motif de la liste, annoncé à l'auteur.
+export class AdminRemovalQuery {
+  @ApiProperty({ enum: REPORT_REASONS, enumName: 'ReportReason' })
+  @IsIn(REPORT_REASONS)
+  reason!: ReportReason;
+}
+
+// Journal de modération : `userId` = compte visé.
+export class AdminModerationActionsQuery extends AdminPageQuery {
+  @ApiPropertyOptional({ format: 'uuid', description: 'Actions sur ce compte.' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+}

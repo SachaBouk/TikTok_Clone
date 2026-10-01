@@ -4,6 +4,8 @@ import type {
   AdminCommentPageDto,
   AdminCommentVideoDto,
   AdminCountDto,
+  AdminModerationActionDto,
+  AdminModerationActionPageDto,
   AdminReportCountsDto,
   AdminReportDto,
   AdminReportReasonCountDto,
@@ -22,6 +24,7 @@ import type {
   AdminVideoPageDto,
   AdminWalletTransactionDto,
   AdminWalletTransactionPageDto,
+  ModerationActionType,
   ReportReason,
   ReportResolution,
   ReportTargetType,
@@ -29,6 +32,7 @@ import type {
   VideoStatus,
   WalletTransactionKind,
 } from '@repo/shared';
+import type { User } from '../../users/domain/user';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type {
   AdminAccount,
@@ -40,7 +44,7 @@ import type {
   PlatformStats,
   ReportTargetDetail,
 } from '../domain/admin';
-import { REPORT_REASONS, REPORT_TARGET_TYPES } from '../../reports/domain/report';
+import { MODERATION_ACTION_TYPES, REPORT_REASONS, REPORT_RESOLUTIONS, REPORT_TARGET_TYPES, type ModerationAction } from '../../reports/domain/report';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -426,7 +430,7 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
 
 const REPORT_TARGET_TYPE = { enum: REPORT_TARGET_TYPES, enumName: 'ReportTargetType' };
 const REPORT_REASON = { enum: REPORT_REASONS, enumName: 'ReportReason' };
-const REPORT_RESOLUTION = { enum: ['contentRemoved', 'accountSuspended', 'dismissed'], enumName: 'ReportResolution' };
+const REPORT_RESOLUTION = { enum: REPORT_RESOLUTIONS, enumName: 'ReportResolution' };
 
 export class AdminReportReasonCountResponse implements AdminReportReasonCountDto {
   @ApiProperty(REPORT_REASON)
@@ -443,8 +447,12 @@ export class AdminReportTargetResponse implements AdminReportTargetDto {
   @ApiProperty({ format: 'uuid' })
   targetId!: string;
 
-  @ApiProperty({ type: UserSummaryResponse, description: 'Auteur de la vidéo ou du commentaire, ou le compte signalé.' })
-  targetUser!: UserSummaryResponse;
+  // Auteur du contenu, ou le compte signalé ; absent s'il a été supprimé depuis.
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  targetUser?: UserSummaryResponse;
+
+  @ApiProperty({ description: 'Pseudo du compte visé au moment du signalement.' })
+  targetUsername!: string;
 
   @ApiProperty({ description: 'Faux si le contenu a disparu depuis.' })
   available!: boolean;
@@ -517,7 +525,8 @@ export function toAdminReportTargetDto(item: ModeratedReportTarget): AdminReport
   return {
     targetType: item.target.type,
     targetId: item.target.id,
-    targetUser: toUserSummary(item.targetUser),
+    ...(item.targetUser ? { targetUser: toUserSummary(item.targetUser) } : {}),
+    targetUsername: item.targetUsername,
     available: item.available,
     ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
     ...(item.videoId ? { videoId: item.videoId } : {}),
@@ -544,4 +553,76 @@ export function toAdminReportDto({ report, reporter, resolvedBy }: ModeratedRepo
 
 export function toAdminReportTargetDetailDto({ target, reports }: ReportTargetDetail): AdminReportTargetDetailDto {
   return { target: toAdminReportTargetDto(target), reports: reports.map(toAdminReportDto) };
+}
+
+// ─── Journal de modération (ADR-038) ─────────────────────────────────────────
+
+export class AdminModerationActionResponse implements AdminModerationActionDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ enum: MODERATION_ACTION_TYPES, enumName: 'ModerationActionType' })
+  action!: ModerationActionType;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  admin?: UserSummaryResponse;
+
+  @ApiProperty()
+  adminUsername!: string;
+
+  @ApiProperty(REPORT_TARGET_TYPE)
+  targetType!: ReportTargetType;
+
+  @ApiProperty({ format: 'uuid' })
+  targetId!: string;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  targetUser?: UserSummaryResponse;
+
+  @ApiProperty({ type: String, nullable: true })
+  targetUsername!: string | null;
+
+  @ApiPropertyOptional(REPORT_REASON)
+  reason?: ReportReason;
+
+  @ApiProperty({ type: String, nullable: true, description: 'Suspension : motif saisi.' })
+  note!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  excerpt!: string | null;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Signalements ouverts clos par cette action.' })
+  reportsClosed!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+}
+
+export class AdminModerationActionPageResponse implements AdminModerationActionPageDto {
+  @ApiProperty({ type: [AdminModerationActionResponse], description: 'Du plus récent au plus ancien.' })
+  items!: AdminModerationActionResponse[];
+
+  @ApiProperty(NEXT_CURSOR)
+  nextCursor!: string | null;
+}
+
+// Comptes encore existants (administrateur, compte visé), lus par l'appelant.
+export function toAdminModerationActionDto(action: ModerationAction, users: Map<string, User>): AdminModerationActionDto {
+  const admin = action.adminId ? users.get(action.adminId) : undefined;
+  const targetUser = action.targetUserId ? users.get(action.targetUserId) : undefined;
+  return {
+    id: action.id,
+    action: action.action,
+    ...(admin ? { admin: toUserSummary(admin) } : {}),
+    adminUsername: action.adminUsername,
+    targetType: action.target.type,
+    targetId: action.target.id,
+    ...(targetUser ? { targetUser: toUserSummary(targetUser) } : {}),
+    targetUsername: action.targetUsername,
+    ...(action.reason ? { reason: action.reason } : {}),
+    note: action.note,
+    excerpt: action.excerpt,
+    reportsClosed: action.reportsClosed,
+    createdAt: action.createdAt.toISOString(),
+  };
 }

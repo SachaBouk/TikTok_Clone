@@ -1,9 +1,11 @@
 import type { AuthService } from '../../auth/application/auth.service';
 import { CannotSuspendAdminError } from '../../auth/domain/auth.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { MessagingService } from '../../messaging/application/messaging.service';
+import { MessageNotFoundError } from '../../messaging/domain/messaging.errors';
 import type { RealtimeService } from '../../realtime/application/realtime.service';
 import type { ReportsService } from '../../reports/application/reports.service';
-import type { OpenReportTarget, ReportTarget } from '../../reports/domain/report';
+import type { ModerationAction, OpenReportTarget, ReportReason, ReportTarget } from '../../reports/domain/report';
 import { ReportTargetNotFoundError } from '../../reports/domain/report.errors';
 import type { CommentFilter } from '../../interactions/domain/interaction';
 import { CommentNotFoundError } from '../../interactions/domain/interaction.errors';
@@ -40,6 +42,7 @@ export class AdminService {
     private readonly wallet: WalletService,
     private readonly realtime: RealtimeService,
     private readonly reports: ReportsService,
+    private readonly messaging: MessagingService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -83,9 +86,10 @@ export class AdminService {
 
   // Suspension (ADR-037) : les règles sont dans auth (motif obligatoire, pas d'administrateur, sessions révoquées) ;
   // ici, la fermeture des WebSocket du compte, que auth ne peut pas faire (realtime dépend de auth). Un compte déjà
-  // suspendu garde sa suspension. La personne n'est pas prévenue autrement qu'au moment où l'app se reconnecte.
+  // suspendu garde sa suspension (rien n'est alors journalisé). La personne l'apprend à la connexion.
   async suspendAccount(adminId: string, userId: string, reason: string): Promise<AdminAccount> {
     await this.account(userId);
+    const wasSuspended = (await this.auth.getSuspensions([userId])).has(userId);
     try {
       if (!(await this.auth.suspend(userId, adminId, reason))) throw new AdminTargetNotFoundError('Compte', userId);
     } catch (error) {
@@ -93,15 +97,17 @@ export class AdminService {
       throw error;
     }
     await this.realtime.disconnectUser(userId);
-    // Ses signalements ouverts (compte, vidéos, commentaires) sont clos par cette décision (ADR-038).
-    await this.reports.accountSuspended(userId, adminId);
+    // Ses signalements ouverts sont clos, les personnes qui ont signalé prévenues, l'action journalisée (ADR-038).
+    if (!wasSuspended) await this.reports.accountSuspended(userId, adminId, reason.trim());
     return this.getAccount(userId);
   }
 
-  // Levée : le compte peut se reconnecter, ses contenus réapparaissent. Idempotent.
-  async liftSuspension(userId: string): Promise<AdminAccount> {
+  // Levée : le compte peut se reconnecter, ses contenus réapparaissent. Idempotent (journalisée si elle a lieu).
+  async liftSuspension(adminId: string, userId: string): Promise<AdminAccount> {
     await this.account(userId);
+    const wasSuspended = (await this.auth.getSuspensions([userId])).has(userId);
     await this.auth.liftSuspension(userId);
+    if (wasSuspended) await this.reports.suspensionLifted(userId, adminId);
     return this.getAccount(userId);
   }
 
@@ -126,16 +132,45 @@ export class AdminService {
     return { video, author };
   }
 
-  // Retrait par modération : même suppression que par l'auteur (cascade, nettoyage des fichiers). Les signalements
-  // ouverts de la vidéo sont clos (« contenu supprimé », ADR-038).
-  async removeVideo(adminId: string, videoId: string): Promise<void> {
-    try {
-      await this.videos.removeVideo(videoId);
-    } catch (error) {
-      if (error instanceof VideoNotFoundError) throw new AdminTargetNotFoundError('Vidéo', videoId);
-      throw error;
-    }
-    await this.reports.contentRemoved({ type: 'video', id: videoId }, adminId);
+  // Retrait par modération : même suppression que par l'auteur (cascade, nettoyage des fichiers). Motif obligatoire,
+  // annoncé à l'auteur ; signalements ouverts clos et personnes qui ont signalé prévenues ; journalisé (ADR-038).
+  async removeVideo(adminId: string, videoId: string, reason: ReportReason): Promise<void> {
+    const [video] = await this.videos.getVideoDetails([videoId]);
+    if (!video) throw new AdminTargetNotFoundError('Vidéo', videoId);
+    await this.reports.removeContent(
+      { adminId, target: { type: 'video', id: videoId }, authorId: video.userId, excerpt: video.description, reason },
+      async () => {
+        try {
+          await this.videos.removeVideo(videoId);
+        } catch (error) {
+          if (error instanceof VideoNotFoundError) throw new AdminTargetNotFoundError('Vidéo', videoId);
+          throw error;
+        }
+      },
+    );
+  }
+
+  // Retrait d'un message (ADR-038), pour les deux participants, comme par son expéditeur. Seul ce message est vu par
+  // l'administrateur (signalement), jamais le reste de la conversation.
+  async removeMessage(adminId: string, messageId: string, reason: ReportReason): Promise<void> {
+    const [message] = await this.messaging.getMessages([messageId]);
+    if (!message) throw new AdminTargetNotFoundError('Message', messageId);
+    await this.reports.removeContent(
+      { adminId, target: { type: 'message', id: messageId }, authorId: message.senderId, excerpt: message.content || (message.sharedVideoId ? 'Vidéo partagée' : null), reason },
+      async () => {
+        try {
+          await this.messaging.removeMessage(messageId);
+        } catch (error) {
+          if (error instanceof MessageNotFoundError) throw new AdminTargetNotFoundError('Message', messageId);
+          throw error;
+        }
+      },
+    );
+  }
+
+  // Journal de modération (ADR-038), du plus récent au plus ancien ; `targetUserId` : actions sur ce compte.
+  listModerationActions(filter: { targetUserId?: string }, cursor: string | null, limit: number): Promise<Page<ModerationAction>> {
+    return this.reports.listActions(filter, cursor, limit);
   }
 
   // Journal des jetons, filtré par compte ou « à rapprocher », avec le compte crédité s'il existe encore.
@@ -166,21 +201,28 @@ export class AdminService {
     };
   }
 
-  async removeComment(adminId: string, commentId: string): Promise<void> {
-    try {
-      await this.interactions.removeComment(commentId);
-    } catch (error) {
-      if (error instanceof CommentNotFoundError) throw new AdminTargetNotFoundError('Commentaire', commentId);
-      throw error;
-    }
-    await this.reports.contentRemoved({ type: 'comment', id: commentId }, adminId);
+  async removeComment(adminId: string, commentId: string, reason: ReportReason): Promise<void> {
+    const [comment] = await this.interactions.getComments([commentId]);
+    if (!comment) throw new AdminTargetNotFoundError('Commentaire', commentId);
+    await this.reports.removeContent(
+      { adminId, target: { type: 'comment', id: commentId }, authorId: comment.userId, excerpt: comment.content, reason },
+      async () => {
+        try {
+          await this.interactions.removeComment(commentId);
+        } catch (error) {
+          if (error instanceof CommentNotFoundError) throw new AdminTargetNotFoundError('Commentaire', commentId);
+          throw error;
+        }
+      },
+    );
   }
 
   // File des signalements (ADR-038) : cibles avec des signalements ouverts, de la plus récemment signalée à la plus
-  // ancienne. Une cible dont le compte visé a disparu entre-temps est sautée (la cascade emporte ses signalements).
+  // ancienne. Une cible qui disparaît sans décision est close par la base (triggers) et quitte la file.
   async listReportTargets(cursor: string | null, limit: number): Promise<Page<ModeratedReportTarget>> {
     const page = await this.reports.listOpenTargets(cursor, limit);
-    return { items: await this.describeReportTargets(page.items.map((open) => ({ target: open.target, targetUserId: open.targetUserId, open }))), nextCursor: page.nextCursor };
+    const rows = page.items.map((open) => ({ target: open.target, targetUserId: open.targetUserId, targetUsername: open.targetUsername, open }));
+    return { items: await this.describeReportTargets(rows), nextCursor: page.nextCursor };
   }
 
   // Une cible et tous ses signalements (ouverts et clos), avec les comptes qui ont signalé et décidé.
@@ -192,7 +234,9 @@ export class AdminService {
       if (error instanceof ReportTargetNotFoundError) throw new AdminTargetNotFoundError('Signalement', target.id);
       throw error;
     }
-    const [described] = await this.describeReportTargets([{ target, targetUserId: detail.targetUserId, open: detail.open, latest: detail.reports[0] }]);
+    const [described] = await this.describeReportTargets([
+      { target, targetUserId: detail.targetUserId, targetUsername: detail.targetUsername, open: detail.open, latest: detail.reports[0] },
+    ]);
     if (!described) throw new AdminTargetNotFoundError('Signalement', target.id);
     const users = await this.usersById(detail.reports.flatMap((r) => [r.reporterId, r.resolvedBy].filter((id): id is string => !!id)));
     return {
@@ -210,34 +254,43 @@ export class AdminService {
     if ((await this.reports.dismiss(target, adminId)) === 0) throw new AdminTargetNotFoundError('Signalement', target.id);
   }
 
+  // Compte visé supprimé depuis : son pseudo copié reste (signalements gardés, anonymisés).
   private async describeReportTargets(
-    rows: { target: ReportTarget; targetUserId: string; open: OpenReportTarget | null; latest?: { excerpt: string | null; createdAt: Date } }[],
+    rows: {
+      target: ReportTarget;
+      targetUserId: string | null;
+      targetUsername: string;
+      open: OpenReportTarget | null;
+      latest?: { excerpt: string | null; createdAt: Date };
+    }[],
   ): Promise<ModeratedReportTarget[]> {
     const idsOf = (type: ReportTarget['type']) => rows.filter((r) => r.target.type === type).map((r) => r.target.id);
-    const [users, videos, comments] = await Promise.all([
-      this.usersById(rows.map((r) => r.targetUserId)),
+    const [users, videos, comments, messages] = await Promise.all([
+      this.usersById(rows.flatMap((r) => (r.targetUserId ? [r.targetUserId] : []))),
       this.videos.getPublishedVideos(idsOf('video')),
       this.interactions.getComments(idsOf('comment')),
+      this.messaging.getMessages(idsOf('message')),
     ]);
     const videosById = new Map(videos.map((v) => [v.id, v]));
     const commentsById = new Map(comments.map((c) => [c.id, c]));
-    return rows.flatMap(({ target, targetUserId, open, latest }) => {
-      const targetUser = users.get(targetUserId);
-      if (!targetUser) return [];
+    const messageIds = new Set(messages.map((m) => m.id));
+    return rows.map(({ target, targetUserId, targetUsername, open, latest }) => {
+      const targetUser = (targetUserId && users.get(targetUserId)) || null;
       const video = target.type === 'video' ? videosById.get(target.id) : undefined;
       const comment = target.type === 'comment' ? commentsById.get(target.id) : undefined;
-      return [
-        {
+      const available =
+        target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment;
+      return {
           target,
           targetUser,
-          available: target.type === 'account' || !!video || !!comment,
+          targetUsername,
+          available,
           thumbnailUrl: video?.thumbnailUrl ?? null,
           videoId: comment?.videoId ?? null,
           open,
           excerpt: open?.excerpt ?? latest?.excerpt ?? null,
           latestAt: open?.latestAt ?? latest?.createdAt ?? this.now(),
-        },
-      ];
+      };
     });
   }
 
@@ -271,6 +324,11 @@ export class AdminService {
           : null,
       };
     });
+  }
+
+  // Comptes existants parmi `ids` (journal de modération : administrateurs et comptes visés).
+  usersByIds(ids: string[]): Promise<Map<string, User>> {
+    return this.usersById(ids);
   }
 
   private async usersById(ids: string[]): Promise<Map<string, User>> {

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import type { NewReport, OpenReportTarget, Report, ReportReason, ReportResolution, ReportTarget, ReportTargetType } from '../domain/report';
+import type { NewReport, OpenReportTarget, Report, ReportReason, ReportResolution, ReportTarget, ReportTargetType, ResolvedReport } from '../domain/report';
 import { ReportRepository } from '../domain/report.repository';
 
 const reportSelect = {
@@ -10,6 +10,7 @@ const reportSelect = {
   targetType: true,
   targetId: true,
   targetUserId: true,
+  targetUsername: true,
   reason: true,
   details: true,
   excerpt: true,
@@ -23,6 +24,7 @@ interface OpenTargetRow {
   target_type: ReportTargetType;
   target_id: string;
   target_user_id: string;
+  target_username: string;
   open_count: number;
   latest_id: string;
   latest_at: Date;
@@ -43,6 +45,7 @@ export class PrismaReportRepository extends ReportRepository {
         targetType: report.target.type,
         targetId: report.target.id,
         targetUserId: report.targetUserId,
+        targetUsername: report.targetUsername,
         reason: report.reason,
         details: report.details,
         excerpt: report.excerpt,
@@ -75,20 +78,27 @@ export class PrismaReportRepository extends ReportRepository {
     return rows.map(toReport);
   }
 
-  async resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number> {
-    const { count } = await this.prisma.report.updateMany({
-      where: { targetType: target.type, targetId: target.id, resolution: null },
-      data: { resolution, resolvedAt: at, resolvedById: resolvedBy },
-    });
-    return count;
+  resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]> {
+    return this.resolve({ targetType: target.type, targetId: target.id, resolution: null }, resolution, resolvedBy, at);
   }
 
-  async resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number> {
-    const { count } = await this.prisma.report.updateMany({
-      where: { targetUserId, resolution: null },
+  resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]> {
+    return this.resolve({ targetUserId, resolution: null }, resolution, resolvedBy, at);
+  }
+
+  private async resolve(where: Prisma.ReportWhereInput, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]> {
+    const rows = await this.prisma.report.updateManyAndReturn({
+      where,
       data: { resolution, resolvedAt: at, resolvedById: resolvedBy },
+      select: { reporterId: true, targetType: true, targetId: true, targetUserId: true, targetUsername: true, excerpt: true },
     });
-    return count;
+    return rows.map((row) => ({
+      reporterId: row.reporterId,
+      target: { type: row.targetType, id: row.targetId },
+      targetUserId: row.targetUserId,
+      targetUsername: row.targetUsername,
+      excerpt: row.excerpt,
+    }));
   }
 
   async countOpenTargets(): Promise<number> {
@@ -105,7 +115,7 @@ export class PrismaReportRepository extends ReportRepository {
         WHERE resolution IS NULL ${where}
         GROUP BY target_type, target_id
       )
-      SELECT g.target_type::text AS target_type, g.target_id::text AS target_id, r.target_user_id::text AS target_user_id,
+      SELECT g.target_type::text AS target_type, g.target_id::text AS target_id, r.target_user_id::text AS target_user_id, r.target_username,
              g.open_count, g.latest_id::text AS latest_id, r.created_at AS latest_at, r.excerpt
       FROM g JOIN reports r ON r.report_id = g.latest_id
       ${before}
@@ -123,6 +133,7 @@ export class PrismaReportRepository extends ReportRepository {
     return rows.map((row) => ({
       target: { type: row.target_type, id: row.target_id },
       targetUserId: row.target_user_id,
+      targetUsername: row.target_username,
       openCount: row.open_count,
       reasons: counts
         .filter((c) => c.targetType === row.target_type && c.targetId === row.target_id)
@@ -141,6 +152,7 @@ function toReport(row: Prisma.ReportGetPayload<{ select: typeof reportSelect }>)
     reporterId: row.reporterId,
     target: { type: row.targetType, id: row.targetId },
     targetUserId: row.targetUserId,
+    targetUsername: row.targetUsername,
     reason: row.reason,
     details: row.details,
     excerpt: row.excerpt,

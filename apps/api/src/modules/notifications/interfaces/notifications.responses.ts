@@ -3,14 +3,27 @@ import type {
   NotificationCommentDto,
   NotificationDto,
   NotificationGroupDto,
+  ModerationOutcome,
   NotificationGroupPageDto,
+  NotificationModerationDto,
   NotificationPageDto,
   NotificationType,
   NotificationVideoDto,
+  ReportReason,
+  ReportTargetType,
   UnreadNotificationsDto,
 } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
-import { groupKey, type NotificationGroupWithContext, type NotificationWithContext } from '../domain/notification';
+import {
+  groupKey,
+  MODERATION_OUTCOMES,
+  MODERATION_REASONS,
+  MODERATION_TARGET_TYPES,
+  type Notification,
+  NOTIFICATION_TYPES,
+  type NotificationGroupWithContext,
+  type NotificationWithContext,
+} from '../domain/notification';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -30,18 +43,35 @@ export class NotificationCommentResponse implements NotificationCommentDto {
   content!: string;
 }
 
+// Notification de modération (ADR-038). Enums nommés sans description (sinon `allOf`).
+export class NotificationModerationResponse implements NotificationModerationDto {
+  @ApiProperty({ enum: MODERATION_TARGET_TYPES, enumName: 'ReportTargetType' })
+  targetType!: ReportTargetType;
+
+  // Contenu retiré : motif choisi par l'administrateur.
+  @ApiPropertyOptional({ enum: MODERATION_REASONS, enumName: 'ReportReason' })
+  reason?: ReportReason;
+
+  // Signalement examiné : décision.
+  @ApiPropertyOptional({ enum: MODERATION_OUTCOMES, enumName: 'ModerationOutcome' })
+  outcome?: ModerationOutcome;
+
+  @ApiPropertyOptional({ description: 'Texte du contenu concerné, copié.' })
+  excerpt?: string;
+}
+
 export class NotificationResponse implements NotificationDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
   // `kind` plutôt que `type` : le générateur Swift renommerait `type` en `_type`.
-  @ApiProperty({ enum: ['like', 'comment', 'follow', 'repost'], enumName: 'NotificationType' })
+  @ApiProperty({ enum: NOTIFICATION_TYPES, enumName: 'NotificationType' })
   kind!: NotificationType;
 
-  // Auteur de l'action. Objets imbriqués sans description : elle produirait un `allOf`,
-  // que le client Swift envelopperait (voir CLAUDE.md).
-  @ApiProperty({ type: UserSummaryResponse })
-  actor!: UserSummaryResponse;
+  // Auteur de l'action ; absent pour une notification de modération. Objets imbriqués sans description : elle
+  // produirait un `allOf`, que le client Swift envelopperait (voir CLAUDE.md).
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  actor?: UserSummaryResponse;
 
   // Absent pour un follow.
   @ApiPropertyOptional({ type: NotificationVideoResponse })
@@ -50,6 +80,10 @@ export class NotificationResponse implements NotificationDto {
   // Présent pour un commentaire seulement.
   @ApiPropertyOptional({ type: NotificationCommentResponse })
   comment?: NotificationCommentResponse;
+
+  // Présent pour une notification de modération seulement.
+  @ApiPropertyOptional({ type: NotificationModerationResponse })
+  moderation?: NotificationModerationResponse;
 
   @ApiProperty()
   read!: boolean;
@@ -67,10 +101,12 @@ export class NotificationPageResponse implements NotificationPageDto {
 }
 
 export class NotificationGroupResponse implements NotificationGroupDto {
-  @ApiProperty({ description: 'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`.' })
+  @ApiProperty({
+    description: 'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`.',
+  })
   key!: string;
 
-  @ApiProperty({ enum: ['like', 'comment', 'follow', 'repost'], enumName: 'NotificationType' })
+  @ApiProperty({ enum: NOTIFICATION_TYPES, enumName: 'NotificationType' })
   kind!: NotificationType;
 
   @ApiProperty({ type: [UserSummaryResponse], description: 'Auteurs des notifications les plus récentes, 2 au plus, du plus récent au plus ancien.' })
@@ -86,6 +122,10 @@ export class NotificationGroupResponse implements NotificationGroupDto {
   // Groupe d'un commentaire (toujours seul).
   @ApiPropertyOptional({ type: NotificationCommentResponse })
   comment?: NotificationCommentResponse;
+
+  // Notification de modération (toujours seule, `actors` vide).
+  @ApiPropertyOptional({ type: NotificationModerationResponse })
+  moderation?: NotificationModerationResponse;
 
   @ApiProperty({ description: 'Faux si au moins une notification du groupe n’est pas lue.' })
   read!: boolean;
@@ -116,10 +156,12 @@ export function toNotificationDto({ notification, actor, video }: NotificationWi
   const dto: NotificationDto = {
     id: notification.id,
     kind: notification.type,
-    actor: toUserSummary(actor),
     read: notification.readAt !== null,
     createdAt: notification.createdAt.toISOString(),
   };
+  if (actor) dto.actor = toUserSummary(actor);
+  const moderation = toModerationDto(notification);
+  if (moderation) dto.moderation = moderation;
   if (video) dto.video = { id: video.id, thumbnailUrl: video.thumbnailUrl };
   if (notification.commentId && notification.commentText !== null) {
     dto.comment = { id: notification.commentId, content: notification.commentText };
@@ -142,5 +184,17 @@ export function toNotificationGroupDto({ group, actors, video }: NotificationGro
   if (latest.type === 'comment' && latest.commentId && latest.commentText !== null) {
     dto.comment = { id: latest.commentId, content: latest.commentText };
   }
+  const moderation = toModerationDto(latest);
+  if (moderation) dto.moderation = moderation;
   return dto;
+}
+
+function toModerationDto({ moderation }: Notification): NotificationModerationDto | null {
+  if (!moderation) return null;
+  return {
+    targetType: moderation.targetType,
+    ...(moderation.reason ? { reason: moderation.reason } : {}),
+    ...(moderation.outcome ? { outcome: moderation.outcome } : {}),
+    ...(moderation.excerpt ? { excerpt: moderation.excerpt } : {}),
+  };
 }

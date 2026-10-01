@@ -53,6 +53,52 @@ struct ActivityDataTests {
         #expect(log.operations == ["listNotificationGroups", "listNotifications"])
     }
 
+    @Test("modération (ADR-038) : sans auteur, groupe seul, textes de la décision et du contenu retiré")
+    func moderation() async throws {
+        let body = """
+        {"items":[\
+        {"key":"moderation:n8","kind":"contentRemoved","actors":[],"count":1,"read":false,"latestId":"n8",\
+        "moderation":{"targetType":"message","reason":"harassment","excerpt":"Insulte"},"createdAt":"2026-09-26T08:00:00.000Z"},\
+        {"key":"moderation:n7","kind":"reportResolved","actors":[],"count":1,"read":true,"latestId":"n7",\
+        "moderation":{"targetType":"video","outcome":"dismissed","excerpt":"Démo"},"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":null}
+        """
+        let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { _, _ in json(.ok, body) }))
+        let page = try await repository.groups(cursor: nil)
+        let removed = try #require(page.groups.first)
+        #expect(removed.kind == .contentRemoved)
+        #expect(removed.actors.isEmpty)
+        #expect(removed.actorNames == "Contenu retiré")
+        #expect(removed.summary == "Ton message a été retiré. Motif : harcèlement.")
+        #expect(removed.moderation?.excerpt == "Insulte")
+        #expect(removed.filter == nil)
+        #expect(page.groups[1].actorNames == "Signalement examiné")
+        #expect(page.groups[1].summary == "Ton signalement a été examiné : aucune infraction constatée.")
+
+        let other = ActivityModeration(target: .video, reason: .other, outcome: nil, excerpt: nil)
+        #expect(other.text(.contentRemoved) == "Ta vidéo a été retirée. Motif : non-respect des règles.")
+        #expect(ActivityModeration(target: .account, reason: nil, outcome: .accountSuspended, excerpt: nil).text(.reportResolved)
+            == "Ton signalement a été examiné : le compte a été suspendu.")
+    }
+
+    @Test("modération reçue en direct : sans auteur, son propre groupe")
+    func moderationRealtime() throws {
+        let created = """
+        {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"reportResolved",\
+        "moderation":{"targetType":"comment","outcome":"contentRemoved","excerpt":"Spam"},\
+        "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":1}}
+        """
+        guard case .notificationCreated(let notification, _)? = RealtimeEventDecoder().decode(created) else {
+            Issue.record("notificationCreated attendu")
+            return
+        }
+        #expect(notification.actor == nil)
+        #expect(notification.summary == "Ton signalement a été examiné : le contenu a été retiré.")
+        let group = ActivityGroup.merging(notification, into: nil)
+        #expect(group.key == "moderation:n9")
+        #expect(group.actors.isEmpty)
+        #expect(group.moderation?.outcome == .contentRemoved)
+    }
+
     @Test("badge et marquage lu ; 401 → session expirée")
     func badge() async throws {
         let log = RequestLog()

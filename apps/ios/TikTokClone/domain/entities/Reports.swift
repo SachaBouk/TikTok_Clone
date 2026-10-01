@@ -1,7 +1,7 @@
 import Foundation
 
-// Signalements (ADR-038) : une vidéo, un commentaire ou un compte, avec un motif de la liste et une précision
-// facultative. Rien n'est masqué ensuite : un administrateur décide.
+// Signalements (ADR-038) : une vidéo, un commentaire, un compte ou un message reçu, avec un motif de la liste et une
+// précision facultative. Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité.
 
 enum ReportReason: String, CaseIterable, Identifiable, Sendable {
     case spam, harassment, hate, violence, sexual, impersonation, other
@@ -25,12 +25,14 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
     case video(id: String)
     case comment(id: String)
     case account(id: String, username: String)
+    case message(id: String)
 
     var id: String {
         switch self {
         case .video(let id): "video:\(id)"
         case .comment(let id): "comment:\(id)"
         case .account(let id, _): "account:\(id)"
+        case .message(let id): "message:\(id)"
         }
     }
 
@@ -40,7 +42,14 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .video: "Pourquoi signaler cette vidéo ?"
         case .comment: "Pourquoi signaler ce commentaire ?"
         case .account(_, let username): "Pourquoi signaler @\(username) ?"
+        case .message: "Pourquoi signaler ce message ?"
         }
+    }
+
+    // Message privé : ce qui est transmis aux administrateurs.
+    var privacyNote: String? {
+        if case .message = self { return "Seul ce message est transmis à l’équipe de modération, jamais le reste de la conversation." }
+        return nil
     }
 
     // Nom envoyé à la mesure d'audience (ADR-013).
@@ -49,6 +58,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .video: "video"
         case .comment: "comment"
         case .account: "account"
+        case .message: "message"
         }
     }
 }

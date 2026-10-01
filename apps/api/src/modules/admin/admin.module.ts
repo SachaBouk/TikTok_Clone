@@ -3,6 +3,8 @@ import { AuthService } from '../auth/application/auth.service';
 import { AuthModule } from '../auth/auth.module';
 import { InteractionsService } from '../interactions/application/interactions.service';
 import { InteractionsModule } from '../interactions/interactions.module';
+import { MessagingService } from '../messaging/application/messaging.service';
+import { MessagingModule } from '../messaging/messaging.module';
 import { RealtimeService } from '../realtime/application/realtime.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { ReportsService } from '../reports/application/reports.service';
@@ -20,7 +22,7 @@ import { AdminController } from './interfaces/admin.controller';
 // vidéos, commentaires et jetons sont lus et modérés via les services exportés des autres modules (ADR-003).
 // Aucun module ne dépend de celui-ci.
 @Module({
-  imports: [AuthModule, UsersModule, VideosModule, InteractionsModule, WalletModule, RealtimeModule, ReportsModule],
+  imports: [AuthModule, UsersModule, VideosModule, InteractionsModule, WalletModule, RealtimeModule, ReportsModule, MessagingModule],
   controllers: [AdminController],
   providers: [
     {
@@ -33,8 +35,9 @@ import { AdminController } from './interfaces/admin.controller';
         wallet: WalletService,
         realtime: RealtimeService,
         reports: ReportsService,
-      ) => new AdminService(users, videos, interactions, auth, wallet, realtime, reports),
-      inject: [UsersService, VideosService, InteractionsService, AuthService, WalletService, RealtimeService, ReportsService],
+        messaging: MessagingService,
+      ) => new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging),
+      inject: [UsersService, VideosService, InteractionsService, AuthService, WalletService, RealtimeService, ReportsService, MessagingService],
     },
   ],
 })

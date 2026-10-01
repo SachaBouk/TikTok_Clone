@@ -23,14 +23,16 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
+        {/* Sous xl, la navigation passe sur sa propre ligne, défilable plutôt que coupée en deux. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
           <span className="font-semibold">Backoffice</span>
-          <nav className="flex flex-1 flex-wrap gap-1">
+          <nav className="order-last -mx-1 flex w-full gap-1 overflow-x-auto xl:order-none xl:mx-0 xl:w-auto xl:flex-1">
             <NavLink href="/">Tableau de bord</NavLink>
             <NavLink href="/users">Comptes</NavLink>
             <NavLink href="/videos">Vidéos</NavLink>
             <NavLink href="/comments">Commentaires</NavLink>
             <NavLink href="/reports">Signalements</NavLink>
+            <NavLink href="/moderation">Journal</NavLink>
             <NavLink href="/tokens">Jetons</NavLink>
           </nav>
           <div className="flex items-center gap-2 text-sm">

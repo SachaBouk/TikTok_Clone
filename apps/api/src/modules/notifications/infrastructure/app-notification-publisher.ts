@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PUSH_BODY_MAX_LENGTH } from '../../push/domain/push';
 import { PushService } from '../../push/application/push.service';
 import { RealtimeService } from '../../realtime/application/realtime.service';
-import type { NotificationWithContext } from '../domain/notification';
+import type { ModerationOutcome, ModerationReason, ModerationTargetType, NotificationWithContext } from '../domain/notification';
 import { NotificationPublisher } from '../domain/notification-publisher';
 import { toNotificationDto } from '../interfaces/notifications.responses';
 
@@ -24,7 +24,8 @@ export class AppNotificationPublisher extends NotificationPublisher {
       data: { notification: toNotificationDto(item), unreadCount },
     });
     await this.push.notify(notification.recipientId, {
-      title: actor.displayName,
+      // Modération (ADR-038) : pas d'auteur.
+      title: actor?.displayName ?? (notification.type === 'reportResolved' ? 'Signalement examiné' : 'Contenu retiré'),
       body: pushBody(item),
       threadId: 'activity',
       data: { type: 'notification', notificationId: notification.id, kind: notification.type, ...(notification.videoId ? { videoId: notification.videoId } : {}) },
@@ -46,5 +47,38 @@ function pushBody({ notification }: NotificationWithContext): string {
       return 'a commencé à te suivre';
     case 'comment':
       return `a commenté : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
+    case 'reportResolved':
+      return outcomeText(notification.moderation?.outcome ?? 'dismissed');
+    case 'contentRemoved':
+      return `${REMOVED[notification.moderation?.targetType ?? 'video']} Motif : ${REASON_LABELS[notification.moderation?.reason ?? 'other']}.`;
+  }
+}
+
+// Textes en français des notifications de modération (mêmes libellés que l'app et le backoffice).
+const REMOVED: Record<ModerationTargetType, string> = {
+  video: 'Ta vidéo a été retirée.',
+  comment: 'Ton commentaire a été retiré.',
+  message: 'Ton message a été retiré.',
+  // Un compte n'est pas « retiré » (suspension, annoncée à la connexion) : jamais envoyé.
+  account: 'Ton compte a été suspendu.',
+};
+const REASON_LABELS: Record<ModerationReason, string> = {
+  spam: 'spam',
+  harassment: 'harcèlement',
+  hate: 'contenu haineux',
+  violence: 'violence',
+  sexual: 'nudité ou contenu sexuel',
+  impersonation: 'usurpation d’identité',
+  other: 'non-respect des règles',
+};
+
+function outcomeText(outcome: ModerationOutcome): string {
+  switch (outcome) {
+    case 'contentRemoved':
+      return 'Ton signalement a été examiné : le contenu a été retiré.';
+    case 'accountSuspended':
+      return 'Ton signalement a été examiné : le compte a été suspendu.';
+    case 'dismissed':
+      return 'Ton signalement a été examiné : aucune infraction constatée.';
   }
 }

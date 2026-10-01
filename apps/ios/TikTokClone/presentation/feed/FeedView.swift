@@ -13,7 +13,7 @@ struct FeedView: View {
     @State private var scrolledID: String?
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
-    @State private var manageVideo: FeedVideo?
+    @State private var reportedVideo: FeedVideo?
     @State private var alertMessage: String?
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
@@ -50,7 +50,7 @@ struct FeedView: View {
         .onChange(of: session.isSignedIn) { Task { await reload() } }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
         .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions, container: container)
     }
 
     private func reload() async {
@@ -98,7 +98,7 @@ struct FeedView: View {
                             togglePause: { viewModel.togglePause() },
                             comments: { commentsVideo = interactions.display(entry.video) },
                             share: { shareVideo = interactions.display(entry.video) },
-                            manage: { manageVideo = entry.video },
+                            report: { report(entry.video) },
                             alert: { alertMessage = $0 }
                         )
                     )
@@ -116,6 +116,11 @@ struct FeedView: View {
         // Nouvelle ScrollView à chaque rechargement : elle repart en haut, sur la vidéo courante.
         .id(viewModel.reloadCount)
         .accessibilityIdentifier("feed.pages")
+    }
+
+    // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
+    private func report(_ video: FeedVideo) {
+        if session.isSignedIn { reportedVideo = video } else { session.requestSignIn() }
     }
 
     private func updateActivity() {
@@ -145,8 +150,9 @@ struct VideoPageActions {
     var comments: () -> Void
     var share: () -> Void
     var follow: () -> Void
-    // « … » : sa propre vidéo, « Supprimer » ; celle d'un autre, « Signaler » (ADR-038).
-    var manage: () -> Void
+    // Menu « … » : celle d'un autre, « Signaler » (ADR-038) ; sa propre vidéo, « Supprimer », confirmé dans la colonne.
+    var report: () -> Void
+    var delete: () -> Void
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
@@ -263,6 +269,8 @@ struct FeedActionColumn: View {
     let video: FeedVideo
     let showsFollowButton: Bool
     let actions: VideoPageActions
+    // Confirmation attachée au menu : elle s'affiche à côté du bouton « … », pas dans un coin de l'écran.
+    @State private var isConfirmingDelete = false
 
     var body: some View {
         let viewer = video.viewer ?? .empty
@@ -301,7 +309,13 @@ struct FeedActionColumn: View {
                 .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
-            Button(action: actions.manage) {
+            Menu {
+                if showsFollowButton {
+                    Button("Signaler", systemImage: "flag", role: .destructive, action: actions.report)
+                } else {
+                    Button("Supprimer la vidéo", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
+                }
+            } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 24, weight: .bold))
                     .shadow(radius: 4)
@@ -311,6 +325,12 @@ struct FeedActionColumn: View {
             .buttonStyle(.plain)
             .accessibilityLabel(showsFollowButton ? "Plus d’options" : "Gérer la vidéo")
             .accessibilityIdentifier("video.manage")
+            // Sa propre vidéo : suppression, quel que soit son statut (les autres écrans la retirent ensuite).
+            .confirmationDialog("Supprimer cette vidéo ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
+                Button("Supprimer", role: .destructive, action: actions.delete)
+            } message: {
+                Text("Ses likes, commentaires et republications disparaîtront aussi.")
+            }
         }
     }
 }

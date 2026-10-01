@@ -10,6 +10,7 @@ struct RemoteReportRepository: ReportRepository {
         case .video(let id): (.video, id)
         case .comment(let id): (.comment, id)
         case .account(let id, _): (.account, id)
+        case .message(let id): (.message, id)
         }
         let body = Components.Schemas.CreateReportRequest(targetType: type, targetId: id, reason: Self.reason(reason), details: details)
         switch try await mappingErrors({ try await client.createReport(body: .json(body)) }) {

@@ -1,13 +1,15 @@
 import type { UsersService } from '../../users/application/users.service';
 import type { VideosService } from '../../videos/application/videos.service';
-import type {
-  ActivityEvent,
-  Notification,
-  NotificationFilter,
-  NotificationGroup,
-  NotificationGroupWithContext,
-  NotificationWithContext,
-  RetractableActivity,
+import {
+  type ActivityEvent,
+  isModeration,
+  type ModerationEvent,
+  type Notification,
+  type NotificationFilter,
+  type NotificationGroup,
+  type NotificationGroupWithContext,
+  type NotificationWithContext,
+  type RetractableActivity,
 } from '../domain/notification';
 import type { NotificationPublisher } from '../domain/notification-publisher';
 import type { NotificationRepository } from '../domain/notification.repository';
@@ -46,6 +48,14 @@ export class NotificationsService {
     if (event.actorId === event.recipientId) return;
     const created = await this.notifications.add(event);
     if (!created) return;
+    const [item] = await this.withContext([created]);
+    if (item) await this.publisher.notificationCreated(item, await this.countUnread(event.recipientId));
+  }
+
+  // Modération (ADR-038, module reports) : décision annoncée à la personne qui a signalé, ou contenu retiré annoncé à
+  // son auteur. Sans auteur ; toujours créée, poussée en direct et en push comme les autres.
+  async notifyModeration(event: ModerationEvent): Promise<void> {
+    const created = await this.notifications.addModeration(event);
     const [item] = await this.withContext([created]);
     if (item) await this.publisher.notificationCreated(item, await this.countUnread(event.recipientId));
   }
@@ -122,7 +132,8 @@ export class NotificationsService {
     return groups.flatMap((group) => {
       const groupActors = group.recentActorIds.flatMap((id) => actors.get(id) ?? []);
       const video = group.latest.videoId ? videos.get(group.latest.videoId) : null;
-      if (groupActors.length === 0 || video === undefined) return [];
+      // Une notification de modération n'a pas d'auteur.
+      if ((groupActors.length === 0 && !isModeration(group.latest.type)) || video === undefined) return [];
       return [{ group, actors: groupActors, video }];
     });
   }
@@ -130,13 +141,13 @@ export class NotificationsService {
   // Auteurs et vidéos, lus via les modules users et videos (ADR-003). Compte ou vidéo supprimés
   // entre-temps : la cascade de la base supprime aussi la notification, elle est simplement sautée ici.
   private async withContext(notifications: Notification[]): Promise<NotificationWithContext[]> {
-    const actors = new Map((await this.users.getByIds(notifications.map((n) => n.actorId))).map((u) => [u.id, u]));
+    const actors = new Map((await this.users.getByIds(notifications.flatMap((n) => (n.actorId ? [n.actorId] : [])))).map((u) => [u.id, u]));
     const videoIds = [...new Set(notifications.flatMap((n) => (n.videoId ? [n.videoId] : [])))];
     const videos = new Map((await this.videos.getPublishedVideos(videoIds)).map((v) => [v.id, v]));
     return notifications.flatMap((notification) => {
-      const actor = actors.get(notification.actorId);
+      const actor = notification.actorId ? (actors.get(notification.actorId) ?? null) : null;
       const video = notification.videoId ? videos.get(notification.videoId) : null;
-      if (!actor || video === undefined) return [];
+      if ((!actor && !isModeration(notification.type)) || video === undefined) return [];
       return [{ notification, actor, video }];
     });
   }

@@ -1,8 +1,21 @@
+import type { ReportReason, ReportTargetType } from './reports.js';
 import type { UserSummaryDto } from './users.js';
 
 // Centre d'activité (ADR-016) : ce que les autres comptes ont fait sur mes vidéos et mon compte.
 
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost';
+// `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur.
+export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved';
+
+// Décision sur un signalement, annoncée à la personne qui l'a envoyé.
+export type ModerationOutcome = 'contentRemoved' | 'accountSuspended' | 'dismissed';
+
+// Notification de modération : contenu concerné, motif (contenu retiré) ou décision (signalement examiné), texte copié.
+export interface NotificationModerationDto {
+  targetType: ReportTargetType;
+  reason?: ReportReason;
+  outcome?: ModerationOutcome;
+  excerpt?: string;
+}
 
 // Vidéo concernée (like, commentaire, republication), pour afficher sa miniature.
 export interface NotificationVideoDto {
@@ -19,12 +32,14 @@ export interface NotificationDto {
   id: string;
   // `kind` plutôt que `type` : le générateur Swift renommerait `type` en `_type`.
   kind: NotificationType;
-  // Auteur de l'action.
-  actor: UserSummaryDto;
+  // Auteur de l'action ; absent pour une notification de modération.
+  actor?: UserSummaryDto;
   // Absent pour un follow (plutôt que null : voir FeedItemDto.viewer).
   video?: NotificationVideoDto;
   // Présent pour un commentaire seulement.
   comment?: NotificationCommentDto;
+  // Présent pour une notification de modération seulement.
+  moderation?: NotificationModerationDto;
   read: boolean;
   createdAt: string;
 }
@@ -39,7 +54,8 @@ export interface NotificationPageDto {
 // Groupe du centre d'activité, calculé à la lecture (« Inès, Nathan et 3 autres ont aimé ta vidéo ») :
 // like et republication par vidéo, tous les follows ensemble, chaque commentaire seul.
 export interface NotificationGroupDto {
-  // Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`.
+  // Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`,
+  // `moderation:<notificationId>`.
   key: string;
   kind: NotificationType;
   // Auteurs des notifications les plus récentes du groupe, 2 au plus, du plus récent au plus ancien.
@@ -50,6 +66,8 @@ export interface NotificationGroupDto {
   video?: NotificationVideoDto;
   // Groupe d'un commentaire (toujours seul).
   comment?: NotificationCommentDto;
+  // Notification de modération (toujours seule, sans auteur : `actors` vide).
+  moderation?: NotificationModerationDto;
   // Faux si au moins une notification du groupe n'est pas lue.
   read: boolean;
   // Notification la plus récente du groupe : curseur de pagination, marquage lu.

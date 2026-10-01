@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CommentsTable } from '@/components/comments-table';
-import { ConfirmAction } from '@/components/confirm-action';
+import { RemoveContent } from '@/components/remove-content';
 import { HlsPlayer } from '@/components/hls-player';
 import { Thumbnail } from '@/components/thumbnail';
 import { UserAvatar } from '@/components/user-avatar';
@@ -60,12 +60,11 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
           </dl>
           <code className="text-xs text-muted-foreground">{video.id}</code>
           <div>
-            <ConfirmAction
+            <RemoveContent
               size="default"
               label="Supprimer la vidéo"
               title="Supprimer cette vidéo ?"
-              description="La vidéo, ses likes, commentaires, favoris et notifications sont supprimés définitivement, puis ses fichiers. Son auteur n’est pas prévenu."
-              confirmLabel="Supprimer"
+              description="La vidéo, ses likes, commentaires, favoris et notifications sont supprimés définitivement, puis ses fichiers. Son auteur est prévenu avec le motif choisi."
               action={removeVideo.bind(null, video.id, '/videos')}
             />
           </div>

@@ -4389,14 +4389,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "reason",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReportReason"
+            }
           }
         ],
         "responses": {
           "204": {
-            "description": "Vidéo supprimée, avec ses likes, commentaires et notifications."
+            "description": "Vidéo supprimée, avec ses likes, commentaires et notifications ; auteur prévenu avec le motif."
           },
           "400": {
-            "description": "Identifiant invalide.",
+            "description": "Identifiant ou motif invalide.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4427,6 +4435,160 @@
           },
           "404": {
             "description": "Vidéo introuvable ou déjà supprimée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/{id}": {
+      "delete": {
+        "operationId": "deleteAdminMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReportReason"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Message retiré pour les deux participants ; expéditeur prévenu avec le motif."
+          },
+          "400": {
+            "description": "Identifiant ou motif invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message introuvable ou déjà retiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/moderation-actions": {
+      "get": {
+        "operationId": "listAdminModerationActions",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Actions sur ce compte.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminModerationActionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide (curseur, limite, filtre).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4637,14 +4799,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "reason",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReportReason"
+            }
           }
         ],
         "responses": {
           "204": {
-            "description": "Commentaire supprimé, avec sa notification."
+            "description": "Commentaire supprimé, avec sa notification ; auteur prévenu avec le motif."
           },
           "400": {
-            "description": "Identifiant invalide.",
+            "description": "Identifiant ou motif invalide.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5763,7 +5933,9 @@
           "like",
           "comment",
           "follow",
-          "repost"
+          "repost",
+          "reportResolved",
+          "contentRemoved"
         ]
       },
       "NotificationVideoResponse": {
@@ -5799,6 +5971,56 @@
           "content"
         ]
       },
+      "ReportTargetType": {
+        "type": "string",
+        "enum": [
+          "video",
+          "comment",
+          "account",
+          "message"
+        ]
+      },
+      "ReportReason": {
+        "type": "string",
+        "enum": [
+          "spam",
+          "harassment",
+          "hate",
+          "violence",
+          "sexual",
+          "impersonation",
+          "other"
+        ]
+      },
+      "ModerationOutcome": {
+        "type": "string",
+        "enum": [
+          "contentRemoved",
+          "accountSuspended",
+          "dismissed"
+        ]
+      },
+      "NotificationModerationResponse": {
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "$ref": "#/components/schemas/ReportTargetType"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ModerationOutcome"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Texte du contenu concerné, copié."
+          }
+        },
+        "required": [
+          "targetType"
+        ]
+      },
       "NotificationResponse": {
         "type": "object",
         "properties": {
@@ -5818,6 +6040,9 @@
           "comment": {
             "$ref": "#/components/schemas/NotificationCommentResponse"
           },
+          "moderation": {
+            "$ref": "#/components/schemas/NotificationModerationResponse"
+          },
           "read": {
             "type": "boolean"
           },
@@ -5829,7 +6054,6 @@
         "required": [
           "id",
           "kind",
-          "actor",
           "read",
           "createdAt"
         ]
@@ -5861,7 +6085,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`."
+            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`."
           },
           "kind": {
             "$ref": "#/components/schemas/NotificationType"
@@ -5883,6 +6107,9 @@
           },
           "comment": {
             "$ref": "#/components/schemas/NotificationCommentResponse"
+          },
+          "moderation": {
+            "$ref": "#/components/schemas/NotificationModerationResponse"
           },
           "read": {
             "type": "boolean",
@@ -6406,26 +6633,6 @@
           "nextCursor"
         ]
       },
-      "ReportTargetType": {
-        "type": "string",
-        "enum": [
-          "video",
-          "comment",
-          "account"
-        ]
-      },
-      "ReportReason": {
-        "type": "string",
-        "enum": [
-          "spam",
-          "harassment",
-          "hate",
-          "violence",
-          "sexual",
-          "impersonation",
-          "other"
-        ]
-      },
       "CreateReportRequest": {
         "type": "object",
         "properties": {
@@ -6824,6 +7031,103 @@
           "nextCursor"
         ]
       },
+      "ModerationActionType": {
+        "type": "string",
+        "enum": [
+          "videoRemoved",
+          "commentRemoved",
+          "messageRemoved",
+          "accountSuspended",
+          "suspensionLifted",
+          "reportsDismissed"
+        ]
+      },
+      "AdminModerationActionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ModerationActionType"
+          },
+          "admin": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "adminUsername": {
+            "type": "string"
+          },
+          "targetType": {
+            "$ref": "#/components/schemas/ReportTargetType"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetUser": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "targetUsername": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Suspension : motif saisi."
+          },
+          "excerpt": {
+            "type": "string",
+            "nullable": true
+          },
+          "reportsClosed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Signalements ouverts clos par cette action."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "adminUsername",
+          "targetType",
+          "targetId",
+          "targetUsername",
+          "note",
+          "excerpt",
+          "reportsClosed",
+          "createdAt"
+        ]
+      },
+      "AdminModerationActionPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminModerationActionResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
       "AdminCommentVideoResponse": {
         "type": "object",
         "properties": {
@@ -7020,12 +7324,11 @@
             "format": "uuid"
           },
           "targetUser": {
-            "description": "Auteur de la vidéo ou du commentaire, ou le compte signalé.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UserSummaryResponse"
-              }
-            ]
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "targetUsername": {
+            "type": "string",
+            "description": "Pseudo du compte visé au moment du signalement."
           },
           "available": {
             "type": "boolean",
@@ -7064,7 +7367,7 @@
         "required": [
           "targetType",
           "targetId",
-          "targetUser",
+          "targetUsername",
           "available",
           "openCount",
           "reasons",
@@ -7097,7 +7400,9 @@
         "enum": [
           "contentRemoved",
           "accountSuspended",
-          "dismissed"
+          "dismissed",
+          "contentDeleted",
+          "accountDeleted"
         ]
       },
       "AdminReportResponse": {

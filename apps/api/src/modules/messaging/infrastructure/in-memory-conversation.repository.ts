@@ -90,6 +90,10 @@ export class InMemoryConversationRepository extends ConversationRepository {
     return this.messages.find((m) => m.id === messageId) ?? null;
   }
 
+  async findMessagesByIds(ids: string[]): Promise<Message[]> {
+    return this.messages.filter((m) => ids.includes(m.id));
+  }
+
   async deleteMessage(messageId: string): Promise<void> {
     const index = this.messages.findIndex((m) => m.id === messageId);
     if (index >= 0) this.messages.splice(index, 1);

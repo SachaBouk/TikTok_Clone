@@ -2,8 +2,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { DEFAULT_NOTIFICATIONS_PAGE_SIZE, MAX_NOTIFICATIONS_PAGE_SIZE, type NotificationType } from '../domain/notification';
+import { NOTIFICATION_TYPES } from '../domain/notification';
 
-const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost'];
 
 // Corps et paramètres de requête validés par le ValidationPipe global (main.ts).
 

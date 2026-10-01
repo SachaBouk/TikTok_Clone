@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Pagination } from '@/components/pagination';
-import { ReportTargetPreview } from '@/components/report-target-preview';
+import { ReportTargetAccount, ReportTargetPreview } from '@/components/report-target-preview';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDateTime, formatNumber, withQuery } from '@/lib/format';
@@ -10,7 +10,7 @@ import { listReportTargets } from '@/models/reports.model';
 
 export const metadata: Metadata = { title: 'Signalements' };
 
-// File de modération (ADR-038) : une ligne par vidéo, commentaire ou compte signalé, du plus récemment signalé au plus
+// File de modération (ADR-038) : une ligne par vidéo, commentaire, message ou compte signalé, du plus récemment signalé au plus
 // ancien. Rien n'est masqué avant une décision.
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ curseur?: string }> }) {
   const { curseur } = await searchParams;
@@ -41,9 +41,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 </Link>
               </TableCell>
               <TableCell>
-                <Link href={`/users/${target.targetUser.id}`} className="hover:underline">
-                  @{target.targetUser.username}
-                </Link>
+                <ReportTargetAccount target={target} />
               </TableCell>
               <TableCell className="text-right tabular-nums">{formatNumber(target.openCount)}</TableCell>
               <TableCell>

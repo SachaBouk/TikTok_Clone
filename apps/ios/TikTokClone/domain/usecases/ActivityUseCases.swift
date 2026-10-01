@@ -36,10 +36,10 @@ struct LoadActivityGroupUseCase: Sendable {
 
     func callAsFunction(_ filter: ActivityFilter, cursor: String?) async throws -> ActivityPage {
         let page = try await activity.notifications(filter: filter, cursor: cursor)
-        let relationships = await actorRelationships(page.notifications.filter { $0.kind == .follow }.map(\.actor.id))
+        let relationships = await actorRelationships(page.notifications.filter { $0.kind == .follow }.compactMap(\.actor?.id))
         let notifications = page.notifications.map { notification in
             var notification = notification
-            if notification.kind == .follow { notification.actorRelationship = relationships[notification.actor.id] }
+            if notification.kind == .follow { notification.actorRelationship = notification.actor.flatMap { relationships[$0.id] } }
             return notification
         }
         return ActivityPage(notifications: notifications, nextCursor: page.nextCursor)

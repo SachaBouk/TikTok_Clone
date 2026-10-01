@@ -285,6 +285,28 @@ describe('MessagingService', () => {
     });
   });
 
+  describe('signalement et modération (ADR-038)', () => {
+    it('un message n’est visible que des participants, et plus après avoir supprimé la conversation pour soi', async () => {
+      const id = await open('alice', 'bob');
+      const { message } = await send('bob', id, 'insulte');
+      await expect(service.getVisibleMessage('alice', message.id)).resolves.toMatchObject({ senderId: 'bob', content: 'insulte' });
+      await expect(service.getVisibleMessage('carol', message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
+      await service.deleteConversation('alice', id);
+      await expect(service.getVisibleMessage('alice', message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
+      await expect(service.getMessages([message.id, message.id, 'inconnu'])).resolves.toMatchObject([{ id: message.id }]);
+    });
+
+    it('un administrateur retire un message pour les deux, comme son expéditeur', async () => {
+      const id = await open('alice', 'bob');
+      const { message } = await send('bob', id, 'insulte');
+      events.events.length = 0;
+      await expect(service.removeMessage(message.id)).resolves.toMatchObject({ id: message.id });
+      expect(eventsOf('messageDeleted')).toEqual([['alice', message.id], ['bob', message.id]]);
+      await expect(service.getMessages([message.id])).resolves.toEqual([]);
+      await expect(service.removeMessage(message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
+    });
+  });
+
   describe('partage de vidéo', () => {
     async function publishedVideo(author: string) {
       const created = await videoRepository.create({ userId: author, description: 'ma vidéo', rawKey: 'k', uploadId: 'u', rawSize: 1 });

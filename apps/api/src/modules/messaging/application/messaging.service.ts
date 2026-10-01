@@ -10,6 +10,7 @@ import {
   REQUEST_MESSAGE_LIMIT,
   REQUEST_RATE_LIMITS,
   TYPING_THROTTLE_MS,
+  type Conversation,
   type ConversationStatus,
   type ConversationView,
   type Message,
@@ -170,12 +171,41 @@ export class MessagingService {
     const conversation = message && (await this.conversations.findConversation(message.conversationId));
     if (!message || !conversation?.members.some((m) => m.userId === userId)) throw new MessageNotFoundError(messageId);
     if (message.senderId !== userId) throw new NotMessageSenderError();
+    await this.retract(message, conversation);
+  }
 
-    await this.conversations.deleteMessage(messageId);
+  // Pour le module reports (ADR-038) : un message que `userId` voit (participant, pas supprimé pour lui).
+  async getVisibleMessage(userId: string, messageId: string): Promise<Message> {
+    const message = await this.conversations.findMessage(messageId);
+    const conversation = message && (await this.conversations.findConversation(message.conversationId));
+    const member = conversation?.members.find((m) => m.userId === userId);
+    if (!message || !member || (member.clearedUpToMessageId !== null && message.id <= member.clearedUpToMessageId)) {
+      throw new MessageNotFoundError(messageId);
+    }
+    return message;
+  }
+
+  // Pour le module admin (file des signalements) : messages existants parmi `ids`.
+  getMessages(ids: string[]): Promise<Message[]> {
+    return this.conversations.findMessagesByIds([...new Set(ids)]);
+  }
+
+  // Retrait par un administrateur (ADR-038), comme par son expéditeur : pour les deux participants. Renvoie le message.
+  async removeMessage(messageId: string): Promise<Message> {
+    const message = await this.conversations.findMessage(messageId);
+    const conversation = message && (await this.conversations.findConversation(message.conversationId));
+    if (!message || !conversation) throw new MessageNotFoundError(messageId);
+    await this.retract(message, conversation);
+    return message;
+  }
+
+  // Suppression pour les deux, annoncée aux participants (pas à celui qui a refusé la demande, qui ne la voyait pas).
+  private async retract(message: Message, conversation: Conversation): Promise<void> {
+    await this.conversations.deleteMessage(message.id);
     const delivered = !conversation.declinedAt || conversation.acceptedAt !== null;
     for (const { userId: recipientId } of conversation.members) {
-      if (recipientId !== userId && !delivered) continue;
-      await this.events.messageDeleted(recipientId, { conversationId: message.conversationId, messageId }, await this.badges(recipientId));
+      if (recipientId !== message.senderId && !delivered) continue;
+      await this.events.messageDeleted(recipientId, { conversationId: message.conversationId, messageId: message.id }, await this.badges(recipientId));
     }
   }
 

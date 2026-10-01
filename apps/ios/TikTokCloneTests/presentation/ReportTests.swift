@@ -31,6 +31,18 @@ struct ReportDataTests {
         #expect(decoded == ["targetType": "account", "targetId": "0192f3a0-0000-7000-8000-000000000002", "reason": "impersonation", "details": "Faux compte"])
     }
 
+    @Test("message reçu : type message ; la feuille précise que seul ce message est transmis")
+    func message() async throws {
+        let transport = CapturingTransport()
+        let client = Client(serverURL: URL(string: "http://api.test")!, transport: transport)
+        try await RemoteReportRepository(client: client).report(.message(id: "m1"), reason: .harassment, details: nil)
+        let decoded = try JSONSerialization.jsonObject(with: Data(try #require(transport.body).utf8)) as? [String: String]
+        #expect(decoded == ["targetType": "message", "targetId": "m1", "reason": "harassment"])
+        #expect(ReportTarget.message(id: "m1").question == "Pourquoi signaler ce message ?")
+        #expect(ReportTarget.message(id: "m1").privacyNote != nil)
+        #expect(ReportTarget.video(id: "v1").privacyNote == nil)
+    }
+
     @Test("404 → introuvable ; 429 → délai en minutes ; 401 → session expirée")
     func errors() async {
         func repository(_ response: (HTTPResponse, HTTPBody?)) -> RemoteReportRepository {

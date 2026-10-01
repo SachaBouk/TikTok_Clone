@@ -7,6 +7,7 @@ import SwiftUI
 // - Toucher une notification seule : la vidéo concernée, ou le profil pour un abonnement.
 // - Toucher la photo : le profil de l'auteur (la liste complète pour un groupe).
 // - Abonnement d'un seul compte (et chaque abonnement de la liste complète) : bouton « Suivre en retour ».
+// - Décision de modération (ADR-038) : bouclier à la place de la photo, texte et contenu concerné ; rien à ouvrir.
 struct ActivityView: View {
     let container: AppContainer
     @Environment(\.isTabActive) private var isTabActive
@@ -68,7 +69,9 @@ struct ActivityView: View {
     }
 
     private func open(_ group: ActivityGroup) {
-        if group.count > 1, let filter = group.filter {
+        if group.kind.isModeration {
+            return
+        } else if group.count > 1, let filter = group.filter {
             openedGroup = filter
         } else if let video = group.video {
             container.router.presentedVideo = AppRouter.VideoRoute(id: video.id)
@@ -106,7 +109,7 @@ struct ActivityGroupView: View {
                 ActivityRow(
                     notification: notification,
                     follow: notification.kind == .follow
-                        ? followBack.control(for: notification.actor, relationship: notification.actorRelationship, error: $followError)
+                        ? notification.actor.flatMap { followBack.control(for: $0, relationship: notification.actorRelationship, error: $followError) }
                         : nil,
                     openProfile: { openedProfile = ProfileRoute(username: $0) },
                     openVideo: { container.router.presentedVideo = AppRouter.VideoRoute(id: $0) }
@@ -184,22 +187,32 @@ private struct ActivityGroupRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Button(action: openActor) { StackedAvatars(actors: group.actors) }
-                .buttonStyle(.plain)
-                .accessibilityLabel(group.count > 1 ? "Voir les \(group.count) comptes" : "Profil de @\(group.actors.first?.username ?? "")")
+            if group.kind.isModeration {
+                ModerationIcon(kind: group.kind)
+            } else {
+                Button(action: openActor) { StackedAvatars(actors: group.actors) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(group.count > 1 ? "Voir les \(group.count) comptes" : "Profil de @\(group.actors.first?.username ?? "")")
+            }
 
             Button(action: open) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        (Text(group.actorNames).bold() + Text(" ") + Text(group.summary))
+                        (Text(group.actorNames).bold() + Text(group.kind.isModeration ? "\n" : " ") + Text(group.summary))
                             .font(.subheadline)
-                            .lineLimit(3)
+                            .lineLimit(4)
+                        if let excerpt = group.moderation?.excerpt, !excerpt.isEmpty {
+                            Text("« \(excerpt) »")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
                         Text.relative(group.createdAt)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if follow == nil { ActivityTrailing(video: group.video) }
+                    if follow == nil, !group.kind.isModeration { ActivityTrailing(video: group.video) }
                 }
                 .contentShape(Rectangle())
             }
@@ -223,16 +236,20 @@ private struct ActivityRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Button { openProfile(notification.actor.username) } label: {
-                AvatarView(url: notification.actor.avatarURL, name: notification.actor.displayName, size: 44)
+            if let actor = notification.actor {
+                Button { openProfile(actor.username) } label: {
+                    AvatarView(url: actor.avatarURL, name: actor.displayName, size: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Profil de @\(actor.username)")
+            } else {
+                ModerationIcon(kind: notification.kind)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Profil de @\(notification.actor.username)")
 
             Button(action: primaryAction) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        (Text(notification.actor.displayName).bold() + Text(" ") + Text(notification.summary))
+                        (Text(notification.actor?.displayName ?? notification.moderation?.title(notification.kind) ?? "").bold() + Text(" ") + Text(notification.summary))
                             .font(.subheadline)
                             .lineLimit(3)
                         Text.relative(notification.createdAt)
@@ -256,9 +273,23 @@ private struct ActivityRow: View {
     private func primaryAction() {
         if let video = notification.video {
             openVideo(video.id)
-        } else {
-            openProfile(notification.actor.username)
+        } else if let actor = notification.actor {
+            openProfile(actor.username)
         }
+    }
+}
+
+// Décision de modération (ADR-038) : un bouclier à la place de la photo.
+private struct ModerationIcon: View {
+    let kind: ActivityKind
+
+    var body: some View {
+        Image(systemName: kind == .contentRemoved ? "exclamationmark.shield.fill" : "checkmark.shield.fill")
+            .font(.title2)
+            .foregroundStyle(kind == .contentRemoved ? Color.orange : Color.accentColor)
+            .frame(width: 44, height: 44)
+            .background(Circle().fill(Color(.secondarySystemBackground)))
+            .accessibilityHidden(true)
     }
 }
 

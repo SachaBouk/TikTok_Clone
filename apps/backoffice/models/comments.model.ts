@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AdminCommentPageDto } from '@repo/shared';
+import type { AdminCommentPageDto, ReportReason } from '@repo/shared';
 import { apiRequest } from '@/lib/api-client';
 
 export interface CommentFilter {
@@ -13,6 +13,7 @@ export function listComments(filter: CommentFilter): Promise<AdminCommentPageDto
   return apiRequest('GET', '/admin/comments', { videoId: filter.videoId, userId: filter.userId, cursor: filter.cursor, limit: filter.limit ?? 25 });
 }
 
-export function deleteComment(id: string): Promise<void> {
-  return apiRequest('DELETE', `/admin/comments/${encodeURIComponent(id)}`);
+// Le motif est annoncé à l'auteur.
+export function deleteComment(id: string, reason: ReportReason): Promise<void> {
+  return apiRequest('DELETE', `/admin/comments/${encodeURIComponent(id)}`, { reason });
 }

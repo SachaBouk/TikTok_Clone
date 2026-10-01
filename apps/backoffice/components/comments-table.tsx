@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { AdminCommentDto } from '@repo/shared';
-import { ConfirmAction } from '@/components/confirm-action';
+import { RemoveContent } from '@/components/remove-content';
 import { Thumbnail } from '@/components/thumbnail';
 import { UserAvatar } from '@/components/user-avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,11 +39,10 @@ export function CommentsTable({ comments, showVideo = true }: { comments: AdminC
             )}
             <TableCell className="text-muted-foreground">{formatDateTime(comment.createdAt)}</TableCell>
             <TableCell className="text-right">
-              <ConfirmAction
+              <RemoveContent
                 label="Supprimer"
                 title="Supprimer ce commentaire ?"
-                description={`Le commentaire de @${comment.author.username} et sa notification seront supprimés définitivement. Son auteur n’est pas prévenu.`}
-                confirmLabel="Supprimer"
+                description={`Le commentaire de @${comment.author.username} et sa notification seront supprimés définitivement. Son auteur est prévenu avec le motif choisi.`}
                 action={removeComment.bind(null, comment.id)}
               />
             </TableCell>

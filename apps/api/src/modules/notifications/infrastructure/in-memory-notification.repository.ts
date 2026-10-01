@@ -1,5 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { GROUP_ACTORS_SHOWN, groupKey, type ActivityEvent, type Notification, type NotificationFilter, type NotificationGroup, type RetractableActivity } from '../domain/notification';
+import {
+  GROUP_ACTORS_SHOWN,
+  groupKey,
+  type ActivityEvent,
+  type ModerationEvent,
+  type Notification,
+  type NotificationFilter,
+  type NotificationGroup,
+  type RetractableActivity,
+} from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
 // Adaptateur en mémoire pour les tests. Reproduit les index uniques partiels de la base :
@@ -20,6 +29,30 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       videoId: event.type === 'follow' ? null : event.videoId,
       commentId: event.type === 'comment' ? event.commentId : null,
       commentText: event.type === 'comment' ? event.commentText : null,
+      moderation: null,
+      readAt: null,
+      createdAt: new Date(),
+    };
+    this.notifications.set(id, created);
+    return created;
+  }
+
+  async addModeration(event: ModerationEvent): Promise<Notification> {
+    const id = `${String(++this.sequence).padStart(8, '0')}-${randomUUID()}`;
+    const created: Notification = {
+      id,
+      recipientId: event.recipientId,
+      actorId: null,
+      type: event.type,
+      videoId: null,
+      commentId: null,
+      commentText: null,
+      moderation: {
+        targetType: event.targetType,
+        reason: event.type === 'contentRemoved' ? event.reason : null,
+        outcome: event.type === 'reportResolved' ? event.outcome : null,
+        excerpt: event.excerpt,
+      },
       readAt: null,
       createdAt: new Date(),
     };
@@ -61,19 +94,19 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     for (const n of this.newestFirst(recipientId, excludedActorIds)) {
       const group = groups.get(groupKey(n));
       if (!group) {
-        groups.set(groupKey(n), { latest: n, count: 1, unread: !n.readAt, recentActorIds: [n.actorId] });
+        groups.set(groupKey(n), { latest: n, count: 1, unread: !n.readAt, recentActorIds: n.actorId ? [n.actorId] : [] });
         continue;
       }
       group.count += 1;
       group.unread ||= !n.readAt;
-      if (group.recentActorIds.length < GROUP_ACTORS_SHOWN) group.recentActorIds.push(n.actorId);
+      if (n.actorId && group.recentActorIds.length < GROUP_ACTORS_SHOWN) group.recentActorIds.push(n.actorId);
     }
     return [...groups.values()].filter((g) => !beforeId || g.latest.id < beforeId).slice(0, limit);
   }
 
   private newestFirst(recipientId: string, excludedActorIds: string[] = []): Notification[] {
     return [...this.notifications.values()]
-      .filter((n) => n.recipientId === recipientId && !excludedActorIds.includes(n.actorId))
+      .filter((n) => n.recipientId === recipientId && !(n.actorId && excludedActorIds.includes(n.actorId)))
       .sort((a, b) => (a.id < b.id ? 1 : -1));
   }
 

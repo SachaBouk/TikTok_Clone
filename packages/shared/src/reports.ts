@@ -2,12 +2,13 @@ import type { UserSummaryDto } from './users.js';
 
 // Signalements (ADR-038) : une vidéo, un commentaire ou un compte, avec un motif de la liste et une précision.
 
-export type ReportTargetType = 'video' | 'comment' | 'account';
+export type ReportTargetType = 'video' | 'comment' | 'account' | 'message';
 
 export type ReportReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 
-// Décision d'un administrateur, qui clôt tous les signalements ouverts d'une cible.
-export type ReportResolution = 'contentRemoved' | 'accountSuspended' | 'dismissed';
+// Décision d'un administrateur, qui clôt tous les signalements ouverts d'une cible ; ou clôture automatique quand la
+// cible disparaît sans décision (contenu supprimé par son auteur, compte supprimé).
+export type ReportResolution = 'contentRemoved' | 'accountSuspended' | 'dismissed' | 'contentDeleted' | 'accountDeleted';
 
 export interface CreateReportDto {
   targetType: ReportTargetType;
@@ -28,8 +29,10 @@ export interface AdminReportReasonCountDto {
 export interface AdminReportTargetDto {
   targetType: ReportTargetType;
   targetId: string;
-  // Compte visé : auteur de la vidéo ou du commentaire, ou le compte lui-même.
-  targetUser: UserSummaryDto;
+  // Compte visé : auteur du contenu, ou le compte lui-même ; absent s'il a été supprimé depuis.
+  targetUser?: UserSummaryDto;
+  // Pseudo du compte visé au moment du signalement (reste après sa suppression).
+  targetUsername: string;
   // Faux si le contenu a disparu depuis (supprimé par son auteur, vidéo dépubliée).
   available: boolean;
   // Vidéo : miniature (absente si elle n'est plus disponible).
@@ -67,4 +70,34 @@ export interface AdminReportDto {
 export interface AdminReportTargetDetailDto {
   target: AdminReportTargetDto;
   reports: AdminReportDto[];
+}
+
+// ─── Journal de modération ───────────────────────────────────────────────────
+
+export type ModerationActionType = 'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+
+// Une action d'un administrateur ; pseudos et texte copiés (le journal survit aux suppressions).
+export interface AdminModerationActionDto {
+  id: string;
+  action: ModerationActionType;
+  // Absent si l'administrateur a supprimé son compte depuis.
+  admin?: UserSummaryDto;
+  adminUsername: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  // Absent si le compte visé a été supprimé depuis.
+  targetUser?: UserSummaryDto;
+  targetUsername: string | null;
+  // Contenu retiré : motif de la liste.
+  reason?: ReportReason;
+  // Suspension : motif saisi.
+  note: string | null;
+  excerpt: string | null;
+  reportsClosed: number;
+  createdAt: string;
+}
+
+export interface AdminModerationActionPageDto {
+  items: AdminModerationActionDto[];
+  nextCursor: string | null;
 }

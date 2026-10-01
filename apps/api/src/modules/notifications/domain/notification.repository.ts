@@ -1,17 +1,20 @@
-import type { ActivityEvent, Notification, NotificationFilter, NotificationGroup, RetractableActivity } from './notification';
+import type { ActivityEvent, ModerationEvent, Notification, NotificationFilter, NotificationGroup, RetractableActivity } from './notification';
 
 // Port de la table notifications (ADR-006).
 export abstract class NotificationRepository {
   // Idempotent pour like, republication et follow : au plus une notification par acteur et cible.
   // Renvoie la notification créée, ou null si elle existait déjà.
   abstract add(event: ActivityEvent): Promise<Notification | null>;
+  // Notification de modération (ADR-038) : toujours créée.
+  abstract addModeration(event: ModerationEvent): Promise<Notification>;
   // Sans effet si la notification n'existe pas. Renvoie true si une notification a été supprimée.
   abstract remove(activity: RetractableActivity): Promise<boolean>;
 
   // Supprime les notifications échangées entre deux comptes (blocage). Renvoie les destinataires touchés.
   abstract removeBetween(userId: string, otherId: string): Promise<string[]>;
 
-  // Lectures : sans les notifications des auteurs `excludedActorIds` (comptes suspendus, ADR-037), qui ne comptent
+  // Lectures : sans les notifications des auteurs `excludedActorIds` (comptes suspendus, ADR-037 ; une notification de
+  // modération, sans auteur, n'est jamais exclue), qui ne comptent
   // ni dans les groupes ni dans le badge.
   // Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné (identifiants UUID v7, ordonnés).
   abstract listForRecipient(

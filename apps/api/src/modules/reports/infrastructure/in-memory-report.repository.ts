@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { NewReport, OpenReportTarget, Report, ReportResolution, ReportTarget } from '../domain/report';
+import type { NewReport, OpenReportTarget, Report, ReportResolution, ReportTarget, ResolvedReport } from '../domain/report';
 import { ReportRepository } from '../domain/report.repository';
 
 // Adaptateur en mémoire pour les tests : identifiants croissants (comme les UUID v7) et horloge injectable.
@@ -18,6 +18,7 @@ export class InMemoryReportRepository extends ReportRepository {
       reporterId: report.reporterId,
       target: report.target,
       targetUserId: report.targetUserId,
+      targetUsername: report.targetUsername,
       reason: report.reason,
       details: report.details,
       excerpt: report.excerpt,
@@ -45,27 +46,35 @@ export class InMemoryReportRepository extends ReportRepository {
       .slice(0, limit);
   }
 
-  async resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number> {
+  async resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]> {
     return this.resolve((r) => sameTarget(r.target, target), resolution, resolvedBy, at);
   }
 
-  async resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number> {
+  async resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]> {
     return this.resolve((r) => r.targetUserId === targetUserId, resolution, resolvedBy, at);
+  }
+
+  // Comme les triggers de la base : clôture automatique quand une cible ou un compte disparaît (tests).
+  closeAutomatically(matches: (r: Report) => boolean, resolution: 'contentDeleted' | 'accountDeleted', at: Date): void {
+    for (const report of this.reports) {
+      if (!report.resolution && matches(report)) Object.assign(report, { resolution, resolvedAt: at });
+    }
   }
 
   async countOpenTargets(): Promise<number> {
     return this.groups().length;
   }
 
-  private resolve(matches: (r: Report) => boolean, resolution: ReportResolution, resolvedBy: string, at: Date): number {
-    let count = 0;
+  private resolve(matches: (r: Report) => boolean, resolution: ReportResolution, resolvedBy: string, at: Date): ResolvedReport[] {
+    const resolved: ResolvedReport[] = [];
     for (const report of this.reports) {
       if (!report.resolution && matches(report)) {
         Object.assign(report, { resolution, resolvedAt: at, resolvedBy });
-        count++;
+        const { reporterId, target, targetUserId, targetUsername, excerpt } = report;
+        resolved.push({ reporterId, target, targetUserId, targetUsername, excerpt });
       }
     }
-    return count;
+    return resolved;
   }
 
   private newestFirst(): Report[] {
@@ -85,7 +94,8 @@ export class InMemoryReportRepository extends ReportRepository {
       for (const r of reports) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
       return {
         target: latest.target,
-        targetUserId: latest.targetUserId,
+        targetUserId: latest.targetUserId ?? '',
+        targetUsername: latest.targetUsername,
         openCount: reports.length,
         reasons: [...counts].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason)),
         latestId: latest.id,

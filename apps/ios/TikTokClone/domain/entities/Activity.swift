@@ -2,8 +2,52 @@ import Foundation
 
 // Centre d'activité (ADR-016, module notifications de l'API) : une notification par like, commentaire,
 // republication ou follow reçu (pas de favori). La boîte de réception les affiche regroupées (`ActivityGroup`).
+// S'y ajoutent les décisions de modération (ADR-038), sans auteur : signalement examiné, contenu retiré.
 enum ActivityKind: String, Equatable, Sendable {
-    case like, comment, follow, repost
+    case like, comment, follow, repost, reportResolved, contentRemoved
+
+    var isModeration: Bool { self == .reportResolved || self == .contentRemoved }
+}
+
+// Décision de modération (ADR-038) : à la personne qui a signalé (`outcome`), ou à l'auteur d'un contenu retiré
+// (`reason`, motif choisi par l'administrateur). `excerpt` : texte du contenu concerné, copié.
+struct ActivityModeration: Equatable, Sendable {
+    enum Target: String, Sendable {
+        case video, comment, account, message
+    }
+
+    enum Outcome: String, Sendable {
+        case contentRemoved, accountSuspended, dismissed
+    }
+
+    let target: Target
+    let reason: ReportReason?
+    let outcome: Outcome?
+    let excerpt: String?
+
+    // Titre en gras de la ligne, comme celui de la notification push.
+    func title(_ kind: ActivityKind) -> String {
+        kind == .contentRemoved ? "Contenu retiré" : "Signalement examiné"
+    }
+
+    // Mêmes textes que les notifications push de l'API.
+    func text(_ kind: ActivityKind) -> String {
+        if kind == .contentRemoved {
+            let removed = switch target {
+            case .video: "Ta vidéo a été retirée."
+            case .comment: "Ton commentaire a été retiré."
+            case .message: "Ton message a été retiré."
+            case .account: "Ton compte a été suspendu."
+            }
+            // « Autre » : libellé de la liste, peu parlant seul ; même texte que la notification push.
+            return reason.map { "\(removed) Motif : \($0 == .other ? "non-respect des règles" : $0.label.lowercased())." } ?? removed
+        }
+        return switch outcome {
+        case .contentRemoved: "Ton signalement a été examiné : le contenu a été retiré."
+        case .accountSuspended: "Ton signalement a été examiné : le compte a été suspendu."
+        case .dismissed, nil: "Ton signalement a été examiné : aucune infraction constatée."
+        }
+    }
 }
 
 struct ActivityNotification: Identifiable, Equatable, Sendable {
@@ -19,7 +63,8 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
 
     let id: String
     let kind: ActivityKind
-    let actor: UserSummary
+    // Absent pour une décision de modération.
+    let actor: UserSummary?
     // Like, commentaire, republication : la vidéo concernée.
     let video: Video?
     // Commentaire : son texte.
@@ -29,14 +74,17 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
     // Abonnement : relation du compte connecté avec l'auteur (« Suivre en retour »), lue à part (module interactions,
     // ADR-036) ; nil tant qu'elle n'est pas connue, et pour les autres types.
     var actorRelationship: Relationship? = nil
+    // Décision de modération (ADR-038).
+    var moderation: ActivityModeration? = nil
 
-    // Texte affiché après le nom de l'auteur de l'action.
+    // Texte affiché après le nom de l'auteur de l'action (le texte entier pour une décision de modération).
     var summary: String {
         switch kind {
         case .like: "a aimé ta vidéo."
         case .comment: "a commenté ta vidéo : \(comment?.content ?? "")"
         case .follow: "a commencé à te suivre."
         case .repost: "a republié ta vidéo."
+        case .reportResolved, .contentRemoved: moderation?.text(kind) ?? ""
         }
     }
 }
@@ -49,10 +97,12 @@ struct ActivityPage: Equatable, Sendable {
 // Groupe de la boîte de réception, calculé par l'API (choix du développeur, comme TikTok) : like et
 // republication par vidéo, tous les follows ensemble, chaque commentaire seul.
 struct ActivityGroup: Identifiable, Equatable, Sendable {
-    // Clé stable : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`.
+    // Clé stable : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`,
+    // `moderation:<notificationId>`.
     let key: String
     let kind: ActivityKind
-    // Auteurs des notifications les plus récentes, 2 au plus, du plus récent au plus ancien.
+    // Auteurs des notifications les plus récentes, 2 au plus, du plus récent au plus ancien ; aucun pour une décision
+    // de modération.
     let actors: [UserSummary]
     let count: Int
     let video: ActivityNotification.Video?
@@ -64,6 +114,8 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
     let createdAt: Date
     // Abonnement d'un seul compte : relation avec lui (« Suivre en retour »), comme `ActivityNotification`.
     var actorRelationship: Relationship? = nil
+    // Décision de modération (ADR-038), toujours seule dans son groupe.
+    var moderation: ActivityModeration? = nil
 
     var id: String { key }
 
@@ -77,12 +129,13 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         switch kind {
         case .like, .repost: video.map { ActivityFilter(kind: kind, videoID: $0.id) }
         case .follow: ActivityFilter(kind: .follow, videoID: nil)
-        case .comment: nil
+        case .comment, .reportResolved, .contentRemoved: nil
         }
     }
 
     // « Inès Moreau », « Inès Moreau et Nathan Petit », « Inès Moreau, Nathan Petit et 3 autres ».
     var actorNames: String {
+        if kind.isModeration, let moderation { return moderation.title(kind) }
         let names = actors.map(\.displayName)
         let others = count - names.count
         switch (names.count, others) {
@@ -102,6 +155,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .comment: return "a commenté ta vidéo : \(comment?.content ?? "")"
         case .follow: return plural ? "ont commencé à te suivre." : "a commencé à te suivre."
         case .repost: return plural ? "ont republié ta vidéo." : "a republié ta vidéo."
+        case .reportResolved, .contentRemoved: return moderation?.text(kind) ?? ""
         }
     }
 
@@ -111,6 +165,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .like, .repost: "\(notification.kind.rawValue):\(notification.video?.id ?? "")"
         case .follow: "follow"
         case .comment: "comment:\(notification.id)"
+        case .reportResolved, .contentRemoved: "moderation:\(notification.id)"
         }
     }
 
@@ -119,12 +174,13 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
     static func merging(_ notification: ActivityNotification, into existing: ActivityGroup?) -> ActivityGroup {
         guard let existing else {
             return ActivityGroup(
-                key: key(for: notification), kind: notification.kind, actors: [notification.actor], count: 1,
+                key: key(for: notification), kind: notification.kind, actors: notification.actor.map { [$0] } ?? [], count: 1,
                 video: notification.video, comment: notification.comment, read: notification.read,
-                latestID: notification.id, createdAt: notification.createdAt, actorRelationship: notification.actorRelationship
+                latestID: notification.id, createdAt: notification.createdAt, actorRelationship: notification.actorRelationship,
+                moderation: notification.moderation
             )
         }
-        let actors = [notification.actor] + existing.actors.filter { $0.id != notification.actor.id }
+        let actors = (notification.actor.map { [$0] } ?? []) + existing.actors.filter { $0.id != notification.actor?.id }
         return ActivityGroup(
             key: existing.key, kind: existing.kind, actors: Array(actors.prefix(2)), count: existing.count + 1,
             video: notification.video ?? existing.video, comment: existing.comment, read: existing.read && notification.read,
@@ -149,6 +205,7 @@ struct ActivityFilter: Hashable, Sendable {
         case .comment: "Commentaires"
         case .follow: "Nouveaux abonnés"
         case .repost: "Republications"
+        case .reportResolved, .contentRemoved: "Modération"
         }
     }
 }

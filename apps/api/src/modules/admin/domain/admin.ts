@@ -60,7 +60,9 @@ export interface RecentCount {
 // Une cible de la file des signalements (ADR-038), avec ce qu'il faut pour l'afficher.
 export interface ModeratedReportTarget {
   target: ReportTarget;
-  targetUser: User;
+  // Nul si le compte visé a été supprimé depuis ; son pseudo copié reste.
+  targetUser: User | null;
+  targetUsername: string;
   // Faux si le contenu a disparu depuis.
   available: boolean;
   thumbnailUrl: string | null;

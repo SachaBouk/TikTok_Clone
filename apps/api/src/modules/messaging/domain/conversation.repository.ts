@@ -28,6 +28,8 @@ export abstract class ConversationRepository {
     openRequest: boolean;
   }): Promise<Message>;
   abstract findMessage(messageId: string): Promise<Message | null>;
+  // Messages existants parmi `ids`, dans un ordre quelconque.
+  abstract findMessagesByIds(ids: string[]): Promise<Message[]>;
   abstract deleteMessage(messageId: string): Promise<void>;
   // Du plus récent au plus ancien, strictement avant `beforeId` et après `afterId` s'ils sont donnés.
   abstract listMessages(conversationId: string, beforeId: string | null, afterId: string | null, limit: number): Promise<Message[]>;

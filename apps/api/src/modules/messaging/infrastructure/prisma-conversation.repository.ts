@@ -133,6 +133,11 @@ export class PrismaConversationRepository extends ConversationRepository {
     return this.prisma.message.findUnique({ where: { id: messageId }, select: messageSelect });
   }
 
+  async findMessagesByIds(ids: string[]): Promise<Message[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.message.findMany({ where: { id: { in: ids } }, select: messageSelect });
+  }
+
   async deleteMessage(messageId: string): Promise<void> {
     await this.prisma.message.deleteMany({ where: { id: messageId } });
   }

@@ -5,9 +5,10 @@ import { redirect } from 'next/navigation';
 import { ApiError } from '@/lib/api-error';
 import { MAX_SUSPENSION_REASON_LENGTH } from '@/lib/moderation-rules';
 import { safeReturnPath } from '@/lib/session-cookies';
-import type { ReportTargetType } from '@repo/shared';
-import { REPORT_TARGET_TYPES } from '@/lib/report-labels';
+import type { ReportReason, ReportTargetType } from '@repo/shared';
+import { REPORT_REASONS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import * as comments from '@/models/comments.model';
+import * as messages from '@/models/messages.model';
 import * as reports from '@/models/reports.model';
 import * as users from '@/models/users.model';
 import * as videos from '@/models/videos.model';
@@ -21,19 +22,33 @@ export interface ActionResult {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Les suppressions prennent un motif de la liste des signalements, annoncé à l'auteur du contenu (ADR-038). Il vient en
+// dernier : les composants lient la cible (`bind`) et ajoutent le motif choisi.
+
 // Suppression d'une vidéo, puis retour à `returnTo` (la liste, si l'on était sur sa page).
-export async function removeVideo(videoId: string, returnTo: string | null): Promise<ActionResult> {
+export async function removeVideo(videoId: string, returnTo: string | null, reason: ReportReason): Promise<ActionResult> {
   if (!UUID.test(videoId)) return { error: 'Identifiant de vidéo invalide.' };
-  const failure = await attempt(() => videos.deleteVideo(videoId), 'Cette vidéo a déjà été supprimée.');
+  if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
+  const failure = await attempt(() => videos.deleteVideo(videoId, reason), 'Cette vidéo a déjà été supprimée.');
   if (failure) return failure;
   revalidatePath('/', 'layout');
   if (returnTo) redirect(safeReturnPath(returnTo));
   return { error: null };
 }
 
-export async function removeComment(commentId: string): Promise<ActionResult> {
+export async function removeComment(commentId: string, reason: ReportReason): Promise<ActionResult> {
   if (!UUID.test(commentId)) return { error: 'Identifiant de commentaire invalide.' };
-  const failure = await attempt(() => comments.deleteComment(commentId), 'Ce commentaire a déjà été supprimé.');
+  if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
+  const failure = await attempt(() => comments.deleteComment(commentId, reason), 'Ce commentaire a déjà été supprimé.');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
+export async function removeMessage(messageId: string, reason: ReportReason): Promise<ActionResult> {
+  if (!UUID.test(messageId)) return { error: 'Identifiant de message invalide.' };
+  if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
+  const failure = await attempt(() => messages.deleteMessage(messageId, reason), 'Ce message a déjà été supprimé.');
   if (failure) return failure;
   revalidatePath('/', 'layout');
   return { error: null };

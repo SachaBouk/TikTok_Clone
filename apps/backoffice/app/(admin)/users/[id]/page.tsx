@@ -55,6 +55,9 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         <Button variant="outline" asChild>
           <Link href={`/comments?userId=${user.id}`}>Ses commentaires</Link>
         </Button>
+        <Button variant="outline" asChild>
+          <Link href={`/moderation?userId=${user.id}`}>Journal de modération</Link>
+        </Button>
         {/* Un administrateur ne peut pas être suspendu : retirer d'abord son rôle (pnpm admin:revoke). */}
         {!user.suspension && user.role !== 'admin' && <SuspendAccount userId={user.id} username={user.username} />}
       </div>

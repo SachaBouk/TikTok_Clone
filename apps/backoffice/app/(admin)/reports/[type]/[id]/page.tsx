@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReportTargetType } from '@repo/shared';
 import { ConfirmAction } from '@/components/confirm-action';
-import { ReportTargetPreview } from '@/components/report-target-preview';
+import { RemoveContent } from '@/components/remove-content';
+import { ReportTargetAccount, ReportTargetPreview } from '@/components/report-target-preview';
 import { SuspendAccount } from '@/components/suspend-account';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { dismissReports, removeComment, removeVideo } from '@/controllers/moderation.actions';
+import { dismissReports, removeComment, removeMessage, removeVideo } from '@/controllers/moderation.actions';
 import { formatDateTime } from '@/lib/format';
 import { REPORT_REASON_LABELS, REPORT_RESOLUTION_LABELS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import { getReportTarget } from '@/models/reports.model';
@@ -27,6 +28,9 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
   if (!detail) notFound();
   const { target, reports } = detail;
   const isOpen = target.openCount > 0;
+  // Motif proposé à la suppression : le plus signalé parmi les signalements ouverts.
+  const defaultReason = target.reasons[0]?.reason;
+  const notice = 'Son auteur est prévenu avec le motif choisi, et les personnes qui l’ont signalé reçoivent la décision.';
   const contentHref =
     target.targetType === 'video' ? `/videos/${target.targetId}` : target.targetType === 'comment' && target.videoId ? `/videos/${target.videoId}` : null;
 
@@ -38,9 +42,7 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
           <ReportTargetPreview target={target} />
           <p className="text-sm text-muted-foreground">
             Compte visé :{' '}
-            <Link href={`/users/${target.targetUser.id}`} className="font-medium text-foreground hover:underline">
-              @{target.targetUser.username}
-            </Link>
+            <ReportTargetAccount target={target} className="font-medium text-foreground hover:underline" />
           </p>
         </div>
         {contentHref && target.available && (
@@ -57,30 +59,40 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
         {isOpen && (
           <CardContent className="flex flex-wrap gap-2">
             {target.available && target.targetType === 'video' && (
-              <ConfirmAction
+              <RemoveContent
                 label="Supprimer la vidéo"
                 title="Supprimer cette vidéo ?"
-                description="Suppression définitive, comme par son auteur. Ses signalements ouverts sont clos. L’auteur n’est pas prévenu."
-                confirmLabel="Supprimer"
+                description={`Suppression définitive, comme par son auteur. Ses signalements ouverts sont clos. ${notice}`}
                 size="default"
+                defaultReason={defaultReason}
                 action={removeVideo.bind(null, target.targetId, null)}
               />
             )}
             {target.available && target.targetType === 'comment' && (
-              <ConfirmAction
+              <RemoveContent
                 label="Supprimer le commentaire"
                 title="Supprimer ce commentaire ?"
-                description="Suppression définitive. Ses signalements ouverts sont clos. L’auteur n’est pas prévenu."
-                confirmLabel="Supprimer"
+                description={`Suppression définitive. Ses signalements ouverts sont clos. ${notice}`}
                 size="default"
+                defaultReason={defaultReason}
                 action={removeComment.bind(null, target.targetId)}
               />
             )}
-            <SuspendAccount userId={target.targetUser.id} username={target.targetUser.username} />
+            {target.available && target.targetType === 'message' && (
+              <RemoveContent
+                label="Supprimer le message"
+                title="Supprimer ce message ?"
+                description={`Le message disparaît pour les deux participants, comme retiré par son expéditeur. ${notice}`}
+                size="default"
+                defaultReason={defaultReason}
+                action={removeMessage.bind(null, target.targetId)}
+              />
+            )}
+            {target.targetUser && <SuspendAccount userId={target.targetUser.id} username={target.targetUser.username} />}
             <ConfirmAction
               label="Classer sans suite"
               title="Classer ces signalements sans suite ?"
-              description="Le contenu reste en ligne. Il pourra être signalé de nouveau."
+              description="Le contenu reste en ligne. Il pourra être signalé de nouveau. Les personnes qui l’ont signalé reçoivent la décision."
               confirmLabel="Classer sans suite"
               pendingLabel="Classement…"
               destructive={false}

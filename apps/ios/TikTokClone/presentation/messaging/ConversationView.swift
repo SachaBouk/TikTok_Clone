@@ -2,13 +2,14 @@ import SwiftUI
 
 // Fil d'une conversation : messages (texte, vidéo partagée), « Vu », « en train d'écrire », champ de saisie.
 // Demande reçue : accepter ou refuser (ou répondre, ce qui l'accepte). Appui long sur un message : copier,
-// retirer le sien (pour les deux).
+// retirer le sien (pour les deux), signaler celui de l'autre (ADR-038).
 struct ConversationView: View {
     @State private var viewModel: ConversationViewModel
     let container: AppContainer
     @State private var isConfirmingDelete = false
     @State private var isConfirmingDecline = false
     @State private var retracting: DirectMessage?
+    @State private var reportTarget: ReportTarget?
     @State private var isOnScreen = false
     // Ouvert par un bouton : un lien de navigation par valeur ne fonctionne pas dans un écran lui-même poussé
     // par `navigationDestination(item:)` (boîte de réception, demandes).
@@ -45,6 +46,7 @@ struct ConversationView: View {
             .onChange(of: viewModel.isClosed) { _, closed in
                 if closed { dismiss() }
             }
+            .reportSheet($reportTarget, container: container)
             .confirmationDialog("Supprimer la conversation ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
                 Button("Supprimer", role: .destructive) { Task { await viewModel.delete() } }
             } message: {
@@ -129,6 +131,8 @@ struct ConversationView: View {
                             }
                             if isOwn {
                                 Button("Retirer", systemImage: "trash", role: .destructive) { retracting = message }
+                            } else {
+                                Button("Signaler", systemImage: "flag") { reportTarget = .message(id: message.id) }
                             }
                         }
                         .id(message.id)

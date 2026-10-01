@@ -1,4 +1,4 @@
-import type { NewReport, OpenReportTarget, Report, ReportResolution, ReportTarget } from './report';
+import type { NewReport, OpenReportTarget, Report, ReportResolution, ReportTarget, ResolvedReport } from './report';
 
 // Port de la table reports (ADR-038).
 export abstract class ReportRepository {
@@ -11,9 +11,9 @@ export abstract class ReportRepository {
   abstract findOpenTarget(target: ReportTarget): Promise<OpenReportTarget | null>;
   // Tous les signalements d'une cible, du plus récent au plus ancien.
   abstract listForTarget(target: ReportTarget, limit: number): Promise<Report[]>;
-  // Clôt les signalements ouverts : d'une cible, ou de toutes les cibles d'un compte (vidéos, commentaires, compte).
-  // Renvoie le nombre de signalements clos.
-  abstract resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number>;
-  abstract resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<number>;
+  // Clôt les signalements ouverts : d'une cible, ou de toutes les cibles d'un compte (compte, vidéos, commentaires,
+  // messages). Renvoie les signalements clos.
+  abstract resolveTarget(target: ReportTarget, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]>;
+  abstract resolveForUser(targetUserId: string, resolution: ReportResolution, resolvedBy: string, at: Date): Promise<ResolvedReport[]>;
   abstract countOpenTargets(): Promise<number>;
 }

@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import { GROUP_ACTORS_SHOWN, type ActivityEvent, type Notification, type NotificationFilter, type NotificationGroup, type RetractableActivity } from '../domain/notification';
+import {
+  GROUP_ACTORS_SHOWN,
+  type ActivityEvent,
+  type ModerationEvent,
+  type ModerationOutcome,
+  type Notification,
+  type NotificationFilter,
+  type NotificationGroup,
+  type RetractableActivity,
+} from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
 const notificationSelect = {
@@ -12,9 +21,15 @@ const notificationSelect = {
   videoId: true,
   commentId: true,
   commentText: true,
+  moderationTargetType: true,
+  moderationReason: true,
+  moderationOutcome: true,
+  moderationExcerpt: true,
   readAt: true,
   createdAt: true,
 } as const;
+
+type NotificationRow = Prisma.NotificationGetPayload<{ select: typeof notificationSelect }>;
 
 // Table notifications. Les index uniques partiels (migration notifications) empêchent les doublons
 // de like, republication et follow ; une contrainte CHECK refuse une notification adressée à son auteur.
@@ -44,6 +59,21 @@ export class PrismaNotificationRepository extends NotificationRepository {
     return created ? toNotification(created) : null;
   }
 
+  async addModeration(event: ModerationEvent): Promise<Notification> {
+    const created = await this.prisma.notification.create({
+      data: {
+        userId: event.recipientId,
+        type: event.type,
+        moderationTargetType: event.targetType,
+        moderationReason: event.type === 'contentRemoved' ? event.reason : null,
+        moderationOutcome: event.type === 'reportResolved' ? event.outcome : null,
+        moderationExcerpt: event.excerpt,
+      },
+      select: notificationSelect,
+    });
+    return toNotification(created);
+  }
+
   async remove(activity: RetractableActivity): Promise<boolean> {
     const { count } = await this.prisma.notification.deleteMany({
       where:
@@ -71,7 +101,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
     const rows = await this.prisma.notification.findMany({
       where: {
         userId: recipientId,
-        ...(excludedActorIds.length ? { actorId: { notIn: excludedActorIds } } : {}),
+        ...(excludedActorIds.length ? { OR: [{ actorId: null }, { actorId: { notIn: excludedActorIds } }] } : {}),
         ...(filter.type ? { type: filter.type } : {}),
         ...(filter.videoId ? { videoId: filter.videoId } : {}),
         ...(beforeId ? { id: { lt: beforeId } } : {}),
@@ -88,18 +118,19 @@ export class PrismaNotificationRepository extends NotificationRepository {
   // lecture et les auteurs les plus récents. Les notifications les plus récentes sont ensuite relues par Prisma.
   async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
     const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
-    const excluded = excludedActorIds.length ? Prisma.sql`AND actor_id <> ALL(${excludedActorIds}::uuid[])` : Prisma.empty;
-    const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] }[]>`
+    // Sans auteur (modération) : jamais exclue (`actor_id <> ALL(…)` vaudrait NULL).
+    const excluded = excludedActorIds.length ? Prisma.sql`AND (actor_id IS NULL OR actor_id <> ALL(${excludedActorIds}::uuid[]))` : Prisma.empty;
+    const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] | null }[]>`
       WITH grouped AS (
         SELECT max(notification_id::text)::uuid AS latest_id,
                count(*)::int AS count,
                bool_or(read_at IS NULL) AS unread,
-               (array_agg(actor_id::text ORDER BY notification_id DESC))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
+               (array_agg(actor_id::text ORDER BY notification_id DESC) FILTER (WHERE actor_id IS NOT NULL))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
         FROM notifications
         WHERE user_id = ${recipientId}::uuid ${excluded}
         GROUP BY type,
                  CASE WHEN type IN ('like', 'repost') THEN video_id END,
-                 CASE WHEN type = 'comment' THEN notification_id END
+                 CASE WHEN type NOT IN ('like', 'repost', 'follow') THEN notification_id END
       )
       SELECT latest_id::text AS latest_id, count, unread, actor_ids FROM grouped
       ${before}
@@ -114,13 +145,17 @@ export class PrismaNotificationRepository extends NotificationRepository {
     );
     return rows.flatMap((row) => {
       const notification = latest.get(row.latest_id);
-      return notification ? [{ latest: notification, count: row.count, unread: row.unread, recentActorIds: row.actor_ids }] : [];
+      return notification ? [{ latest: notification, count: row.count, unread: row.unread, recentActorIds: row.actor_ids ?? [] }] : [];
     });
   }
 
   countUnread(recipientId: string, excludedActorIds: string[]): Promise<number> {
     return this.prisma.notification.count({
-      where: { userId: recipientId, readAt: null, ...(excludedActorIds.length ? { actorId: { notIn: excludedActorIds } } : {}) },
+      where: {
+        userId: recipientId,
+        readAt: null,
+        ...(excludedActorIds.length ? { OR: [{ actorId: null }, { actorId: { notIn: excludedActorIds } }] } : {}),
+      },
     });
   }
 
@@ -132,7 +167,25 @@ export class PrismaNotificationRepository extends NotificationRepository {
   }
 }
 
-// La colonne `user_id` est le destinataire.
-function toNotification({ userId, ...rest }: Omit<Notification, 'recipientId'> & { userId: string }): Notification {
-  return { ...rest, recipientId: userId };
+// La colonne `user_id` est le destinataire ; les colonnes de modération forment `moderation`.
+function toNotification(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    recipientId: row.userId,
+    actorId: row.actorId,
+    type: row.type,
+    videoId: row.videoId,
+    commentId: row.commentId,
+    commentText: row.commentText,
+    moderation: row.moderationTargetType
+      ? {
+          targetType: row.moderationTargetType,
+          reason: row.moderationReason,
+          outcome: row.moderationOutcome as ModerationOutcome | null,
+          excerpt: row.moderationExcerpt,
+        }
+      : null,
+    readAt: row.readAt,
+    createdAt: row.createdAt,
+  };
 }

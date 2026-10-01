@@ -8,7 +8,7 @@ struct VideoDetailView: View {
     let container: AppContainer
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
-    @State private var manageVideo: FeedVideo?
+    @State private var reportedVideo: FeedVideo?
     @State private var alertMessage: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -47,7 +47,12 @@ struct VideoDetailView: View {
         .onChange(of: interactions.blockedUserIDs) { _, ids in
             if case .loaded(let video) = viewModel.state, ids.contains(video.author.id) { dismiss() }
         }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, manage: $manageVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions, container: container)
+    }
+
+    // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
+    private func report(_ video: FeedVideo) {
+        if container.session.isSignedIn { reportedVideo = video } else { container.session.requestSignIn() }
     }
 
     @ViewBuilder
@@ -71,7 +76,7 @@ struct VideoDetailView: View {
                     togglePause: { viewModel.togglePause() },
                     comments: { commentsVideo = interactions.display(video) },
                     share: { shareVideo = interactions.display(video) },
-                    manage: { manageVideo = video },
+                    report: { report(video) },
                     alert: { alertMessage = $0 }
                 )
             )

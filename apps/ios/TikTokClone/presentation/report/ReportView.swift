@@ -74,7 +74,9 @@ struct ReportView: View {
             } header: {
                 Text(viewModel.target.question)
             } footer: {
-                Text("Ton signalement est anonyme : la personne concernée ne saura pas qui l’a envoyé.")
+                Text(["Ton signalement est anonyme : la personne concernée ne saura pas qui l’a envoyé.", viewModel.target.privacyNote]
+                    .compactMap { $0 }
+                    .joined(separator: " "))
             }
             Section {
                 TextField("Ajoute des détails (facultatif)", text: $viewModel.details, axis: .vertical)
@@ -92,7 +94,7 @@ struct ReportView: View {
         ContentUnavailableView {
             Label("Merci", systemImage: "checkmark.shield")
         } description: {
-            Text("Ton signalement sera examiné.")
+            Text("Ton signalement sera examiné. La décision arrivera dans ton activité.")
         } actions: {
             if case .account(_, let username) = viewModel.target, let onBlock {
                 Button("Bloquer @\(username)", role: .destructive) {

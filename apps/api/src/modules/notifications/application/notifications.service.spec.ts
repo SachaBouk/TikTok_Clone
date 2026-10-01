@@ -99,7 +99,7 @@ describe('NotificationsService', () => {
       await service.notify(like('alice'));
       await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
 
-      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor.id, item.video?.id ?? null, unreadCount])).toEqual([
+      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor?.id, item.video?.id ?? null, unreadCount])).toEqual([
         ['like', 'alice', video, 1],
         ['follow', 'carol', null, 2],
       ]);
@@ -211,7 +211,7 @@ describe('NotificationsService', () => {
       await service.notify(like('carol'));
       await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
       const page = await service.list('bob', null, 20, { type: 'like', videoId: video });
-      expect(page.items.map((i) => i.actor.id)).toEqual(['carol', 'alice']);
+      expect(page.items.map((i) => i.actor?.id)).toEqual(['carol', 'alice']);
       expect((await service.list('bob', null, 20, { type: 'follow' })).items).toHaveLength(1);
     });
   });
@@ -223,7 +223,7 @@ describe('NotificationsService', () => {
       await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
       await suspended.add('carol');
 
-      expect((await service.list('bob', null, 10)).items.map((i) => i.actor.id)).toEqual(['alice']);
+      expect((await service.list('bob', null, 10)).items.map((i) => i.actor?.id)).toEqual(['alice']);
       const groups = (await service.listGroups('bob', null, 10)).items;
       expect(groups.map((g) => [g.group.latest.type, g.group.count, g.actors.map((a) => a.id)])).toEqual([['like', 1, ['alice']]]);
       await expect(service.unreadCount('bob')).resolves.toBe(1);
@@ -231,6 +231,29 @@ describe('NotificationsService', () => {
       await suspended.remove('carol');
       await expect(service.unreadCount('bob')).resolves.toBe(3);
       expect((await service.listGroups('bob', null, 10)).items.map((g) => g.group.count)).toEqual([1, 2]);
+    });
+  });
+
+  describe('modération (ADR-038)', () => {
+    it('sans auteur : envoyée en direct, jamais regroupée, comptée même si des comptes sont suspendus', async () => {
+      await suspended.add('carol');
+      await service.notifyModeration({ type: 'contentRemoved', recipientId: 'bob', targetType: 'video', reason: 'spam', excerpt: 'Démo' });
+      await service.notifyModeration({ type: 'reportResolved', recipientId: 'bob', targetType: 'comment', outcome: 'dismissed', excerpt: 'Bravo' });
+      await service.notifyModeration({ type: 'reportResolved', recipientId: 'bob', targetType: 'comment', outcome: 'dismissed', excerpt: 'Bravo' });
+
+      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor, item.notification.moderation?.targetType, unreadCount])).toEqual([
+        ['contentRemoved', null, 'video', 1],
+        ['reportResolved', null, 'comment', 2],
+        ['reportResolved', null, 'comment', 3],
+      ]);
+      const groups = (await service.listGroups('bob', null, 10)).items;
+      expect(groups.map((g) => [g.group.latest.type, g.group.count, g.actors])).toEqual([
+        ['reportResolved', 1, []],
+        ['reportResolved', 1, []],
+        ['contentRemoved', 1, []],
+      ]);
+      expect(groups[2]!.group.latest.moderation).toEqual({ targetType: 'video', reason: 'spam', outcome: null, excerpt: 'Démo' });
+      await expect(service.unreadCount('bob')).resolves.toBe(3);
     });
   });
 

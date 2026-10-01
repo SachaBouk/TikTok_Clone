@@ -94,6 +94,6 @@ extension ActivityNotification {
     }
 
     func marked(read: Bool) -> ActivityNotification {
-        ActivityNotification(id: id, kind: kind, actor: actor, video: video, comment: comment, read: read, createdAt: createdAt)
+        ActivityNotification(id: id, kind: kind, actor: actor, video: video, comment: comment, read: read, createdAt: createdAt, moderation: moderation)
     }
 }

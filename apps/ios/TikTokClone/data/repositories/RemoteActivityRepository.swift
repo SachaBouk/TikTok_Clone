@@ -61,11 +61,12 @@ extension ActivityNotification {
         self.init(
             id: dto.id,
             kind: ActivityKind(dto.kind),
-            actor: UserSummary(dto.actor),
+            actor: dto.actor.map(UserSummary.init),
             video: dto.video.map { Video(id: $0.id, thumbnailURL: URL(string: $0.thumbnailUrl)) },
             comment: dto.comment.map { Comment(id: $0.id, content: $0.content) },
             read: dto.read,
-            createdAt: dto.createdAt
+            createdAt: dto.createdAt,
+            moderation: dto.moderation.map(ActivityModeration.init)
         )
     }
 }
@@ -81,8 +82,42 @@ extension ActivityGroup {
             comment: dto.comment.map { ActivityNotification.Comment(id: $0.id, content: $0.content) },
             read: dto.read,
             latestID: dto.latestId,
-            createdAt: dto.createdAt
+            createdAt: dto.createdAt,
+            moderation: dto.moderation.map(ActivityModeration.init)
         )
+    }
+}
+
+extension ActivityModeration {
+    init(_ dto: Components.Schemas.NotificationModerationResponse) {
+        let target: Target = switch dto.targetType {
+        case .video: .video
+        case .comment: .comment
+        case .account: .account
+        case .message: .message
+        }
+        let outcome: Outcome? = dto.outcome.map {
+            switch $0 {
+            case .contentRemoved: .contentRemoved
+            case .accountSuspended: .accountSuspended
+            case .dismissed: .dismissed
+            }
+        }
+        self.init(target: target, reason: dto.reason.map(ReportReason.init), outcome: outcome, excerpt: dto.excerpt)
+    }
+}
+
+extension ReportReason {
+    init(_ dto: Components.Schemas.ReportReason) {
+        switch dto {
+        case .spam: self = .spam
+        case .harassment: self = .harassment
+        case .hate: self = .hate
+        case .violence: self = .violence
+        case .sexual: self = .sexual
+        case .impersonation: self = .impersonation
+        case .other: self = .other
+        }
     }
 }
 
@@ -93,6 +128,8 @@ extension Components.Schemas.NotificationType {
         case .comment: self = .comment
         case .follow: self = .follow
         case .repost: self = .repost
+        case .reportResolved: self = .reportResolved
+        case .contentRemoved: self = .contentRemoved
         }
     }
 }
@@ -104,6 +141,8 @@ extension ActivityKind {
         case .comment: self = .comment
         case .follow: self = .follow
         case .repost: self = .repost
+        case .reportResolved: self = .reportResolved
+        case .contentRemoved: self = .contentRemoved
         }
     }
 }

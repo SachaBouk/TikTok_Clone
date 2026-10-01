@@ -70,7 +70,7 @@ Mise en œuvre :
 - Après la levée, un access token encore valide (moins de 15 minutes) fonctionne de nouveau. Les sessions, elles, restent révoquées.
 - Les compteurs (abonnés, likes, commentaires) comptent toujours les contributions du compte suspendu.
 - Le badge des notifications n'est pas renvoyé en direct au moment de la suspension : il est relu ensuite.
-- Pas de journal des actions de modération (ADR-019), ni de liste des comptes suspendus dans le backoffice (recherche par pseudo).
+- Pas de liste des comptes suspendus dans le backoffice (recherche par pseudo). Suspensions et levées sont inscrites au journal de modération (ADR-038).
 - Une personne suspendue ne peut pas supprimer elle-même son compte : une demande de suppression passe par l'exploitant.
 
 ## Liens

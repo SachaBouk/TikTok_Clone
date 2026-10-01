@@ -52,22 +52,28 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
-- **Signalements** (ADR-038) : file des vidéos, commentaires et comptes signalés, groupés par cible (aperçu, compte visé,
-  nombre, motifs), de la plus récemment signalée à la plus ancienne ; alerte sur le tableau de bord. Page d'une cible :
-  « Supprimer la vidéo / le commentaire », « Suspendre », « Classer sans suite », et l'historique des signalements avec la
-  décision (date, administrateur). Toute décision clôt les signalements ouverts de la cible (une suspension, ceux de tout
-  le compte). Rien n'est masqué avant décision.
+- **Signalements** (ADR-038) : file des vidéos, commentaires, messages et comptes signalés, groupés par cible (aperçu,
+  compte visé, nombre, motifs), de la plus récemment signalée à la plus ancienne ; alerte sur le tableau de bord. Page d'une
+  cible : « Supprimer la vidéo / le commentaire / le message », « Suspendre », « Classer sans suite », et l'historique des
+  signalements avec la décision (date, administrateur). Toute décision clôt les signalements ouverts de la cible (une
+  suspension, ceux de tout le compte) et est annoncée aux personnes qui les ont envoyés. Un contenu supprimé par son
+  auteur, ou un compte supprimé, quitte la file de lui-même. Rien n'est masqué avant décision. D'un message, seul son
+  texte est visible : jamais la conversation.
+- **Journal** (ADR-038) : chaque suppression, suspension, levée et classement sans suite, avec l'administrateur, le compte
+  visé, le contenu, le motif et le nombre de signalements clos ; filtrable par compte (lien depuis sa fiche).
 - **Jetons** (ADR-032, lecture seule) : vendus, remboursés, ajustés et en circulation (production ; achats de test à part),
   journal complet filtrable par compte ou « à rapprocher » (client RevenueCat inconnu de l'API : rien n'a été crédité).
   Montant annoncé et appliqué, solde après, identifiants RevenueCat et store. Un crédit manuel passe par un ajustement
   dans RevenueCat (il revient par le webhook).
 
-Suppressions confirmées dans une alerte. Une vidéo est supprimée comme par son auteur (cascade, fichiers nettoyés par l'API) ;
-un commentaire emporte sa notification. L'auteur n'est pas prévenu.
+Suppressions confirmées dans une alerte, avec un **motif** de la liste des signalements (le plus signalé est proposé depuis
+un signalement) : l'auteur reçoit « Contenu retiré » avec ce motif, dans son activité et en notification push. Une vidéo est
+supprimée comme par son auteur (cascade, fichiers nettoyés par l'API) ; un commentaire emporte sa notification ; un message
+disparaît pour les deux participants.
 
 ## Limites
 
-- Pas de journal des actions de modération (seules les décisions sur des signalements sont gardées) ; les messages ne sont pas signalables.
+- Pas de contestation d'une décision par l'auteur ; le rôle administrateur (script `admin:grant`) n'est pas journalisé.
 - Pas de liste des comptes suspendus : on les retrouve par la recherche (pseudo, nom).
 - Rafraîchissement dédupliqué propre au processus : avec plusieurs instances du backoffice, il faudrait un magasin partagé (Redis via l'API, ou affinité de session).
 - Pas de copie des données PostHog : liens seulement.
