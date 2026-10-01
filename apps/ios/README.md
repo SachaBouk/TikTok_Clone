@@ -123,6 +123,7 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
 - Bloquer ou débloquer un compte : menu « … » de son profil. Ses vidéos, commentaires et lignes d'abonnés disparaissent aussitôt des écrans déjà chargés ; l'API ne les renvoie plus ensuite (ADR-029).
 - Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
+- Signaler (ADR-038) : « … » du lecteur sur la vidéo d'un autre, geste « Signaler » sur son commentaire, « Signaler » dans le menu « … » de son profil. Feuille commune : motif de la liste, précision facultative (500 caractères), puis « Merci, ton signalement sera examiné. » ; après un signalement de compte, « Bloquer @… ». Rien n'est masqué ensuite : un administrateur décide.
 
 ## Boîte de réception et messagerie
 

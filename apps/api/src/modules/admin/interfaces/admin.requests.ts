@@ -77,3 +77,6 @@ export class AdminSuspendRequest implements AdminSuspendUserDto {
   @Matches(/\S/, { message: 'Le motif est obligatoire' })
   reason!: string;
 }
+
+// File des signalements (ADR-038) : curseur = `latestReportId` interne, renvoyé tel quel dans `nextCursor`.
+export class AdminReportsQuery extends AdminPageQuery {}

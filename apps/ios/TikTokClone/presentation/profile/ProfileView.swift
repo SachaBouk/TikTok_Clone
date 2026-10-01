@@ -7,6 +7,9 @@ struct ProfileView: View {
     let container: AppContainer
     @State private var isEditing = false
     @State private var isConfirmingBlock = false
+    @State private var reportTarget: ReportTarget?
+    // « Bloquer » choisi après un signalement : la confirmation s'ouvre une fois la feuille fermée.
+    @State private var blockAfterReport = false
     @State private var failedPublication: PublishingModel.Publication?
     @State private var alertMessage: String?
     // « Message » : ouvert par un bouton, le profil pouvant lui-même être poussé par `navigationDestination(item:)`.
@@ -30,6 +33,13 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $isEditing) {
                 EditProfileView(viewModel: container.makeEditProfileViewModel())
+            }
+            // Signalement du compte (ADR-038) ; la confirmation propose ensuite de le bloquer (s'il ne l'est pas déjà).
+            .reportSheet($reportTarget, container: container, onBlock: viewModel.isBlocked ? nil : { blockAfterReport = true }) {
+                if blockAfterReport {
+                    blockAfterReport = false
+                    isConfirmingBlock = true
+                }
             }
             .confirmationDialog(blockTitle, isPresented: $isConfirmingBlock, titleVisibility: .visible) {
                 Button(viewModel.isBlocked ? "Débloquer" : "Bloquer", role: viewModel.isBlocked ? nil : .destructive) {
@@ -238,6 +248,11 @@ struct ProfileView: View {
                 .accessibilityIdentifier("profile.settings")
             } else if container.session.isSignedIn, viewModel.profile != nil {
                 Menu {
+                    if let profile = viewModel.profile {
+                        Button("Signaler", systemImage: "flag") {
+                            reportTarget = .account(id: profile.id, username: profile.username)
+                        }
+                    }
                     Button(viewModel.isBlocked ? "Débloquer" : "Bloquer", systemImage: "hand.raised", role: viewModel.isBlocked ? nil : .destructive) {
                         isConfirmingBlock = true
                     }

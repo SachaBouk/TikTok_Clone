@@ -39,6 +39,7 @@
 | [ADR-035](ADR-035-metadonnees-personnelles-videos.md) | Métadonnées personnelles des vidéos retirées dans l'app (complète ADR-007) | Proposé |
 | [ADR-036](ADR-036-suivre-en-retour-activite.md) | « Suivre en retour » dans le centre d'activité (complète ADR-028) | Proposé |
 | [ADR-037](ADR-037-suspension-compte.md) | Suspension de compte (complète ADR-019) | Proposé |
+| [ADR-038](ADR-038-signalements.md) | Signalements (complète ADR-019) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

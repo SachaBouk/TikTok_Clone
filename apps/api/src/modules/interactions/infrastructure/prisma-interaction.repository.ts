@@ -139,6 +139,11 @@ export class PrismaInteractionRepository extends InteractionRepository {
     return this.prisma.comment.findUnique({ where: { id }, select: commentSelect });
   }
 
+  async findCommentsByIds(ids: string[]): Promise<Comment[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.comment.findMany({ where: { id: { in: ids } }, select: commentSelect });
+  }
+
   async deleteComment(id: string): Promise<void> {
     await this.prisma.comment.deleteMany({ where: { id } });
   }

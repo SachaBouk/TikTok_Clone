@@ -88,6 +88,11 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "follow_changed", properties: ["user_id": .string(userID), "active": .bool(active)])
     }
 
+    // Signalement envoyé (ADR-038) : type de cible et motif, jamais la précision saisie.
+    static func reportSubmitted(target: ReportTarget, reason: ReportReason) -> AnalyticsEvent {
+        AnalyticsEvent(name: "report_submitted", properties: ["target_type": .string(target.analyticsName), "reason": .string(reason.rawValue)])
+    }
+
     static func messageSent(conversationID: String, status: ConversationStatus) -> AnalyticsEvent {
         AnalyticsEvent(name: "message_sent", properties: [
             "conversation_id": .string(conversationID),

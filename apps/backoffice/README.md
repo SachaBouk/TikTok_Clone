@@ -52,6 +52,11 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
+- **Signalements** (ADR-038) : file des vidéos, commentaires et comptes signalés, groupés par cible (aperçu, compte visé,
+  nombre, motifs), de la plus récemment signalée à la plus ancienne ; alerte sur le tableau de bord. Page d'une cible :
+  « Supprimer la vidéo / le commentaire », « Suspendre », « Classer sans suite », et l'historique des signalements avec la
+  décision (date, administrateur). Toute décision clôt les signalements ouverts de la cible (une suspension, ceux de tout
+  le compte). Rien n'est masqué avant décision.
 - **Jetons** (ADR-032, lecture seule) : vendus, remboursés, ajustés et en circulation (production ; achats de test à part),
   journal complet filtrable par compte ou « à rapprocher » (client RevenueCat inconnu de l'API : rien n'a été crédité).
   Montant annoncé et appliqué, solde après, identifiants RevenueCat et store. Un crédit manuel passe par un ajustement
@@ -62,7 +67,7 @@ un commentaire emporte sa notification. L'auteur n'est pas prévenu.
 
 ## Limites
 
-- Pas de signalement, ni de journal des actions de modération.
+- Pas de journal des actions de modération (seules les décisions sur des signalements sont gardées) ; les messages ne sont pas signalables.
 - Pas de liste des comptes suspendus : on les retrouve par la recherche (pseudo, nom).
 - Rafraîchissement dédupliqué propre au processus : avec plusieurs instances du backoffice, il faudrait un magasin partagé (Redis via l'API, ou affinité de session).
 - Pas de copie des données PostHog : liens seulement.

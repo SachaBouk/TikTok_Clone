@@ -1,11 +1,12 @@
 import SwiftUI
 
 // Feuille de commentaires native (demi-hauteur, extensible). Glisser vers la gauche sur son commentaire
-// pour le supprimer.
+// pour le supprimer, sur celui d'un autre pour le signaler (ADR-038).
 struct CommentsView: View {
     @State private var viewModel: CommentsViewModel
     let container: AppContainer
     @State private var isPresentingSignIn = false
+    @State private var reportTarget: ReportTarget?
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -36,6 +37,7 @@ struct CommentsView: View {
         .sheet(isPresented: $isPresentingSignIn) {
             AuthFlowView(container: container)
         }
+        .reportSheet($reportTarget, container: container)
         .alert("Commentaires", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -78,6 +80,11 @@ struct CommentsView: View {
                                 Button("Supprimer", systemImage: "trash", role: .destructive) {
                                     Task { await viewModel.delete(comment) }
                                 }
+                            } else {
+                                Button("Signaler", systemImage: "flag") {
+                                    if viewModel.isSignedIn { reportTarget = .comment(id: comment.id) } else { isPresentingSignIn = true }
+                                }
+                                .tint(.orange)
                             }
                         }
                 }

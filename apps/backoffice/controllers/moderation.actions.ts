@@ -5,7 +5,10 @@ import { redirect } from 'next/navigation';
 import { ApiError } from '@/lib/api-error';
 import { MAX_SUSPENSION_REASON_LENGTH } from '@/lib/moderation-rules';
 import { safeReturnPath } from '@/lib/session-cookies';
+import type { ReportTargetType } from '@repo/shared';
+import { REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import * as comments from '@/models/comments.model';
+import * as reports from '@/models/reports.model';
 import * as users from '@/models/users.model';
 import * as videos from '@/models/videos.model';
 
@@ -43,6 +46,15 @@ export async function suspendAccount(userId: string, reason: string): Promise<Ac
   if (!text) return { error: 'Le motif est obligatoire.' };
   if (text.length > MAX_SUSPENSION_REASON_LENGTH) return { error: `Le motif fait au plus ${MAX_SUSPENSION_REASON_LENGTH} caractères.` };
   const failure = await attempt(() => users.suspendUser(userId, text).then(() => undefined), 'Ce compte a été supprimé.', 'la suspension');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
+// Classement sans suite des signalements ouverts d'une cible (ADR-038) : le contenu reste en ligne.
+export async function dismissReports(type: ReportTargetType, targetId: string): Promise<ActionResult> {
+  if (!REPORT_TARGET_TYPES.includes(type) || !UUID.test(targetId)) return { error: 'Cible invalide.' };
+  const failure = await attempt(() => reports.dismissReports(type, targetId), 'Ces signalements ont déjà été traités.', 'le classement');
   if (failure) return failure;
   revalidatePath('/', 'layout');
   return { error: null };

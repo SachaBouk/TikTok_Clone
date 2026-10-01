@@ -1,4 +1,5 @@
 import type { Comment } from '../../interactions/domain/interaction';
+import type { OpenReportTarget, Report, ReportTarget } from '../../reports/domain/report';
 import type { User } from '../../users/domain/user';
 import type { VideoDetails, VideoStatus } from '../../videos/domain/video';
 import type { WalletLedgerEntry, WalletStats } from '../../wallet/domain/wallet';
@@ -56,7 +57,35 @@ export interface RecentCount {
   last7Days: number;
 }
 
+// Une cible de la file des signalements (ADR-038), avec ce qu'il faut pour l'afficher.
+export interface ModeratedReportTarget {
+  target: ReportTarget;
+  targetUser: User;
+  // Faux si le contenu a disparu depuis.
+  available: boolean;
+  thumbnailUrl: string | null;
+  // Commentaire : vidéo commentée.
+  videoId: string | null;
+  // Nul si aucun signalement n'est plus ouvert (page d'une cible déjà traitée).
+  open: OpenReportTarget | null;
+  // Extrait du signalement le plus récent.
+  excerpt: string | null;
+  latestAt: Date;
+}
+
+export interface ModeratedReport {
+  report: Report;
+  reporter: User | null;
+  resolvedBy: User | null;
+}
+
+export interface ReportTargetDetail {
+  target: ModeratedReportTarget;
+  reports: ModeratedReport[];
+}
+
 export interface PlatformStats {
+  reports: { openTargets: number };
   users: RecentCount & { suspended: number };
   videos: RecentCount & Record<VideoStatus, number>;
   comments: RecentCount;

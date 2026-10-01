@@ -3743,6 +3743,79 @@
         ]
       }
     },
+    "/reports": {
+      "post": {
+        "operationId": "createReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Signalement enregistré (ou déjà ouvert)."
+          },
+          "400": {
+            "description": "Requête invalide, ou son propre contenu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contenu introuvable (supprimé, non publié, compte suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de signalements envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/admin/me": {
       "get": {
         "operationId": "getAdminSession",
@@ -4602,6 +4675,228 @@
           },
           "404": {
             "description": "Commentaire introuvable ou déjà supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "operationId": "listAdminReports",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReportTargetPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide (curseur, limite, filtre).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/reports/{targetType}/{targetId}": {
+      "get": {
+        "operationId": "getAdminReportTarget",
+        "parameters": [
+          {
+            "name": "targetType",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ReportTargetType"
+            }
+          },
+          {
+            "name": "targetId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReportTargetDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Type ou identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Aucun signalement pour cette cible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/reports/{targetType}/{targetId}/dismiss": {
+      "post": {
+        "operationId": "dismissAdminReports",
+        "parameters": [
+          {
+            "name": "targetType",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ReportTargetType"
+            }
+          },
+          {
+            "name": "targetId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Signalements ouverts classés sans suite ; le contenu reste en ligne."
+          },
+          "400": {
+            "description": "Type ou identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Aucun signalement ouvert pour cette cible.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6111,6 +6406,52 @@
           "nextCursor"
         ]
       },
+      "ReportTargetType": {
+        "type": "string",
+        "enum": [
+          "video",
+          "comment",
+          "account"
+        ]
+      },
+      "ReportReason": {
+        "type": "string",
+        "enum": [
+          "spam",
+          "harassment",
+          "hate",
+          "violence",
+          "sexual",
+          "impersonation",
+          "other"
+        ]
+      },
+      "CreateReportRequest": {
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "$ref": "#/components/schemas/ReportTargetType"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant de la vidéo, du commentaire ou du compte."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "details": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Précision facultative."
+          }
+        },
+        "required": [
+          "targetType",
+          "targetId",
+          "reason"
+        ]
+      },
       "UserRole": {
         "type": "string",
         "enum": [
@@ -6198,6 +6539,18 @@
           "videosCount",
           "tokenBalance",
           "createdAt"
+        ]
+      },
+      "AdminReportCountsResponse": {
+        "type": "object",
+        "properties": {
+          "openTargets": {
+            "type": "integer",
+            "description": "Cibles avec au moins un signalement ouvert."
+          }
+        },
+        "required": [
+          "openTargets"
         ]
       },
       "AdminUserCountsResponse": {
@@ -6324,6 +6677,9 @@
       "AdminStatsResponse": {
         "type": "object",
         "properties": {
+          "reports": {
+            "$ref": "#/components/schemas/AdminReportCountsResponse"
+          },
           "users": {
             "$ref": "#/components/schemas/AdminUserCountsResponse"
           },
@@ -6338,6 +6694,7 @@
           }
         },
         "required": [
+          "reports",
           "users",
           "videos",
           "comments",
@@ -6634,6 +6991,176 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "AdminReportReasonCountResponse": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "reason",
+          "count"
+        ]
+      },
+      "AdminReportTargetResponse": {
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "$ref": "#/components/schemas/ReportTargetType"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetUser": {
+            "description": "Auteur de la vidéo ou du commentaire, ou le compte signalé.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserSummaryResponse"
+              }
+            ]
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Faux si le contenu a disparu depuis."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "videoId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Commentaire : vidéo commentée."
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Texte signalé, copié au moment du signalement le plus récent."
+          },
+          "openCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Signalements ouverts."
+          },
+          "reasons": {
+            "description": "Motifs des signalements ouverts, du plus fréquent au moins fréquent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminReportReasonCountResponse"
+            }
+          },
+          "latestAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "targetType",
+          "targetId",
+          "targetUser",
+          "available",
+          "openCount",
+          "reasons",
+          "latestAt"
+        ]
+      },
+      "AdminReportTargetPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "De la plus récemment signalée à la plus ancienne.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminReportTargetResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "ReportResolution": {
+        "type": "string",
+        "enum": [
+          "contentRemoved",
+          "accountSuspended",
+          "dismissed"
+        ]
+      },
+      "AdminReportResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reporter": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          },
+          "details": {
+            "type": "string",
+            "nullable": true
+          },
+          "excerpt": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/ReportResolution"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedBy": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "details",
+          "excerpt",
+          "createdAt"
+        ]
+      },
+      "AdminReportTargetDetailResponse": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/AdminReportTargetResponse"
+          },
+          "reports": {
+            "description": "Du plus récent au plus ancien, 100 au plus.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminReportResponse"
+            }
+          }
+        },
+        "required": [
+          "target",
+          "reports"
         ]
       },
       "VideoProcessedEvent": {

@@ -13,7 +13,7 @@ Trois points dépendent de comptes externes que le projet n'a pas encore :
 
 ## Méthode
 
-- **Tests automatisés** : 267 tests pour l'API, 14 pour le worker (FFmpeg réel), 10 pour le backoffice et 207 pour l'app iOS (Swift Testing), tous verts.
+- **Tests automatisés** : 277 tests pour l'API, 14 pour le worker (FFmpeg réel), 10 pour le backoffice et 212 pour l'app iOS (Swift Testing), tous verts.
 - **Intégration continue** : deux workflows GitHub Actions.
   - `ci.yml` : typecheck, tests, build, contrat OpenAPI, migrations sur une base vierge, images Docker.
   - `ios.yml` : app iOS sur l'image Xcode 27, avec les versions du `Package.resolved`.
@@ -41,8 +41,8 @@ Suppression du compte (exigence Apple) : faite, et vérifiée au parcours 11. El
 
 ### Au-delà du périmètre
 
-Ajouts décidés pendant la réalisation (ADR 017 à 037) :
-- **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032), suspension de compte (ADR-037, proposé).
+Ajouts décidés pendant la réalisation (ADR 017 à 038) :
+- **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032), suspension de compte (ADR-037, proposé), signalements depuis l'app et file de modération (ADR-038, proposé).
 - **Blocage** : actions interdites dans les deux sens, contenus masqués (ADR-029, proposé).
 - **« Suivre en retour »** dans le centre d'activité (ADR-036, proposé).
 - **Sécurité** : limites de débit de la connexion et des partages (ADR-030), signature HMAC du webhook (ADR-031).
@@ -116,7 +116,7 @@ Consignées au fil des étapes, détaillées dans `CLAUDE.md` :
 - **Mesure d'audience** :
   - le premier lancement n'est pas compté ;
   - le temps de chargement est compté dans le temps de visionnage.
-- **Backoffice** : pas de signalements ni de journal de modération.
+- **Backoffice** : pas de journal de modération ; messages non signalables.
 - **Infrastructure** : image Docker de l'API lourde (environ 850 Mo).
 
 ## Pour une démonstration

@@ -4,6 +4,12 @@ import type {
   AdminCommentPageDto,
   AdminCommentVideoDto,
   AdminCountDto,
+  AdminReportCountsDto,
+  AdminReportDto,
+  AdminReportReasonCountDto,
+  AdminReportTargetDetailDto,
+  AdminReportTargetDto,
+  AdminReportTargetPageDto,
   AdminStatsDto,
   AdminSuspensionDto,
   AdminTokenStatsDto,
@@ -16,12 +22,25 @@ import type {
   AdminVideoPageDto,
   AdminWalletTransactionDto,
   AdminWalletTransactionPageDto,
+  ReportReason,
+  ReportResolution,
+  ReportTargetType,
   UserRole,
   VideoStatus,
   WalletTransactionKind,
 } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
-import type { AdminAccount, LedgerLine, ModeratedComment, ModeratedVideo, PlatformStats } from '../domain/admin';
+import type {
+  AdminAccount,
+  LedgerLine,
+  ModeratedComment,
+  ModeratedReport,
+  ModeratedReportTarget,
+  ModeratedVideo,
+  PlatformStats,
+  ReportTargetDetail,
+} from '../domain/admin';
+import { REPORT_REASONS, REPORT_TARGET_TYPES } from '../../reports/domain/report';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -229,7 +248,15 @@ export class AdminUserCountsResponse extends AdminCountResponse implements Admin
   suspended!: number;
 }
 
+export class AdminReportCountsResponse implements AdminReportCountsDto {
+  @ApiProperty({ type: 'integer', description: 'Cibles avec au moins un signalement ouvert.' })
+  openTargets!: number;
+}
+
 export class AdminStatsResponse implements AdminStatsDto {
+  @ApiProperty({ type: AdminReportCountsResponse })
+  reports!: AdminReportCountsResponse;
+
   @ApiProperty({ type: AdminUserCountsResponse })
   users!: AdminUserCountsResponse;
 
@@ -374,6 +401,7 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
   const { users, videos, comments, tokens } = stats;
   const totals = ({ purchased, refunded, adjusted }: PlatformStats['tokens']['production']) => ({ purchased, refunded, adjusted });
   return {
+    reports: { openTargets: stats.reports.openTargets },
     users: { total: users.total, last7Days: users.last7Days, suspended: users.suspended },
     videos: {
       total: videos.total,
@@ -392,4 +420,128 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
       unmatched: tokens.unmatched,
     },
   };
+}
+
+// ─── Signalements (ADR-038) ──────────────────────────────────────────────────
+
+const REPORT_TARGET_TYPE = { enum: REPORT_TARGET_TYPES, enumName: 'ReportTargetType' };
+const REPORT_REASON = { enum: REPORT_REASONS, enumName: 'ReportReason' };
+const REPORT_RESOLUTION = { enum: ['contentRemoved', 'accountSuspended', 'dismissed'], enumName: 'ReportResolution' };
+
+export class AdminReportReasonCountResponse implements AdminReportReasonCountDto {
+  @ApiProperty(REPORT_REASON)
+  reason!: ReportReason;
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  count!: number;
+}
+
+export class AdminReportTargetResponse implements AdminReportTargetDto {
+  @ApiProperty(REPORT_TARGET_TYPE)
+  targetType!: ReportTargetType;
+
+  @ApiProperty({ format: 'uuid' })
+  targetId!: string;
+
+  @ApiProperty({ type: UserSummaryResponse, description: 'Auteur de la vidéo ou du commentaire, ou le compte signalé.' })
+  targetUser!: UserSummaryResponse;
+
+  @ApiProperty({ description: 'Faux si le contenu a disparu depuis.' })
+  available!: boolean;
+
+  @ApiPropertyOptional({ format: 'uri' })
+  thumbnailUrl?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Commentaire : vidéo commentée.' })
+  videoId?: string;
+
+  @ApiPropertyOptional({ description: 'Texte signalé, copié au moment du signalement le plus récent.' })
+  excerpt?: string;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Signalements ouverts.' })
+  openCount!: number;
+
+  @ApiProperty({ type: [AdminReportReasonCountResponse], description: 'Motifs des signalements ouverts, du plus fréquent au moins fréquent.' })
+  reasons!: AdminReportReasonCountResponse[];
+
+  @ApiProperty({ format: 'date-time' })
+  latestAt!: string;
+}
+
+export class AdminReportTargetPageResponse implements AdminReportTargetPageDto {
+  @ApiProperty({ type: [AdminReportTargetResponse], description: 'De la plus récemment signalée à la plus ancienne.' })
+  items!: AdminReportTargetResponse[];
+
+  @ApiProperty(NEXT_CURSOR)
+  nextCursor!: string | null;
+}
+
+export class AdminReportResponse implements AdminReportDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  reporter?: UserSummaryResponse;
+
+  @ApiProperty(REPORT_REASON)
+  reason!: ReportReason;
+
+  @ApiProperty({ type: String, nullable: true })
+  details!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  excerpt!: string | null;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiPropertyOptional(REPORT_RESOLUTION)
+  resolution?: ReportResolution;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  resolvedAt?: string;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  resolvedBy?: UserSummaryResponse;
+}
+
+export class AdminReportTargetDetailResponse implements AdminReportTargetDetailDto {
+  @ApiProperty({ type: AdminReportTargetResponse })
+  target!: AdminReportTargetResponse;
+
+  @ApiProperty({ type: [AdminReportResponse], description: 'Du plus récent au plus ancien, 100 au plus.' })
+  reports!: AdminReportResponse[];
+}
+
+export function toAdminReportTargetDto(item: ModeratedReportTarget): AdminReportTargetDto {
+  return {
+    targetType: item.target.type,
+    targetId: item.target.id,
+    targetUser: toUserSummary(item.targetUser),
+    available: item.available,
+    ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
+    ...(item.videoId ? { videoId: item.videoId } : {}),
+    ...(item.excerpt ? { excerpt: item.excerpt } : {}),
+    openCount: item.open?.openCount ?? 0,
+    reasons: (item.open?.reasons ?? []).map(({ reason, count }) => ({ reason, count })),
+    latestAt: item.latestAt.toISOString(),
+  };
+}
+
+export function toAdminReportDto({ report, reporter, resolvedBy }: ModeratedReport): AdminReportDto {
+  return {
+    id: report.id,
+    ...(reporter ? { reporter: toUserSummary(reporter) } : {}),
+    reason: report.reason,
+    details: report.details,
+    excerpt: report.excerpt,
+    createdAt: report.createdAt.toISOString(),
+    ...(report.resolution ? { resolution: report.resolution } : {}),
+    ...(report.resolvedAt ? { resolvedAt: report.resolvedAt.toISOString() } : {}),
+    ...(resolvedBy ? { resolvedBy: toUserSummary(resolvedBy) } : {}),
+  };
+}
+
+export function toAdminReportTargetDetailDto({ target, reports }: ReportTargetDetail): AdminReportTargetDetailDto {
+  return { target: toAdminReportTargetDto(target), reports: reports.map(toAdminReportDto) };
 }

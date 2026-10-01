@@ -81,6 +81,9 @@ model User {
   pushDevices              PushDevice[]
   suspendedBy              User?                     @relation("SuspendedBy", fields: [suspendedById], references: [id], onDelete: SetNull)
   suspensionsMade          User[]                    @relation("SuspendedBy")
+  reportsMade              Report[]                  @relation("Reporter")
+  reportsReceived          Report[]                  @relation("ReportTargetUser")
+  reportsResolved          Report[]                  @relation("ReportResolver")
   walletTransactions       WalletTransaction[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
@@ -460,4 +463,67 @@ model PushDevice {
 
   @@index([userId])
   @@map("push_devices")
+}
+
+// ─── Signalements (ADR-038) ──────────────────────────────────────────────────
+
+enum ReportTargetType {
+  video
+  comment
+  account
+
+  @@map("report_target_type")
+}
+
+enum ReportReason {
+  spam
+  harassment
+  hate
+  violence
+  sexual
+  impersonation
+  other
+
+  @@map("report_reason")
+}
+
+enum ReportResolution {
+  contentRemoved   @map("content_removed")
+  accountSuspended @map("account_suspended")
+  dismissed
+
+  @@map("report_resolution")
+}
+
+model Report {
+  id           String           @id @default(uuid(7)) @map("report_id") @db.Uuid
+  // Nul si la personne qui a signalé a supprimé son compte depuis (le signalement reste dans l'historique).
+  reporterId   String?          @map("reporter_id") @db.Uuid
+  targetType   ReportTargetType @map("target_type")
+  // Vidéo, commentaire ou compte signalé. Pas de clé étrangère : le signalement survit à la suppression du contenu.
+  targetId     String           @map("target_id") @db.Uuid
+  // Compte visé (auteur de la vidéo ou du commentaire, ou le compte lui-même) : sa suppression emporte les signalements.
+  targetUserId String           @map("target_user_id") @db.Uuid
+  reason       ReportReason
+  // Précision facultative de la personne qui signale (500 caractères au plus).
+  details      String?
+  // Copie du texte signalé au moment du signalement (commentaire, description de la vidéo).
+  excerpt      String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  // Décision d'un administrateur : nulle tant que le signalement est ouvert (CHECK écrit à la main).
+  resolution   ReportResolution?
+  resolvedAt   DateTime?        @map("resolved_at")
+  resolvedById String?          @map("resolved_by") @db.Uuid
+
+  reporter   User? @relation("Reporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  targetUser User  @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  // Un seul signalement ouvert par personne et par cible.
+  @@unique([reporterId, targetType, targetId], map: "reports_open_key", where: raw("resolution IS NULL"))
+  @@index([targetType, targetId])
+  @@index([targetUserId])
+  // File de modération : signalements ouverts, du plus récent au plus ancien.
+  @@index([id], map: "reports_open_idx", where: raw("resolution IS NULL"))
+  @@map("reports")
 }

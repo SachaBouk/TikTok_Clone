@@ -128,7 +128,14 @@ export interface AdminUserCountsDto extends AdminCountDto {
   suspended: number;
 }
 
+// Signalements (ADR-038).
+export interface AdminReportCountsDto {
+  // Cibles avec au moins un signalement ouvert (taille de la file de modération).
+  openTargets: number;
+}
+
 export interface AdminStatsDto {
+  reports: AdminReportCountsDto;
   users: AdminUserCountsDto;
   videos: AdminVideoCountsDto;
   comments: AdminCountDto;

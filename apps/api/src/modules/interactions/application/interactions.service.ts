@@ -244,6 +244,18 @@ export class InteractionsService {
     return this.interactions.findComments(filter, beforeId, limit);
   }
 
+  // Pour le module reports (ADR-038) : un commentaire, quel que soit son auteur (CommentNotFoundError s'il n'existe plus).
+  async getComment(commentId: string): Promise<Comment> {
+    const comment = await this.interactions.findComment(commentId);
+    if (!comment) throw new CommentNotFoundError(commentId);
+    return comment;
+  }
+
+  // Pour le module admin (file des signalements) : commentaires existants parmi `ids`.
+  getComments(ids: string[]): Promise<Comment[]> {
+    return this.interactions.findCommentsByIds([...new Set(ids)]);
+  }
+
   // Backoffice : nombre de commentaires, écrits depuis `createdSince` s'il est donné.
   countComments(createdSince: Date | null = null): Promise<number> {
     return this.interactions.countComments(createdSince);

@@ -41,6 +41,8 @@ export abstract class InteractionRepository {
 
   abstract createComment(comment: { videoId: string; userId: string; content: string }): Promise<Comment>;
   abstract findComment(id: string): Promise<Comment | null>;
+  // Commentaires existants parmi `ids`, dans un ordre quelconque.
+  abstract findCommentsByIds(ids: string[]): Promise<Comment[]>;
   abstract deleteComment(id: string): Promise<void>;
   // Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné (identifiants UUID v7, ordonnés).
   abstract listComments(videoId: string, beforeId: string | null, limit: number): Promise<Comment[]>;

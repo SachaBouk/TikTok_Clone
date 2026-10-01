@@ -145,7 +145,7 @@ struct VideoPageActions {
     var comments: () -> Void
     var share: () -> Void
     var follow: () -> Void
-    // Sa propre vidéo : « Supprimer ».
+    // « … » : sa propre vidéo, « Supprimer » ; celle d'un autre, « Signaler » (ADR-038).
     var manage: () -> Void
 }
 
@@ -301,18 +301,16 @@ struct FeedActionColumn: View {
                 .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
-            if !showsFollowButton {
-                Button(action: actions.manage) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 24, weight: .bold))
-                        .shadow(radius: 4)
-                        .frame(width: 56, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Gérer la vidéo")
-                .accessibilityIdentifier("video.manage")
+            Button(action: actions.manage) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 24, weight: .bold))
+                    .shadow(radius: 4)
+                    .frame(width: 56, height: 32)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(showsFollowButton ? "Plus d’options" : "Gérer la vidéo")
+            .accessibilityIdentifier("video.manage")
         }
     }
 }

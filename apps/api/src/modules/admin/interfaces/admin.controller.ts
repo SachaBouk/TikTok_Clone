@@ -1,30 +1,36 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Put, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseEnumPipe, ParseUUIDPipe, Post, Put, Query, UseFilters } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type {
   AdminCommentPageDto,
+  AdminReportTargetDetailDto,
+  AdminReportTargetPageDto,
   AdminStatsDto,
   AdminUserDto,
   AdminUserPageDto,
   AdminVideoDto,
   AdminVideoPageDto,
   AdminWalletTransactionPageDto,
+  ReportTargetType,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { AdminOnly } from '../../auth/interfaces/admin-only.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { AdminService } from '../application/admin.service';
 import { AdminErrorFilter } from './admin-error.filter';
-import { AdminCommentsQuery, AdminSuspendRequest, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
+import { AdminCommentsQuery, AdminReportsQuery, AdminSuspendRequest, AdminUsersQuery, AdminVideosQuery, AdminWalletTransactionsQuery } from './admin.requests';
 import {
   AdminCommentPageResponse,
+  AdminReportTargetDetailResponse,
+  AdminReportTargetPageResponse,
   AdminStatsResponse,
   AdminUserPageResponse,
   AdminUserResponse,
@@ -32,6 +38,8 @@ import {
   AdminVideoResponse,
   AdminWalletTransactionPageResponse,
   toAdminCommentDto,
+  toAdminReportTargetDetailDto,
+  toAdminReportTargetDto,
   toAdminStatsDto,
   toAdminUserDto,
   toAdminVideoDto,
@@ -39,6 +47,8 @@ import {
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
+const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account' });
+const TARGET_TYPE_PARAM = { name: 'targetType', enum: ['video', 'comment', 'account'], enumName: 'ReportTargetType' };
 
 // Routes du backoffice (ADR-004), toutes réservées aux administrateurs (@AdminOnly : 403 sinon).
 // Couche `interfaces/` : traduit HTTP ↔ service applicatif, sans logique métier (ADR-003).
@@ -124,8 +134,8 @@ export class AdminController {
   @ApiNoContentResponse({ description: 'Vidéo supprimée, avec ses likes, commentaires et notifications.' })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo introuvable ou déjà supprimée.' })
-  async deleteAdminVideo(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.adminService.removeVideo(id);
+  async deleteAdminVideo(@CurrentUser() admin: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.adminService.removeVideo(admin.userId, id);
   }
 
   @Get('comments')
@@ -150,7 +160,43 @@ export class AdminController {
   @ApiNoContentResponse({ description: 'Commentaire supprimé, avec sa notification.' })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire introuvable ou déjà supprimé.' })
-  async deleteAdminComment(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.adminService.removeComment(id);
+  async deleteAdminComment(@CurrentUser() admin: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.adminService.removeComment(admin.userId, id);
+  }
+
+  // File des signalements (ADR-038), groupés par cible. Supprimer le contenu (routes ci-dessus) ou suspendre le compte
+  // clôt les signalements ouverts ; sinon, classement sans suite.
+  @Get('reports')
+  @ApiOkResponse({ type: AdminReportTargetPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminReports(@Query() query: AdminReportsQuery): Promise<AdminReportTargetPageDto> {
+    const page = await this.adminService.listReportTargets(query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminReportTargetDto), nextCursor: page.nextCursor };
+  }
+
+  @Get('reports/:targetType/:targetId')
+  @ApiParam(TARGET_TYPE_PARAM)
+  @ApiOkResponse({ type: AdminReportTargetDetailResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Type ou identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Aucun signalement pour cette cible.' })
+  async getAdminReportTarget(
+    @Param('targetType', TARGET_TYPE) targetType: ReportTargetType,
+    @Param('targetId', ParseUUIDPipe) targetId: string,
+  ): Promise<AdminReportTargetDetailDto> {
+    return toAdminReportTargetDetailDto(await this.adminService.getReportTarget({ type: targetType, id: targetId }));
+  }
+
+  @Post('reports/:targetType/:targetId/dismiss')
+  @HttpCode(204)
+  @ApiParam(TARGET_TYPE_PARAM)
+  @ApiNoContentResponse({ description: 'Signalements ouverts classés sans suite ; le contenu reste en ligne.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Type ou identifiant invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Aucun signalement ouvert pour cette cible.' })
+  async dismissAdminReports(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('targetType', TARGET_TYPE) targetType: ReportTargetType,
+    @Param('targetId', ParseUUIDPipe) targetId: string,
+  ): Promise<void> {
+    await this.adminService.dismissReports(admin.userId, { type: targetType, id: targetId });
   }
 }

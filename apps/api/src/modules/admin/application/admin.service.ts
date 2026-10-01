@@ -2,6 +2,9 @@ import type { AuthService } from '../../auth/application/auth.service';
 import { CannotSuspendAdminError } from '../../auth/domain/auth.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { RealtimeService } from '../../realtime/application/realtime.service';
+import type { ReportsService } from '../../reports/application/reports.service';
+import type { OpenReportTarget, ReportTarget } from '../../reports/domain/report';
+import { ReportTargetNotFoundError } from '../../reports/domain/report.errors';
 import type { CommentFilter } from '../../interactions/domain/interaction';
 import { CommentNotFoundError } from '../../interactions/domain/interaction.errors';
 import type { UsersService } from '../../users/application/users.service';
@@ -16,10 +19,12 @@ import {
   type AdminAccount,
   type LedgerLine,
   type ModeratedComment,
+  type ModeratedReportTarget,
   type ModeratedVideo,
   type Page,
   type PlatformStats,
   RECENT_PERIOD_DAYS,
+  type ReportTargetDetail,
 } from '../domain/admin';
 import { AdminActionRefusedError, AdminTargetNotFoundError } from '../domain/admin.errors';
 
@@ -34,12 +39,13 @@ export class AdminService {
     private readonly auth: AuthService,
     private readonly wallet: WalletService,
     private readonly realtime: RealtimeService,
+    private readonly reports: ReportsService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async getStats(): Promise<PlatformStats> {
     const since = new Date(this.now().getTime() - RECENT_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-    const [usersTotal, usersRecent, usersSuspended, videos, commentsTotal, commentsRecent, tokens] = await Promise.all([
+    const [usersTotal, usersRecent, usersSuspended, videos, commentsTotal, commentsRecent, tokens, openReportTargets] = await Promise.all([
       this.users.countAccounts(),
       this.users.countAccounts(since),
       this.auth.countSuspended(),
@@ -47,9 +53,11 @@ export class AdminService {
       this.interactions.countComments(),
       this.interactions.countComments(since),
       this.wallet.getStats(since),
+      this.reports.countOpenTargets(),
     ]);
     const { byStatus } = videos;
     return {
+      reports: { openTargets: openReportTargets },
       users: { total: usersTotal, last7Days: usersRecent, suspended: usersSuspended },
       videos: {
         total: byStatus.uploading + byStatus.processing + byStatus.ready + byStatus.failed,
@@ -85,6 +93,8 @@ export class AdminService {
       throw error;
     }
     await this.realtime.disconnectUser(userId);
+    // Ses signalements ouverts (compte, vidéos, commentaires) sont clos par cette décision (ADR-038).
+    await this.reports.accountSuspended(userId, adminId);
     return this.getAccount(userId);
   }
 
@@ -116,14 +126,16 @@ export class AdminService {
     return { video, author };
   }
 
-  // Retrait par modération : même suppression que par l'auteur (cascade, nettoyage des fichiers).
-  async removeVideo(videoId: string): Promise<void> {
+  // Retrait par modération : même suppression que par l'auteur (cascade, nettoyage des fichiers). Les signalements
+  // ouverts de la vidéo sont clos (« contenu supprimé », ADR-038).
+  async removeVideo(adminId: string, videoId: string): Promise<void> {
     try {
       await this.videos.removeVideo(videoId);
     } catch (error) {
       if (error instanceof VideoNotFoundError) throw new AdminTargetNotFoundError('Vidéo', videoId);
       throw error;
     }
+    await this.reports.contentRemoved({ type: 'video', id: videoId }, adminId);
   }
 
   // Journal des jetons, filtré par compte ou « à rapprocher », avec le compte crédité s'il existe encore.
@@ -154,13 +166,79 @@ export class AdminService {
     };
   }
 
-  async removeComment(commentId: string): Promise<void> {
+  async removeComment(adminId: string, commentId: string): Promise<void> {
     try {
       await this.interactions.removeComment(commentId);
     } catch (error) {
       if (error instanceof CommentNotFoundError) throw new AdminTargetNotFoundError('Commentaire', commentId);
       throw error;
     }
+    await this.reports.contentRemoved({ type: 'comment', id: commentId }, adminId);
+  }
+
+  // File des signalements (ADR-038) : cibles avec des signalements ouverts, de la plus récemment signalée à la plus
+  // ancienne. Une cible dont le compte visé a disparu entre-temps est sautée (la cascade emporte ses signalements).
+  async listReportTargets(cursor: string | null, limit: number): Promise<Page<ModeratedReportTarget>> {
+    const page = await this.reports.listOpenTargets(cursor, limit);
+    return { items: await this.describeReportTargets(page.items.map((open) => ({ target: open.target, targetUserId: open.targetUserId, open }))), nextCursor: page.nextCursor };
+  }
+
+  // Une cible et tous ses signalements (ouverts et clos), avec les comptes qui ont signalé et décidé.
+  async getReportTarget(target: ReportTarget): Promise<ReportTargetDetail> {
+    let detail;
+    try {
+      detail = await this.reports.getTarget(target);
+    } catch (error) {
+      if (error instanceof ReportTargetNotFoundError) throw new AdminTargetNotFoundError('Signalement', target.id);
+      throw error;
+    }
+    const [described] = await this.describeReportTargets([{ target, targetUserId: detail.targetUserId, open: detail.open, latest: detail.reports[0] }]);
+    if (!described) throw new AdminTargetNotFoundError('Signalement', target.id);
+    const users = await this.usersById(detail.reports.flatMap((r) => [r.reporterId, r.resolvedBy].filter((id): id is string => !!id)));
+    return {
+      target: described,
+      reports: detail.reports.map((report) => ({
+        report,
+        reporter: (report.reporterId && users.get(report.reporterId)) || null,
+        resolvedBy: (report.resolvedBy && users.get(report.resolvedBy)) || null,
+      })),
+    };
+  }
+
+  // Classement sans suite : les signalements ouverts de la cible sont clos, le contenu reste en ligne.
+  async dismissReports(adminId: string, target: ReportTarget): Promise<void> {
+    if ((await this.reports.dismiss(target, adminId)) === 0) throw new AdminTargetNotFoundError('Signalement', target.id);
+  }
+
+  private async describeReportTargets(
+    rows: { target: ReportTarget; targetUserId: string; open: OpenReportTarget | null; latest?: { excerpt: string | null; createdAt: Date } }[],
+  ): Promise<ModeratedReportTarget[]> {
+    const idsOf = (type: ReportTarget['type']) => rows.filter((r) => r.target.type === type).map((r) => r.target.id);
+    const [users, videos, comments] = await Promise.all([
+      this.usersById(rows.map((r) => r.targetUserId)),
+      this.videos.getPublishedVideos(idsOf('video')),
+      this.interactions.getComments(idsOf('comment')),
+    ]);
+    const videosById = new Map(videos.map((v) => [v.id, v]));
+    const commentsById = new Map(comments.map((c) => [c.id, c]));
+    return rows.flatMap(({ target, targetUserId, open, latest }) => {
+      const targetUser = users.get(targetUserId);
+      if (!targetUser) return [];
+      const video = target.type === 'video' ? videosById.get(target.id) : undefined;
+      const comment = target.type === 'comment' ? commentsById.get(target.id) : undefined;
+      return [
+        {
+          target,
+          targetUser,
+          available: target.type === 'account' || !!video || !!comment,
+          thumbnailUrl: video?.thumbnailUrl ?? null,
+          videoId: comment?.videoId ?? null,
+          open,
+          excerpt: open?.excerpt ?? latest?.excerpt ?? null,
+          latestAt: open?.latestAt ?? latest?.createdAt ?? this.now(),
+        },
+      ];
+    });
   }
 
   private async account(userId: string): Promise<User> {

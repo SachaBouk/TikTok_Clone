@@ -51,6 +51,7 @@ private struct VideoInteractionSheets: ViewModifier {
     // « Envoyer par message » choisi : la feuille des destinataires s'ouvre une fois celle du partage fermée.
     @State private var chosenForMessage: FeedVideo?
     @State private var sendByMessage: FeedVideo?
+    @State private var reportTarget: ReportTarget?
 
     func body(content: Content) -> some View {
         content
@@ -87,9 +88,23 @@ private struct VideoInteractionSheets: ViewModifier {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            // Vidéo d'un autre compte : « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
+            .confirmationDialog("Options", isPresented: Binding(
+                get: { manage.map { !interactions.isOwn($0) } ?? false },
+                set: { if !$0 { manage = nil } }
+            ), titleVisibility: .hidden, presenting: manage) { video in
+                Button("Signaler", role: .destructive) {
+                    if container.session.isSignedIn {
+                        reportTarget = .video(id: video.id)
+                    } else {
+                        container.session.requestSignIn()
+                    }
+                }
+            }
+            .reportSheet($reportTarget, container: container)
             // Sa propre vidéo : suppression, quel que soit son statut (les autres écrans la retirent ensuite).
             .confirmationDialog("Supprimer cette vidéo ?", isPresented: Binding(
-                get: { manage != nil },
+                get: { manage.map { interactions.isOwn($0) } ?? false },
                 set: { if !$0 { manage = nil } }
             ), titleVisibility: .visible, presenting: manage) { video in
                 Button("Supprimer", role: .destructive) {

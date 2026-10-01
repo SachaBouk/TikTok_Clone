@@ -28,6 +28,7 @@ final class AppContainer {
     private let viewHistory: any ViewHistoryRepository
     private let interactions: any InteractionRepository
     private let relationships: any RelationshipRepository
+    private let reports: any ReportRepository
     private let videoLists: any VideoListRepository
     private let uploads: any UploadStore
     private let activityRepository: any ActivityRepository
@@ -51,6 +52,7 @@ final class AppContainer {
         viewHistory = RemoteViewHistoryRepository(client: client)
         interactions = RemoteInteractionRepository(client: client)
         relationships = RemoteRelationshipRepository(client: client)
+        reports = RemoteReportRepository(client: client)
         videoLists = RemoteVideoListRepository(client: client)
         let videos = RemoteVideoPublishingRepository(client: client)
         let uploads = FileUploadStore()
@@ -222,6 +224,11 @@ final class AppContainer {
             session: session,
             analytics: analytics
         )
+    }
+
+    // Signalement d'une vidéo, d'un commentaire ou d'un compte (ADR-038).
+    func makeReportViewModel(target: ReportTarget) -> ReportViewModel {
+        ReportViewModel(target: target, sendReport: SendReportUseCase(reports: reports), session: session, analytics: analytics)
     }
 
     func makeCommentsViewModel(video: FeedVideo, onCountChange: @escaping (Int) -> Void) -> CommentsViewModel {

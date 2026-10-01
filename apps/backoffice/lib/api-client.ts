@@ -9,8 +9,8 @@ type Query = Record<string, string | number | undefined | null>;
 
 // Client de l'API REST pour les models (ADR-004), côté serveur uniquement : il envoie l'access token de
 // la session. Le proxy l'a rafraîchi avant la requête. Session refusée (401) ou rôle retiré (403) :
-// fin de session. Les autres erreurs remontent en ApiError. `body` : corps JSON (PUT).
-export async function apiRequest<T>(method: 'GET' | 'DELETE' | 'PUT', path: string, query: Query = {}, body?: unknown): Promise<T> {
+// fin de session. Les autres erreurs remontent en ApiError. `body` : corps JSON (PUT, POST).
+export async function apiRequest<T>(method: 'GET' | 'DELETE' | 'PUT' | 'POST', path: string, query: Query = {}, body?: unknown): Promise<T> {
   const accessToken = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!accessToken) redirect('/auth/fin?raison=session');
 

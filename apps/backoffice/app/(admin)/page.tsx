@@ -32,6 +32,12 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Tableau de bord</h1>
 
+      {stats.reports.openTargets > 0 && (
+        <Link href="/reports" className="rounded-lg border border-destructive/50 p-3 text-sm text-destructive hover:bg-muted/50">
+          {formatNumber(stats.reports.openTargets)} contenu(s) ou compte(s) signalé(s) à examiner.
+        </Link>
+      )}
+
       {stats.tokens.unmatched > 0 && (
         <Link href="/tokens?rapprocher=1" className="rounded-lg border border-destructive/50 p-3 text-sm text-destructive hover:bg-muted/50">
           {formatNumber(stats.tokens.unmatched)} achat(s) de jetons d’un client inconnu, à rapprocher avec RevenueCat.

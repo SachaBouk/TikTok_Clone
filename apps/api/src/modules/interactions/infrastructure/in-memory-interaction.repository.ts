@@ -136,6 +136,10 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     return this.comments.get(id) ?? null;
   }
 
+  async findCommentsByIds(ids: string[]): Promise<Comment[]> {
+    return ids.flatMap((id) => this.comments.get(id) ?? []);
+  }
+
   async deleteComment(id: string): Promise<void> {
     const comment = this.comments.get(id);
     if (comment && this.comments.delete(id)) this.videos.adjustCounter(comment.videoId, 'commentsCount', -1);

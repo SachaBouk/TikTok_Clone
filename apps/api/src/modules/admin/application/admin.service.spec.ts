@@ -9,6 +9,8 @@ import { InteractionsService } from '../../interactions/application/interactions
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
 import { NotificationsService } from '../../notifications/application/notifications.service';
 import { RealtimeService } from '../../realtime/application/realtime.service';
+import { ReportsService } from '../../reports/application/reports.service';
+import { InMemoryReportRepository } from '../../reports/infrastructure/in-memory-report.repository';
 import { AccessTokenVerifier } from '../../realtime/domain/access-token-verifier';
 import { InMemoryRealtimeBus } from '../../realtime/infrastructure/in-memory-realtime-bus';
 import { InMemoryNotificationPublisher } from '../../notifications/infrastructure/in-memory-notification-publisher';
@@ -92,6 +94,8 @@ describe('AdminService', () => {
   let service: AdminService;
   let bus: InMemoryRealtimeBus;
   let refreshTokens: InMemoryRefreshTokenRepository;
+  let reports: ReportsService;
+  let reportRepository: InMemoryReportRepository;
 
   let eventSequence = 0;
   const tokens = (appUserId: string, amount: number, environment = 'PRODUCTION'): CurrencyEvent => ({
@@ -149,7 +153,53 @@ describe('AdminService', () => {
         return null;
       }
     })());
-    service = new AdminService(users, videos, interactions, auth, wallet, realtime, () => NOW);
+    reportRepository = new InMemoryReportRepository(() => NOW);
+    reports = new ReportsService(reportRepository, users, videos, interactions, new InMemoryRateLimiter(), suspended, () => NOW);
+    service = new AdminService(users, videos, interactions, auth, wallet, realtime, reports, () => NOW);
+  });
+
+  describe('signalements (ADR-038)', () => {
+    it('file : cibles décrites (miniature, vidéo commentée, compte visé, disponibilité) ; détail avec les comptes', async () => {
+      const video = await createVideo(BOB);
+      const { comment } = await interactions.addComment(CAROL, video, 'Spam');
+      await reports.report(ALICE, { target: { type: 'video', id: video }, reason: 'spam' });
+      await reports.report(ALICE, { target: { type: 'comment', id: comment.id }, reason: 'hate', details: 'Insultes' });
+      await reports.report(BOB, { target: { type: 'account', id: CAROL }, reason: 'harassment' });
+
+      const page = await service.listReportTargets(null, 10);
+      expect(page.items.map((i) => [i.target.type, i.targetUser.id, i.available, i.thumbnailUrl, i.videoId, i.excerpt, i.open?.openCount])).toEqual([
+        ['account', CAROL, true, null, null, null, 1],
+        ['comment', CAROL, true, null, video, 'Spam', 1],
+        ['video', BOB, true, 't', null, 'Démo', 1],
+      ]);
+
+      const detail = await service.getReportTarget({ type: 'comment', id: comment.id });
+      expect(detail.reports.map((r) => [r.reporter?.id, r.report.details, r.resolvedBy])).toEqual([[ALICE, 'Insultes', null]]);
+      expect((await service.getStats()).reports.openTargets).toBe(3);
+    });
+
+    it('supprimer le contenu ou suspendre le compte clôt les signalements ; sans suite sinon', async () => {
+      accounts.adminIds.add(CAROL);
+      const video = await createVideo(BOB);
+      const { comment } = await interactions.addComment(ALICE, video, 'Spam');
+      await reports.report(CAROL, { target: { type: 'video', id: video }, reason: 'spam' });
+      await reports.report(CAROL, { target: { type: 'comment', id: comment.id }, reason: 'spam' });
+      await reports.report(CAROL, { target: { type: 'account', id: ALICE }, reason: 'spam' });
+
+      await service.removeVideo(CAROL, video);
+      const removed = await service.getReportTarget({ type: 'video', id: video });
+      expect(removed.target).toMatchObject({ available: false, open: null });
+      expect(removed.reports.map((r) => [r.report.resolution, r.resolvedBy?.id])).toEqual([['contentRemoved', CAROL]]);
+
+      await service.dismissReports(CAROL, { type: 'account', id: ALICE });
+      await expect(service.dismissReports(CAROL, { type: 'account', id: ALICE })).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      // Commentaire supprimé par son auteur : sa cible reste dans la file, « indisponible ».
+      await interactions.deleteComment(ALICE, comment.id);
+      expect((await service.listReportTargets(null, 10)).items.map((i) => [i.target.type, i.available])).toEqual([['comment', false]]);
+      await service.suspendAccount(CAROL, ALICE, 'Spam');
+      expect((await service.listReportTargets(null, 10)).items).toEqual([]);
+      await expect(service.getReportTarget({ type: 'video', id: 'jamais' })).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+    });
   });
 
   describe('suspension (ADR-037)', () => {
@@ -232,10 +282,10 @@ describe('AdminService', () => {
       const video = await createVideo(CAROL, 'processing');
       await expect(service.getVideo(video)).resolves.toMatchObject({ video: { status: 'processing' }, author: { id: CAROL } });
 
-      await service.removeVideo(video);
+      await service.removeVideo(CAROL, video);
       expect(videoRepository.videos.has(video)).toBe(false);
       expect(cleanup.scheduled).toHaveLength(1);
-      await expect(service.removeVideo(video)).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      await expect(service.removeVideo(CAROL, video)).rejects.toBeInstanceOf(AdminTargetNotFoundError);
       await expect(service.getVideo(video)).rejects.toBeInstanceOf(AdminTargetNotFoundError);
     });
   });
@@ -251,9 +301,9 @@ describe('AdminService', () => {
       expect(page.nextCursor).toBe(second.comment.id);
       await expect(service.listComments({ userId: BOB }, null, 10)).resolves.toMatchObject({ items: [{ comment: { id: first.comment.id } }] });
 
-      await service.removeComment(second.comment.id);
+      await service.removeComment(CAROL, second.comment.id);
       await expect(service.listComments({}, null, 10)).resolves.toMatchObject({ items: [{ comment: { id: first.comment.id } }] });
-      await expect(service.removeComment(second.comment.id)).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      await expect(service.removeComment(CAROL, second.comment.id)).rejects.toBeInstanceOf(AdminTargetNotFoundError);
     });
   });
 
@@ -265,6 +315,7 @@ describe('AdminService', () => {
     await interactions.addComment(BOB, video, 'Bravo');
 
     await expect(service.getStats()).resolves.toEqual({
+      reports: { openTargets: 0 },
       users: { total: 3, last7Days: 2, suspended: 0 },
       videos: { total: 3, last7Days: 3, uploading: 1, processing: 0, ready: 1, failed: 1 },
       comments: { total: 1, last7Days: 1 },
