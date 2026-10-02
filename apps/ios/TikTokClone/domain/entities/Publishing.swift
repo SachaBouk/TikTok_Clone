@@ -88,6 +88,10 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 enum UploadRules {
     static let maxFileSize = 1024 * 1024 * 1024 // 1 Gio
     static let maxDescriptionLength = 2200
+    // Durée maximale (ADR-040), comme le worker : 3 minutes, à une seconde près (arrondis du conteneur).
+    static let maxDuration: Duration = .seconds(180)
+    static let durationTolerance: Duration = .seconds(1)
+    static let tooLongMessage = "Cette vidéo dure plus de 3 minutes. Choisis-en une plus courte."
     // Un envoi jamais terminé est oublié au bout de ce délai : l'API supprime alors la vidéo (maintenance).
     static let abandonedAfter: TimeInterval = 24 * 60 * 60
     // Marge avant l'expiration des URLs signées : au-delà, un envoi neuf est demandé.
@@ -97,6 +101,10 @@ enum UploadRules {
     static func range(ofPart number: Int, partSize: Int, fileSize: Int) -> Range<Int> {
         let start = min((number - 1) * partSize, fileSize)
         return start..<min(start + partSize, fileSize)
+    }
+
+    static func isTooLong(_ duration: Duration) -> Bool {
+        duration > maxDuration + durationTolerance
     }
 
     // Description nettoyée ; nil si vide.

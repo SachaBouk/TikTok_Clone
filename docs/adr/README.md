@@ -41,6 +41,7 @@
 | [ADR-037](ADR-037-suspension-compte.md) | Suspension de compte (complète ADR-019) | Proposé |
 | [ADR-038](ADR-038-signalements.md) | Signalements (complète ADR-019) | Proposé |
 | [ADR-039](ADR-039-limites-debit-actions.md) | Limites de débit : inscription, réactions, commentaires, follows, vues et envois (prolonge ADR-030) | Proposé |
+| [ADR-040](ADR-040-duree-maximale-video.md) | Durée maximale d'une vidéo : 3 minutes (complète ADR-007 et ADR-008) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

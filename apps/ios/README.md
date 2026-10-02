@@ -104,7 +104,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 ## Publication
 
-Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d'origine sans conversion), description facultative (2 200 caractères), puis envoi direct au stockage (ADR-007).
+Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d'origine sans conversion), 3 minutes au plus (ADR-040 : refusée dès le choix, le worker revérifie), description facultative (2 200 caractères), puis envoi direct au stockage (ADR-007).
 
 - **Sans position** (ADR-035) : à l'import, la vidéo est ré-écrite sans réencodage avec le filtre de partage d'AVFoundation (`AVFoundationVideoMetadataCleaner`) : position GPS, modèle d'appareil et autres métadonnées personnelles retirés, rotation et HDR gardés, sortie `.mov`. La position ne quitte jamais le téléphone. Une vidéo qu'on ne sait pas ré-écrire est refusée.
 

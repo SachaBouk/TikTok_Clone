@@ -51,7 +51,8 @@ final class PublishDraftViewModel {
     }
 
     // `loader` exporte la vidéo choisie vers un fichier temporaire (nil si la sélection est vide), puis la vidéo
-    // est préparée (métadonnées personnelles retirées) : c'est ce fichier-là qui sera envoyé.
+    // est préparée (métadonnées personnelles retirées) : c'est ce fichier-là qui sera envoyé. Une vidéo de plus de
+    // 3 minutes (ADR-040) est refusée ici, avant tout envoi ; une durée illisible est laissée au worker.
     func load(_ loader: () async throws -> URL?) async {
         discardFile()
         state = .loading
@@ -61,9 +62,13 @@ final class PublishDraftViewModel {
                 return
             }
             let file = try await prepareVideo(picked)
-            async let preview = makePreview(file)
-            async let duration = loadDuration(file)
-            state = .ready(Draft(file: file, preview: await preview, duration: await duration))
+            let duration = await loadDuration(file)
+            if let duration, UploadRules.isTooLong(duration) {
+                try? FileManager.default.removeItem(at: file)
+                state = .failed(UploadRules.tooLongMessage)
+                return
+            }
+            state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration))
         } catch let error as AppError {
             state = .failed(error.message)
         } catch {

@@ -5,6 +5,7 @@ import type { TranscodeJobData } from '@repo/shared';
 import type { WorkerConfig } from './config';
 import { createThumbnail, probe, transcodeToHls, type FfmpegOptions } from './media/ffmpeg';
 import { renditionsFor } from './media/ladder';
+import { assertPublishable } from './media/rules';
 import type { VideoStorage } from './storage';
 
 export interface TranscodeOutput {
@@ -13,7 +14,7 @@ export interface TranscodeOutput {
   thumbnailUrl: string;
 }
 
-// Pipeline d'une vidéo (ADR-008) : téléchargement du brut, analyse, HLS multi-résolutions,
+// Pipeline d'une vidéo (ADR-008) : téléchargement du brut, analyse (durée de 3 min au plus, ADR-040), HLS multi-résolutions,
 // miniature, envoi au bucket HLS. Tout passe par un dossier temporaire, supprimé à la fin.
 // Rejouable : une nouvelle tentative réécrit les mêmes clés sous `<videoId>/`.
 export async function transcode(job: TranscodeJobData, config: WorkerConfig, storage: VideoStorage): Promise<TranscodeOutput> {
@@ -30,6 +31,8 @@ export async function transcode(job: TranscodeJobData, config: WorkerConfig, sto
     await storage.downloadRaw(job.rawKey, source);
 
     const media = await probe(source, options);
+    // Durée maximale (ADR-040) : vérifiée avant tout transcodage.
+    assertPublishable(media);
     await transcodeToHls(source, output, renditionsFor(media), media, options);
     await createThumbnail(source, join(output, 'thumbnail.jpg'), media, options);
     await storage.uploadHls(output, job.videoId);

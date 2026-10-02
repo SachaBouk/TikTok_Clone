@@ -162,6 +162,29 @@ struct PublishingModelTests {
         #expect(draft.state == .failed("Impossible d’importer cette vidéo."))
     }
 
+    @Test("brouillon : plus de 3 minutes (ADR-040) refusée avant l'envoi, à une seconde près")
+    func draftTooLong() async {
+        let (model, _) = await makeModel()
+        let cleaner = FakeVideoMetadataCleaner(store: store)
+        var duration: Duration = .milliseconds(181_500)
+        let draft = PublishDraftViewModel(
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { [duration] _ in duration }
+        )
+        await draft.load { picked() }
+        #expect(draft.state == .failed("Cette vidéo dure plus de 3 minutes. Choisis-en une plus courte."))
+        #expect(!draft.canPublish)
+        #expect(model.publications.isEmpty)
+
+        duration = .milliseconds(180_900)
+        let accepted = PublishDraftViewModel(
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { [duration] _ in duration }
+        )
+        await accepted.load { picked() }
+        #expect(accepted.canPublish)
+        #expect(UploadRules.isTooLong(.seconds(182)))
+        #expect(!UploadRules.isTooLong(.seconds(180)))
+    }
+
     @Test("brouillon : une vidéo qu'on ne sait pas nettoyer est refusée, rien n'est gardé")
     func draftCleaningFails() async {
         let (model, _) = await makeModel()
