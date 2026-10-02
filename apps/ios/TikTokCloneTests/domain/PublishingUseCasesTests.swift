@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 import Testing
+
 @testable import TikTokClone
 
 @Suite("Publication : règles et envoi par parties")
@@ -17,7 +18,8 @@ struct PublishingUseCasesTests {
     // Fichier de 10 octets enregistré pour l'envoi : 3 parties de 4, 4 et 2 octets.
     func stored(_ bytes: String = "0123456789") throws -> PendingUpload {
         let file = store.addPickedFile("clip.MOV", Data(bytes.utf8))
-        return try CreatePublicationUseCase(store: store, now: { [now] in now }, makeID: { "u1" })(file: file, description: "  Ma vidéo \n", userID: "alice-id")
+        return try CreatePublicationUseCase(store: store, now: { [now] in now }, makeID: { "u1" })(
+            file: file, description: "  Ma vidéo \n", userID: "alice-id")
     }
 
     @Test("règles : parties, formats, description")

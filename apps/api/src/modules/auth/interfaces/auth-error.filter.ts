@@ -37,7 +37,10 @@ export class AuthErrorFilter implements ExceptionFilter {
 
 function toHttpException(error: AuthError): HttpException {
   if (error instanceof TooManyLoginAttemptsError || error instanceof TooManySignupsError) {
-    return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
+    return new HttpException(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
   if (error instanceof EmailAlreadyUsedError || error instanceof UsernameAlreadyUsedError || error instanceof CannotSuspendAdminError) {
     return new ConflictException(error.message);

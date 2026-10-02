@@ -43,7 +43,8 @@ export class AuthController {
   @ApiForbiddenResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037), après vérification de l’identité.' })
   @ApiTooManyRequestsResponse({
     type: ErrorResponse,
-    description: 'Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
+    description:
+      'Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
     // Documenté pour que le client Swift généré l'expose (`headers.retryAfter`).
     headers: { 'Retry-After': { description: 'Secondes à attendre avant de réessayer.', schema: { type: 'integer', minimum: 1 } } },
   })

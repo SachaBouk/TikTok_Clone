@@ -43,15 +43,17 @@ final class WatchReporter {
         self.video = nil
         let progress = playback.progress(of: video.id)
         guard let result = timer.finish(at: now()), result.videoID == video.id, isMeasured else { return }
-        analytics.track(.videoWatched(VideoWatch(
-            videoID: video.id,
-            authorID: video.author.id,
-            source: source,
-            watched: result.watched,
-            duration: progress?.duration,
-            exitPosition: progress?.position,
-            exit: exit
-        )))
+        analytics.track(
+            .videoWatched(
+                VideoWatch(
+                    videoID: video.id,
+                    authorID: video.author.id,
+                    source: source,
+                    watched: result.watched,
+                    duration: progress?.duration,
+                    exitPosition: progress?.position,
+                    exit: exit
+                )))
     }
 
     // Vidéo supprimée pendant sa lecture : rien n'est envoyé.

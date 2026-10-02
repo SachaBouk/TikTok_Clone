@@ -69,16 +69,23 @@ struct FollowListView: View {
             }
         }
         .listStyle(.plain)
-        .overlay { PagedListPlaceholder(state: viewModel.list.state, isEmpty: viewModel.list.items.isEmpty, emptyTitle: emptyTitle) { await viewModel.list.loadFirst() } }
+        .overlay {
+            PagedListPlaceholder(state: viewModel.list.state, isEmpty: viewModel.list.items.isEmpty, emptyTitle: emptyTitle) {
+                await viewModel.list.loadFirst()
+            }
+        }
         .navigationTitle(viewModel.kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
         .onChange(of: viewModel.blockedUserIDs) { _, ids in viewModel.removeBlocked(ids) }
-        .alert("Abonnements", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Abonnements",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")

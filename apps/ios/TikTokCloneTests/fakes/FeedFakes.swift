@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Feed en mémoire : renvoie les pages prévues, dans l'ordre, et garde les curseurs demandés.

@@ -63,10 +63,18 @@ struct PublishView: View {
                 pickerItem = nil
                 Task { await draft.load { try await item.loadTransferable(type: PickedVideo.self)?.url } }
             }
-            .alert("Publication", isPresented: Binding(
-                get: { alertMessage != nil || draft.errorMessage != nil },
-                set: { if !$0 { alertMessage = nil; draft.errorMessage = nil } }
-            )) {
+            .alert(
+                "Publication",
+                isPresented: Binding(
+                    get: { alertMessage != nil || draft.errorMessage != nil },
+                    set: {
+                        if !$0 {
+                            alertMessage = nil
+                            draft.errorMessage = nil
+                        }
+                    }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage ?? draft.errorMessage ?? "")

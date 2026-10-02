@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 import TikTokAPI
+
 @testable import TikTokClone
 
 // Transport HTTP simulé : le client généré et ses middlewares s'exécutent pour de vrai, sans réseau.
@@ -44,9 +45,9 @@ func json(_ status: HTTPResponse.Status, _ body: String) -> (HTTPResponse, HTTPB
 }
 
 let profileJSON = """
-{"id":"0192f3a0-0000-7000-8000-000000000001","username":"alice","displayName":"Alice","avatarUrl":null,"bio":"Bonjour",\
-"followersCount":3,"followingCount":1,"createdAt":"2026-01-01T12:00:00.123Z"}
-"""
+    {"id":"0192f3a0-0000-7000-8000-000000000001","username":"alice","displayName":"Alice","avatarUrl":null,"bio":"Bonjour",\
+    "followersCount":3,"followingCount":1,"createdAt":"2026-01-01T12:00:00.123Z"}
+    """
 
 func tokensJSON(access: String, refresh: String) -> String {
     #"{"accessToken":"\#(access)","accessTokenExpiresIn":900,"refreshToken":"\#(refresh)"}"#

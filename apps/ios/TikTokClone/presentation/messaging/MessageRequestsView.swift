@@ -13,7 +13,9 @@ struct MessageRequestsView: View {
         List {
             Section {
                 ForEach(messaging.requests.items) { conversation in
-                    Button { openedConversation = ConversationRoute(conversation) } label: {
+                    Button {
+                        openedConversation = ConversationRoute(conversation)
+                    } label: {
                         ConversationRow(conversation: conversation, ownID: container.session.profile?.id, isTyping: false)
                     }
                     .buttonStyle(.plain)
@@ -26,7 +28,9 @@ struct MessageRequestsView: View {
                     .accessibilityIdentifier("requests.conversation")
                 }
                 if messaging.requests.items.isEmpty {
-                    InboxListState(list: messaging.requests, emptyTitle: "Aucune demande", emptyDescription: "Les messages des comptes que tu ne suis pas en retour arrivent ici.")
+                    InboxListState(
+                        list: messaging.requests, emptyTitle: "Aucune demande",
+                        emptyDescription: "Les messages des comptes que tu ne suis pas en retour arrivent ici.")
                 }
             } footer: {
                 Text("Ces comptes ne savent pas si tu as lu leur demande tant que tu ne l’as pas acceptée. Un refus ne leur est pas signalé.")
@@ -40,10 +44,13 @@ struct MessageRequestsView: View {
         }
         .task { await messaging.requests.loadFirstIfNeeded() }
         .refreshable { await messaging.requests.loadFirst() }
-        .alert("Demandes de message", isPresented: Binding(
-            get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
-        )) {
+        .alert(
+            "Demandes de message",
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")

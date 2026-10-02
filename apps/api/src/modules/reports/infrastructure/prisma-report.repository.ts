@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import type { NewReport, OpenReportTarget, Report, ReportReason, ReportResolution, ReportTarget, ReportTargetType, ResolvedReport } from '../domain/report';
+import type {
+  NewReport,
+  OpenReportTarget,
+  Report,
+  ReportReason,
+  ReportResolution,
+  ReportTarget,
+  ReportTargetType,
+  ResolvedReport,
+} from '../domain/report';
 import { ReportRepository } from '../domain/report.repository';
 
 const reportSelect = {

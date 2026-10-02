@@ -187,10 +187,11 @@ enum ProfileRules {
         if bio.count > maxBioLength {
             return .failure(.rejected("Bio : \(maxBioLength) caractères au plus."))
         }
-        return .success(ProfileChanges(
-            username: username == profile.username ? nil : username,
-            displayName: displayName == profile.displayName ? nil : displayName,
-            bio: bio == (profile.bio ?? "") ? nil : bio
-        ))
+        return .success(
+            ProfileChanges(
+                username: username == profile.username ? nil : username,
+                displayName: displayName == profile.displayName ? nil : displayName,
+                bio: bio == (profile.bio ?? "") ? nil : bio
+            ))
     }
 }

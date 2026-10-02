@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 @Suite("Mesure d'audience : règles du visionnage")
@@ -28,7 +29,8 @@ struct WatchRulesTests {
     @Test("visionnage : taux de complétion arrondi, vue en entier à 90 %, boucles")
     func completion() {
         func watch(_ watched: Duration, of duration: Duration?) -> VideoWatch {
-            VideoWatch(videoID: "v1", authorID: "bob-id", source: .feed, watched: watched, duration: duration, exitPosition: .seconds(2), exit: .swipe)
+            VideoWatch(
+                videoID: "v1", authorID: "bob-id", source: .feed, watched: watched, duration: duration, exitPosition: .seconds(2), exit: .swipe)
         }
         #expect(watch(.seconds(3), of: .seconds(10)).completion == 0.3)
         #expect(!watch(.seconds(3), of: .seconds(10)).completed)
@@ -274,7 +276,8 @@ struct AnalyticsInstrumentationTests {
         let session = makeSession(auth: FakeAuthRepository(hasSession: false))
         await session.restore()
         let analytics = makeAnalytics(service)
-        let viewModel = LoginViewModel(login: LoginUseCase(auth: FakeAuthRepository(), profiles: FakeProfileRepository()), session: session, analytics: analytics)
+        let viewModel = LoginViewModel(
+            login: LoginUseCase(auth: FakeAuthRepository(), profiles: FakeProfileRepository()), session: session, analytics: analytics)
         viewModel.email = "alice@test.local"
         viewModel.password = "password"
         await viewModel.submit()

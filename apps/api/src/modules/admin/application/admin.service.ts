@@ -156,7 +156,13 @@ export class AdminService {
     const [message] = await this.messaging.getMessages([messageId]);
     if (!message) throw new AdminTargetNotFoundError('Message', messageId);
     await this.reports.removeContent(
-      { adminId, target: { type: 'message', id: messageId }, authorId: message.senderId, excerpt: message.content || (message.sharedVideoId ? 'Vidéo partagée' : null), reason },
+      {
+        adminId,
+        target: { type: 'message', id: messageId },
+        authorId: message.senderId,
+        excerpt: message.content || (message.sharedVideoId ? 'Vidéo partagée' : null),
+        reason,
+      },
       async () => {
         try {
           await this.messaging.removeMessage(messageId);
@@ -278,18 +284,17 @@ export class AdminService {
       const targetUser = (targetUserId && users.get(targetUserId)) || null;
       const video = target.type === 'video' ? videosById.get(target.id) : undefined;
       const comment = target.type === 'comment' ? commentsById.get(target.id) : undefined;
-      const available =
-        target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment;
+      const available = target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment;
       return {
-          target,
-          targetUser,
-          targetUsername,
-          available,
-          thumbnailUrl: video?.thumbnailUrl ?? null,
-          videoId: comment?.videoId ?? null,
-          open,
-          excerpt: open?.excerpt ?? latest?.excerpt ?? null,
-          latestAt: open?.latestAt ?? latest?.createdAt ?? this.now(),
+        target,
+        targetUser,
+        targetUsername,
+        available,
+        thumbnailUrl: video?.thumbnailUrl ?? null,
+        videoId: comment?.videoId ?? null,
+        open,
+        excerpt: open?.excerpt ?? latest?.excerpt ?? null,
+        latestAt: open?.latestAt ?? latest?.createdAt ?? this.now(),
       };
     });
   }

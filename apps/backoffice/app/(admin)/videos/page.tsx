@@ -59,7 +59,9 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
               <TableCell>
                 <Link href={`/videos/${video.id}`} className="flex items-center gap-3">
                   <Thumbnail url={video.thumbnailUrl} />
-                  <span className="line-clamp-2 max-w-xs whitespace-normal">{video.description || <em className="text-muted-foreground">Sans description</em>}</span>
+                  <span className="line-clamp-2 max-w-xs whitespace-normal">
+                    {video.description || <em className="text-muted-foreground">Sans description</em>}
+                  </span>
                 </Link>
               </TableCell>
               <TableCell>

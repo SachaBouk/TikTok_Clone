@@ -31,11 +31,12 @@ struct RemoteWalletRepository: WalletRepository {
 extension WalletTransaction {
     // Mapping explicite (ADR-002).
     init(_ dto: Components.Schemas.WalletTransactionResponse) {
-        let kind: WalletTransactionKind = switch dto.kind {
-        case .purchase: .purchase
-        case .refund: .refund
-        case .adjustment: .adjustment
-        }
+        let kind: WalletTransactionKind =
+            switch dto.kind {
+            case .purchase: .purchase
+            case .refund: .refund
+            case .adjustment: .adjustment
+            }
         self.init(id: dto.id, kind: kind, amount: dto.amount, balanceAfter: dto.balanceAfter, productID: dto.productId, createdAt: dto.createdAt)
     }
 }

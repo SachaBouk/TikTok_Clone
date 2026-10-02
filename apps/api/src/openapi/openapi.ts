@@ -66,7 +66,12 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   markPublicOperations(document);
   unwrapSingleRefAllOf(document);
   addUnion(document, 'RealtimeEvent', 'Message envoyé par le serveur sur le WebSocket `/realtime` (ADR-011).', REALTIME_EVENTS);
-  addUnion(document, 'RealtimeClientMessage', 'Message envoyé par l’app sur le WebSocket `/realtime` (les autres sont ignorés).', REALTIME_CLIENT_MESSAGES);
+  addUnion(
+    document,
+    'RealtimeClientMessage',
+    'Message envoyé par l’app sur le WebSocket `/realtime` (les autres sont ignorés).',
+    REALTIME_CLIENT_MESSAGES,
+  );
   assertUniqueOperationIds(document);
   return document;
 }

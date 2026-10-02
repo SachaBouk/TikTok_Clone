@@ -75,9 +75,7 @@ describe('VideosService', () => {
     });
 
     it('refuse un format non pris en charge ou un fichier trop volumineux', async () => {
-      await expect(service.createUpload(ALICE, { contentType: 'image/png', fileSize: 1000 })).rejects.toBeInstanceOf(
-        UnsupportedVideoTypeError,
-      );
+      await expect(service.createUpload(ALICE, { contentType: 'image/png', fileSize: 1000 })).rejects.toBeInstanceOf(UnsupportedVideoTypeError);
       await expect(service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MAX_VIDEO_SIZE_BYTES + 1 })).rejects.toBeInstanceOf(
         VideoTooLargeError,
       );
@@ -141,9 +139,7 @@ describe('VideosService', () => {
       const parts = uploadAllParts(video.uploadId!, 25 * MIB, 3);
 
       await expect(service.completeUpload(ALICE, video.id, parts.slice(0, 2))).rejects.toBeInstanceOf(UploadIncompleteError);
-      await expect(service.completeUpload(ALICE, video.id, [parts[0]!, parts[0]!, parts[2]!])).rejects.toBeInstanceOf(
-        UploadIncompleteError,
-      );
+      await expect(service.completeUpload(ALICE, video.id, [parts[0]!, parts[0]!, parts[2]!])).rejects.toBeInstanceOf(UploadIncompleteError);
       expect(storage.objects.has(video.rawKey)).toBe(false);
       await expect(service.completeUpload(ALICE, video.id, parts)).resolves.toMatchObject({ status: 'processing' });
     });
@@ -204,11 +200,17 @@ describe('VideosService', () => {
 
     it('rend la vidéo publique quand le transcodage réussit', async () => {
       const video = await processingVideo();
-      const applied = await service.applyTranscodeResult(video.id, { status: 'ready', hlsUrl: 'https://cdn/v.m3u8', thumbnailUrl: 'https://cdn/t.jpg' });
+      const applied = await service.applyTranscodeResult(video.id, {
+        status: 'ready',
+        hlsUrl: 'https://cdn/v.m3u8',
+        thumbnailUrl: 'https://cdn/t.jpg',
+      });
 
       expect(applied).toBe(true);
       await expect(service.getVideo(video.id, null)).resolves.toMatchObject({ status: 'ready', hlsUrl: 'https://cdn/v.m3u8' });
-      expect(events.processed).toEqual([expect.objectContaining({ id: video.id, userId: ALICE, status: 'ready', thumbnailUrl: 'https://cdn/t.jpg' })]);
+      expect(events.processed).toEqual([
+        expect.objectContaining({ id: video.id, userId: ALICE, status: 'ready', thumbnailUrl: 'https://cdn/t.jpg' }),
+      ]);
     });
 
     it('passe la vidéo en failed après un échec définitif', async () => {
@@ -287,7 +289,7 @@ describe('VideosService', () => {
       return video;
     }
 
-    it("supprime la vidéo de son auteur et programme le nettoyage de ses fichiers, avec délai", async () => {
+    it('supprime la vidéo de son auteur et programme le nettoyage de ses fichiers, avec délai', async () => {
       const video = await videoWithStatus('ready');
       await service.deleteVideo(ALICE, video.id);
       expect(videos.videos.has(video.id)).toBe(false);
@@ -415,7 +417,10 @@ describe('VideosService', () => {
       const ready = await videoOf(ALICE, 'ready');
       const failed = await videoOf(ALICE, 'failed');
       const other = await videoOf(BOB, 'ready');
-      const all = [ready, failed, other].map((v) => v.id).sort().reverse();
+      const all = [ready, failed, other]
+        .map((v) => v.id)
+        .sort()
+        .reverse();
 
       expect((await service.listVideoDetails({}, null, 10)).map((v) => v.id)).toEqual(all);
       expect((await service.listVideoDetails({}, all[0]!, 10)).map((v) => v.id)).toEqual(all.slice(1));
@@ -435,7 +440,12 @@ describe('VideosService', () => {
         createdSince: 3,
       });
       await expect(service.countVideos(new Date(Date.now() + 60_000))).resolves.toMatchObject({ createdSince: 0 });
-      await expect(service.countVideosByAuthors([ALICE, BOB, 'personne'])).resolves.toEqual(new Map([[ALICE, 2], [BOB, 1]]));
+      await expect(service.countVideosByAuthors([ALICE, BOB, 'personne'])).resolves.toEqual(
+        new Map([
+          [ALICE, 2],
+          [BOB, 1],
+        ]),
+      );
     });
   });
 });

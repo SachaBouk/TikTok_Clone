@@ -58,15 +58,17 @@ enum VideoLink {
 
 extension FeedVideo {
     func with(stats: VideoStats? = nil, viewer: ViewerState?) -> FeedVideo {
-        FeedVideo(id: id, description: description, hlsURL: hlsURL, thumbnailURL: thumbnailURL, createdAt: createdAt,
-                  stats: stats ?? self.stats, author: author, viewer: viewer)
+        FeedVideo(
+            id: id, description: description, hlsURL: hlsURL, thumbnailURL: thumbnailURL, createdAt: createdAt,
+            stats: stats ?? self.stats, author: author, viewer: viewer)
     }
 }
 
 extension VideoStats {
     func with(likes: Int? = nil, comments: Int? = nil, favorites: Int? = nil, shares: Int? = nil, reposts: Int? = nil) -> VideoStats {
-        VideoStats(views: views, likes: likes ?? self.likes, comments: comments ?? self.comments,
-                   favorites: favorites ?? self.favorites, shares: shares ?? self.shares, reposts: reposts ?? self.reposts)
+        VideoStats(
+            views: views, likes: likes ?? self.likes, comments: comments ?? self.comments,
+            favorites: favorites ?? self.favorites, shares: shares ?? self.shares, reposts: reposts ?? self.reposts)
     }
 
     func count(of kind: ReactionKind) -> Int {

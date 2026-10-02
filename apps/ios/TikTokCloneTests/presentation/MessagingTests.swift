@@ -1,12 +1,15 @@
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 private let me = UserProfile.alice.id
 private let carla = UserSummary(id: "carla-id", username: "carla", displayName: "Carla", avatarURL: nil)
 
 @MainActor
-private func makeMessaging(_ repository: FakeMessagingRepository, channel: FakeRealtimeChannel = FakeRealtimeChannel(), typingDisplay: Duration = .seconds(5)) async -> (MessagingModel, SessionStore) {
+private func makeMessaging(
+    _ repository: FakeMessagingRepository, channel: FakeRealtimeChannel = FakeRealtimeChannel(), typingDisplay: Duration = .seconds(5)
+) async -> (MessagingModel, SessionStore) {
     let session = makeSession(auth: FakeAuthRepository(hasSession: true))
     await session.restore()
     let model = MessagingModel(
@@ -31,7 +34,8 @@ struct MessagingModelTests {
 
     init() {
         repository.add(.sample("c1", lastMessage: .sample("m10", in: "c1")), messages: [.sample("m10", in: "c1")])
-        repository.add(.sample("c2", with: carla, lastMessage: .sample("m11", in: "c2", from: carla.id)), messages: [.sample("m11", in: "c2", from: carla.id)])
+        repository.add(
+            .sample("c2", with: carla, lastMessage: .sample("m11", in: "c2", from: carla.id)), messages: [.sample("m11", in: "c2", from: carla.id)])
     }
 
     @Test("connexion : badges relus ; les listes ne sont chargées qu'à l'affichage")
@@ -244,7 +248,10 @@ struct ConversationViewModelTests {
         viewModel.draft = "Sal"
         #expect(await eventually { channel.typingSent == ["c1", "c1"] })
 
-        repository.update("c1") { $0.status = .requestSent; $0.remainingRequestMessages = 3 }
+        repository.update("c1") {
+            $0.status = .requestSent
+            $0.remainingRequestMessages = 3
+        }
         await viewModel.load()
         clock.advance(by: 3)
         viewModel.draft = "Salu"

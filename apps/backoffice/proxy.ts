@@ -21,7 +21,10 @@ export async function proxy(request: NextRequest) {
     outcome = await refreshOnce(refreshToken);
   } catch {
     // Session gardée : rien n'a été consommé, la prochaine requête réessaiera.
-    return new NextResponse('API injoignable : réessayez dans un instant.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    return new NextResponse('API injoignable : réessayez dans un instant.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
   if (outcome.kind === 'rejected') return toLogin(request, 'session');
 

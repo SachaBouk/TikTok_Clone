@@ -36,9 +36,10 @@ extension View {
         interactions: VideoInteractionsModel,
         container: AppContainer
     ) -> some View {
-        modifier(VideoInteractionSheets(
-            comments: comments, share: share, report: report, alert: alert, interactions: interactions, container: container
-        ))
+        modifier(
+            VideoInteractionSheets(
+                comments: comments, share: share, report: report, alert: alert, interactions: interactions, container: container
+            ))
     }
 }
 
@@ -65,10 +66,13 @@ private struct VideoInteractionSheets: ViewModifier {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(item: $share, onDismiss: {
-                sendByMessage = chosenForMessage
-                chosenForMessage = nil
-            }) { video in
+            .sheet(
+                item: $share,
+                onDismiss: {
+                    sendByMessage = chosenForMessage
+                    chosenForMessage = nil
+                }
+            ) { video in
                 ActivityShareSheet(items: video.shareItems, allowsSendByMessage: container.session.isSignedIn) { outcome in
                     switch outcome {
                     case .shared: Task { await interactions.shareCompleted(video) }
@@ -89,14 +93,19 @@ private struct VideoInteractionSheets: ViewModifier {
                     .presentationDragIndicator(.visible)
             }
             // Vidéo d'un autre compte signalée depuis le menu « … » (ADR-038).
-            .reportSheet(Binding(
-                get: { report.map { ReportTarget.video(id: $0.id) } },
-                set: { if $0 == nil { report = nil } }
-            ), container: container)
-            .alert("Action impossible", isPresented: Binding(
-                get: { alert != nil },
-                set: { if !$0 { alert = nil } }
-            )) {
+            .reportSheet(
+                Binding(
+                    get: { report.map { ReportTarget.video(id: $0.id) } },
+                    set: { if $0 == nil { report = nil } }
+                ), container: container
+            )
+            .alert(
+                "Action impossible",
+                isPresented: Binding(
+                    get: { alert != nil },
+                    set: { if !$0 { alert = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alert ?? "")

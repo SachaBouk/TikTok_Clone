@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UIKit
+
 @testable import TikTokClone
 
 @MainActor
@@ -44,7 +45,8 @@ struct PublishingModelTests {
         #expect(videos.completed("vid-1")?.count == 3)
         #expect(store.uploads.isEmpty)
 
-        model.videoProcessed(OwnVideo(id: "vid-1", description: "Salut", status: .ready, thumbnailURL: URL(string: "http://cdn.test/t.jpg"), createdAt: .now))
+        model.videoProcessed(
+            OwnVideo(id: "vid-1", description: "Salut", status: .ready, thumbnailURL: URL(string: "http://cdn.test/t.jpg"), createdAt: .now))
         #expect(model.publications.first?.phase == .ready)
         #expect(model.publications.first?.thumbnailURL?.absoluteString == "http://cdn.test/t.jpg")
         #expect(model.inProgressCount == 0)
@@ -108,7 +110,10 @@ struct PublishingModelTests {
     @Test("supprimer une vidéo en échec ; annuler un envoi en cours")
     func delete() async {
         let failed = OwnVideo(id: "old", description: nil, status: .failed, thumbnailURL: nil, createdAt: .now)
-        videos.state.withLock { $0.pending = [failed]; $0.videos["old"] = failed }
+        videos.state.withLock {
+            $0.pending = [failed]
+            $0.videos["old"] = failed
+        }
         let (model, _) = await makeModel()
         await model.refresh()
         #expect(await model.delete("old") == nil)
@@ -168,7 +173,8 @@ struct PublishingModelTests {
         let cleaner = FakeVideoMetadataCleaner(store: store)
         var duration: Duration = .milliseconds(181_500)
         let draft = PublishDraftViewModel(
-            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { [duration] _ in duration }
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil },
+            loadDuration: { [duration] _ in duration }
         )
         await draft.load { picked() }
         #expect(draft.state == .failed("Cette vidéo dure plus de 3 minutes. Choisis-en une plus courte."))
@@ -177,7 +183,8 @@ struct PublishingModelTests {
 
         duration = .milliseconds(180_900)
         let accepted = PublishDraftViewModel(
-            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { [duration] _ in duration }
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil },
+            loadDuration: { [duration] _ in duration }
         )
         await accepted.load { picked() }
         #expect(accepted.canPublish)

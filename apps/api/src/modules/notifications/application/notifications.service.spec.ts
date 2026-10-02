@@ -48,10 +48,24 @@ describe('NotificationsService', () => {
     videoRepository = new InMemoryVideoRepository();
     userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol'), user('dave')]);
     repository = new InMemoryNotificationRepository();
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      new InMemoryVideoCleanupQueue(),
+      new InMemoryRateLimiter(),
+    );
     publisher = new InMemoryNotificationPublisher();
     suspended = new InMemorySuspendedAccounts();
-    service = new NotificationsService(repository, new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended), videos, publisher, suspended, () => readAt);
+    service = new NotificationsService(
+      repository,
+      new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended),
+      videos,
+      publisher,
+      suspended,
+      () => readAt,
+    );
 
     const created = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
     Object.assign(videoRepository.videos.get(created.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 'miniature.jpg' });
@@ -100,10 +114,12 @@ describe('NotificationsService', () => {
       await service.notify(like('alice'));
       await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
 
-      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor?.id, item.video?.id ?? null, unreadCount])).toEqual([
-        ['like', 'alice', video, 1],
-        ['follow', 'carol', null, 2],
-      ]);
+      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor?.id, item.video?.id ?? null, unreadCount])).toEqual(
+        [
+          ['like', 'alice', video, 1],
+          ['follow', 'carol', null, 2],
+        ],
+      );
       expect(publisher.unreadCounts).toEqual([]);
     });
 
@@ -197,7 +213,7 @@ describe('NotificationsService', () => {
       expect(second.nextCursor).toBeNull();
     });
 
-    it("saute un groupe dont la vidéo a disparu", async () => {
+    it('saute un groupe dont la vidéo a disparu', async () => {
       await service.notify(like('alice'));
       await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
       await videoRepository.delete(video);
@@ -242,7 +258,9 @@ describe('NotificationsService', () => {
       await service.notifyModeration({ type: 'reportResolved', recipientId: 'bob', targetType: 'comment', outcome: 'dismissed', excerpt: 'Bravo' });
       await service.notifyModeration({ type: 'reportResolved', recipientId: 'bob', targetType: 'comment', outcome: 'dismissed', excerpt: 'Bravo' });
 
-      expect(publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor, item.notification.moderation?.targetType, unreadCount])).toEqual([
+      expect(
+        publisher.created.map(({ item, unreadCount }) => [item.notification.type, item.actor, item.notification.moderation?.targetType, unreadCount]),
+      ).toEqual([
         ['contentRemoved', null, 'video', 1],
         ['reportResolved', null, 'comment', 2],
         ['reportResolved', null, 'comment', 3],

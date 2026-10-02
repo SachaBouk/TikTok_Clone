@@ -142,8 +142,9 @@ enum MessageRules {
     // « Vu » : sous le dernier message envoyé par le compte connecté, s'il a été lu par l'autre.
     static func seenMessageID(in messages: [DirectMessage], ownID: String, participantLastRead: String?) -> String? {
         guard let lastRead = participantLastRead,
-              let lastOwn = messages.last(where: { $0.senderID == ownID }),
-              isAtOrBefore(lastOwn.id, lastRead) else { return nil }
+            let lastOwn = messages.last(where: { $0.senderID == ownID }),
+            isAtOrBefore(lastOwn.id, lastRead)
+        else { return nil }
         return lastOwn.id
     }
 

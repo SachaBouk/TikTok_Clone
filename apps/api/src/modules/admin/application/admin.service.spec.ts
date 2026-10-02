@@ -131,18 +131,44 @@ describe('AdminService', () => {
     videoRepository = new InMemoryVideoRepository(() => NOW);
     accounts = new InMemoryAuthAccountRepository();
     // Les comptes existent aussi côté auth (même table `users`, colonnes propres à chaque module).
-    for (const [id, username] of [[ALICE, 'alice'], [BOB, 'bob'], [CAROL, 'carol']]) {
-      accounts.accounts.push({ id: id!, email: `${username}@test.local`, passwordHash: null, appleSub: null, username: username!, displayName: username! });
+    for (const [id, username] of [
+      [ALICE, 'alice'],
+      [BOB, 'bob'],
+      [CAROL, 'carol'],
+    ]) {
+      accounts.accounts.push({
+        id: id!,
+        email: `${username}@test.local`,
+        passwordHash: null,
+        appleSub: null,
+        username: username!,
+        displayName: username!,
+      });
     }
     refreshTokens = new InMemoryRefreshTokenRepository();
     bus = new InMemoryRealtimeBus();
     cleanup = new InMemoryVideoCleanupQueue();
     suspended = new InMemorySuspendedAccounts();
     const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended, () => NOW);
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), cleanup, new InMemoryRateLimiter(), () => NOW);
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      cleanup,
+      new InMemoryRateLimiter(),
+      () => NOW,
+    );
     notificationRepository = new InMemoryNotificationRepository();
     const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter(), suspended);
+    interactions = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, userRepository),
+      videos,
+      users,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+    );
     const auth = new AuthService(
       accounts,
       refreshTokens,
@@ -155,13 +181,23 @@ describe('AdminService', () => {
       () => NOW,
     );
     wallet = new WalletService(new InMemoryWalletRepository(), users, new InMemoryWalletEventPublisher(), { rejectSandbox: false });
-    const realtime = new RealtimeService(bus, new (class extends AccessTokenVerifier {
-      async verify() {
-        return null;
-      }
-    })());
+    const realtime = new RealtimeService(
+      bus,
+      new (class extends AccessTokenVerifier {
+        async verify() {
+          return null;
+        }
+      })(),
+    );
     reportRepository = new InMemoryReportRepository(() => NOW);
-    messaging = new MessagingService(new InMemoryConversationRepository(), users, interactions, videos, new InMemoryMessagingEventPublisher(), new InMemoryRateLimiter());
+    messaging = new MessagingService(
+      new InMemoryConversationRepository(),
+      users,
+      interactions,
+      videos,
+      new InMemoryMessagingEventPublisher(),
+      new InMemoryRateLimiter(),
+    );
     reports = new ReportsService(
       reportRepository,
       new InMemoryModerationActionRepository(() => NOW),
@@ -237,7 +273,9 @@ describe('AdminService', () => {
       await expect(messaging.getMessages([message.id])).resolves.toEqual([]);
       await expect(service.removeMessage(CAROL, message.id, 'harassment')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
       expect(
-        [...notificationRepository.notifications.values()].filter((n) => n.moderation).map((n) => [n.recipientId, n.type, n.moderation!.reason ?? n.moderation!.outcome]),
+        [...notificationRepository.notifications.values()]
+          .filter((n) => n.moderation)
+          .map((n) => [n.recipientId, n.type, n.moderation!.reason ?? n.moderation!.outcome]),
       ).toEqual([
         [BOB, 'contentRemoved', 'harassment'],
         [ALICE, 'reportResolved', 'contentRemoved'],
@@ -308,7 +346,12 @@ describe('AdminService', () => {
 
     it('cherche un compte, et en ouvre un par identifiant', async () => {
       await expect(service.listAccounts('@BO', null, 10)).resolves.toMatchObject({ items: [{ user: { id: BOB } }], nextCursor: null });
-      await expect(service.getAccount(ALICE)).resolves.toMatchObject({ user: { username: 'alice' }, isAdmin: false, videosCount: 0, tokenBalance: 0 });
+      await expect(service.getAccount(ALICE)).resolves.toMatchObject({
+        user: { username: 'alice' },
+        isAdmin: false,
+        videosCount: 0,
+        tokenBalance: 0,
+      });
       await expect(service.getAccount('0192f3a0-0000-7000-8000-00000000dead')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
     });
   });

@@ -2,6 +2,7 @@ import AVFoundation
 import CoreVideo
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 // Vrai AVFoundation, sur une vidéo écrite pour le test : position GPS au format d'un iPhone, rotation d'un quart de tour.
@@ -57,14 +58,19 @@ struct VideoMetadataCleanerTests {
     // 15 images de 64 × 64 à 30 i/s, en H.264, avec la position et le fabricant comme un iPhone.
     private static func writeVideo(to url: URL) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 64,
-        ])
+        let input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 64,
+            ])
         input.expectsMediaDataInRealTime = false
         input.transform = CGAffineTransform(rotationAngle: .pi / 2)
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey as String: 64, kCVPixelBufferHeightKey as String: 64,
-        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey as String: 64,
+                kCVPixelBufferHeightKey as String: 64,
+            ])
         writer.add(input)
         writer.metadata = [
             metadataItem(.quickTimeMetadataLocationISO6709, location),

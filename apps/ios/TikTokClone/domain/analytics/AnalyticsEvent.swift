@@ -64,12 +64,14 @@ extension AnalyticsEvent {
 
     // Like, favori, republication (bouton ou double toucher), et leur retrait.
     static func videoReaction(_ kind: ReactionKind, active: Bool, videoID: String, doubleTap: Bool = false) -> AnalyticsEvent {
-        AnalyticsEvent(name: "video_reaction", properties: [
-            "video_id": .string(videoID),
-            "kind": .string(kind.analyticsName),
-            "active": .bool(active),
-            "trigger": .string(doubleTap ? "double_tap" : "button"),
-        ])
+        AnalyticsEvent(
+            name: "video_reaction",
+            properties: [
+                "video_id": .string(videoID),
+                "kind": .string(kind.analyticsName),
+                "active": .bool(active),
+                "trigger": .string(doubleTap ? "double_tap" : "button"),
+            ])
     }
 
     static func commentPosted(videoID: String) -> AnalyticsEvent {
@@ -78,10 +80,12 @@ extension AnalyticsEvent {
 
     // Partage envoyé : feuille système, ou message de l'app.
     static func videoShared(videoID: String, byMessage: Bool) -> AnalyticsEvent {
-        AnalyticsEvent(name: "video_shared", properties: [
-            "video_id": .string(videoID),
-            "method": .string(byMessage ? "message" : "system"),
-        ])
+        AnalyticsEvent(
+            name: "video_shared",
+            properties: [
+                "video_id": .string(videoID),
+                "method": .string(byMessage ? "message" : "system"),
+            ])
     }
 
     static func followChanged(userID: String, active: Bool) -> AnalyticsEvent {
@@ -94,10 +98,12 @@ extension AnalyticsEvent {
     }
 
     static func messageSent(conversationID: String, status: ConversationStatus) -> AnalyticsEvent {
-        AnalyticsEvent(name: "message_sent", properties: [
-            "conversation_id": .string(conversationID),
-            "conversation_status": .string(status.analyticsName),
-        ])
+        AnalyticsEvent(
+            name: "message_sent",
+            properties: [
+                "conversation_id": .string(conversationID),
+                "conversation_status": .string(status.analyticsName),
+            ])
     }
 
     // Parcours d'onboarding : feuille de connexion affichée, inscription commencée puis terminée, connexion.

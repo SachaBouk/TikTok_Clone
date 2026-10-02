@@ -102,7 +102,8 @@ export class NotificationPageResponse implements NotificationPageDto {
 
 export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiProperty({
-    description: 'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`.',
+    description:
+      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`.',
   })
   key!: string;
 

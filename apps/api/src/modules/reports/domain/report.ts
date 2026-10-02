@@ -86,7 +86,8 @@ export interface ResolvedReport {
 
 // ─── Journal de modération ───────────────────────────────────────────────────
 
-export type ModerationActionType = 'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+export type ModerationActionType =
+  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
 export const MODERATION_ACTION_TYPES: ModerationActionType[] = [
   'videoRemoved',
   'commentRemoved',

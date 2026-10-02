@@ -66,7 +66,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           )}
         </TableBody>
       </Table>
-      <Pagination onFirstPage={!curseur} firstHref="/reports" nextHref={page.nextCursor ? withQuery('/reports', { curseur: page.nextCursor }) : null} />
+      <Pagination
+        onFirstPage={!curseur}
+        firstHref="/reports"
+        nextHref={page.nextCursor ? withQuery('/reports', { curseur: page.nextCursor }) : null}
+      />
     </div>
   );
 }

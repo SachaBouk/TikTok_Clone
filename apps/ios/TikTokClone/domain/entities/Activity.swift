@@ -33,12 +33,13 @@ struct ActivityModeration: Equatable, Sendable {
     // Mêmes textes que les notifications push de l'API.
     func text(_ kind: ActivityKind) -> String {
         if kind == .contentRemoved {
-            let removed = switch target {
-            case .video: "Ta vidéo a été retirée."
-            case .comment: "Ton commentaire a été retiré."
-            case .message: "Ton message a été retiré."
-            case .account: "Ton compte a été suspendu."
-            }
+            let removed =
+                switch target {
+                case .video: "Ta vidéo a été retirée."
+                case .comment: "Ton commentaire a été retiré."
+                case .message: "Ton message a été retiré."
+                case .account: "Ton compte a été suspendu."
+                }
             // « Autre » : libellé de la liste, peu parlant seul ; même texte que la notification push.
             return reason.map { "\(removed) Motif : \($0 == .other ? "non-respect des règles" : $0.label.lowercased())." } ?? removed
         }

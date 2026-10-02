@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 @Suite("RemoteAuthRepository et RemoteProfileRepository")
@@ -10,10 +11,11 @@ struct RemoteAuthRepositoryTests {
     let log = RequestLog()
 
     func repository(_ respond: @escaping @Sendable (String) throws -> (HTTPResponse, HTTPBody?)) -> RemoteAuthRepository {
-        let client = makeClient(transport: MockTransport { [log] request, operationID in
-            log.record(request, operationID)
-            return try respond(operationID)
-        })
+        let client = makeClient(
+            transport: MockTransport { [log] request, operationID in
+                log.record(request, operationID)
+                return try respond(operationID)
+            })
         return RemoteAuthRepository(client: client, store: store, now: { [now] in now })
     }
 

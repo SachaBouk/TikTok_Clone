@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Centre d'activité en mémoire : notifications du plus récent au plus ancien, 2 par page, regroupées comme
@@ -94,6 +95,7 @@ extension ActivityNotification {
     }
 
     func marked(read: Bool) -> ActivityNotification {
-        ActivityNotification(id: id, kind: kind, actor: actor, video: video, comment: comment, read: read, createdAt: createdAt, moderation: moderation)
+        ActivityNotification(
+            id: id, kind: kind, actor: actor, video: video, comment: comment, read: read, createdAt: createdAt, moderation: moderation)
     }
 }

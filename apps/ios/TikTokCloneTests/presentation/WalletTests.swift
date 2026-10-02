@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 @Suite("Portefeuille : API et temps réel")
@@ -8,12 +9,14 @@ struct WalletDataTests {
     @Test("solde et historique : mapping des mouvements")
     func mapping() async throws {
         let history = """
-        {"items":[{"id":"t2","kind":"refund","amount":-50,"balanceAfter":50,"productId":"tokens_100","createdAt":"2026-09-27T10:00:00.000Z"},\
-        {"id":"t1","kind":"purchase","amount":100,"balanceAfter":100,"productId":"tokens_100","createdAt":"2026-09-27T09:00:00.000Z"}],"nextCursor":"t1"}
-        """
-        let repository = RemoteWalletRepository(client: makeClient(transport: MockTransport { _, operation in
-            operation == "getWallet" ? json(.ok, #"{"balance":50}"#) : json(.ok, history)
-        }))
+            {"items":[{"id":"t2","kind":"refund","amount":-50,"balanceAfter":50,"productId":"tokens_100","createdAt":"2026-09-27T10:00:00.000Z"},\
+            {"id":"t1","kind":"purchase","amount":100,"balanceAfter":100,"productId":"tokens_100","createdAt":"2026-09-27T09:00:00.000Z"}],"nextCursor":"t1"}
+            """
+        let repository = RemoteWalletRepository(
+            client: makeClient(
+                transport: MockTransport { _, operation in
+                    operation == "getWallet" ? json(.ok, #"{"balance":50}"#) : json(.ok, history)
+                }))
         #expect(try await repository.balance() == 50)
         let page = try await repository.transactions(cursor: nil)
         #expect(page.transactions.map(\.kind) == [.refund, .purchase])
@@ -24,9 +27,11 @@ struct WalletDataTests {
 
     @Test("session expirée : 401")
     func unauthorized() async {
-        let repository = RemoteWalletRepository(client: makeClient(transport: MockTransport { _, _ in
-            json(.unauthorized, #"{"statusCode":401,"message":"Unauthorized"}"#)
-        }))
+        let repository = RemoteWalletRepository(
+            client: makeClient(
+                transport: MockTransport { _, _ in
+                    json(.unauthorized, #"{"statusCode":401,"message":"Unauthorized"}"#)
+                }))
         await #expect(throws: AppError.sessionExpired) { try await repository.balance() }
     }
 

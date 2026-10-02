@@ -50,11 +50,7 @@ export class InMemoryUserRepository extends UserRepository {
     return [...this.users.values()]
       .filter((user) => !beforeId || user.id < beforeId)
       .filter(
-        (user) =>
-          !needle ||
-          user.username.toLowerCase().includes(needle) ||
-          user.displayName.toLowerCase().includes(needle) ||
-          user.id === needle,
+        (user) => !needle || user.username.toLowerCase().includes(needle) || user.displayName.toLowerCase().includes(needle) || user.id === needle,
       )
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .slice(0, limit);

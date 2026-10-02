@@ -159,7 +159,8 @@ export class MessagingService {
       await this.events.messageCreated(recipientId, recipientId === userId ? item! : received!, await this.badges(recipientId));
     }
     if (accept && view.requestSenderId !== null) {
-      for (const recipientId of [userId, otherId]) await this.events.conversationAccepted(recipientId, conversationId, await this.badges(recipientId));
+      for (const recipientId of [userId, otherId])
+        await this.events.conversationAccepted(recipientId, conversationId, await this.badges(recipientId));
     }
     if (received) await this.events.pushNewMessage(otherId, await this.users.getById(userId), received, status === 'requestSent');
     return item!;
@@ -205,7 +206,11 @@ export class MessagingService {
     const delivered = !conversation.declinedAt || conversation.acceptedAt !== null;
     for (const { userId: recipientId } of conversation.members) {
       if (recipientId !== message.senderId && !delivered) continue;
-      await this.events.messageDeleted(recipientId, { conversationId: message.conversationId, messageId: message.id }, await this.badges(recipientId));
+      await this.events.messageDeleted(
+        recipientId,
+        { conversationId: message.conversationId, messageId: message.id },
+        await this.badges(recipientId),
+      );
     }
   }
 
@@ -325,7 +330,12 @@ export class MessagingService {
     const mutual = await this.interactions.getMutualFollowers(userId, ids);
     const blocks = await this.interactions.getBlocks(userId, ids);
     const lastMessages = new Map(
-      (await this.withVideos(userId, views.flatMap((v) => (v.lastMessage ? [v.lastMessage] : [])))).map((item) => [item.message.conversationId, item]),
+      (
+        await this.withVideos(
+          userId,
+          views.flatMap((v) => (v.lastMessage ? [v.lastMessage] : [])),
+        )
+      ).map((item) => [item.message.conversationId, item]),
     );
     return views.flatMap((conversation) => {
       const participant = participants.get(conversation.participantId);

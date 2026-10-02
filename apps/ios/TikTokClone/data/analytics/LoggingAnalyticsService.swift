@@ -48,8 +48,8 @@ final class LoggingAnalyticsService: AnalyticsService {
     }
 }
 
-private extension AnalyticsValue {
-    var logDescription: String {
+extension AnalyticsValue {
+    fileprivate var logDescription: String {
         switch self {
         case .string(let value): value
         case .int(let value): String(value)

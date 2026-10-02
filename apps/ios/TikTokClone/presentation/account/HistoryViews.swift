@@ -88,10 +88,13 @@ struct ViewHistoryView: View {
         } message: {
             Text("Les vues déjà comptées sur les vidéos ne changent pas.")
         }
-        .alert("Historique", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Historique",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
@@ -171,18 +174,23 @@ struct CommentHistoryView: View {
         }
         .listStyle(.plain)
         .overlay {
-            PagedListPlaceholder(state: viewModel.list.state, isEmpty: viewModel.list.items.isEmpty, emptyTitle: "Aucun commentaire",
-                                 emptySystemImage: "text.bubble") { await viewModel.list.loadFirst() }
+            PagedListPlaceholder(
+                state: viewModel.list.state, isEmpty: viewModel.list.items.isEmpty, emptyTitle: "Aucun commentaire",
+                emptySystemImage: "text.bubble"
+            ) { await viewModel.list.loadFirst() }
         }
         .navigationTitle("Historique des commentaires")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
         .onChange(of: viewModel.blockedUserIDs) { _, ids in viewModel.removeBlocked(ids) }
-        .alert("Commentaires", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Commentaires",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")

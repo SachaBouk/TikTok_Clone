@@ -23,7 +23,26 @@ let corrupted: string;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'ffmpeg-spec-'));
   const raw = join(dir, 'raw.mp4');
-  ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '5', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', raw);
+  ffmpeg(
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=1280x720:rate=30',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440',
+    '-t',
+    '5',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'ultrafast',
+    '-c:a',
+    'aac',
+    '-shortest',
+    raw,
+  );
   iphoneLike = join(dir, 'iphone.mov');
   ffmpeg('-display_rotation:v:0', '90', '-i', raw, '-c', 'copy', iphoneLike);
   landscapeNoAudio = join(dir, 'landscape.mp4');
@@ -51,7 +70,7 @@ describe('probe', () => {
 });
 
 describe('transcodeToHls', () => {
-  it("produit un master HLS multi-résolutions, en vertical, avec segments alignés", async () => {
+  it('produit un master HLS multi-résolutions, en vertical, avec segments alignés', async () => {
     const out = join(dir, 'hls-iphone');
     const media = await probe(iphoneLike, options);
     await transcodeToHls(iphoneLike, out, renditionsFor(media), media, options);
@@ -109,8 +128,19 @@ describe('createThumbnail', () => {
 describe('métadonnées personnelles', () => {
   it('aucune position dans le HLS ni dans la miniature', async () => {
     const located = join(dir, 'located.mov');
-    ffmpeg('-i', iphoneLike, '-c', 'copy', '-movflags', 'use_metadata_tags',
-      '-metadata', 'com.apple.quicktime.location.ISO6709=+48.8566+002.3522+035.000/', '-metadata', 'location=+48.8566+002.3522/', located);
+    ffmpeg(
+      '-i',
+      iphoneLike,
+      '-c',
+      'copy',
+      '-movflags',
+      'use_metadata_tags',
+      '-metadata',
+      'com.apple.quicktime.location.ISO6709=+48.8566+002.3522+035.000/',
+      '-metadata',
+      'location=+48.8566+002.3522/',
+      located,
+    );
     expect(readFileSync(located).includes('+48.8566')).toBe(true);
 
     const out = join(dir, 'hls-located');

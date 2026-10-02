@@ -57,18 +57,24 @@ struct ConversationView: View {
             } message: {
                 Text("Elle disparaît de tes demandes. @\(viewModel.username) n’en sera pas informé(e).")
             }
-            .confirmationDialog("Retirer ce message ?", isPresented: Binding(
-                get: { retracting != nil },
-                set: { if !$0 { retracting = nil } }
-            ), titleVisibility: .visible, presenting: retracting) { message in
+            .confirmationDialog(
+                "Retirer ce message ?",
+                isPresented: Binding(
+                    get: { retracting != nil },
+                    set: { if !$0 { retracting = nil } }
+                ), titleVisibility: .visible, presenting: retracting
+            ) { message in
                 Button("Retirer", role: .destructive) { Task { await viewModel.retract(message) } }
             } message: { _ in
                 Text("Il sera retiré pour vous deux.")
             }
-            .alert("Messages", isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
-            )) {
+            .alert(
+                "Messages",
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(viewModel.errorMessage ?? "")
@@ -109,7 +115,9 @@ struct ConversationView: View {
                                 }
                             }
                     } else if let conversation = viewModel.conversation {
-                        ConversationHeader(user: conversation.participant) { openedProfile = ProfileRoute(username: conversation.participant.username) }
+                        ConversationHeader(user: conversation.participant) {
+                            openedProfile = ProfileRoute(username: conversation.participant.username)
+                        }
                     }
                     let ownID = viewModel.ownID
                     let timestamped = viewModel.timestampedIDs
@@ -282,10 +290,12 @@ private struct RequestBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("@\(username) veut t’envoyer un message. Accepte pour discuter librement ; il ou elle ne saura pas que tu as lu sa demande d’ici là.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Text(
+                "@\(username) veut t’envoyer un message. Accepte pour discuter librement ; il ou elle ne saura pas que tu as lu sa demande d’ici là."
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
             HStack {
                 Button("Refuser", role: .destructive, action: decline)
                     .buttonStyle(.bordered)
@@ -341,7 +351,9 @@ private struct SharedVideoCard: View {
 
     var body: some View {
         if video.available {
-            Button { open(video.id) } label: {
+            Button {
+                open(video.id)
+            } label: {
                 ZStack(alignment: .bottomLeading) {
                     VideoGridCell(thumbnailURL: video.thumbnailURL, image: nil, views: nil)
                     if let author = video.author {

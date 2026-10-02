@@ -18,12 +18,16 @@ struct AnalyticsConsentView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             VStack(spacing: 10) {
-                Button { analytics.setConsent(true) } label: {
+                Button {
+                    analytics.setConsent(true)
+                } label: {
                     Text("Autoriser").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("consent.accept")
-                Button { analytics.setConsent(false) } label: {
+                Button {
+                    analytics.setConsent(false)
+                } label: {
                     Text("Refuser").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -36,7 +40,8 @@ struct AnalyticsConsentView: View {
         .interactiveDismissDisabled()
     }
 
-    static let explanation = "Avec ton accord, l’app mesure son utilisation (vidéos regardées, réactions, inscription) et essaie des variantes de certains écrans, avec PostHog, hébergé dans l’Union européenne. Seul l’identifiant de ton compte est transmis : ni nom, ni pseudo, ni email, ni contenu de tes messages. Tu peux changer d’avis à tout moment dans les réglages."
+    static let explanation =
+        "Avec ton accord, l’app mesure son utilisation (vidéos regardées, réactions, inscription) et essaie des variantes de certains écrans, avec PostHog, hébergé dans l’Union européenne. Seul l’identifiant de ton compte est transmis : ni nom, ni pseudo, ni email, ni contenu de tes messages. Tu peux changer d’avis à tout moment dans les réglages."
 }
 
 // Réglage de la mesure d'audience (paramètres du compte, ou profil en invité).
@@ -44,10 +49,13 @@ struct AnalyticsConsentToggle: View {
     @Environment(AnalyticsModel.self) private var analytics
 
     var body: some View {
-        Toggle("Mesure d’audience", isOn: Binding(
-            get: { analytics.isEnabled },
-            set: { analytics.setConsent($0) }
-        ))
+        Toggle(
+            "Mesure d’audience",
+            isOn: Binding(
+                get: { analytics.isEnabled },
+                set: { analytics.setConsent($0) }
+            )
+        )
         .accessibilityIdentifier("settings.analytics")
     }
 }

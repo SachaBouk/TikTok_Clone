@@ -46,8 +46,8 @@ export function SuspendAccount({ userId, username }: { userId: string; username:
         <AlertDialogHeader>
           <AlertDialogTitle>Suspendre @{username} ?</AlertDialogTitle>
           <AlertDialogDescription>
-            Le compte est déconnecté de tous ses appareils et ne peut plus se connecter. Son profil, ses vidéos, ses commentaires et
-            ses messages disparaissent pour les autres, jusqu’à la levée de la suspension. Rien n’est supprimé.
+            Le compte est déconnecté de tous ses appareils et ne peut plus se connecter. Son profil, ses vidéos, ses commentaires et ses messages
+            disparaissent pour les autres, jusqu’à la levée de la suspension. Rien n’est supprimé.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="flex flex-col gap-2">

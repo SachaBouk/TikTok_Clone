@@ -26,10 +26,7 @@ export class RealtimeWsAdapter extends WsAdapter {
   override create(port: number, options: Record<string, unknown> & { path?: string } = {}) {
     return super.create(port, {
       ...options,
-      verifyClient: (
-        info: { req: IncomingMessage },
-        done: (verified: boolean, code?: number, message?: string) => void,
-      ) => {
+      verifyClient: (info: { req: IncomingMessage }, done: (verified: boolean, code?: number, message?: string) => void) => {
         this.realtime.authenticate(bearerToken(info.req)).then(
           (session) => {
             if (!session) return done(false, 401, 'Unauthorized');

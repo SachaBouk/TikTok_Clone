@@ -1,4 +1,5 @@
 import Testing
+
 @testable import TikTokClone
 
 @Suite("Cas d'usage de l'authentification")
@@ -31,13 +32,15 @@ struct AuthUseCasesTests {
         #expect(auth.hasStoredSession())
     }
 
-    @Test("inscription : règles vérifiées avant l'envoi, textes nettoyés", arguments: [
-        ("pas-un-email", "alice", "Alice", "motdepasse", "Adresse email invalide."),
-        ("a@b.c", "Alice!", "Alice", "motdepasse", "Pseudo : 2 à 24 caractères parmi a-z, 0-9, « . » et « _ »."),
-        ("a@b.c", "me", "Alice", "motdepasse", "Ce pseudo n’est pas disponible."),
-        ("a@b.c", "alice", "   ", "motdepasse", "Nom : 1 à 50 caractères."),
-        ("a@b.c", "alice", "Alice", "court", "Mot de passe : 8 caractères au minimum."),
-    ])
+    @Test(
+        "inscription : règles vérifiées avant l'envoi, textes nettoyés",
+        arguments: [
+            ("pas-un-email", "alice", "Alice", "motdepasse", "Adresse email invalide."),
+            ("a@b.c", "Alice!", "Alice", "motdepasse", "Pseudo : 2 à 24 caractères parmi a-z, 0-9, « . » et « _ »."),
+            ("a@b.c", "me", "Alice", "motdepasse", "Ce pseudo n’est pas disponible."),
+            ("a@b.c", "alice", "   ", "motdepasse", "Nom : 1 à 50 caractères."),
+            ("a@b.c", "alice", "Alice", "court", "Mot de passe : 8 caractères au minimum."),
+        ])
     func registrationRules(email: String, username: String, displayName: String, password: String, message: String) async {
         let auth = FakeAuthRepository()
         let register = RegisterUseCase(auth: auth, profiles: FakeProfileRepository())
@@ -54,6 +57,9 @@ struct AuthUseCasesTests {
             Registration(email: " a@b.c ", password: "motdepasse", username: "alice", displayName: "  Alice ")
         )
         #expect(profile == .alice)
-        #expect(auth.state.withLock { $0.registrations } == [Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice")])
+        #expect(
+            auth.state.withLock { $0.registrations } == [
+                Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice")
+            ])
     }
 }

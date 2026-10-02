@@ -54,10 +54,7 @@ export class NotificationsController {
   @ApiOkResponse({ type: UnreadNotificationsResponse, description: 'Badge après le marquage.' })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
-  async markNotificationsRead(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() body: MarkNotificationsReadRequest,
-  ): Promise<UnreadNotificationsDto> {
+  async markNotificationsRead(@CurrentUser() user: AuthenticatedUser, @Body() body: MarkNotificationsReadRequest): Promise<UnreadNotificationsDto> {
     return { unreadCount: await this.notifications.markRead(user.userId, body.upToId ?? null) };
   }
 }

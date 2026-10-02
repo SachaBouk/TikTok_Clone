@@ -15,7 +15,10 @@ export class ReportErrorFilter implements ExceptionFilter {
 
 function toHttpException(error: ReportError): HttpException {
   if (error instanceof TooManyReportsError) {
-    return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
+    return new HttpException(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
   if (error instanceof CannotReportYourselfError || error instanceof InvalidReportError) return new BadRequestException(error.message);
   // ReportTargetNotFoundError

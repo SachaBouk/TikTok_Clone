@@ -1,14 +1,17 @@
 import Testing
+
 @testable import TikTokClone
 
 @Suite("Règles du lecteur")
 struct FeedRulesTests {
-    @Test("fenêtre de préchargement : courante, suivante, précédente, dans les bornes", arguments: [
-        (0, 5, [0, 1]),
-        (2, 5, [2, 3, 1]),
-        (4, 5, [4, 3]),
-        (0, 1, [0]),
-    ])
+    @Test(
+        "fenêtre de préchargement : courante, suivante, précédente, dans les bornes",
+        arguments: [
+            (0, 5, [0, 1]),
+            (2, 5, [2, 3, 1]),
+            (4, 5, [4, 3]),
+            (0, 1, [0]),
+        ])
     func window(index: Int, count: Int, expected: [Int]) {
         #expect(PreloadPolicy.window(around: index, count: count) == expected)
     }

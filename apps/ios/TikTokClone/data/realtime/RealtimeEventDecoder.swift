@@ -25,7 +25,8 @@ struct RealtimeEventDecoder: Sendable {
             return .messageCreated(DirectMessage(data.message), badges(data.unreadConversations, data.pendingRequests))
         case .messageDeleted(let event):
             let data = event.data
-            return .messageDeleted(conversationID: data.conversationId, messageID: data.messageId, badges(data.unreadConversations, data.pendingRequests))
+            return .messageDeleted(
+                conversationID: data.conversationId, messageID: data.messageId, badges(data.unreadConversations, data.pendingRequests))
         case .conversationRead(let event):
             let data = event.data
             return .conversationRead(

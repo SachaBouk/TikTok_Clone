@@ -43,7 +43,14 @@ export class InMemoryWalletRepository extends WalletRepository {
       .filter((e) => e.userId === userId && (!beforeId || e.id < beforeId))
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .slice(0, limit)
-      .map((e) => ({ id: e.id, kind: e.kind, amount: e.appliedAmount, balanceAfter: e.balanceAfter ?? 0, productId: e.productId, occurredAt: e.occurredAt }));
+      .map((e) => ({
+        id: e.id,
+        kind: e.kind,
+        amount: e.appliedAmount,
+        balanceAfter: e.balanceAfter ?? 0,
+        productId: e.productId,
+        occurredAt: e.occurredAt,
+      }));
   }
 
   async getBalances(userIds: string[]): Promise<Map<string, number>> {
@@ -52,7 +59,9 @@ export class InMemoryWalletRepository extends WalletRepository {
 
   async listLedger(filter: LedgerFilter, beforeId: string | null, limit: number): Promise<WalletLedgerEntry[]> {
     return this.entries
-      .filter((e) => (!filter.userId || e.userId === filter.userId) && (!filter.unmatched || e.balanceAfter === null) && (!beforeId || e.id < beforeId))
+      .filter(
+        (e) => (!filter.userId || e.userId === filter.userId) && (!filter.unmatched || e.balanceAfter === null) && (!beforeId || e.id < beforeId),
+      )
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .slice(0, limit)
       .map((e) => ({

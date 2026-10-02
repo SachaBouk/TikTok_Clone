@@ -61,7 +61,9 @@ export function WalletTransactionsTable({ transactions, showAccount = true }: { 
                 <span className="block text-xs text-muted-foreground">appliqué : {formatSigned(transaction.appliedAmount)}</span>
               )}
             </TableCell>
-            <TableCell className="text-right tabular-nums">{transaction.balanceAfter === null ? '—' : formatNumber(transaction.balanceAfter)}</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {transaction.balanceAfter === null ? '—' : formatNumber(transaction.balanceAfter)}
+            </TableCell>
             <TableCell>
               <span className="block text-sm">{transaction.store ?? '—'}</span>
               {transaction.storeTransactionId && <code className="text-xs text-muted-foreground">{transaction.storeTransactionId}</code>}

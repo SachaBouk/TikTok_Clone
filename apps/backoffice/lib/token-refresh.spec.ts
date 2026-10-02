@@ -24,7 +24,10 @@ describe('createRefresher', () => {
   it("resert le même résultat pendant la fenêtre de réemploi, puis l'oublie", async () => {
     let time = 0;
     let calls = 0;
-    const refreshOnce = createRefresher(async () => ({ kind: 'refreshed', tokens: tokens(++calls) }), () => time);
+    const refreshOnce = createRefresher(
+      async () => ({ kind: 'refreshed', tokens: tokens(++calls) }),
+      () => time,
+    );
 
     await refreshOnce('refresh-0');
     time += REFRESH_REUSE_WINDOW_MS;

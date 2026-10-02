@@ -21,7 +21,12 @@ export default async function DashboardPage() {
   const stats = await getStats();
   const cards = [
     // Comptes suspendus (ADR-037) : rappelés sous le total.
-    { title: 'Comptes', count: stats.users, href: '/users', note: stats.users.suspended > 0 ? `${formatNumber(stats.users.suspended)} suspendu(s)` : null },
+    {
+      title: 'Comptes',
+      count: stats.users,
+      href: '/users',
+      note: stats.users.suspended > 0 ? `${formatNumber(stats.users.suspended)} suspendu(s)` : null,
+    },
     { title: 'Vidéos', count: stats.videos, href: '/videos' },
     { title: 'Commentaires', count: stats.comments, href: '/comments' },
     // Jetons vendus en production (ADR-009) ; achats de test à part, sur la page « Jetons ».
@@ -86,7 +91,12 @@ export default async function DashboardPage() {
             <ul className="grid gap-3 sm:grid-cols-3">
               {POSTHOG_LINKS.map(({ path, label, description }) => (
                 <li key={path}>
-                  <a href={`${POSTHOG_PROJECT_URL}${path}`} target="_blank" rel="noreferrer" className="block rounded-lg border p-3 hover:bg-muted/50">
+                  <a
+                    href={`${POSTHOG_PROJECT_URL}${path}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-lg border p-3 hover:bg-muted/50"
+                  >
                     <span className="flex items-center gap-1 font-medium">
                       {label} <ExternalLinkIcon className="size-3.5" />
                     </span>
@@ -97,8 +107,8 @@ export default async function DashboardPage() {
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Renseigne <code>POSTHOG_PROJECT_URL</code> dans le <code>.env</code> (par exemple <code>https://eu.posthog.com/project/12345</code>) pour
-              afficher les liens vers le projet PostHog.
+              Renseigne <code>POSTHOG_PROJECT_URL</code> dans le <code>.env</code> (par exemple <code>https://eu.posthog.com/project/12345</code>)
+              pour afficher les liens vers le projet PostHog.
             </p>
           )}
         </CardContent>

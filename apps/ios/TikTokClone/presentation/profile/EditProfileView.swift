@@ -26,9 +26,11 @@ struct EditProfileView: View {
                                 }
                             }
                         HStack(spacing: 20) {
-                            PhotosPicker(viewModel.profile?.avatarURL == nil ? "Ajouter une photo" : "Changer la photo",
-                                         selection: $photoItem, matching: .images)
-                                .accessibilityIdentifier("editProfile.photo")
+                            PhotosPicker(
+                                viewModel.profile?.avatarURL == nil ? "Ajouter une photo" : "Changer la photo",
+                                selection: $photoItem, matching: .images
+                            )
+                            .accessibilityIdentifier("editProfile.photo")
                             if viewModel.profile?.avatarURL != nil {
                                 Button("Supprimer", role: .destructive) { Task { await viewModel.removePhoto() } }
                             }
@@ -97,10 +99,13 @@ struct EditProfileView: View {
                     await viewModel.changePhoto(data)
                 }
             }
-            .alert("Profil", isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
-            )) {
+            .alert(
+                "Profil",
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(viewModel.errorMessage ?? "")

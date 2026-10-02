@@ -74,7 +74,8 @@ export interface AdminReportTargetDetailDto {
 
 // ─── Journal de modération ───────────────────────────────────────────────────
 
-export type ModerationActionType = 'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+export type ModerationActionType =
+  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
 
 // Une action d'un administrateur ; pseudos et texte copiés (le journal survit aux suppressions).
 export interface AdminModerationActionDto {

@@ -44,10 +44,7 @@ export class FeedController {
   @ApiOkResponse({ type: FeedItemResponse })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, supprimée, pas encore publiée, ou d’un compte bloqué.' })
-  async getFeedItem(
-    @CurrentUser() user: AuthenticatedUser | undefined,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ): Promise<FeedItemDto> {
+  async getFeedItem(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id', new ParseUUIDPipe()) id: string): Promise<FeedItemDto> {
     try {
       return toFeedItemDto(await this.feed.getItem(id, user?.userId ?? null));
     } catch (error) {

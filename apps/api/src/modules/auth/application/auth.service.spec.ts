@@ -168,9 +168,7 @@ describe('AuthService', () => {
       await service.register(registration);
       await expect(service.register({ ...registration, username: 'autre' })).rejects.toBeInstanceOf(EmailAlreadyUsedError);
       await expect(service.register({ ...registration, email: 'b@b.fr' })).rejects.toBeInstanceOf(UsernameAlreadyUsedError);
-      await expect(service.register({ ...registration, email: 'c@c.fr', username: 'me' })).rejects.toBeInstanceOf(
-        UsernameAlreadyUsedError,
-      );
+      await expect(service.register({ ...registration, email: 'c@c.fr', username: 'me' })).rejects.toBeInstanceOf(UsernameAlreadyUsedError);
     });
 
     it('connecte avec le bon mot de passe, email insensible à la casse', async () => {
@@ -258,7 +256,7 @@ describe('AuthService', () => {
       expect(accounts.accounts[0]).toMatchObject({ displayName: 'Utilisateur', email: null });
     });
 
-    it("refuse un email Apple déjà utilisé par un compte email / mot de passe (pas de liaison automatique)", async () => {
+    it('refuse un email Apple déjà utilisé par un compte email / mot de passe (pas de liaison automatique)', async () => {
       await service.register(registration);
       apple.identities.set('jeton', { sub: 'apple-789', email: 'alice@example.com' });
       await expect(service.loginWithApple({ identityToken: 'jeton' })).rejects.toBeInstanceOf(EmailAlreadyUsedError);

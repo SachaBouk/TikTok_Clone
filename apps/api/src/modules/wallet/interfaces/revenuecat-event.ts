@@ -20,9 +20,7 @@ export function parseRevenueCatEvent(body: unknown, currencyCode: string): Curre
     throw new MalformedWebhookError('Événement VIRTUAL_CURRENCY_TRANSACTION incomplet');
   }
 
-  const amount = adjustments
-    .filter((a) => record(a!.currency)?.code === currencyCode)
-    .reduce((sum, a) => sum + (a!.amount as number), 0);
+  const amount = adjustments.filter((a) => record(a!.currency)?.code === currencyCode).reduce((sum, a) => sum + (a!.amount as number), 0);
   const aliases = Array.isArray(event.aliases) ? event.aliases.map(text).filter((id): id is string => id !== null) : [];
   const timestamp = typeof event.event_timestamp_ms === 'number' ? event.event_timestamp_ms : Date.now();
 

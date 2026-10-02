@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 @Suite("AuthMiddleware et TokenRefresher")
@@ -73,7 +74,10 @@ struct AuthMiddlewareTests {
     @Test("refresh token refusé : session effacée, app prévenue, 401 rendu")
     func refreshRejected() async throws {
         let output = try await makeClient(acceptedToken: "A2", outcome: { .rejected }).getMyProfile()
-        guard case .unauthorized = output else { Issue.record("attendu .unauthorized, reçu \(output)"); return }
+        guard case .unauthorized = output else {
+            Issue.record("attendu .unauthorized, reçu \(output)")
+            return
+        }
         #expect(store.load() == nil)
         #expect(expirations.count == 1)
     }
@@ -81,7 +85,10 @@ struct AuthMiddlewareTests {
     @Test("API injoignable au rafraîchissement : la session est gardée")
     func refreshOffline() async throws {
         let output = try await makeClient(acceptedToken: "A2", outcome: { throw URLError(.notConnectedToInternet) }).getMyProfile()
-        guard case .unauthorized = output else { Issue.record("attendu .unauthorized"); return }
+        guard case .unauthorized = output else {
+            Issue.record("attendu .unauthorized")
+            return
+        }
         #expect(store.load()?.refreshToken == "R1")
         #expect(expirations.count == 0)
     }

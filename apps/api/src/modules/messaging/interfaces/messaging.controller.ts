@@ -110,7 +110,9 @@ export class MessagingController {
 
   @Post('conversations/:id/decline')
   @HttpCode(204)
-  @ApiNoContentResponse({ description: 'Demande refusée : elle disparaît, ses messages suivants ne sont plus remis. L’expéditeur n’est pas prévenu.' })
+  @ApiNoContentResponse({
+    description: 'Demande refusée : elle disparaît, ses messages suivants ne sont plus remis. L’expéditeur n’est pas prévenu.',
+  })
   @ApiBadRequestResponse(INVALID_ID)
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(NOT_FOUND)

@@ -19,14 +19,16 @@ struct AuthMiddleware: ClientMiddleware {
         next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
     ) async throws -> (HTTPResponse, HTTPBody?) {
         guard !Self.unauthenticatedOperations.contains(operationID),
-              let token = await refresher.validAccessToken() else {
+            let token = await refresher.validAccessToken()
+        else {
             return try await next(request, body, baseURL)
         }
 
         let response = try await next(authorized(request, token), body, baseURL)
         // Un corps à lecture unique ne peut pas être renvoyé : la réponse 401 est alors rendue telle quelle.
         guard response.0.status == .unauthorized, body?.iterationBehavior != .single,
-              let refreshed = await refresher.refreshTokens(replacing: token) else {
+            let refreshed = await refresher.refreshTokens(replacing: token)
+        else {
             return response
         }
         return try await next(authorized(request, refreshed.accessToken), body, baseURL)

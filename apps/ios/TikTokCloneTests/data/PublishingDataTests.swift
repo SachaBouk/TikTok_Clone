@@ -1,12 +1,13 @@
 import Foundation
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 private let videoJSON = """
-{"id":"0192f3a0-0000-7000-8000-00000000000a","userId":"0192f3a0-0000-7000-8000-000000000001","description":"Ma vidéo",\
-"status":"processing","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
-"""
+    {"id":"0192f3a0-0000-7000-8000-00000000000a","userId":"0192f3a0-0000-7000-8000-000000000001","description":"Ma vidéo",\
+    "status":"processing","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
+    """
 
 @Suite("RemoteVideoPublishingRepository")
 struct RemoteVideoPublishingRepositoryTests {
@@ -24,9 +25,9 @@ struct RemoteVideoPublishingRepositoryTests {
     @Test("createUpload : une URL par partie, taille des parties, expiration")
     func createUpload() async throws {
         let body = """
-        {"video":\(videoJSON),"partSize":10485760,"parts":[{"partNumber":1,"url":"http://localhost:9000/videos-raw/a?partNumber=1"},\
-        {"partNumber":2,"url":"http://localhost:9000/videos-raw/a?partNumber=2"}],"expiresAt":"2026-09-25T14:00:00.000Z"}
-        """
+            {"video":\(videoJSON),"partSize":10485760,"parts":[{"partNumber":1,"url":"http://localhost:9000/videos-raw/a?partNumber=1"},\
+            {"partNumber":2,"url":"http://localhost:9000/videos-raw/a?partNumber=2"}],"expiresAt":"2026-09-25T14:00:00.000Z"}
+            """
         let ticket = try await repository { _ in json(.created, body) }.createUpload(contentType: .quickTime, fileSize: 12_000_000, description: nil)
         #expect(ticket.videoID == "0192f3a0-0000-7000-8000-00000000000a")
         #expect(ticket.partSize == 10_485_760)
@@ -37,7 +38,8 @@ struct RemoteVideoPublishingRepositoryTests {
     @Test("createUpload refusé : message de l'API")
     func createRejected() async {
         await #expect(throws: AppError.rejected("fichier trop volumineux")) {
-            try await repository { _ in json(.badRequest, errorJSON(400, "fichier trop volumineux")) }.createUpload(contentType: .mp4, fileSize: 1, description: nil)
+            try await repository { _ in json(.badRequest, errorJSON(400, "fichier trop volumineux")) }.createUpload(
+                contentType: .mp4, fileSize: 1, description: nil)
         }
     }
 
@@ -61,7 +63,8 @@ struct RemoteVideoPublishingRepositoryTests {
     func pendingAndDelete() async throws {
         let pending = try await repository { _ in json(.ok, #"{"items":[\#(videoJSON)]}"#) }.pendingVideos()
         #expect(pending.map(\.status) == [.processing])
-        try await repository { _ in (HTTPResponse(status: .notFound, headerFields: [.contentType: "application/json"]), HTTPBody(errorJSON(404, "x"))) }.deleteVideo(id: "v")
+        try await repository { _ in (HTTPResponse(status: .notFound, headerFields: [.contentType: "application/json"]), HTTPBody(errorJSON(404, "x")))
+        }.deleteVideo(id: "v")
         await #expect(throws: AppError.sessionExpired) {
             try await repository { _ in json(.unauthorized, errorJSON(401, "x")) }.pendingVideos()
         }
@@ -87,7 +90,9 @@ struct FileUploadStoreTests {
         let saved = PendingUpload(
             id: "u1", userID: "alice-id", fileName: name, contentType: .quickTime, fileSize: 10, description: nil,
             createdAt: Date(timeIntervalSince1970: 1_800_000_000),
-            ticket: UploadTicket(videoID: "v", partSize: 4, parts: [.init(number: 1, url: URL(string: "http://s.test/1")!)], expiresAt: Date(timeIntervalSince1970: 1_800_007_200)),
+            ticket: UploadTicket(
+                videoID: "v", partSize: 4, parts: [.init(number: 1, url: URL(string: "http://s.test/1")!)],
+                expiresAt: Date(timeIntervalSince1970: 1_800_007_200)),
             sentParts: [1: "\"etag\""]
         )
         try store.save(saved)

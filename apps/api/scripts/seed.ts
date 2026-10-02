@@ -133,8 +133,7 @@ async function main() {
   const provided = listProvidedVideos();
   const workDir = mkdtempSync(join(tmpdir(), 'seed-videos-'));
   try {
-    const files =
-      provided.length > 0 ? await withoutMetadata(provided, workDir) : videoCount > 0 ? await generateVideos(videoCount, workDir) : [];
+    const files = provided.length > 0 ? await withoutMetadata(provided, workDir) : videoCount > 0 ? await generateVideos(videoCount, workDir) : [];
     if (files.length > 0) {
       console.log(`\nPublication de ${files.length} vidéo(s) ${provided.length > 0 ? `depuis ${VIDEOS_DIR}` : 'générées'}`);
     } else {
@@ -177,7 +176,9 @@ function assertLocal(url: string) {
 }
 
 async function assertApiUp() {
-  const ok = await fetch(`${API_URL}/health`).then((r) => r.ok).catch(() => false);
+  const ok = await fetch(`${API_URL}/health`)
+    .then((r) => r.ok)
+    .catch(() => false);
   if (!ok) throw new Error(`API injoignable sur ${API_URL}. Lancez d'abord : pnpm infra:up puis pnpm dev`);
 }
 
@@ -219,8 +220,22 @@ async function withoutMetadata(files: string[], directory: string): Promise<stri
   for (const file of files) {
     const output = join(directory, basename(file));
     await execFileAsync(FFMPEG, [
-      '-nostdin', '-y', '-loglevel', 'error', '-i', file,
-      '-map', '0:V', '-map', '0:a?', '-c', 'copy', '-map_metadata', '-1', '-map_chapters', '-1',
+      '-nostdin',
+      '-y',
+      '-loglevel',
+      'error',
+      '-i',
+      file,
+      '-map',
+      '0:V',
+      '-map',
+      '0:a?',
+      '-c',
+      'copy',
+      '-map_metadata',
+      '-1',
+      '-map_chapters',
+      '-1',
       output,
     ]);
     cleaned.push(output);
@@ -239,13 +254,34 @@ async function generateVideos(count: number, directory: string): Promise<string[
     const title = `drawtext=font=Arial:text='Démo ${index + 1}':fontsize=120:fontcolor=white:borderw=6:bordercolor=black:x=(w-tw)/2:y=h*0.42`;
     const encode = (filters: string) =>
       execFileAsync(FFMPEG, [
-        '-nostdin', '-y', '-loglevel', 'error',
-        '-f', 'lavfi', '-i', source,
-        '-f', 'lavfi', '-i', `sine=frequency=${220 + index * 55}`,
-        '-t', String(6 + (index % 5)),
-        '-vf', filters,
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26', '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-shortest', file,
+        '-nostdin',
+        '-y',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        source,
+        '-f',
+        'lavfi',
+        '-i',
+        `sine=frequency=${220 + index * 55}`,
+        '-t',
+        String(6 + (index % 5)),
+        '-vf',
+        filters,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'ultrafast',
+        '-crf',
+        '26',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-shortest',
+        file,
       ]);
     try {
       await encode(`scale=1080:1920:flags=neighbor,${title}`);
@@ -413,7 +449,10 @@ async function sendRequest(from: Account, to: Account): Promise<boolean> {
   const conversation = response.body as ConversationDto;
   if (conversation.lastMessage || !conversation.canSend) return false;
   const content = REQUEST_MESSAGES[hash('request-text', from.username, to.username) % REQUEST_MESSAGES.length]!;
-  await expectOk(request('POST', `/conversations/${conversation.id}/messages`, { token: from.token, body: { content } }), `demande à @${to.username}`);
+  await expectOk(
+    request('POST', `/conversations/${conversation.id}/messages`, { token: from.token, body: { content } }),
+    `demande à @${to.username}`,
+  );
   return true;
 }
 

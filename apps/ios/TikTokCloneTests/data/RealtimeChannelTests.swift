@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 import Testing
+
 @testable import TikTokClone
 
 @Suite("WebSocketRealtimeChannel : authentification et reconnexion")
@@ -65,9 +66,9 @@ struct RealtimeChannelTests {
 }
 
 private let processedJSON = """
-{"event":"videoProcessed","data":{"id":"v1","userId":"u","description":null,"status":"ready",\
-"hlsUrl":"http://cdn.test/v1/master.m3u8","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg","createdAt":"2026-09-25T12:00:00.123Z"}}
-"""
+    {"event":"videoProcessed","data":{"id":"v1","userId":"u","description":null,"status":"ready",\
+    "hlsUrl":"http://cdn.test/v1/master.m3u8","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg","createdAt":"2026-09-25T12:00:00.123Z"}}
+    """
 
 // Attentes avant reconnexion, enregistrées sans attendre.
 final class Pauses: Sendable {

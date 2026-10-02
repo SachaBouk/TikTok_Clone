@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Interactions en mémoire : garde les appels et renvoie des états comme l'API (compteurs relus côté serveur).

@@ -1,4 +1,13 @@
-import { ArgumentsHost, BadRequestException, Catch, ConflictException, ExceptionFilter, HttpException, HttpStatus, NotFoundException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  BadRequestException,
+  Catch,
+  ConflictException,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { TooManyUploadsError, VideoError, VideoNotAwaitingUploadError, VideoNotFoundError } from '../domain/video.errors';
 
@@ -15,7 +24,10 @@ export class VideoErrorFilter implements ExceptionFilter {
 
 function toHttpException(error: VideoError): HttpException {
   if (error instanceof TooManyUploadsError) {
-    return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
+    return new HttpException(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
   if (error instanceof VideoNotFoundError) return new NotFoundException(error.message);
   if (error instanceof VideoNotAwaitingUploadError) return new ConflictException(error.message);

@@ -137,12 +137,20 @@ final class MessagingModel {
 
     // Glisser dans la boîte de réception : supprimer pour soi. Renvoie un message d'erreur.
     func delete(_ conversation: Conversation) async -> String? {
-        await perform { try await self.deleteConversation(conversation.id) } then: { self.removed(conversation.id) }
+        await perform {
+            try await self.deleteConversation(conversation.id)
+        } then: {
+            self.removed(conversation.id)
+        }
     }
 
     // Glisser dans les demandes : refuser.
     func decline(_ conversation: Conversation) async -> String? {
-        await perform { try await self.answerRequest.decline(conversation.id) } then: { self.removed(conversation.id) }
+        await perform {
+            try await self.answerRequest.decline(conversation.id)
+        } then: {
+            self.removed(conversation.id)
+        }
     }
 
     // MARK: - Temps réel

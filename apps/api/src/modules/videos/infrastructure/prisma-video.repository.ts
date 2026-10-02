@@ -193,6 +193,10 @@ const publishedSelect = {
 } as const;
 
 // `ready` garantit les URLs, que le schéma déclare facultatives (nulles avant le transcodage).
-function toPublished({ hlsUrl, thumbnailUrl, ...video }: { hlsUrl: string | null; thumbnailUrl: string | null } & Omit<PublishedVideo, 'hlsUrl' | 'thumbnailUrl'>): PublishedVideo[] {
+function toPublished({
+  hlsUrl,
+  thumbnailUrl,
+  ...video
+}: { hlsUrl: string | null; thumbnailUrl: string | null } & Omit<PublishedVideo, 'hlsUrl' | 'thumbnailUrl'>): PublishedVideo[] {
   return hlsUrl && thumbnailUrl ? [{ ...video, hlsUrl, thumbnailUrl }] : [];
 }

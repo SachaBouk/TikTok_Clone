@@ -39,9 +39,7 @@ export class PrismaInteractionRepository extends InteractionRepository {
     const rows = await this.reactionTable(kind).findMany({
       where: {
         userId,
-        ...(after
-          ? { OR: [{ createdAt: { lt: after.reactedAt } }, { createdAt: after.reactedAt, videoId: { lt: after.videoId } }] }
-          : {}),
+        ...(after ? { OR: [{ createdAt: { lt: after.reactedAt } }, { createdAt: after.reactedAt, videoId: { lt: after.videoId } }] } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { videoId: 'desc' }],
       take: limit,
@@ -103,9 +101,7 @@ export class PrismaInteractionRepository extends InteractionRepository {
     const rows = await this.prisma.follow.findMany({
       where: {
         [own]: userId,
-        ...(after
-          ? { OR: [{ createdAt: { lt: after.followedAt } }, { createdAt: after.followedAt, [other]: { lt: after.userId } }] }
-          : {}),
+        ...(after ? { OR: [{ createdAt: { lt: after.followedAt } }, { createdAt: after.followedAt, [other]: { lt: after.userId } }] } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { [other]: 'desc' }],
       take: limit,
@@ -184,7 +180,12 @@ export class PrismaInteractionRepository extends InteractionRepository {
     await this.prisma.$transaction([
       this.prisma.block.createMany({ data: [{ blockerId, blockedId }], skipDuplicates: true }),
       this.prisma.follow.deleteMany({
-        where: { OR: [{ followerId: blockerId, followingId: blockedId }, { followerId: blockedId, followingId: blockerId }] },
+        where: {
+          OR: [
+            { followerId: blockerId, followingId: blockedId },
+            { followerId: blockedId, followingId: blockerId },
+          ],
+        },
       }),
     ]);
   }
@@ -195,14 +196,24 @@ export class PrismaInteractionRepository extends InteractionRepository {
 
   async isBlockedBetween(userId: string, otherId: string): Promise<boolean> {
     const count = await this.prisma.block.count({
-      where: { OR: [{ blockerId: userId, blockedId: otherId }, { blockerId: otherId, blockedId: userId }] },
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: otherId },
+          { blockerId: otherId, blockedId: userId },
+        ],
+      },
     });
     return count > 0;
   }
 
   async findBlocks(userId: string, otherIds: string[]): Promise<BlockRelations> {
     const rows = await this.prisma.block.findMany({
-      where: { OR: [{ blockerId: userId, blockedId: { in: otherIds } }, { blockedId: userId, blockerId: { in: otherIds } }] },
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: { in: otherIds } },
+          { blockedId: userId, blockerId: { in: otherIds } },
+        ],
+      },
       select: { blockerId: true, blockedId: true },
     });
     return {

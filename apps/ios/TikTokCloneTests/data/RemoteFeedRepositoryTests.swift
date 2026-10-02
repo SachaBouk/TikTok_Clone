@@ -1,25 +1,28 @@
 import Foundation
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 @Suite("RemoteFeedRepository")
 struct RemoteFeedRepositoryTests {
     static let item = """
-    {"id":"v1","description":null,"hlsUrl":"http://localhost:9000/videos-hls/v1/master.m3u8",\
-    "thumbnailUrl":"http://localhost:9000/videos-hls/v1/thumbnail.jpg","createdAt":"2026-09-25T10:00:00.000Z",\
-    "viewsCount":10,"likesCount":2,"commentsCount":1,"favoritesCount":0,"sharesCount":3,"repostsCount":4,\
-    "author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null}
-    """
+        {"id":"v1","description":null,"hlsUrl":"http://localhost:9000/videos-hls/v1/master.m3u8",\
+        "thumbnailUrl":"http://localhost:9000/videos-hls/v1/thumbnail.jpg","createdAt":"2026-09-25T10:00:00.000Z",\
+        "viewsCount":10,"likesCount":2,"commentsCount":1,"favoritesCount":0,"sharesCount":3,"repostsCount":4,\
+        "author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null}
+        """
 
     @Test("mapping d'une page : compteurs, auteur, viewer présent ou absent, curseur")
     func mapping() async throws {
-        let body = #"{"items":[\#(Self.item),"viewer":{"liked":true,"favorited":false,"reposted":false,"followingAuthor":true}},\#(Self.item.replacingOccurrences(of: "\"v1\"", with: "\"v2\""))}],"nextCursor":"abc"}"#
+        let body =
+            #"{"items":[\#(Self.item),"viewer":{"liked":true,"favorited":false,"reposted":false,"followingAuthor":true}},\#(Self.item.replacingOccurrences(of: "\"v1\"", with: "\"v2\""))}],"nextCursor":"abc"}"#
         let log = RequestLog()
-        let client = makeClient(transport: MockTransport { request, operationID in
-            log.record(request, operationID)
-            return json(.ok, body)
-        })
+        let client = makeClient(
+            transport: MockTransport { request, operationID in
+                log.record(request, operationID)
+                return json(.ok, body)
+            })
         let page = try await RemoteFeedRepository(client: client).page(cursor: nil)
         #expect(page.nextCursor == "abc")
         #expect(page.videos.map(\.id) == ["v1", "v2"])
@@ -34,9 +37,10 @@ struct RemoteFeedRepositoryTests {
     @Test("vue : 204 accepté, vidéo supprimée ignorée, 401 → session expirée")
     func recordView() async throws {
         for (status, expected) in [(HTTPResponse.Status.noContent, nil), (.notFound, nil), (.unauthorized, AppError.sessionExpired)] {
-            let client = makeClient(transport: MockTransport { _, _ in
-                status == .noContent ? (HTTPResponse(status: status), nil) : json(status, errorJSON(status.code, "x"))
-            })
+            let client = makeClient(
+                transport: MockTransport { _, _ in
+                    status == .noContent ? (HTTPResponse(status: status), nil) : json(status, errorJSON(status.code, "x"))
+                })
             let repository = RemoteViewHistoryRepository(client: client)
             if let expected {
                 await #expect(throws: expected) { try await repository.recordView(videoID: "v1") }

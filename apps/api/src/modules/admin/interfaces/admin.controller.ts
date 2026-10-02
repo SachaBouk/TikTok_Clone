@@ -193,7 +193,11 @@ export class AdminController {
   @ApiOkResponse({ type: AdminWalletTransactionPageResponse })
   @ApiBadRequestResponse(INVALID_QUERY)
   async listAdminWalletTransactions(@Query() query: AdminWalletTransactionsQuery): Promise<AdminWalletTransactionPageDto> {
-    const page = await this.adminService.listWalletTransactions({ userId: query.userId, unmatched: query.unmatched }, query.cursor ?? null, query.limit);
+    const page = await this.adminService.listWalletTransactions(
+      { userId: query.userId, unmatched: query.unmatched },
+      query.cursor ?? null,
+      query.limit,
+    );
     return { items: page.items.map(toAdminWalletTransactionDto), nextCursor: page.nextCursor };
   }
 

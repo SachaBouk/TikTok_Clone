@@ -77,27 +77,42 @@ export async function transcodeToHls(input: string, outDir: string, renditions: 
   });
 
   args.push(
-    '-c:v', 'libx264',
-    '-preset', options.x264Preset,
-    '-profile:v', 'high',
+    '-c:v',
+    'libx264',
+    '-preset',
+    options.x264Preset,
+    '-profile:v',
+    'high',
     // 8 bits 4:2:0 : lisible partout (les vidéos HDR 10 bits d'iPhone sont converties).
-    '-pix_fmt', 'yuv420p',
-    '-sc_threshold', '0',
-    '-force_key_frames', `expr:gte(t,n_forced*${KEYFRAME_INTERVAL_SECONDS})`,
-    '-map_metadata', '-1',
+    '-pix_fmt',
+    'yuv420p',
+    '-sc_threshold',
+    '0',
+    '-force_key_frames',
+    `expr:gte(t,n_forced*${KEYFRAME_INTERVAL_SECONDS})`,
+    '-map_metadata',
+    '-1',
   );
   if (media.hasAudio) args.push('-c:a', 'aac', '-b:a', `${AUDIO_KBPS}k`, '-ac', '2', '-ar', '48000');
 
   const streamMap = renditions.map((r, i) => (media.hasAudio ? `v:${i},a:${i},name:${r.name}` : `v:${i},name:${r.name}`)).join(' ');
   args.push(
-    '-f', 'hls',
-    '-hls_time', String(SEGMENT_SECONDS),
-    '-hls_playlist_type', 'vod',
-    '-hls_flags', 'independent_segments',
-    '-hls_segment_type', 'mpegts',
-    '-hls_segment_filename', join(outDir, '%v', 'seg_%03d.ts'),
-    '-master_pl_name', 'master.m3u8',
-    '-var_stream_map', streamMap,
+    '-f',
+    'hls',
+    '-hls_time',
+    String(SEGMENT_SECONDS),
+    '-hls_playlist_type',
+    'vod',
+    '-hls_flags',
+    'independent_segments',
+    '-hls_segment_type',
+    'mpegts',
+    '-hls_segment_filename',
+    join(outDir, '%v', 'seg_%03d.ts'),
+    '-master_pl_name',
+    'master.m3u8',
+    '-var_stream_map',
+    streamMap,
     join(outDir, '%v', 'index.m3u8'),
   );
 

@@ -90,25 +90,25 @@ final class UnavailablePurchaseService: PurchaseService {
 }
 
 #if DEBUG
-// Développement sans compte RevenueCat (argument de lancement `-fakePurchases`) : des packs fictifs, un achat
-// toujours accepté, sans aucun paiement. Rien n'est crédité : le webhook se simule à la main (voir apps/ios/README.md).
-@MainActor
-final class DevelopmentPurchaseService: PurchaseService {
-    let isAvailable = true
+    // Développement sans compte RevenueCat (argument de lancement `-fakePurchases`) : des packs fictifs, un achat
+    // toujours accepté, sans aucun paiement. Rien n'est crédité : le webhook se simule à la main (voir apps/ios/README.md).
+    @MainActor
+    final class DevelopmentPurchaseService: PurchaseService {
+        let isAvailable = true
 
-    func setUser(_ userID: String?) async {}
+        func setUser(_ userID: String?) async {}
 
-    func packs() async throws -> [TokenPack] {
-        [
-            TokenPack(id: "dev_100", productID: "tokens_100", title: "100 jetons", price: "0,99 €"),
-            TokenPack(id: "dev_500", productID: "tokens_500", title: "500 jetons", price: "4,99 €"),
-            TokenPack(id: "dev_1000", productID: "tokens_1000", title: "1 000 jetons", price: "9,99 €"),
-        ]
+        func packs() async throws -> [TokenPack] {
+            [
+                TokenPack(id: "dev_100", productID: "tokens_100", title: "100 jetons", price: "0,99 €"),
+                TokenPack(id: "dev_500", productID: "tokens_500", title: "500 jetons", price: "4,99 €"),
+                TokenPack(id: "dev_1000", productID: "tokens_1000", title: "1 000 jetons", price: "9,99 €"),
+            ]
+        }
+
+        func purchase(_ pack: TokenPack) async throws -> PurchaseOutcome {
+            try? await Task.sleep(for: .seconds(1))
+            return .purchased
+        }
     }
-
-    func purchase(_ pack: TokenPack) async throws -> PurchaseOutcome {
-        try? await Task.sleep(for: .seconds(1))
-        return .purchased
-    }
-}
 #endif

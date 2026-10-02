@@ -13,15 +13,19 @@ export class BullmqTranscodingQueue extends TranscodingQueue implements OnModule
 
   async enqueue(job: TranscodingJob): Promise<void> {
     this.queue ??= new Queue<TranscodeJobData>(TRANSCODE_QUEUE, { connection: queueConnection() });
-    await this.queue.add('transcode', { videoId: job.videoId, rawKey: job.rawKey }, {
-      // Un job par vidéo : une nouvelle publication pour une vidéo déjà dans la file est ignorée.
-      jobId: job.videoId,
-      attempts: TRANSCODE_ATTEMPTS,
-      backoff: { type: 'exponential', delay: TRANSCODE_BACKOFF_DELAY_MS },
-      removeOnComplete: { age: 7 * 24 * 3600 },
-      // Gardés 24 h pour le diagnostic. Tant qu'un job en échec existe, une republication est ignorée.
-      removeOnFail: { age: 24 * 3600 },
-    });
+    await this.queue.add(
+      'transcode',
+      { videoId: job.videoId, rawKey: job.rawKey },
+      {
+        // Un job par vidéo : une nouvelle publication pour une vidéo déjà dans la file est ignorée.
+        jobId: job.videoId,
+        attempts: TRANSCODE_ATTEMPTS,
+        backoff: { type: 'exponential', delay: TRANSCODE_BACKOFF_DELAY_MS },
+        removeOnComplete: { age: 7 * 24 * 3600 },
+        // Gardés 24 h pour le diagnostic. Tant qu'un job en échec existe, une republication est ignorée.
+        removeOnFail: { age: 24 * 3600 },
+      },
+    );
   }
 
   async cancel(videoId: string): Promise<void> {

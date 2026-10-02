@@ -22,7 +22,9 @@ struct RemoteRelationshipRepository: RelationshipRepository {
         switch try await mappingErrors({ try await client.getRelationships(query: .init(userIds: userIDs)) }) {
         case .ok(let ok):
             let items = try ok.body.json.items
-            return Dictionary(items.map { ($0.userId, Relationship(following: $0.following, followedBy: $0.followedBy, blockedByMe: $0.blockedByMe)) }) { first, _ in first }
+            return Dictionary(
+                items.map { ($0.userId, Relationship(following: $0.following, followedBy: $0.followedBy, blockedByMe: $0.blockedByMe)) }
+            ) { first, _ in first }
         case .unauthorized: throw AppError.sessionExpired
         case .badRequest, .undocumented: throw AppError.unexpected
         }

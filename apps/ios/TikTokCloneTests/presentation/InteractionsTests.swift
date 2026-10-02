@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UIKit
+
 @testable import TikTokClone
 
 @MainActor
@@ -108,8 +109,9 @@ struct InteractionsTests {
         #expect(repository.calls == ["follow-bob-true"])
 
         let own = FeedVideo.sample("v3", author: "alice", viewer: .empty)
-        let ownVideo = FeedVideo(id: own.id, description: nil, hlsURL: own.hlsURL, thumbnailURL: own.thumbnailURL, createdAt: own.createdAt,
-                                 stats: own.stats, author: .alice, viewer: .empty)
+        let ownVideo = FeedVideo(
+            id: own.id, description: nil, hlsURL: own.hlsURL, thumbnailURL: own.thumbnailURL, createdAt: own.createdAt,
+            stats: own.stats, author: .alice, viewer: .empty)
         #expect(model.isOwn(ownVideo))
         _ = await model.toggleFollow(authorOf: ownVideo)
         #expect(repository.calls == ["follow-bob-true"])
@@ -168,9 +170,10 @@ struct InteractionsTests {
     func deleteFailure() async {
         let (_, session) = await makeModel()
         repository.state.withLock { $0.comments["v1"] = [.sample("c1", author: .alice)] }
-        let viewModel = CommentsViewModel(video: video, loadComments: LoadCommentsUseCase(interactions: repository),
-                                          addComment: AddCommentUseCase(interactions: repository),
-                                          deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let viewModel = CommentsViewModel(
+            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
+            addComment: AddCommentUseCase(interactions: repository),
+            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
         await viewModel.start()
         repository.fail(with: .network)
         await viewModel.delete(viewModel.comments[0])
@@ -182,9 +185,10 @@ struct InteractionsTests {
     func commentsOfBlockedAccount() async {
         let (_, session) = await makeModel()
         repository.state.withLock { $0.comments["v1"] = [.sample("c1"), .sample("c2", author: .alice)] }
-        let viewModel = CommentsViewModel(video: video, loadComments: LoadCommentsUseCase(interactions: repository),
-                                          addComment: AddCommentUseCase(interactions: repository),
-                                          deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let viewModel = CommentsViewModel(
+            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
+            addComment: AddCommentUseCase(interactions: repository),
+            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
         await viewModel.start()
         viewModel.removeComments(byAuthors: [UserSummary.bob.id])
         #expect(viewModel.comments.map(\.id) == ["c2"])
@@ -199,8 +203,9 @@ struct InteractionsTests {
         let history = FakeViewHistoryRepository()
         let feed = FakeFeedRepository([])
         feed.videos["v1"] = video
-        let viewModel = VideoDetailViewModel(videoID: "v1", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                             playback: playback, session: session, analytics: analytics, viewDelay: .milliseconds(20))
+        let viewModel = VideoDetailViewModel(
+            videoID: "v1", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
+            playback: playback, session: session, analytics: analytics, viewDelay: .milliseconds(20))
         await viewModel.start()
         #expect(viewModel.video == video)
         #expect(playback.loaded == [["v1"]])
@@ -208,8 +213,9 @@ struct InteractionsTests {
         try await Task.sleep(for: .milliseconds(120))
         #expect(history.recorded == ["v1"])
 
-        let missing = VideoDetailViewModel(videoID: "absente", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                           playback: playback, session: session, analytics: analytics)
+        let missing = VideoDetailViewModel(
+            videoID: "absente", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
+            playback: playback, session: session, analytics: analytics)
         await missing.start()
         #expect(missing.state == .failed(AppError.notFound.message))
     }

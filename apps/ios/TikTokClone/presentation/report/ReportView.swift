@@ -39,10 +39,13 @@ struct ReportView: View {
                     }
                 }
             }
-            .alert("Signalement", isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
-            )) {
+            .alert(
+                "Signalement",
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(viewModel.errorMessage ?? "")
@@ -74,9 +77,10 @@ struct ReportView: View {
             } header: {
                 Text(viewModel.target.question)
             } footer: {
-                Text(["Ton signalement est anonyme : la personne concernée ne saura pas qui l’a envoyé.", viewModel.target.privacyNote]
-                    .compactMap { $0 }
-                    .joined(separator: " "))
+                Text(
+                    ["Ton signalement est anonyme : la personne concernée ne saura pas qui l’a envoyé.", viewModel.target.privacyNote]
+                        .compactMap { $0 }
+                        .joined(separator: " "))
             }
             Section {
                 TextField("Ajoute des détails (facultatif)", text: $viewModel.details, axis: .vertical)

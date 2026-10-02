@@ -86,7 +86,7 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 
 // Règles de l'upload, alignées sur celles de l'API (`apps/api/src/modules/videos/domain/upload-rules.ts`).
 enum UploadRules {
-    static let maxFileSize = 1024 * 1024 * 1024 // 1 Gio
+    static let maxFileSize = 1024 * 1024 * 1024  // 1 Gio
     static let maxDescriptionLength = 2200
     // Durée maximale (ADR-040), comme le worker : 3 minutes, à une seconde près (arrondis du conteneur).
     static let maxDuration: Duration = .seconds(180)

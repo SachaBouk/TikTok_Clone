@@ -69,21 +69,58 @@ describe('ReportsService', () => {
       .filter((n) => n.moderation)
       .map((n) => [n.recipientId, n.type, n.moderation!.targetType, n.moderation!.reason, n.moderation!.outcome, n.moderation!.excerpt]);
   const open = async () =>
-    (await service.listOpenTargets(null, 50)).items.map((t) => [t.target.type, t.target.id, t.openCount, t.reasons.map((r) => `${r.reason}:${r.count}`).join(',')]);
+    (await service.listOpenTargets(null, 50)).items.map((t) => [
+      t.target.type,
+      t.target.id,
+      t.openCount,
+      t.reasons.map((r) => `${r.reason}:${r.count}`).join(','),
+    ]);
 
   beforeEach(async () => {
     videoRepository = new InMemoryVideoRepository();
     const userRepository = new InMemoryUserRepository(['alice', 'bob', 'carol', 'dave'].map(user));
     suspended = new InMemorySuspendedAccounts();
     const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      new InMemoryVideoCleanupQueue(),
+      new InMemoryRateLimiter(),
+    );
     notificationRepository = new InMemoryNotificationRepository();
     const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter(), suspended);
-    messaging = new MessagingService(new InMemoryConversationRepository(), users, interactions, videos, new InMemoryMessagingEventPublisher(), new InMemoryRateLimiter());
+    interactions = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, userRepository),
+      videos,
+      users,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+    );
+    messaging = new MessagingService(
+      new InMemoryConversationRepository(),
+      users,
+      interactions,
+      videos,
+      new InMemoryMessagingEventPublisher(),
+      new InMemoryRateLimiter(),
+    );
     repository = new InMemoryReportRepository(() => NOW);
     actions = new InMemoryModerationActionRepository(() => NOW);
-    service = new ReportsService(repository, actions, users, videos, interactions, messaging, notifications, new InMemoryRateLimiter(), suspended, () => NOW);
+    service = new ReportsService(
+      repository,
+      actions,
+      users,
+      videos,
+      interactions,
+      messaging,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+      () => NOW,
+    );
     video = await createVideo();
     comment = (await interactions.addComment('carol', video, 'Commentaire de Carol')).comment.id;
   });
@@ -111,22 +148,35 @@ describe('ReportsService', () => {
 
     it('refuse son propre contenu ou son compte, et ce qui est invisible', async () => {
       await expect(service.report('bob', { target: videoTarget(), reason: 'spam' })).rejects.toBeInstanceOf(CannotReportYourselfError);
-      await expect(service.report('carol', { target: { type: 'comment', id: comment }, reason: 'spam' })).rejects.toBeInstanceOf(CannotReportYourselfError);
-      await expect(service.report('alice', { target: { type: 'account', id: 'alice' }, reason: 'spam' })).rejects.toBeInstanceOf(CannotReportYourselfError);
+      await expect(service.report('carol', { target: { type: 'comment', id: comment }, reason: 'spam' })).rejects.toBeInstanceOf(
+        CannotReportYourselfError,
+      );
+      await expect(service.report('alice', { target: { type: 'account', id: 'alice' }, reason: 'spam' })).rejects.toBeInstanceOf(
+        CannotReportYourselfError,
+      );
 
       const unpublished = await createVideo('bob', 'processing');
-      for (const target of [videoTarget(unpublished), videoTarget('inconnue'), { type: 'comment', id: 'inconnu' }, { type: 'account', id: 'inconnu' }] as ReportTarget[]) {
+      for (const target of [
+        videoTarget(unpublished),
+        videoTarget('inconnue'),
+        { type: 'comment', id: 'inconnu' },
+        { type: 'account', id: 'inconnu' },
+      ] as ReportTarget[]) {
         await expect(service.report('alice', { target, reason: 'spam' })).rejects.toBeInstanceOf(ReportTargetNotFoundError);
       }
       // Compte suspendu (ADR-037) : ni lui ni ses contenus ne sont visibles.
       await suspended.add('bob');
       await expect(service.report('alice', { target: videoTarget(), reason: 'spam' })).rejects.toBeInstanceOf(ReportTargetNotFoundError);
-      await expect(service.report('alice', { target: { type: 'account', id: 'bob' }, reason: 'spam' })).rejects.toBeInstanceOf(ReportTargetNotFoundError);
+      await expect(service.report('alice', { target: { type: 'account', id: 'bob' }, reason: 'spam' })).rejects.toBeInstanceOf(
+        ReportTargetNotFoundError,
+      );
       expect(repository.reports).toEqual([]);
     });
 
     it('refuse une précision de plus de 500 caractères', async () => {
-      await expect(service.report('alice', { target: videoTarget(), reason: 'other', details: 'x'.repeat(501) })).rejects.toBeInstanceOf(InvalidReportError);
+      await expect(service.report('alice', { target: videoTarget(), reason: 'other', details: 'x'.repeat(501) })).rejects.toBeInstanceOf(
+        InvalidReportError,
+      );
     });
 
     it('10 signalements par heure, puis 429 avec le délai', async () => {
@@ -200,22 +250,31 @@ describe('ReportsService', () => {
 
     it('un message reçu : expéditeur visé, seul ce message copié ; ni le sien, ni hors de la conversation', async () => {
       await service.report('alice', { target: { type: 'message', id: message }, reason: 'harassment' });
-      expect(repository.reports.map((r) => [r.target.type, r.targetUserId, r.targetUsername, r.excerpt])).toEqual([['message', 'bob', 'bob', 'Message de Bob']]);
-      await expect(service.report('bob', { target: { type: 'message', id: message }, reason: 'spam' })).rejects.toBeInstanceOf(CannotReportYourselfError);
-      await expect(service.report('carol', { target: { type: 'message', id: message }, reason: 'spam' })).rejects.toBeInstanceOf(ReportTargetNotFoundError);
+      expect(repository.reports.map((r) => [r.target.type, r.targetUserId, r.targetUsername, r.excerpt])).toEqual([
+        ['message', 'bob', 'bob', 'Message de Bob'],
+      ]);
+      await expect(service.report('bob', { target: { type: 'message', id: message }, reason: 'spam' })).rejects.toBeInstanceOf(
+        CannotReportYourselfError,
+      );
+      await expect(service.report('carol', { target: { type: 'message', id: message }, reason: 'spam' })).rejects.toBeInstanceOf(
+        ReportTargetNotFoundError,
+      );
     });
 
     it('message retiré : expéditeur prévenu avec le motif, signalement clos, journal', async () => {
       await service.report('alice', { target: { type: 'message', id: message }, reason: 'harassment' });
-      await service.removeContent({ adminId: 'dave', target: { type: 'message', id: message }, authorId: 'bob', excerpt: 'Message de Bob', reason: 'harassment' }, () =>
-        messaging.removeMessage(message).then(() => undefined),
+      await service.removeContent(
+        { adminId: 'dave', target: { type: 'message', id: message }, authorId: 'bob', excerpt: 'Message de Bob', reason: 'harassment' },
+        () => messaging.removeMessage(message).then(() => undefined),
       );
       await expect(messaging.getMessages([message])).resolves.toEqual([]);
       expect(moderationNotices()).toEqual([
         ['bob', 'contentRemoved', 'message', 'harassment', null, 'Message de Bob'],
         ['alice', 'reportResolved', 'message', null, 'contentRemoved', 'Message de Bob'],
       ]);
-      expect(actions.actions.map((a) => [a.action, a.adminUsername, a.targetUsername, a.reason, a.reportsClosed])).toEqual([['messageRemoved', 'dave', 'bob', 'harassment', 1]]);
+      expect(actions.actions.map((a) => [a.action, a.adminUsername, a.targetUsername, a.reason, a.reportsClosed])).toEqual([
+        ['messageRemoved', 'dave', 'bob', 'harassment', 1],
+      ]);
     });
   });
 

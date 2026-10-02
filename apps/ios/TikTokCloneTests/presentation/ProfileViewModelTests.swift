@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 @MainActor
@@ -230,8 +231,9 @@ struct ProfileViewModelTests {
             ]
         }
         let interactions = makeInteractions(session)
-        let viewModel = FollowListViewModel(kind: .followers, username: "alice", loadFollows: LoadFollowsUseCase(relationships: relationships),
-                                            interactions: interactions, session: session)
+        let viewModel = FollowListViewModel(
+            kind: .followers, username: "alice", loadFollows: LoadFollowsUseCase(relationships: relationships),
+            interactions: interactions, session: session)
         await viewModel.list.loadFirst()
         #expect(viewModel.status(of: viewModel.list.items[0]) == nil)
         #expect(viewModel.status(of: viewModel.list.items[1]) == .followBack)
@@ -251,8 +253,9 @@ struct ProfileViewModelTests {
         relationships.state.withLock { $0.blocked = [.bob] }
         let interactions = makeInteractions(session)
         interactions.blocked(UserSummary.bob.id)
-        let viewModel = BlockedAccountsViewModel(loadBlockedUsers: LoadBlockedUsersUseCase(relationships: relationships),
-                                                 setBlocked: SetBlockedUseCase(relationships: relationships), interactions: interactions, session: session)
+        let viewModel = BlockedAccountsViewModel(
+            loadBlockedUsers: LoadBlockedUsersUseCase(relationships: relationships),
+            setBlocked: SetBlockedUseCase(relationships: relationships), interactions: interactions, session: session)
         await viewModel.load()
         #expect(viewModel.users == [.bob])
         await viewModel.unblock(.bob)
@@ -272,9 +275,10 @@ struct ProfileViewModelTests {
             ]
         }
         let interactions = makeInteractions(session)
-        let viewModel = CommentHistoryViewModel(loadComments: LoadCommentHistoryUseCase(interactions: interactionRepository),
-                                                deleteComment: DeleteCommentUseCase(interactions: interactionRepository),
-                                                interactions: interactions, session: session)
+        let viewModel = CommentHistoryViewModel(
+            loadComments: LoadCommentHistoryUseCase(interactions: interactionRepository),
+            deleteComment: DeleteCommentUseCase(interactions: interactionRepository),
+            interactions: interactions, session: session)
         await viewModel.list.loadFirst()
         interactions.blocked(UserSummary.bob.id)
         viewModel.removeBlocked(viewModel.blockedUserIDs)
@@ -324,7 +328,8 @@ struct ProfileViewModelTests {
     func emptyPagesSkipped() async {
         let session = await makeSession()
         let empty = { (next: String?) in FeedPage(videos: [], nextCursor: next) }
-        videoLists.set(.myLikes, [empty("1"), empty("2"), page(["v1"], next: "3"), empty("4"), empty("5"), empty("6"), empty("7"), page(["v2"], next: nil)])
+        videoLists.set(
+            .myLikes, [empty("1"), empty("2"), page(["v1"], next: "3"), empty("4"), empty("5"), empty("6"), empty("7"), page(["v2"], next: nil)])
         let list = PagedList<FeedVideo>(session: session) { cursor in
             try await LoadVideoPageUseCase(videos: videoLists)(.myLikes, cursor: cursor).asPage
         }
@@ -372,8 +377,9 @@ struct ProfileViewModelTests {
             playback: FakePlayback(),
             session: session,
             analytics: makeAnalytics(),
-            mode: .list(FeedPage(videos: [.sample("v1", author: "carol"), .sample("v2"), .sample("v3"), .sample("v4", author: "carol")], nextCursor: nil),
-                        startIndex: 1)
+            mode: .list(
+                FeedPage(videos: [.sample("v1", author: "carol"), .sample("v2"), .sample("v3"), .sample("v4", author: "carol")], nextCursor: nil),
+                startIndex: 1)
         )
         await viewModel.start()
         #expect(viewModel.currentVideo?.id == "v2")
@@ -387,8 +393,9 @@ struct ProfileViewModelTests {
         let session = await makeSession()
         let interactions = makeInteractions(session)
         let sample = FeedVideo.sample("mine")
-        let mine = FeedVideo(id: "mine", description: nil, hlsURL: sample.hlsURL, thumbnailURL: sample.thumbnailURL, createdAt: sample.createdAt,
-                             stats: sample.stats, author: .alice, viewer: nil)
+        let mine = FeedVideo(
+            id: "mine", description: nil, hlsURL: sample.hlsURL, thumbnailURL: sample.thumbnailURL, createdAt: sample.createdAt,
+            stats: sample.stats, author: .alice, viewer: nil)
         #expect(await interactions.delete(mine) == nil)
         #expect(await interactions.delete(.sample("theirs", author: "bob")) == nil)
         #expect(interactions.deletedVideoIDs == ["mine"])

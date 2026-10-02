@@ -7,8 +7,7 @@ const NOW = 1_790_000_000;
 // Corps tel que reçu (espaces et ordre des clés compris) : la signature porte sur ces octets exacts.
 const BODY = Buffer.from('{"api_version":"1.0", "event":{"id":"évt-1","type":"VIRTUAL_CURRENCY_TRANSACTION"}}');
 
-const sign = (t: number, body: Buffer = BODY, secret = SECRET) =>
-  createHmac('sha256', secret).update(`${t}.`).update(body).digest('hex');
+const sign = (t: number, body: Buffer = BODY, secret = SECRET) => createHmac('sha256', secret).update(`${t}.`).update(body).digest('hex');
 
 describe('checkRevenueCatSignature', () => {
   it('accepte une signature calculée sur le corps brut, en-tête avec ou sans espaces', () => {

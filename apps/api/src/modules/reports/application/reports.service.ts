@@ -95,7 +95,8 @@ export class ReportsService {
 
   async report(reporterId: string, input: ReportInput): Promise<void> {
     const details = input.details?.trim() || null;
-    if (details && details.length > MAX_REPORT_DETAILS_LENGTH) throw new InvalidReportError(`La précision fait au plus ${MAX_REPORT_DETAILS_LENGTH} caractères`);
+    if (details && details.length > MAX_REPORT_DETAILS_LENGTH)
+      throw new InvalidReportError(`La précision fait au plus ${MAX_REPORT_DETAILS_LENGTH} caractères`);
     const { userId, excerpt } = await this.resolve(reporterId, input.target);
     if (userId === reporterId) throw new CannotReportYourselfError();
     const targetUser = await this.users.getById(userId).catch((error: unknown) => {

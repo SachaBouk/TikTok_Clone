@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Adaptateurs en mémoire des ports du domaine, pour tester cas d'usage et ViewModels (ADR-002).
@@ -120,8 +121,9 @@ final class FakeProfileRepository: ProfileRepository {
 
     private func withAvatar(_ url: URL?) throws -> UserProfile {
         let current = try result.withLock { $0 }.get()
-        let updated = UserProfile(id: current.id, username: current.username, displayName: current.displayName, avatarURL: url, bio: current.bio,
-                                  followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt)
+        let updated = UserProfile(
+            id: current.id, username: current.username, displayName: current.displayName, avatarURL: url, bio: current.bio,
+            followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt)
         result.withLock { $0 = .success(updated) }
         return updated
     }

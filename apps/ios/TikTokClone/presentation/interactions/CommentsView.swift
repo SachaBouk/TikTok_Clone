@@ -38,10 +38,13 @@ struct CommentsView: View {
             AuthFlowView(container: container)
         }
         .reportSheet($reportTarget, container: container)
-        .alert("Commentaires", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Commentaires",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
@@ -66,7 +69,8 @@ struct CommentsView: View {
             if viewModel.isLoading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Aucun commentaire", systemImage: "bubble.left.and.bubble.right", description: Text("Sois le premier à commenter."))
+                ContentUnavailableView(
+                    "Aucun commentaire", systemImage: "bubble.left.and.bubble.right", description: Text("Sois le premier à commenter."))
             }
         } else {
             List {
@@ -75,18 +79,18 @@ struct CommentsView: View {
                     NavigationLink(value: ProfileRoute(username: comment.author.username)) {
                         CommentRow(comment: comment)
                     }
-                        .swipeActions(edge: .trailing) {
-                            if viewModel.isOwn(comment) {
-                                Button("Supprimer", systemImage: "trash", role: .destructive) {
-                                    Task { await viewModel.delete(comment) }
-                                }
-                            } else {
-                                Button("Signaler", systemImage: "flag") {
-                                    if viewModel.isSignedIn { reportTarget = .comment(id: comment.id) } else { isPresentingSignIn = true }
-                                }
-                                .tint(.orange)
+                    .swipeActions(edge: .trailing) {
+                        if viewModel.isOwn(comment) {
+                            Button("Supprimer", systemImage: "trash", role: .destructive) {
+                                Task { await viewModel.delete(comment) }
                             }
+                        } else {
+                            Button("Signaler", systemImage: "flag") {
+                                if viewModel.isSignedIn { reportTarget = .comment(id: comment.id) } else { isPresentingSignIn = true }
+                            }
+                            .tint(.orange)
                         }
+                    }
                 }
                 if viewModel.hasMore {
                     ProgressView()

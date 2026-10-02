@@ -111,8 +111,7 @@ export class AuthService {
   async loginWithApple(input: AppleLoginInput): Promise<AuthTokens> {
     const identity = await this.apple.verify(input.identityToken);
     const account =
-      (await this.accounts.findByAppleSub(identity.sub)) ??
-      (await this.createAppleAccount(identity.sub, identity.email, input.displayName));
+      (await this.accounts.findByAppleSub(identity.sub)) ?? (await this.createAppleAccount(identity.sub, identity.email, input.displayName));
     await this.assertNotSuspended(account.id);
     return this.startSession(account.id);
   }

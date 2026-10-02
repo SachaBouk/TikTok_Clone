@@ -36,7 +36,5 @@ export class TranscodeResultsConsumer implements OnModuleInit, OnModuleDestroy {
 }
 
 function toOutcome(result: TranscodeResult): TranscodeOutcome {
-  return result.status === 'ready'
-    ? { status: 'ready', hlsUrl: result.hlsUrl, thumbnailUrl: result.thumbnailUrl }
-    : { status: 'failed' };
+  return result.status === 'ready' ? { status: 'ready', hlsUrl: result.hlsUrl, thumbnailUrl: result.thumbnailUrl } : { status: 'failed' };
 }

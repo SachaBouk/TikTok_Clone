@@ -69,7 +69,12 @@ export class PrismaAuthAccountRepository extends AuthAccountRepository {
   }
 }
 
-function toSuspension(row: { id: string; suspendedAt: Date | null; suspensionReason: string | null; suspendedById: string | null }): AccountSuspension | null {
+function toSuspension(row: {
+  id: string;
+  suspendedAt: Date | null;
+  suspensionReason: string | null;
+  suspendedById: string | null;
+}): AccountSuspension | null {
   if (!row.suspendedAt || row.suspensionReason === null) return null;
   return { userId: row.id, suspendedAt: row.suspendedAt, reason: row.suspensionReason, suspendedBy: row.suspendedById };
 }

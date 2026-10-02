@@ -182,8 +182,9 @@ final class ProfileViewModel {
 
 extension UserProfile {
     func with(followersCount: Int) -> UserProfile {
-        UserProfile(id: id, username: username, displayName: displayName, avatarURL: avatarURL, bio: bio,
-                    followersCount: followersCount, followingCount: followingCount, createdAt: createdAt)
+        UserProfile(
+            id: id, username: username, displayName: displayName, avatarURL: avatarURL, bio: bio,
+            followersCount: followersCount, followingCount: followingCount, createdAt: createdAt)
     }
 
     var summary: UserSummary {

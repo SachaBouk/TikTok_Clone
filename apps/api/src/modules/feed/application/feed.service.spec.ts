@@ -75,11 +75,31 @@ describe('FeedService', () => {
     videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
     users = new InMemoryUserRepository([user('alice'), user('bob'), user('dave')]);
     snapshots = new InMemoryFeedSnapshotStore();
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      new InMemoryVideoCleanupQueue(),
+      new InMemoryRateLimiter(),
+    );
     suspended = new InMemorySuspendedAccounts();
     const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
-    const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher(), suspended);
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, users), videos, usersService, notifications, new InMemoryRateLimiter(), suspended);
+    const notifications = new NotificationsService(
+      new InMemoryNotificationRepository(),
+      usersService,
+      videos,
+      new InMemoryNotificationPublisher(),
+      suspended,
+    );
+    interactions = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, users),
+      videos,
+      usersService,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+    );
     feed = new FeedService(snapshots, videos, usersService, interactions);
   });
 
@@ -198,7 +218,7 @@ describe('FeedService', () => {
       await expect(feed.listAuthorVideos('bob', undefined, 1, null)).resolves.toMatchObject({ nextCursor: null });
     });
 
-    it("départage les vidéos publiées à la même date sans en perdre", async () => {
+    it('départage les vidéos publiées à la même date sans en perdre', async () => {
       const ids = await Promise.all(Array.from({ length: 5 }, () => publish('alice')));
       for (const id of ids) videoRepository.videos.get(id)!.createdAt = new Date('2026-06-01T00:00:00Z');
       const pages = await readAll((cursor) => feed.listAuthorVideos('alice', cursor, 1, null));
@@ -443,9 +463,7 @@ describe('FeedService', () => {
   });
 
   it('un curseur valide encode photo, graine et position', () => {
-    expect(encodeCursor({ snapshotId: 's', seed: 42, offset: 10 })).toBe(
-      Buffer.from('{"s":"s","r":42,"o":10}').toString('base64url'),
-    );
+    expect(encodeCursor({ snapshotId: 's', seed: 42, offset: 10 })).toBe(Buffer.from('{"s":"s","r":42,"o":10}').toString('base64url'));
   });
 });
 

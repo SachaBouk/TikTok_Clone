@@ -137,7 +137,11 @@ export class FeedService {
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: await this.loadItems(page.map((row) => row.videoId), userId, hidden),
+      items: await this.loadItems(
+        page.map((row) => row.videoId),
+        userId,
+        hidden,
+      ),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.viewedAt, videoId: last.videoId }) : null,
     };
   }
@@ -160,7 +164,11 @@ export class FeedService {
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: await this.loadItems(page.map((row) => row.videoId), viewerId, hidden),
+      items: await this.loadItems(
+        page.map((row) => row.videoId),
+        viewerId,
+        hidden,
+      ),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.reactedAt, videoId: last.videoId }) : null,
     };
   }
@@ -183,7 +191,11 @@ export class FeedService {
   // simplement absente : la page peut être plus courte, la pagination continue.
   private async loadItems(ids: string[], viewerId: string | null, hidden: Set<string>): Promise<FeedItem[]> {
     const videos = new Map((await this.videos.getPublishedVideos(ids)).map((v) => [v.id, v]));
-    return this.toItems(ids.flatMap((id) => videos.get(id) ?? []), viewerId, hidden);
+    return this.toItems(
+      ids.flatMap((id) => videos.get(id) ?? []),
+      viewerId,
+      hidden,
+    );
   }
 
   // Ajoute auteur et état du lecteur, dans l'ordre donné. Une vidéo dont l'auteur a disparu, ou d'un compte

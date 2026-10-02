@@ -32,7 +32,11 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
   const defaultReason = target.reasons[0]?.reason;
   const notice = 'Son auteur est prévenu avec le motif choisi, et les personnes qui l’ont signalé reçoivent la décision.';
   const contentHref =
-    target.targetType === 'video' ? `/videos/${target.targetId}` : target.targetType === 'comment' && target.videoId ? `/videos/${target.videoId}` : null;
+    target.targetType === 'video'
+      ? `/videos/${target.targetId}`
+      : target.targetType === 'comment' && target.videoId
+        ? `/videos/${target.videoId}`
+        : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,8 +45,7 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
           <h1 className="text-2xl font-semibold">Signalement</h1>
           <ReportTargetPreview target={target} />
           <p className="text-sm text-muted-foreground">
-            Compte visé :{' '}
-            <ReportTargetAccount target={target} className="font-medium text-foreground hover:underline" />
+            Compte visé : <ReportTargetAccount target={target} className="font-medium text-foreground hover:underline" />
           </p>
         </div>
         {contentHref && target.available && (

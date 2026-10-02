@@ -11,7 +11,9 @@ describe('RevenueCatConfig', () => {
   it('refuse un en-tête ou un secret de signature trop court', () => {
     expect(() => RevenueCatConfig.fromEnv({ REVENUECAT_WEBHOOK_AUTHORIZATION: 'court' })).toThrow();
     expect(() => RevenueCatConfig.fromEnv({ REVENUECAT_WEBHOOK_SIGNING_SECRET: 'court' })).toThrow();
-    expect(RevenueCatConfig.fromEnv({ REVENUECAT_WEBHOOK_AUTHORIZATION: 'Bearer 0123456789abcdef', REVENUECAT_REJECT_SANDBOX: 'true' })).toMatchObject({
+    expect(
+      RevenueCatConfig.fromEnv({ REVENUECAT_WEBHOOK_AUTHORIZATION: 'Bearer 0123456789abcdef', REVENUECAT_REJECT_SANDBOX: 'true' }),
+    ).toMatchObject({
       webhookAuthorization: 'Bearer 0123456789abcdef',
       webhookSigningSecret: null,
       rejectSandbox: true,

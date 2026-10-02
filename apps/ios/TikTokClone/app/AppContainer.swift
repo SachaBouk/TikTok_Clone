@@ -62,7 +62,8 @@ final class AppContainer {
             logout: LogoutUseCase(auth: auth)
         )
         expiry.session = session
-        let analyticsService: any AnalyticsService = configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
+        let analyticsService: any AnalyticsService =
+            configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
         analytics = AnalyticsModel(service: analyticsService, preferences: UserDefaultsPreferencesStore())
         videoInteractions = VideoInteractionsModel(
@@ -87,7 +88,8 @@ final class AppContainer {
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
         activity = ActivityModel(
-            loadGroups: LoadActivityGroupsUseCase(activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships)),
+            loadGroups: LoadActivityGroupsUseCase(
+                activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships)),
             loadActorRelationships: LoadActorRelationshipsUseCase(relationships: relationships),
             countUnread: CountUnreadActivityUseCase(activity: activityRepository),
             markRead: MarkActivityReadUseCase(activity: activityRepository),
@@ -126,7 +128,7 @@ final class AppContainer {
     // simule des achats sans compte RevenueCat (rien n'est payé ni crédité).
     private static func makePurchaseService(_ configuration: AppConfiguration) -> any PurchaseService {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-fakePurchases") { return DevelopmentPurchaseService() }
+            if ProcessInfo.processInfo.arguments.contains("-fakePurchases") { return DevelopmentPurchaseService() }
         #endif
         return configuration.revenueCatAPIKey.map { RevenueCatPurchaseService(apiKey: $0) } ?? UnavailablePurchaseService()
     }
@@ -197,7 +199,8 @@ final class AppContainer {
 
     // Liste complète d'un groupe du centre d'activité.
     func makeActivityGroupList(_ filter: ActivityFilter) -> PagedList<ActivityNotification> {
-        let load = LoadActivityGroupUseCase(activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships))
+        let load = LoadActivityGroupUseCase(
+            activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships))
         return PagedList(session: session) { cursor in
             let page = try await load(filter, cursor: cursor)
             return (page.notifications, page.nextCursor)

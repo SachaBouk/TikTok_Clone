@@ -16,7 +16,9 @@ struct NewMessageView: View {
         NavigationStack {
             List {
                 ForEach(list.items) { entry in
-                    Button { select(entry.user) } label: {
+                    Button {
+                        select(entry.user)
+                    } label: {
                         UserRow(user: entry.user).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

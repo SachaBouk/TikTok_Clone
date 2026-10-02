@@ -14,11 +14,7 @@ export const metadata: Metadata = { title: 'Jetons' };
 
 // Jetons (ADR-009) : totaux annoncés par RevenueCat, et journal des mouvements appliqués aux soldes. Les achats
 // de test (sandbox) sont comptés à part : ils ne sont jamais payés.
-export default async function TokensPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ userId?: string; rapprocher?: string; curseur?: string }>;
-}) {
+export default async function TokensPage({ searchParams }: { searchParams: Promise<{ userId?: string; rapprocher?: string; curseur?: string }> }) {
   const { userId, rapprocher, curseur } = await searchParams;
   const unmatched = rapprocher === '1';
   const [stats, page, account] = await Promise.all([
@@ -65,14 +61,16 @@ export default async function TokensPage({
         </div>
         {(unmatched || userId) && (
           <div className="flex gap-2">
-            {userId && <FilterChip label={account ? `Compte : @${account.username}` : 'Un compte'} clearHref={withQuery('/tokens', { rapprocher })} />}
+            {userId && (
+              <FilterChip label={account ? `Compte : @${account.username}` : 'Un compte'} clearHref={withQuery('/tokens', { rapprocher })} />
+            )}
             {unmatched && <FilterChip label="À rapprocher" clearHref={withQuery('/tokens', { userId })} />}
           </div>
         )}
         {unmatched && (
           <p className="text-sm text-muted-foreground">
-            Clients RevenueCat inconnus de l’API au moment de l’achat (identifiant anonyme, compte supprimé avant le webhook) : aucun
-            solde n’a été crédité. Retrouver le client dans RevenueCat par son identifiant, puis créditer le compte par un ajustement.
+            Clients RevenueCat inconnus de l’API au moment de l’achat (identifiant anonyme, compte supprimé avant le webhook) : aucun solde n’a été
+            crédité. Retrouver le client dans RevenueCat par son identifiant, puis créditer le compte par un ajustement.
           </p>
         )}
         <WalletTransactionsTable transactions={page.items} />

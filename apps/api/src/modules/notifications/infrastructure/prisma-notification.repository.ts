@@ -85,7 +85,12 @@ export class PrismaNotificationRepository extends NotificationRepository {
   }
 
   async removeBetween(userId: string, otherId: string): Promise<string[]> {
-    const where = { OR: [{ userId, actorId: otherId }, { userId: otherId, actorId: userId }] };
+    const where = {
+      OR: [
+        { userId, actorId: otherId },
+        { userId: otherId, actorId: userId },
+      ],
+    };
     const recipients = await this.prisma.notification.findMany({ where, distinct: ['userId'], select: { userId: true } });
     await this.prisma.notification.deleteMany({ where });
     return recipients.map((r) => r.userId);

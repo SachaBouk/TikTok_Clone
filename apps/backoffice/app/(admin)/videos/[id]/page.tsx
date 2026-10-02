@@ -37,7 +37,11 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start gap-6">
-        {video.status === 'ready' && video.hlsUrl ? <HlsPlayer src={video.hlsUrl} poster={video.thumbnailUrl} /> : <Thumbnail url={video.thumbnailUrl} className="w-40" />}
+        {video.status === 'ready' && video.hlsUrl ? (
+          <HlsPlayer src={video.hlsUrl} poster={video.thumbnailUrl} />
+        ) : (
+          <Thumbnail url={video.thumbnailUrl} className="w-40" />
+        )}
 
         <div className="flex min-w-64 flex-1 flex-col gap-4">
           <div className="flex items-center gap-3">

@@ -6,12 +6,13 @@ struct RemoteReportRepository: ReportRepository {
     let client: Client
 
     func report(_ target: ReportTarget, reason: ReportReason, details: String?) async throws {
-        let (type, id): (Components.Schemas.ReportTargetType, String) = switch target {
-        case .video(let id): (.video, id)
-        case .comment(let id): (.comment, id)
-        case .account(let id, _): (.account, id)
-        case .message(let id): (.message, id)
-        }
+        let (type, id): (Components.Schemas.ReportTargetType, String) =
+            switch target {
+            case .video(let id): (.video, id)
+            case .comment(let id): (.comment, id)
+            case .account(let id, _): (.account, id)
+            case .message(let id): (.message, id)
+            }
         let body = Components.Schemas.CreateReportRequest(targetType: type, targetId: id, reason: Self.reason(reason), details: details)
         switch try await mappingErrors({ try await client.createReport(body: .json(body)) }) {
         case .noContent: return

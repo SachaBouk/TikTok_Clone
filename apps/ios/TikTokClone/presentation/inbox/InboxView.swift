@@ -37,7 +37,9 @@ struct InboxView: View {
             Section("Messages") {
                 ForEach(messaging.inbox.items) { conversation in
                     // Un bouton, et non un lien de navigation : dans une `List`, un lien ajoute un chevron.
-                    Button { openedConversation = ConversationRoute(conversation) } label: {
+                    Button {
+                        openedConversation = ConversationRoute(conversation)
+                    } label: {
                         ConversationRow(
                             conversation: conversation,
                             ownID: container.session.profile?.id,
@@ -52,7 +54,9 @@ struct InboxView: View {
                     .accessibilityIdentifier("inbox.conversation")
                 }
                 if messaging.inbox.items.isEmpty {
-                    InboxListState(list: messaging.inbox, emptyTitle: "Aucun message", emptyDescription: "Écris à un de tes abonnements avec ✎, ou depuis le bouton « Message » d’un profil.")
+                    InboxListState(
+                        list: messaging.inbox, emptyTitle: "Aucun message",
+                        emptyDescription: "Écris à un de tes abonnements avec ✎, ou depuis le bouton « Message » d’un profil.")
                 }
             }
         }
@@ -73,29 +77,38 @@ struct InboxView: View {
         .navigationDestination(item: $openedConversation) { route in
             ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
         }
-        .sheet(isPresented: $isComposing, onDismiss: {
-            if let username = composedUsername { openedConversation = ConversationRoute(username: username) }
-            composedUsername = nil
-        }) {
+        .sheet(
+            isPresented: $isComposing,
+            onDismiss: {
+                if let username = composedUsername { openedConversation = ConversationRoute(username: username) }
+                composedUsername = nil
+            }
+        ) {
             NewMessageView(list: container.makeFollowingList()) { user in
                 composedUsername = user.username
                 isComposing = false
             }
         }
-        .confirmationDialog("Supprimer la conversation ?", isPresented: Binding(
-            get: { deleting != nil },
-            set: { if !$0 { deleting = nil } }
-        ), titleVisibility: .visible, presenting: deleting) { conversation in
+        .confirmationDialog(
+            "Supprimer la conversation ?",
+            isPresented: Binding(
+                get: { deleting != nil },
+                set: { if !$0 { deleting = nil } }
+            ), titleVisibility: .visible, presenting: deleting
+        ) { conversation in
             Button("Supprimer", role: .destructive) {
                 Task { alertMessage = await messaging.delete(conversation) }
             }
         } message: { conversation in
             Text("Elle disparaît pour toi seulement : @\(conversation.participant.username) garde vos messages.")
         }
-        .alert("Messages", isPresented: Binding(
-            get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
-        )) {
+        .alert(
+            "Messages",
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")

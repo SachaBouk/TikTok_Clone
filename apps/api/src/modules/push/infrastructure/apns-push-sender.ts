@@ -98,7 +98,11 @@ export class ApnsPushSender extends PushSender implements OnModuleDestroy {
   private async authToken(): Promise<string> {
     if (this.token && Date.now() - this.token.issuedAt < TOKEN_TTL_MS) return this.token.value;
     const key = await importPKCS8(this.config.privateKey, 'ES256');
-    const value = await new SignJWT({}).setProtectedHeader({ alg: 'ES256', kid: this.config.keyId }).setIssuer(this.config.teamId).setIssuedAt().sign(key);
+    const value = await new SignJWT({})
+      .setProtectedHeader({ alg: 'ES256', kid: this.config.keyId })
+      .setIssuer(this.config.teamId)
+      .setIssuedAt()
+      .sign(key);
     this.token = { value, issuedAt: Date.now() };
     return value;
   }

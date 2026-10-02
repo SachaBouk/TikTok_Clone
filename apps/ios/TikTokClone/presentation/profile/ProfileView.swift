@@ -51,20 +51,26 @@ struct ProfileView: View {
                     Text("Vous ne pourrez plus vous suivre, réagir à vos vidéos ni vous écrire. Vos abonnements mutuels seront retirés.")
                 }
             }
-            .confirmationDialog("Publication en échec", isPresented: Binding(
-                get: { failedPublication != nil },
-                set: { if !$0 { failedPublication = nil } }
-            ), titleVisibility: .visible, presenting: failedPublication) { publication in
+            .confirmationDialog(
+                "Publication en échec",
+                isPresented: Binding(
+                    get: { failedPublication != nil },
+                    set: { if !$0 { failedPublication = nil } }
+                ), titleVisibility: .visible, presenting: failedPublication
+            ) { publication in
                 Button("Supprimer la vidéo", role: .destructive) {
                     Task { alertMessage = await publishing.delete(publication.id) }
                 }
             } message: { _ in
                 Text("Le traitement de cette vidéo a échoué. Tu peux la supprimer et la publier à nouveau.")
             }
-            .alert("Profil", isPresented: Binding(
-                get: { alertMessage != nil },
-                set: { if !$0 { alertMessage = nil } }
-            )) {
+            .alert(
+                "Profil",
+                isPresented: Binding(
+                    get: { alertMessage != nil },
+                    set: { if !$0 { alertMessage = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage ?? "")
@@ -195,10 +201,13 @@ struct ProfileView: View {
     private var grids: some View {
         VStack(spacing: 8) {
             if viewModel.availableGrids.count > 1 {
-                Picker("Vidéos affichées", selection: Binding(
-                    get: { viewModel.selectedGrid },
-                    set: { grid in Task { await viewModel.select(grid) } }
-                )) {
+                Picker(
+                    "Vidéos affichées",
+                    selection: Binding(
+                        get: { viewModel.selectedGrid },
+                        set: { grid in Task { await viewModel.select(grid) } }
+                    )
+                ) {
                     ForEach(viewModel.availableGrids, id: \.self) { grid in
                         Image(systemName: grid.systemImage)
                             .accessibilityLabel(grid.title)
@@ -253,7 +262,8 @@ struct ProfileView: View {
                             reportTarget = .account(id: profile.id, username: profile.username)
                         }
                     }
-                    Button(viewModel.isBlocked ? "Débloquer" : "Bloquer", systemImage: "hand.raised", role: viewModel.isBlocked ? nil : .destructive) {
+                    Button(viewModel.isBlocked ? "Débloquer" : "Bloquer", systemImage: "hand.raised", role: viewModel.isBlocked ? nil : .destructive)
+                    {
                         isConfirmingBlock = true
                     }
                 } label: {

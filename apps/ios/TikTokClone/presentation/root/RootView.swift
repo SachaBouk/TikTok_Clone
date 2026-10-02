@@ -40,10 +40,12 @@ struct RootView: View {
             // Achats rattachés au compte connecté (ADR-009).
             Task { await container.wallet.sessionChanged(userID: userID) }
         }
-        .sheet(isPresented: Binding(
-            get: { analytics.isAskingConsent },
-            set: { analytics.isAskingConsent = $0 }
-        )) {
+        .sheet(
+            isPresented: Binding(
+                get: { analytics.isAskingConsent },
+                set: { analytics.isAskingConsent = $0 }
+            )
+        ) {
             AnalyticsConsentView()
         }
     }

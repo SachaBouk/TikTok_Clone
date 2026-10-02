@@ -44,13 +44,18 @@ describe('WalletService', () => {
   function build(rejectSandbox = false) {
     wallets = new InMemoryWalletRepository();
     events = new InMemoryWalletEventPublisher();
-    const users = new UsersService(new InMemoryUserRepository([alice]), new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemorySuspendedAccounts());
+    const users = new UsersService(
+      new InMemoryUserRepository([alice]),
+      new InMemoryAvatarStorage(),
+      new InMemoryAccountContentCleanup(),
+      new InMemorySuspendedAccounts(),
+    );
     service = new WalletService(wallets, users, events, { rejectSandbox });
   }
 
   beforeEach(() => build());
 
-  it("crédite un achat, une seule fois même si le webhook est rejoué, et pousse le solde", async () => {
+  it('crédite un achat, une seule fois même si le webhook est rejoué, et pousse le solde', async () => {
     const purchase = event();
     await expect(service.recordCurrencyEvent(purchase)).resolves.toBe('applied');
     await expect(service.recordCurrencyEvent(purchase)).resolves.toBe('duplicate');
@@ -76,12 +81,12 @@ describe('WalletService', () => {
     expect(wallets.entries.at(-1)).toMatchObject({ amount: -100, appliedAmount: -50 });
   });
 
-  it("classe un ajustement du tableau de bord RevenueCat", async () => {
+  it('classe un ajustement du tableau de bord RevenueCat', async () => {
     await service.recordCurrencyEvent(event({ source: 'admin_api', amount: 25, productId: null }));
     await expect(service.listTransactions(ALICE, null, 10)).resolves.toMatchObject({ items: [{ kind: 'adjustment', amount: 25 }] });
   });
 
-  it("retrouve le compte parmi les alias (achat commencé en anonyme), sans tenir compte de la casse", async () => {
+  it('retrouve le compte parmi les alias (achat commencé en anonyme), sans tenir compte de la casse', async () => {
     await expect(service.recordCurrencyEvent(event({ appUserIds: ['$RCAnonymousID:abc', ALICE.toUpperCase()] }))).resolves.toBe('applied');
     await expect(service.getBalance(ALICE)).resolves.toBe(100);
   });

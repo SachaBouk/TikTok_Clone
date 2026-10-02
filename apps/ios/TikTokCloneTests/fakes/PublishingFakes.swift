@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // API des vidéos en mémoire : parties de `partSize` octets, vidéos `vid-1`, `vid-2`…
@@ -39,7 +40,8 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         try state.withLock { state in
             if !state.completeErrors.isEmpty { throw state.completeErrors.removeFirst() }
             state.completed[videoID] = parts
-            let video = OwnVideo(id: videoID, description: state.videos[videoID]?.description, status: .processing, thumbnailURL: nil, createdAt: .now)
+            let video = OwnVideo(
+                id: videoID, description: state.videos[videoID]?.description, status: .processing, thumbnailURL: nil, createdAt: .now)
             state.videos[videoID] = video
             return video
         }
@@ -160,8 +162,11 @@ final class InMemoryUploadStore: UploadStore {
 }
 
 extension PendingUpload {
-    static func sample(id: String = "u1", size: Int = 10, createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000), userID: String = UserProfile.alice.id) -> PendingUpload {
-        PendingUpload(id: id, userID: userID, fileName: "\(id).mov", contentType: .quickTime, fileSize: size, description: "Ma vidéo", createdAt: createdAt)
+    static func sample(
+        id: String = "u1", size: Int = 10, createdAt: Date = Date(timeIntervalSince1970: 1_800_000_000), userID: String = UserProfile.alice.id
+    ) -> PendingUpload {
+        PendingUpload(
+            id: id, userID: userID, fileName: "\(id).mov", contentType: .quickTime, fileSize: size, description: "Ma vidéo", createdAt: createdAt)
     }
 }
 

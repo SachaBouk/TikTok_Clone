@@ -20,7 +20,10 @@ struct FeedView: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.scenePhase) private var scenePhase
 
-    init(viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool, allowsRefresh: Bool = true) {
+    init(
+        viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool,
+        allowsRefresh: Bool = true
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
         self.interactions = interactions
@@ -50,7 +53,9 @@ struct FeedView: View {
         .onChange(of: session.isSignedIn) { Task { await reload() } }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
         .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .videoInteractionSheets(
+            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
+            container: container)
     }
 
     private func reload() async {
@@ -281,32 +286,38 @@ struct FeedActionColumn: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Profil de @\(video.author.username)")
-                .overlay(alignment: .bottom) {
-                    if showsFollowButton && !viewer.followingAuthor {
-                        Button(action: actions.follow) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 22, height: 22)
-                                .background(Color.accentColor, in: Circle())
-                        }
-                        .offset(y: 11)
-                        .accessibilityLabel("Suivre @\(video.author.username)")
-                        .accessibilityIdentifier("video.follow")
+            .overlay(alignment: .bottom) {
+                if showsFollowButton && !viewer.followingAuthor {
+                    Button(action: actions.follow) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 22, height: 22)
+                            .background(Color.accentColor, in: Circle())
                     }
+                    .offset(y: 11)
+                    .accessibilityLabel("Suivre @\(video.author.username)")
+                    .accessibilityIdentifier("video.follow")
                 }
-                .padding(.bottom, 6)
-            FeedCounter(systemImage: "heart.fill", count: video.stats.likes, isActive: viewer.liked, activeColor: .red,
-                        label: viewer.liked ? "Je n’aime plus" : "J’aime") { actions.toggle(.like) }
-                .accessibilityIdentifier("video.like")
+            }
+            .padding(.bottom, 6)
+            FeedCounter(
+                systemImage: "heart.fill", count: video.stats.likes, isActive: viewer.liked, activeColor: .red,
+                label: viewer.liked ? "Je n’aime plus" : "J’aime"
+            ) { actions.toggle(.like) }
+            .accessibilityIdentifier("video.like")
             FeedCounter(systemImage: "ellipsis.bubble.fill", count: video.stats.comments, label: "Commentaires", action: actions.comments)
                 .accessibilityIdentifier("video.comments")
-            FeedCounter(systemImage: "bookmark.fill", count: video.stats.favorites, isActive: viewer.favorited, activeColor: .yellow,
-                        label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris") { actions.toggle(.favorite) }
-                .accessibilityIdentifier("video.favorite")
-            FeedCounter(systemImage: "arrow.2.squarepath", count: video.stats.reposts, isActive: viewer.reposted, activeColor: .green,
-                        label: viewer.reposted ? "Annuler la republication" : "Republier") { actions.toggle(.repost) }
-                .accessibilityIdentifier("video.repost")
+            FeedCounter(
+                systemImage: "bookmark.fill", count: video.stats.favorites, isActive: viewer.favorited, activeColor: .yellow,
+                label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris"
+            ) { actions.toggle(.favorite) }
+            .accessibilityIdentifier("video.favorite")
+            FeedCounter(
+                systemImage: "arrow.2.squarepath", count: video.stats.reposts, isActive: viewer.reposted, activeColor: .green,
+                label: viewer.reposted ? "Annuler la republication" : "Republier"
+            ) { actions.toggle(.repost) }
+            .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
             Menu {

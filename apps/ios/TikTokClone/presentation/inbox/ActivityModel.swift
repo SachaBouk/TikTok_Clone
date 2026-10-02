@@ -97,7 +97,7 @@ final class ActivityModel {
     // Relation avec l'auteur d'un abonnement reçu en direct ; sans effet si le groupe a changé entre-temps.
     private func loadRelationship(of actor: UserSummary, in group: ActivityGroup) async {
         guard let relationship = await loadActorRelationships([actor.id])[actor.id],
-              let current = list.items.first(where: { $0.key == group.key }), current.latestID == group.latestID
+            let current = list.items.first(where: { $0.key == group.key }), current.latestID == group.latestID
         else { return }
         var updated = current
         updated.actorRelationship = relationship

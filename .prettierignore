@@ -1,0 +1,22 @@
+# Mise en forme du TypeScript et du JavaScript (ADR-041). Le reste garde sa forme écrite à la main.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+pnpm-lock.yaml
+# Généré : client Prisma, spec OpenAPI, composants shadcn/ui.
+apps/api/src/generated
+apps/api/openapi.json
+apps/backoffice/components/ui
+apps/backoffice/next-env.d.ts
+# App iOS (swift-format), documentation, YAML, SQL, CSS (thème shadcn/ui), réglages locaux de l'éditeur.
+apps/ios
+docs
+seed
+**/*.md
+**/*.yml
+**/*.yaml
+**/*.sql
+**/*.css
+.claude

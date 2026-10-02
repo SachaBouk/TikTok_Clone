@@ -33,7 +33,10 @@ export class InteractionErrorFilter implements ExceptionFilter {
 
 function toHttpException(error: InteractionError): HttpException {
   if (error instanceof TooManyActionsError) {
-    return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
+    return new HttpException(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
   if (
     error instanceof CannotFollowYourselfError ||

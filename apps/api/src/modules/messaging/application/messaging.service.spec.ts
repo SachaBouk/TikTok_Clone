@@ -77,9 +77,29 @@ describe('MessagingService', () => {
     videoRepository = new InMemoryVideoRepository();
     suspended = new InMemorySuspendedAccounts();
     const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
-    const notifications = new NotificationsService(new InMemoryNotificationRepository(), users, videos, new InMemoryNotificationPublisher(), suspended);
-    interactions = new InteractionsService(new InMemoryInteractionRepository(videoRepository, userRepository), videos, users, notifications, new InMemoryRateLimiter(), suspended);
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      new InMemoryVideoCleanupQueue(),
+      new InMemoryRateLimiter(),
+    );
+    const notifications = new NotificationsService(
+      new InMemoryNotificationRepository(),
+      users,
+      videos,
+      new InMemoryNotificationPublisher(),
+      suspended,
+    );
+    interactions = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, userRepository),
+      videos,
+      users,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+    );
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();
     service = new MessagingService(conversations, users, interactions, videos, events, new InMemoryRateLimiter(() => clock), () => clock);
@@ -89,7 +109,13 @@ describe('MessagingService', () => {
   describe('ouverture', () => {
     it('crée la conversation une seule fois, quel que soit celui qui l’ouvre', async () => {
       const opened = await service.openConversation('alice', 'bob');
-      expect(opened).toMatchObject({ participant: { id: 'bob' }, status: 'direct', canSend: true, lastMessage: null, remainingRequestMessages: null });
+      expect(opened).toMatchObject({
+        participant: { id: 'bob' },
+        status: 'direct',
+        canSend: true,
+        lastMessage: null,
+        remainingRequestMessages: null,
+      });
       await expect(open('bob', 'alice')).resolves.toBe(opened.conversation.id);
       expect(conversations.conversations.size).toBe(1);
     });
@@ -100,7 +126,11 @@ describe('MessagingService', () => {
     });
 
     it('sans follow mutuel : le premier message sera une demande', async () => {
-      await expect(service.openConversation('carol', 'alice')).resolves.toMatchObject({ status: 'requestSent', canSend: true, remainingRequestMessages: 3 });
+      await expect(service.openConversation('carol', 'alice')).resolves.toMatchObject({
+        status: 'requestSent',
+        canSend: true,
+        remainingRequestMessages: 3,
+      });
     });
   });
 
@@ -153,7 +183,7 @@ describe('MessagingService', () => {
 
       await send('carol', id, 'd2');
       await send('carol', id, 'd3');
-      expect((await service.getConversation('carol', id))).toMatchObject({ remainingRequestMessages: 0, canSend: false });
+      expect(await service.getConversation('carol', id)).toMatchObject({ remainingRequestMessages: 0, canSend: false });
       await expect(send('carol', id, 'd4')).rejects.toBeInstanceOf(RequestLimitReachedError);
 
       // Lire une demande ne prévient pas l'expéditeur, et « Vu » reste masqué.
@@ -169,7 +199,10 @@ describe('MessagingService', () => {
       events.events.length = 0;
 
       await expect(service.acceptRequest('alice', id)).resolves.toMatchObject({ status: 'direct', canSend: true });
-      expect(eventsOf('conversationAccepted')).toEqual([['alice', id], ['carol', id]]);
+      expect(eventsOf('conversationAccepted')).toEqual([
+        ['alice', id],
+        ['carol', id],
+      ]);
       await expect(send('carol', id, 'd4')).resolves.toBeDefined();
       expect((await service.listConversations('alice', null, 10)).items.map((i) => i.participant.id)).toEqual(['carol']);
       await expect(service.acceptRequest('alice', id)).rejects.toBeInstanceOf(NotAPendingRequestError);
@@ -181,7 +214,10 @@ describe('MessagingService', () => {
       await send('carol', id, 'bonjour ?');
       await send('alice', id, 'bonjour !');
       expect((await service.getConversation('carol', id)).status).toBe('direct');
-      expect(eventsOf('conversationAccepted')).toEqual([['alice', id], ['carol', id]]);
+      expect(eventsOf('conversationAccepted')).toEqual([
+        ['alice', id],
+        ['carol', id],
+      ]);
       expect(events.pushes.at(-1)).toMatchObject({ recipientId: 'carol', asRequest: false });
     });
 
@@ -262,7 +298,10 @@ describe('MessagingService', () => {
       await expect(service.deleteMessage('carol', message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
       await service.deleteMessage('alice', message.id);
 
-      expect(eventsOf('messageDeleted')).toEqual([['alice', message.id], ['bob', message.id]]);
+      expect(eventsOf('messageDeleted')).toEqual([
+        ['alice', message.id],
+        ['bob', message.id],
+      ]);
       expect((await service.listMessages('bob', id, null, 10)).items.map((i) => i.message.content)).toEqual(['réponse']);
       await expect(service.deleteMessage('alice', message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
     });
@@ -301,7 +340,10 @@ describe('MessagingService', () => {
       const { message } = await send('bob', id, 'insulte');
       events.events.length = 0;
       await expect(service.removeMessage(message.id)).resolves.toMatchObject({ id: message.id });
-      expect(eventsOf('messageDeleted')).toEqual([['alice', message.id], ['bob', message.id]]);
+      expect(eventsOf('messageDeleted')).toEqual([
+        ['alice', message.id],
+        ['bob', message.id],
+      ]);
       await expect(service.getMessages([message.id])).resolves.toEqual([]);
       await expect(service.removeMessage(message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
     });
@@ -322,7 +364,9 @@ describe('MessagingService', () => {
       expect(shared.message).toMatchObject({ content: '', sharedVideoId: video });
       expect(shared.sharedVideo).toMatchObject({ id: video, video: { hlsUrl: 'h.m3u8' }, author: { id: 'carol' } });
       expect((await videoRepository.findPublishedByIds([video]))[0]!.sharesCount).toBe(1);
-      await expect(service.sendMessage('alice', id, { content: 'regarde', videoId: video })).resolves.toMatchObject({ message: { content: 'regarde' } });
+      await expect(service.sendMessage('alice', id, { content: 'regarde', videoId: video })).resolves.toMatchObject({
+        message: { content: 'regarde' },
+      });
       expect(events.pushes.map((p) => p.content)).toEqual(['', 'regarde']);
     });
 
@@ -386,7 +430,10 @@ describe('MessagingService', () => {
       await service.typing('alice', id);
       clock += 2_000;
       await service.typing('alice', id);
-      expect(eventsOf('typing')).toEqual([['bob', 'alice'], ['bob', 'alice']]);
+      expect(eventsOf('typing')).toEqual([
+        ['bob', 'alice'],
+        ['bob', 'alice'],
+      ]);
 
       const request = await open('carol', 'alice');
       await send('carol', request, 'd1');

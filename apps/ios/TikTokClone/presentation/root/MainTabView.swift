@@ -51,7 +51,10 @@ struct MainTabView: View {
             // Notifications non lues, conversations non lues et demandes reçues.
             .badge(container.inboxBadgeCount)
             Tab("Profil", systemImage: "person", value: .profile) {
-                SignedInOnly(title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.", showsPrivacy: true) {
+                SignedInOnly(
+                    title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.",
+                    showsPrivacy: true
+                ) {
                     NavigationStack {
                         ProfileView(viewModel: container.makeProfileViewModel(username: nil), container: container)
                             .appDestinations(container)
@@ -75,10 +78,13 @@ struct MainTabView: View {
                 AuthFlowView(container: container)
             }
         }
-        .alert("Session expirée", isPresented: Binding(
-            get: { session.notice != nil },
-            set: { if !$0 { session.notice = nil } }
-        )) {
+        .alert(
+            "Session expirée",
+            isPresented: Binding(
+                get: { session.notice != nil },
+                set: { if !$0 { session.notice = nil } }
+            )
+        ) {
             Button("Se connecter") { session.requestSignIn() }
             Button("Plus tard", role: .cancel) {}
         } message: {

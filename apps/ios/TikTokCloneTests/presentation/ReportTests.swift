@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 // Transport qui garde le corps de la requête, pour vérifier le JSON envoyé.
@@ -28,7 +29,10 @@ struct ReportDataTests {
             .report(.account(id: "0192f3a0-0000-7000-8000-000000000002", username: "bob"), reason: .impersonation, details: "Faux compte")
         let json = try #require(transport.body)
         let decoded = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String]
-        #expect(decoded == ["targetType": "account", "targetId": "0192f3a0-0000-7000-8000-000000000002", "reason": "impersonation", "details": "Faux compte"])
+        #expect(
+            decoded == [
+                "targetType": "account", "targetId": "0192f3a0-0000-7000-8000-000000000002", "reason": "impersonation", "details": "Faux compte",
+            ])
     }
 
     @Test("message reçu : type message ; la feuille précise que seul ce message est transmis")

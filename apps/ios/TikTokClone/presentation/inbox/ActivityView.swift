@@ -29,8 +29,8 @@ struct ActivityView: View {
                     open: { open(group) },
                     openActor: { openActor(of: group) }
                 )
-                    .listRowBackground(group.read ? nil : Color.accentColor.opacity(0.08))
-                    .onAppear { Task { await activity.list.loadMore(ifNeededAfter: group) } }
+                .listRowBackground(group.read ? nil : Color.accentColor.opacity(0.08))
+                .onAppear { Task { await activity.list.loadMore(ifNeededAfter: group) } }
             }
         }
         .listStyle(.plain)
@@ -109,7 +109,9 @@ struct ActivityGroupView: View {
                 ActivityRow(
                     notification: notification,
                     follow: notification.kind == .follow
-                        ? notification.actor.flatMap { followBack.control(for: $0, relationship: notification.actorRelationship, error: $followError) }
+                        ? notification.actor.flatMap {
+                            followBack.control(for: $0, relationship: notification.actorRelationship, error: $followError)
+                        }
                         : nil,
                     openProfile: { openedProfile = ProfileRoute(username: $0) },
                     openVideo: { container.router.presentedVideo = AppRouter.VideoRoute(id: $0) }
@@ -156,7 +158,7 @@ struct FollowBack {
 
     func control(for actor: UserSummary, relationship: Relationship?, error: Binding<String?>) -> Control? {
         guard let relationship, actor.id != session.profile?.id, !interactions.blockedUserIDs.contains(actor.id),
-              let status = relationship.followBackStatus(following: interactions.isFollowing(actor.id, loaded: relationship.following))
+            let status = relationship.followBackStatus(following: interactions.isFollowing(actor.id, loaded: relationship.following))
         else { return nil }
         return Control(status: status) {
             Task {
@@ -168,8 +170,8 @@ struct FollowBack {
     }
 }
 
-private extension View {
-    func followBackAlert(_ message: Binding<String?>) -> some View {
+extension View {
+    fileprivate func followBackAlert(_ message: Binding<String?>) -> some View {
         alert("Abonnements", isPresented: Binding(get: { message.wrappedValue != nil }, set: { if !$0 { message.wrappedValue = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -237,7 +239,9 @@ private struct ActivityRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             if let actor = notification.actor {
-                Button { openProfile(actor.username) } label: {
+                Button {
+                    openProfile(actor.username)
+                } label: {
                     AvatarView(url: actor.avatarURL, name: actor.displayName, size: 44)
                 }
                 .buttonStyle(.plain)
@@ -249,7 +253,8 @@ private struct ActivityRow: View {
             Button(action: primaryAction) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        (Text(notification.actor?.displayName ?? notification.moderation?.title(notification.kind) ?? "").bold() + Text(" ") + Text(notification.summary))
+                        (Text(notification.actor?.displayName ?? notification.moderation?.title(notification.kind) ?? "").bold() + Text(" ")
+                            + Text(notification.summary))
                             .font(.subheadline)
                             .lineLimit(3)
                         Text.relative(notification.createdAt)

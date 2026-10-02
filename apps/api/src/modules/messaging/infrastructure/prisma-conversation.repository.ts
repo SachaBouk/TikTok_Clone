@@ -79,7 +79,12 @@ export class PrismaConversationRepository extends ConversationRepository {
   }
 
   listInbox(userId: string, beforeMessageId: string | null, limit: number): Promise<ConversationView[]> {
-    return this.views(userId, Prisma.sql`(c.accepted_at IS NOT NULL OR c.request_sender_id = me.user_id)`, { listed: true, before: beforeMessageId }, limit);
+    return this.views(
+      userId,
+      Prisma.sql`(c.accepted_at IS NOT NULL OR c.request_sender_id = me.user_id)`,
+      { listed: true, before: beforeMessageId },
+      limit,
+    );
   }
 
   listRequests(userId: string, beforeMessageId: string | null, limit: number): Promise<ConversationView[]> {

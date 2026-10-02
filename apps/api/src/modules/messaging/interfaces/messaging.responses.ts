@@ -77,13 +77,23 @@ export class ConversationResponse implements ConversationDto {
   @ApiProperty({ type: 'integer', minimum: 0, description: 'Messages de l’autre participant non lus.' })
   unreadCount!: number;
 
-  @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'Dernier message lu par l’autre (« Vu »). Null tant que la conversation n’est pas acceptée.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    format: 'uuid',
+    description: 'Dernier message lu par l’autre (« Vu »). Null tant que la conversation n’est pas acceptée.',
+  })
   participantLastReadMessageId!: string | null;
 
   @ApiProperty({ description: 'Faux si l’un des deux a bloqué l’autre, ou si la demande envoyée a atteint sa limite.' })
   canSend!: boolean;
 
-  @ApiProperty({ type: 'integer', nullable: true, minimum: 0, description: 'Messages encore possibles dans une demande envoyée ; null hors demande envoyée.' })
+  @ApiProperty({
+    type: 'integer',
+    nullable: true,
+    minimum: 0,
+    description: 'Messages encore possibles dans une demande envoyée ; null hors demande envoyée.',
+  })
   remainingRequestMessages!: number | null;
 
   @ApiProperty()
@@ -105,7 +115,12 @@ export class MessagePageResponse implements MessagePageDto {
   @ApiProperty({ type: [MessageResponse], description: 'Du plus récent au plus ancien.' })
   items!: MessageResponse[];
 
-  @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'À renvoyer tel quel pour les messages plus anciens ; null s’il n’y en a plus.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    format: 'uuid',
+    description: 'À renvoyer tel quel pour les messages plus anciens ; null s’il n’y en a plus.',
+  })
   nextCursor!: string | null;
 }
 
@@ -133,7 +148,14 @@ export function toMessageDto({ message, sharedVideo }: MessageItem): MessageDto 
 
 function toSharedVideoDto({ id, video, author }: SharedVideo): SharedVideoDto {
   if (!video || !author) return { id, available: false, thumbnailUrl: null, hlsUrl: null, description: null };
-  return { id, available: true, thumbnailUrl: video.thumbnailUrl, hlsUrl: video.hlsUrl, description: video.description, author: toUserSummary(author) };
+  return {
+    id,
+    available: true,
+    thumbnailUrl: video.thumbnailUrl,
+    hlsUrl: video.hlsUrl,
+    description: video.description,
+    author: toUserSummary(author),
+  };
 }
 
 export function toConversationDto(item: ConversationWithParticipant): ConversationDto {

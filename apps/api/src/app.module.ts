@@ -18,7 +18,24 @@ import { SuspensionModule } from './suspension/suspension.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, RedisModule, RateLimitModule, SuspensionModule, AuthModule, UsersModule, VideosModule, InteractionsModule, NotificationsModule, FeedModule, MessagingModule, PushModule, RealtimeModule, WalletModule, ReportsModule, AdminModule],
+  imports: [
+    PrismaModule,
+    RedisModule,
+    RateLimitModule,
+    SuspensionModule,
+    AuthModule,
+    UsersModule,
+    VideosModule,
+    InteractionsModule,
+    NotificationsModule,
+    FeedModule,
+    MessagingModule,
+    PushModule,
+    RealtimeModule,
+    WalletModule,
+    ReportsModule,
+    AdminModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

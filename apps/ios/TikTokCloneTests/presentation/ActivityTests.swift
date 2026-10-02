@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TikTokAPI
+
 @testable import TikTokClone
 
 private func actorJSON(_ name: String) -> String {
@@ -13,11 +14,11 @@ struct ActivityDataTests {
     func mapping() async throws {
         let actor = actorJSON("bob")
         let body = """
-        {"items":[\
-        {"id":"n3","kind":"comment","actor":\(actor),"video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},\
-        "comment":{"id":"c1","content":"Trop bien"},"read":false,"createdAt":"2026-09-26T08:00:00.000Z"},\
-        {"id":"n2","kind":"follow","actor":\(actor),"read":true,"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":"n2"}
-        """
+            {"items":[\
+            {"id":"n3","kind":"comment","actor":\(actor),"video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},\
+            "comment":{"id":"c1","content":"Trop bien"},"read":false,"createdAt":"2026-09-26T08:00:00.000Z"},\
+            {"id":"n2","kind":"follow","actor":\(actor),"read":true,"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":"n2"}
+            """
         let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { _, _ in json(.ok, body) }))
         let page = try await repository.notifications(filter: nil, cursor: nil)
         #expect(page.notifications.map(\.kind) == [.comment, .follow])
@@ -31,15 +32,17 @@ struct ActivityDataTests {
     @Test("groupes : auteurs, nombre, vidéo, clé ; liste complète filtrée")
     func groups() async throws {
         let body = """
-        {"items":[{"key":"like:v1","kind":"like","actors":[\(actorJSON("ines")),\(actorJSON("nathan"))],"count":5,\
-        "video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},"read":false,"latestId":"n9",\
-        "createdAt":"2026-09-26T08:00:00.000Z"}],"nextCursor":"n9"}
-        """
+            {"items":[{"key":"like:v1","kind":"like","actors":[\(actorJSON("ines")),\(actorJSON("nathan"))],"count":5,\
+            "video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},"read":false,"latestId":"n9",\
+            "createdAt":"2026-09-26T08:00:00.000Z"}],"nextCursor":"n9"}
+            """
         let log = RequestLog()
-        let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { request, operation in
-            log.record(request, operation)
-            return operation == "listNotificationGroups" ? json(.ok, body) : json(.ok, #"{"items":[],"nextCursor":null}"#)
-        }))
+        let repository = RemoteActivityRepository(
+            client: makeClient(
+                transport: MockTransport { request, operation in
+                    log.record(request, operation)
+                    return operation == "listNotificationGroups" ? json(.ok, body) : json(.ok, #"{"items":[],"nextCursor":null}"#)
+                }))
         let page = try await repository.groups(cursor: nil)
         let group = try #require(page.groups.first)
         #expect(group.key == "like:v1")
@@ -56,12 +59,12 @@ struct ActivityDataTests {
     @Test("modération (ADR-038) : sans auteur, groupe seul, textes de la décision et du contenu retiré")
     func moderation() async throws {
         let body = """
-        {"items":[\
-        {"key":"moderation:n8","kind":"contentRemoved","actors":[],"count":1,"read":false,"latestId":"n8",\
-        "moderation":{"targetType":"message","reason":"harassment","excerpt":"Insulte"},"createdAt":"2026-09-26T08:00:00.000Z"},\
-        {"key":"moderation:n7","kind":"reportResolved","actors":[],"count":1,"read":true,"latestId":"n7",\
-        "moderation":{"targetType":"video","outcome":"dismissed","excerpt":"Démo"},"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":null}
-        """
+            {"items":[\
+            {"key":"moderation:n8","kind":"contentRemoved","actors":[],"count":1,"read":false,"latestId":"n8",\
+            "moderation":{"targetType":"message","reason":"harassment","excerpt":"Insulte"},"createdAt":"2026-09-26T08:00:00.000Z"},\
+            {"key":"moderation:n7","kind":"reportResolved","actors":[],"count":1,"read":true,"latestId":"n7",\
+            "moderation":{"targetType":"video","outcome":"dismissed","excerpt":"Démo"},"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":null}
+            """
         let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { _, _ in json(.ok, body) }))
         let page = try await repository.groups(cursor: nil)
         let removed = try #require(page.groups.first)
@@ -76,17 +79,18 @@ struct ActivityDataTests {
 
         let other = ActivityModeration(target: .video, reason: .other, outcome: nil, excerpt: nil)
         #expect(other.text(.contentRemoved) == "Ta vidéo a été retirée. Motif : non-respect des règles.")
-        #expect(ActivityModeration(target: .account, reason: nil, outcome: .accountSuspended, excerpt: nil).text(.reportResolved)
-            == "Ton signalement a été examiné : le compte a été suspendu.")
+        #expect(
+            ActivityModeration(target: .account, reason: nil, outcome: .accountSuspended, excerpt: nil).text(.reportResolved)
+                == "Ton signalement a été examiné : le compte a été suspendu.")
     }
 
     @Test("modération reçue en direct : sans auteur, son propre groupe")
     func moderationRealtime() throws {
         let created = """
-        {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"reportResolved",\
-        "moderation":{"targetType":"comment","outcome":"contentRemoved","excerpt":"Spam"},\
-        "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":1}}
-        """
+            {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"reportResolved",\
+            "moderation":{"targetType":"comment","outcome":"contentRemoved","excerpt":"Spam"},\
+            "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":1}}
+            """
         guard case .notificationCreated(let notification, _)? = RealtimeEventDecoder().decode(created) else {
             Issue.record("notificationCreated attendu")
             return
@@ -102,10 +106,12 @@ struct ActivityDataTests {
     @Test("badge et marquage lu ; 401 → session expirée")
     func badge() async throws {
         let log = RequestLog()
-        let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { request, operation in
-            log.record(request, operation)
-            return json(.ok, #"{"unreadCount":3}"#)
-        }))
+        let repository = RemoteActivityRepository(
+            client: makeClient(
+                transport: MockTransport { request, operation in
+                    log.record(request, operation)
+                    return json(.ok, #"{"unreadCount":3}"#)
+                }))
         #expect(try await repository.unreadCount() == 3)
         #expect(try await repository.markRead(upToID: "n3") == 3)
         #expect(log.operations == ["countUnreadNotifications", "markNotificationsRead"])
@@ -119,10 +125,10 @@ struct ActivityDataTests {
     func realtime() {
         let decoder = RealtimeEventDecoder()
         let created = """
-        {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"like","actor":\
-        {"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null},"video":{"id":"v1","thumbnailUrl":"http://cdn.test/t.jpg"},\
-        "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":4}}
-        """
+            {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"like","actor":\
+            {"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null},"video":{"id":"v1","thumbnailUrl":"http://cdn.test/t.jpg"},\
+            "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":4}}
+            """
         guard case .notificationCreated(let notification, let count)? = decoder.decode(created) else {
             Issue.record("notificationCreated attendu")
             return
@@ -239,9 +245,10 @@ struct ActivityModelTests {
     @Test("textes des groupes : singulier, deux noms, « et 1 autre », commentaire seul")
     func groupTexts() {
         func group(_ kind: ActivityKind, actors: [UserSummary], count: Int) -> ActivityGroup {
-            ActivityGroup(key: "k", kind: kind, actors: actors, count: count, video: nil,
-                          comment: kind == .comment ? .init(id: "c", content: "Top") : nil,
-                          read: true, latestID: "n", createdAt: .now)
+            ActivityGroup(
+                key: "k", kind: kind, actors: actors, count: count, video: nil,
+                comment: kind == .comment ? .init(id: "c", content: "Top") : nil,
+                read: true, latestID: "n", createdAt: .now)
         }
         let follow = group(.follow, actors: [.bob], count: 1)
         #expect("\(follow.actorNames) \(follow.summary)" == "Bob a commencé à te suivre.")

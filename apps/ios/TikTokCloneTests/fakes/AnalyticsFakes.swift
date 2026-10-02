@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Mesure d'audience simulée : enregistre ce qui serait envoyé à PostHog, si le service a été démarré.
@@ -54,7 +55,9 @@ final class InMemoryPreferencesStore: PreferencesStore {
 
 // Mesure d'audience acceptée, avec un service simulé.
 @MainActor
-func makeAnalytics(_ service: FakeAnalyticsService = FakeAnalyticsService(), consent: Bool? = true,
-                   preferences: InMemoryPreferencesStore? = nil) -> AnalyticsModel {
+func makeAnalytics(
+    _ service: FakeAnalyticsService = FakeAnalyticsService(), consent: Bool? = true,
+    preferences: InMemoryPreferencesStore? = nil
+) -> AnalyticsModel {
     AnalyticsModel(service: service, preferences: preferences ?? InMemoryPreferencesStore(consent: consent))
 }

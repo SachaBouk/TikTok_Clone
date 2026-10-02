@@ -205,7 +205,10 @@ export class InMemoryInteractionRepository extends InteractionRepository {
   }
 
   async listBlocked(blockerId: string): Promise<string[]> {
-    return this.blocks.filter((key) => key.startsWith(`${blockerId}:`)).map((key) => key.split(':')[1]!).reverse();
+    return this.blocks
+      .filter((key) => key.startsWith(`${blockerId}:`))
+      .map((key) => key.split(':')[1]!)
+      .reverse();
   }
 
   async findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>> {

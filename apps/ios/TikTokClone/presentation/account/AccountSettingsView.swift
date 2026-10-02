@@ -86,7 +86,9 @@ struct AccountSettingsView: View {
             } header: {
                 Text("Confidentialité")
             } footer: {
-                Text("Mesure d’audience : vidéos regardées, réactions et inscription, avec PostHog (Union européenne), sous le seul identifiant de ton compte.")
+                Text(
+                    "Mesure d’audience : vidéos regardées, réactions et inscription, avec PostHog (Union européenne), sous le seul identifiant de ton compte."
+                )
             }
             Section {
                 Button("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right") { isConfirmingSignOut = true }
@@ -114,12 +116,17 @@ struct AccountSettingsView: View {
             Button("Supprimer définitivement", role: .destructive) { Task { await viewModel.deleteMyAccount() } }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Ton compte @\(viewModel.username ?? "") sera supprimé tout de suite, avec tes vidéos, tes commentaires, tes messages, tes abonnés et tes abonnements. Cette action est irréversible.")
+            Text(
+                "Ton compte @\(viewModel.username ?? "") sera supprimé tout de suite, avec tes vidéos, tes commentaires, tes messages, tes abonnés et tes abonnements. Cette action est irréversible."
+            )
         }
-        .alert("Paramètres", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Paramètres",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")

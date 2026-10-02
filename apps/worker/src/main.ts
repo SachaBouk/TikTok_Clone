@@ -3,12 +3,7 @@
 // `video-transcode-results`, que l'API applique en base (ADR-012) : le worker n'accède jamais à PostgreSQL.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import {
-  TRANSCODE_QUEUE,
-  TRANSCODE_RESULTS_QUEUE,
-  type TranscodeJobData,
-  type TranscodeResult,
-} from '@repo/shared';
+import { TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, type TranscodeJobData, type TranscodeResult } from '@repo/shared';
 import { Job, Queue, UnrecoverableError, Worker, type ConnectionOptions } from 'bullmq';
 import { loadConfig, type WorkerConfig } from './config';
 import { InvalidMediaError } from './media/ffmpeg';

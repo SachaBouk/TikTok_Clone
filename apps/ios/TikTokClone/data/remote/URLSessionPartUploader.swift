@@ -45,7 +45,9 @@ private final class PartProgressDelegate: NSObject, URLSessionTaskDelegate, Send
         self.sent = sent
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64
+    ) {
         sent(Int(totalBytesSent))
     }
 }

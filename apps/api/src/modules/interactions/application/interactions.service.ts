@@ -194,10 +194,7 @@ export class InteractionsService {
     const rows = await this.interactions.listFollows(direction, target.id, after, limit + 1);
     const page = rows.slice(0, limit);
     const ids = page.map((row) => row.userId).filter((id) => !hidden.has(id));
-    const [users, relations] = await Promise.all([
-      this.users.getByIds(ids),
-      viewerId ? this.interactions.findFollowRelations(viewerId, ids) : null,
-    ]);
+    const [users, relations] = await Promise.all([this.users.getByIds(ids), viewerId ? this.interactions.findFollowRelations(viewerId, ids) : null]);
     const byId = new Map(users.map((u) => [u.id, u]));
     return {
       // Un compte supprimé entre-temps est sauté (la cascade supprime de toute façon ses follows).
@@ -311,10 +308,7 @@ export class InteractionsService {
   async getRelationships(viewerId: string, userIds: string[]): Promise<(Relationship & { userId: string })[]> {
     const ids = [...new Set(userIds)];
     if (ids.length === 0) return [];
-    const [follows, blocks] = await Promise.all([
-      this.interactions.findFollowRelations(viewerId, ids),
-      this.interactions.findBlocks(viewerId, ids),
-    ]);
+    const [follows, blocks] = await Promise.all([this.interactions.findFollowRelations(viewerId, ids), this.interactions.findBlocks(viewerId, ids)]);
     return ids.map((userId) => ({
       userId,
       following: follows.following.has(userId),

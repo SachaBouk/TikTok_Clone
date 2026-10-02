@@ -89,7 +89,9 @@ private final class ShareItemSource: NSObject, UIActivityItemSource {
 
     func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any { placeholder }
 
-    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?)
+        -> Any?
+    {
         item(activityType)
     }
 }

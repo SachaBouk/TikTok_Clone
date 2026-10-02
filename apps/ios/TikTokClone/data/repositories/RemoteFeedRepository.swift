@@ -68,7 +68,9 @@ extension FeedVideo {
                 reposts: dto.repostsCount
             ),
             author: UserSummary(dto.author),
-            viewer: dto.viewer.map { ViewerState(liked: $0.liked, favorited: $0.favorited, reposted: $0.reposted, followingAuthor: $0.followingAuthor) }
+            viewer: dto.viewer.map {
+                ViewerState(liked: $0.liked, favorited: $0.favorited, reposted: $0.reposted, followingAuthor: $0.followingAuthor)
+            }
         )
     }
 }

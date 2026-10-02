@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Signalements en mémoire : ce qui a été envoyé, et une erreur à lever.

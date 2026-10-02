@@ -84,14 +84,20 @@ final class VideoInteractionsModel {
 
     // Bouton cœur, favori ou republication : bascule l'état.
     func toggle(_ kind: ReactionKind, on video: FeedVideo) async -> String? {
-        guard session.isSignedIn else { session.requestSignIn(); return nil }
+        guard session.isSignedIn else {
+            session.requestSignIn()
+            return nil
+        }
         let active = !(display(video).viewer ?? .empty).isActive(kind)
         return await apply(kind, active: active, on: video)
     }
 
     // Double toucher : like seulement (ne retire jamais un like), comme TikTok.
     func likeFromDoubleTap(_ video: FeedVideo) async -> String? {
-        guard session.isSignedIn else { session.requestSignIn(); return nil }
+        guard session.isSignedIn else {
+            session.requestSignIn()
+            return nil
+        }
         guard display(video).viewer?.liked != true else { return nil }
         return await apply(.like, active: true, on: video, doubleTap: true)
     }
@@ -110,7 +116,10 @@ final class VideoInteractionsModel {
 
     // Suivre ou ne plus suivre un compte (profil, liste d'abonnés, feed) ; optimiste, comme les réactions.
     func setFollowing(_ user: UserSummary, active: Bool, wasFollowing: Bool) async -> FollowOutcome {
-        guard session.isSignedIn else { session.requestSignIn(); return .ignored }
+        guard session.isSignedIn else {
+            session.requestSignIn()
+            return .ignored
+        }
         guard session.profile?.id != user.id else { return .ignored }
         let key = "follow-\(user.id)"
         guard pending.insert(key).inserted else { return .ignored }
@@ -183,7 +192,8 @@ final class VideoInteractionsModel {
         do {
             let state = try await setReaction(kind, videoID: video.id, active: active)
             let current = display(video)
-            overrides[video.id] = Override(stats: current.stats.with(kind, count: state.count), viewer: (current.viewer ?? .empty).with(kind, active: state.active))
+            overrides[video.id] = Override(
+                stats: current.stats.with(kind, count: state.count), viewer: (current.viewer ?? .empty).with(kind, active: state.active))
             analytics.track(.videoReaction(kind, active: state.active, videoID: video.id, doubleTap: doubleTap))
             return nil
         } catch {

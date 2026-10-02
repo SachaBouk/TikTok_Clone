@@ -90,12 +90,13 @@ extension ActivityGroup {
 
 extension ActivityModeration {
     init(_ dto: Components.Schemas.NotificationModerationResponse) {
-        let target: Target = switch dto.targetType {
-        case .video: .video
-        case .comment: .comment
-        case .account: .account
-        case .message: .message
-        }
+        let target: Target =
+            switch dto.targetType {
+            case .video: .video
+            case .comment: .comment
+            case .account: .account
+            case .message: .message
+            }
         let outcome: Outcome? = dto.outcome.map {
             switch $0 {
             case .contentRemoved: .contentRemoved

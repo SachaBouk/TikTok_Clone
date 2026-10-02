@@ -17,12 +17,13 @@ struct RegisterUseCase: Sendable {
 
     func callAsFunction(_ registration: Registration) async throws -> UserProfile {
         if let problem = RegistrationRules.problem(with: registration) { throw AppError.rejected(problem) }
-        try await auth.register(Registration(
-            email: registration.email.trimmingCharacters(in: .whitespaces),
-            password: registration.password,
-            username: registration.username,
-            displayName: registration.displayName.trimmingCharacters(in: .whitespaces)
-        ))
+        try await auth.register(
+            Registration(
+                email: registration.email.trimmingCharacters(in: .whitespaces),
+                password: registration.password,
+                username: registration.username,
+                displayName: registration.displayName.trimmingCharacters(in: .whitespaces)
+            ))
         return try await profiles.myProfile()
     }
 }

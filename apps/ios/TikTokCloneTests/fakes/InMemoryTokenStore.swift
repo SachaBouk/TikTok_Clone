@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Adaptateur en mémoire du TokenStore (le Keychain a ses propres tests).

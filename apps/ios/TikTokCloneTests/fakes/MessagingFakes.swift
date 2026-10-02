@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Messagerie en mémoire : conversations et messages (du plus ancien au plus récent), 2 par page.
@@ -60,7 +61,8 @@ final class FakeMessagingRepository: MessagingRepository {
             state.calls.append("open:\(username)")
             if let error = state.error { throw error }
             if let existing = state.conversations.values.first(where: { $0.participant.username == username }) { return existing }
-            let conversation = Conversation.sample("c-\(username)", with: UserSummary(id: "\(username)-id", username: username, displayName: username.capitalized, avatarURL: nil))
+            let conversation = Conversation.sample(
+                "c-\(username)", with: UserSummary(id: "\(username)-id", username: username, displayName: username.capitalized, avatarURL: nil))
             state.conversations[conversation.id] = conversation
             state.messages[conversation.id] = []
             return conversation
@@ -99,8 +101,9 @@ final class FakeMessagingRepository: MessagingRepository {
             state.sent.append((conversationID, content, videoID))
             if let error = state.sendError ?? state.error { throw error }
             state.nextID += 1
-            let message = DirectMessage.sample("n\(state.nextID)", in: conversationID, from: UserProfile.alice.id, content: content ?? "",
-                                               sharedVideoID: videoID)
+            let message = DirectMessage.sample(
+                "n\(state.nextID)", in: conversationID, from: UserProfile.alice.id, content: content ?? "",
+                sharedVideoID: videoID)
             state.messages[conversationID, default: []].append(message)
             if var conversation = state.conversations[conversationID] {
                 conversation.lastMessage = message

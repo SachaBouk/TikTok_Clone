@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import TikTokClone
 
 // Portefeuille en mémoire : solde modifiable par le test (crédit du webhook).

@@ -111,7 +111,9 @@ final class PublishingModel {
         do {
             let upload = try createPublication(file: file, description: description, userID: userID)
             if let preview { previews[upload.id] = preview }
-            insert(Publication(id: upload.id, videoID: nil, description: upload.description, thumbnailURL: nil, phase: .waiting, createdAt: upload.createdAt))
+            insert(
+                Publication(
+                    id: upload.id, videoID: nil, description: upload.description, thumbnailURL: nil, phase: .waiting, createdAt: upload.createdAt))
             startRunner()
             analytics.track(.uploadStarted)
             return nil
@@ -141,7 +143,10 @@ final class PublishingModel {
         defer { isRefreshing = false }
 
         for upload in pendingUploads(userID: userID) where !publications.contains(where: { $0.id == upload.id }) {
-            insert(Publication(id: upload.id, videoID: upload.ticket?.videoID, description: upload.description, thumbnailURL: nil, phase: .waiting, createdAt: upload.createdAt))
+            insert(
+                Publication(
+                    id: upload.id, videoID: upload.ticket?.videoID, description: upload.description, thumbnailURL: nil, phase: .waiting,
+                    createdAt: upload.createdAt))
             let file = pendingFileURL(upload)
             Task {
                 if let image = await makePreview(file) { previews[upload.id] = image }
@@ -244,7 +249,8 @@ final class PublishingModel {
     private func drain() async {
         while !Task.isCancelled, let next = publications.last(where: { $0.phase == .waiting }) {
             guard let userID = session.profile?.id,
-                  let upload = pendingUploads(userID: userID).first(where: { $0.id == next.id }) else {
+                let upload = pendingUploads(userID: userID).first(where: { $0.id == next.id })
+            else {
                 remove(next.id)
                 continue
             }
@@ -287,7 +293,10 @@ final class PublishingModel {
             publications[index].phase = Publication.Phase(video.status)
             publications[index].thumbnailURL = video.thumbnailURL
         } else if video.status != .uploading {
-            insert(Publication(id: video.id, videoID: video.id, description: video.description, thumbnailURL: video.thumbnailURL, phase: Publication.Phase(video.status), createdAt: video.createdAt))
+            insert(
+                Publication(
+                    id: video.id, videoID: video.id, description: video.description, thumbnailURL: video.thumbnailURL,
+                    phase: Publication.Phase(video.status), createdAt: video.createdAt))
         }
     }
 

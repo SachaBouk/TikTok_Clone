@@ -39,7 +39,10 @@ function toHttpException(error: MessagingError): HttpException {
   }
   if (error instanceof NotAPendingRequestError) return new ConflictException(error.message);
   if (error instanceof RateLimitedError) {
-    return new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' }, HttpStatus.TOO_MANY_REQUESTS);
+    return new HttpException(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
   // ConversationNotFoundError, MessageNotFoundError, RecipientNotFoundError, SharedVideoNotFoundError
   return new NotFoundException(error.message);

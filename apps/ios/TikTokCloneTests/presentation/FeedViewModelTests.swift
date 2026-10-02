@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 @MainActor
@@ -130,8 +131,9 @@ struct FeedViewModelTests {
         let feed = FakeFeedRepository([.success(page(["a"], next: nil))])
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))
         await session.restore()
-        let viewModel = FeedViewModel(loadPage: LoadFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
-                                      playback: playback, session: session, analytics: makeAnalytics(), viewDelay: .milliseconds(20))
+        let viewModel = FeedViewModel(
+            loadPage: LoadFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
+            playback: playback, session: session, analytics: makeAnalytics(), viewDelay: .milliseconds(20))
         await viewModel.start()
         try await waitForViewDelay()
         #expect(!session.isSignedIn)

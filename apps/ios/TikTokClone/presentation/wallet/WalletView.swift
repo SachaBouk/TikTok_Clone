@@ -39,10 +39,13 @@ struct WalletView: View {
         .onChange(of: wallet.balance) { old, new in
             if old != nil, new != old { Task { await history.loadFirst() } }
         }
-        .alert("Jetons", isPresented: Binding(
-            get: { wallet.message != nil },
-            set: { if !$0 { wallet.message = nil } }
-        )) {
+        .alert(
+            "Jetons",
+            isPresented: Binding(
+                get: { wallet.message != nil },
+                set: { if !$0 { wallet.message = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(wallet.message ?? "")

@@ -50,9 +50,7 @@ export class S3AvatarStorage extends AvatarStorage {
   }
 
   async readStart(key: string, length: number): Promise<Uint8Array> {
-    const { Body } = await this.client.send(
-      new GetObjectCommand({ Bucket: this.config.avatarsBucket, Key: key, Range: `bytes=0-${length - 1}` }),
-    );
+    const { Body } = await this.client.send(new GetObjectCommand({ Bucket: this.config.avatarsBucket, Key: key, Range: `bytes=0-${length - 1}` }));
     return Body ? Body.transformToByteArray() : new Uint8Array();
   }
 
@@ -60,9 +58,7 @@ export class S3AvatarStorage extends AvatarStorage {
     const keys: string[] = [];
     let token: string | undefined;
     do {
-      const page = await this.client.send(
-        new ListObjectsV2Command({ Bucket: this.config.avatarsBucket, Prefix: prefix, ContinuationToken: token }),
-      );
+      const page = await this.client.send(new ListObjectsV2Command({ Bucket: this.config.avatarsBucket, Prefix: prefix, ContinuationToken: token }));
       for (const object of page.Contents ?? []) if (object.Key) keys.push(object.Key);
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (token);

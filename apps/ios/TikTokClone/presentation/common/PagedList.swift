@@ -79,7 +79,8 @@ final class PagedList<Item: Identifiable & Equatable> {
     // `item` vient d'apparaître : charge la page suivante s'il est proche de la fin.
     func loadMore(ifNeededAfter item: Item) async {
         guard let index = items.firstIndex(where: { $0.id == item.id }),
-              items.count - 1 - index <= Self.prefetchDistance else { return }
+            items.count - 1 - index <= Self.prefetchDistance
+        else { return }
         await loadMore()
     }
 

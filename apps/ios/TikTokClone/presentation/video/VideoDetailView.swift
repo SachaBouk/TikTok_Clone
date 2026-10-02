@@ -47,7 +47,9 @@ struct VideoDetailView: View {
         .onChange(of: interactions.blockedUserIDs) { _, ids in
             if case .loaded(let video) = viewModel.state, ids.contains(video.author.id) { dismiss() }
         }
-        .videoInteractionSheets(comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions, container: container)
+        .videoInteractionSheets(
+            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
+            container: container)
     }
 
     // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.

@@ -1,17 +1,20 @@
 import Foundation
 import Testing
+
 @testable import TikTokClone
 
 @Suite("Profil : règles et cas d'usage")
 struct ProfileUseCasesTests {
-    let alice = UserProfile.alice // pseudo « alice », nom « Alice », bio « Bonjour »
+    let alice = UserProfile.alice  // pseudo « alice », nom « Alice », bio « Bonjour »
 
     @Test("changements : seuls les champs modifiés, nettoyés ; bio vide = effacée")
     func changes() throws {
         #expect(try ProfileRules.changes(from: alice, username: "alice", displayName: " Alice ", bio: "Bonjour ").get().isEmpty)
-        #expect(try ProfileRules.changes(from: alice, username: "alice_2", displayName: "Alice", bio: "Bonjour").get()
+        #expect(
+            try ProfileRules.changes(from: alice, username: "alice_2", displayName: "Alice", bio: "Bonjour").get()
                 == ProfileChanges(username: "alice_2", displayName: nil, bio: nil))
-        #expect(try ProfileRules.changes(from: alice, username: "alice", displayName: "Alice M.", bio: "  ").get()
+        #expect(
+            try ProfileRules.changes(from: alice, username: "alice", displayName: "Alice M.", bio: "  ").get()
                 == ProfileChanges(username: nil, displayName: "Alice M.", bio: ""))
     }
 

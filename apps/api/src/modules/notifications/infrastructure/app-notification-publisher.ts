@@ -28,7 +28,12 @@ export class AppNotificationPublisher extends NotificationPublisher {
       title: actor?.displayName ?? (notification.type === 'reportResolved' ? 'Signalement examiné' : 'Contenu retiré'),
       body: pushBody(item),
       threadId: 'activity',
-      data: { type: 'notification', notificationId: notification.id, kind: notification.type, ...(notification.videoId ? { videoId: notification.videoId } : {}) },
+      data: {
+        type: 'notification',
+        notificationId: notification.id,
+        kind: notification.type,
+        ...(notification.videoId ? { videoId: notification.videoId } : {}),
+      },
     });
   }
 

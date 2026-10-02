@@ -73,17 +73,22 @@ struct BlockedAccountsView: View {
         }
         .listStyle(.plain)
         .overlay {
-            PagedListPlaceholder(state: viewModel.state, isEmpty: viewModel.users.isEmpty, emptyTitle: "Aucun compte bloqué",
-                                 emptySystemImage: "hand.raised") { await viewModel.load() }
+            PagedListPlaceholder(
+                state: viewModel.state, isEmpty: viewModel.users.isEmpty, emptyTitle: "Aucun compte bloqué",
+                emptySystemImage: "hand.raised"
+            ) { await viewModel.load() }
         }
         .navigationTitle("Comptes bloqués")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
-        .alert("Comptes bloqués", isPresented: Binding(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
+        .alert(
+            "Comptes bloqués",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")

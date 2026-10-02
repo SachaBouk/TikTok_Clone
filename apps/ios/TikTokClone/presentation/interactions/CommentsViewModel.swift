@@ -62,7 +62,10 @@ final class CommentsViewModel {
     }
 
     func send() async {
-        guard session.isSignedIn else { session.requestSignIn(); return }
+        guard session.isSignedIn else {
+            session.requestSignIn()
+            return
+        }
         guard canSend else { return }
         isSending = true
         defer { isSending = false }
@@ -104,8 +107,9 @@ final class CommentsViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let page = try await EmptyPages.fetch(cursor, load: { try await loadComments(videoID: video.id, cursor: $0) },
-                                                  isEmpty: { $0.comments.isEmpty }, next: { $0.nextCursor })
+            let page = try await EmptyPages.fetch(
+                cursor, load: { try await loadComments(videoID: video.id, cursor: $0) },
+                isEmpty: { $0.comments.isEmpty }, next: { $0.nextCursor })
             comments += page.comments.filter { new in !comments.contains { $0.id == new.id } }
             nextCursor = page.nextCursor
             hasLoaded = true
