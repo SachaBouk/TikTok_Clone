@@ -199,9 +199,9 @@ export class InteractionsController {
 
   @Delete('comments/:id')
   @HttpCode(204)
-  @ApiNoContentResponse({ description: 'Commentaire supprimé.' })
+  @ApiNoContentResponse({ description: 'Commentaire supprimé, par son auteur ou par l’auteur de la vidéo (ADR-042), sans prévenir personne.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
-  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Commentaire d’un autre utilisateur.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Commentaire d’un autre, sur la vidéo d’un autre.' })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire inconnu.' })
   async deleteComment(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string): Promise<void> {
     await this.interactions.deleteComment(user.userId, id);

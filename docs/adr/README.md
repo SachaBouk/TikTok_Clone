@@ -43,6 +43,7 @@
 | [ADR-039](ADR-039-limites-debit-actions.md) | Limites de débit : inscription, réactions, commentaires, follows, vues et envois (prolonge ADR-030) | Proposé |
 | [ADR-040](ADR-040-duree-maximale-video.md) | Durée maximale d'une vidéo : 3 minutes (complète ADR-007 et ADR-008) | Proposé |
 | [ADR-041](ADR-041-lint-et-mise-en-forme.md) | Lint et mise en forme : ESLint, Prettier, swift-format (complète ADR-001) | Proposé |
+| [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) | Suppression des commentaires par l'auteur de la vidéo (complète ADR-016 et ADR-028) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

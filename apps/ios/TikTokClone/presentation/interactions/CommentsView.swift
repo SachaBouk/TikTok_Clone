@@ -1,12 +1,15 @@
 import SwiftUI
 
 // Feuille de commentaires native (demi-hauteur, extensible). Glisser vers la gauche sur son commentaire
-// pour le supprimer, sur celui d'un autre pour le signaler (ADR-038).
+// pour le supprimer, sur celui d'un autre pour le signaler (ADR-038). Sur sa propre vidéo, le commentaire d'un autre
+// peut aussi être supprimé, après confirmation et sans prévenir son auteur (ADR-042).
 struct CommentsView: View {
     @State private var viewModel: CommentsViewModel
     let container: AppContainer
     @State private var isPresentingSignIn = false
     @State private var reportTarget: ReportTarget?
+    // Commentaire d'un autre à supprimer de sa vidéo, en attente de confirmation.
+    @State private var removing: VideoComment?
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -85,11 +88,26 @@ struct CommentsView: View {
                                 Task { await viewModel.delete(comment) }
                             }
                         } else {
+                            // Sans `role: .destructive` : le bouton retirerait la ligne avant la confirmation.
+                            if viewModel.canDelete(comment) {
+                                Button("Supprimer", systemImage: "trash") { removing = comment }
+                                    .tint(.red)
+                            }
                             Button("Signaler", systemImage: "flag") {
                                 if viewModel.isSignedIn { reportTarget = .comment(id: comment.id) } else { isPresentingSignIn = true }
                             }
                             .tint(.orange)
                         }
+                    }
+                    // Attachée à la ligne : la confirmation s'affiche près du commentaire, pas dans un coin de l'écran.
+                    .confirmationDialog(
+                        "Supprimer ce commentaire ?",
+                        isPresented: Binding(get: { removing?.id == comment.id }, set: { if !$0 { removing = nil } }),
+                        titleVisibility: .visible
+                    ) {
+                        Button("Supprimer", role: .destructive) { Task { await viewModel.delete(comment) } }
+                    } message: {
+                        Text("Il disparaîtra pour tout le monde. @\(comment.author.username) ne sera pas prévenu(e).")
                     }
                 }
                 if viewModel.hasMore {

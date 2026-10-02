@@ -51,6 +51,15 @@ final class CommentsViewModel {
         session.profile?.id == comment.author.id
     }
 
+    // Sa propre vidéo : on peut y supprimer les commentaires des autres (ADR-042), en silence.
+    var isOwnVideo: Bool {
+        session.profile?.id == video.author.id
+    }
+
+    func canDelete(_ comment: VideoComment) -> Bool {
+        isOwn(comment) || isOwnVideo
+    }
+
     func start() async {
         guard !hasLoaded else { return }
         await load(cursor: nil)
@@ -87,9 +96,9 @@ final class CommentsViewModel {
         comments.removeAll { ids.contains($0.author.id) }
     }
 
-    // Suppression de son propre commentaire ; il revient à sa place si l'API refuse.
+    // Suppression de son commentaire, ou de celui d'un autre sur sa vidéo (ADR-042) ; il revient à sa place si l'API refuse.
     func delete(_ comment: VideoComment) async {
-        guard isOwn(comment), let index = comments.firstIndex(of: comment) else { return }
+        guard canDelete(comment), let index = comments.firstIndex(of: comment) else { return }
         comments.remove(at: index)
         count = max(0, count - 1)
         onCountChange(-1)

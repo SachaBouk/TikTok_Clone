@@ -227,12 +227,16 @@ export class InteractionsService {
     return { comment, author: await this.users.getById(userId) };
   }
 
-  // Seul l'auteur supprime son commentaire (la modération par l'auteur de la vidéo viendra plus tard).
-  // Sa notification disparaît avec lui (cascade de la base).
+  // L'auteur du commentaire le supprime, ou l'auteur de la vidéo (ADR-042), quel que soit le statut de la vidéo.
+  // En silence : personne n'est prévenu. Sa notification disparaît avec lui (cascade de la base), et ses signalements
+  // ouverts sont clos par la base (ADR-038, « supprimé hors modération »).
   async deleteComment(userId: string, commentId: string): Promise<void> {
     const comment = await this.interactions.findComment(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);
-    if (comment.userId !== userId) throw new NotCommentAuthorError();
+    if (comment.userId !== userId) {
+      const [video] = await this.videos.getVideoDetails([comment.videoId]);
+      if (video?.userId !== userId) throw new NotCommentAuthorError();
+    }
     await this.interactions.deleteComment(commentId);
   }
 

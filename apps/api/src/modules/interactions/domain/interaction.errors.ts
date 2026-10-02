@@ -68,7 +68,7 @@ export class CommentNotFoundError extends InteractionError {
 
 export class NotCommentAuthorError extends InteractionError {
   constructor() {
-    super("Seul l'auteur d'un commentaire peut le supprimer");
+    super("Seul l'auteur du commentaire ou de la vidéo peut le supprimer");
     this.name = 'NotCommentAuthorError';
   }
 }

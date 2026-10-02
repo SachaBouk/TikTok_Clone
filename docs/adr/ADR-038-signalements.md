@@ -27,7 +27,7 @@ Mise en œuvre :
   - `target_user_id` : le compte visé, passé à `NULL` s'il est supprimé ; `target_username` garde son pseudo d'alors ;
   - `reporter_id` et `resolved_by` passent à `NULL` si ces comptes sont supprimés ; l'historique reste ;
   - `excerpt` : copie du texte signalé (commentaire, description de la vidéo, message) au moment du signalement ;
-  - `resolution` (contenu supprimé, compte suspendu, sans suite ; et, sans décision, supprimé par son auteur ou compte supprimé), `resolved_at` ;
+  - `resolution` (contenu supprimé, compte suspendu, sans suite ; et, sans décision, supprimé par son auteur hors modération ou compte supprimé), `resolved_at` ;
   - contraintes CHECK écrites à la main : décision complète ou absente, pas de signalement de soi-même, précision de 500 caractères au plus.
 - **Règles du signalement** :
   - on ne signale que ce qu'on peut voir : vidéo publiée, commentaire existant, compte existant, message d'une de ses conversations (pas ceux masqués par « supprimer pour soi »). Le contenu d'un compte suspendu est introuvable (404). On ne signale ni son compte ni son propre contenu (400) ;
@@ -47,9 +47,9 @@ Mise en œuvre :
   - suspendre le compte (ADR-037) → « compte suspendu », pour toutes ses cibles (compte, vidéos, commentaires, messages) ;
   - classer sans suite → « sans suite », le contenu reste en ligne.
 
-  Les signalements sont clos **avant** la suppression : sinon les triggers ci-dessous les cloraient comme « supprimé par son auteur ». Si la suppression échoue, rien n'est annoncé ni journalisé.
+  Les signalements sont clos **avant** la suppression : sinon les triggers ci-dessous les cloraient comme « supprimé hors modération ». Si la suppression échoue, rien n'est annoncé ni journalisé.
 - **Clôture par la base**, sans décision ni notification (triggers écrits à la main, migration `moderation`) :
-  - suppression d'une vidéo, d'un commentaire ou d'un message par son auteur → « supprimé par son auteur » (`content_deleted`) ;
+  - suppression d'une vidéo, d'un commentaire ou d'un message par son auteur, ou d'un commentaire par l'auteur de la vidéo (ADR-042) → « supprimé hors modération » (`content_deleted`) ;
   - suppression du compte visé → « compte supprimé » (`account_deleted`), avant que `target_user_id` passe à `NULL`.
 - **Notifications de modération** (module `notifications`) : deux types, `reportResolved` et `contentRemoved`, **sans auteur** (`actor_id` nul, CHECK par type), avec `moderation` (type de cible, motif ou décision, texte copié). Jamais regroupées, jamais masquées par la suspension d'un compte. Push : « Signalement examiné » ou « Contenu retiré ».
 - **Journal** (`moderation_actions`) : action, administrateur, cible, compte visé, motif (liste) ou note (motif interne d'une suspension), texte copié, nombre de signalements clos. Pseudos copiés, identifiants passés à `NULL` à la suppression des comptes : le journal survit à tout. Une suspension déjà en place ou une levée sans effet ne sont pas journalisées.

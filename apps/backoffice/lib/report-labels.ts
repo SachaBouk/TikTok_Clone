@@ -22,8 +22,9 @@ export const REPORT_RESOLUTION_LABELS: Record<ReportResolution, string> = {
   contentRemoved: 'Contenu supprimé',
   accountSuspended: 'Compte suspendu',
   dismissed: 'Sans suite',
-  // Closes par la base, sans décision : contenu supprimé par son auteur, compte supprimé.
-  contentDeleted: 'Supprimé par son auteur',
+  // Closes par la base, sans décision : contenu supprimé par son auteur (ou, pour un commentaire, par l'auteur de la
+  // vidéo, ADR-042), compte supprimé.
+  contentDeleted: 'Supprimé hors modération',
   accountDeleted: 'Compte supprimé',
 };
 

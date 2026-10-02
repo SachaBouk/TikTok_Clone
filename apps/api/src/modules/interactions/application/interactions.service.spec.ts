@@ -251,6 +251,23 @@ describe('InteractionsService', () => {
       expect(first.items[0].author.id).toBe('alice');
     });
 
+    it("l'auteur de la vidéo supprime le commentaire d'un autre (ADR-042), en silence ; pas sur la vidéo d'un autre", async () => {
+      // `video` appartient à bob.
+      const { comment } = await service.addComment('alice', video, 'Commentaire déplacé');
+      expect(await received('bob')).toEqual(['comment:alice']);
+      await service.deleteComment('bob', comment.id);
+      await expect(service.listComments(video, null, 10)).resolves.toMatchObject({ items: [] });
+      // Personne n'est prévenu (la notification reçue par bob part avec le commentaire : cascade de la base).
+      expect(await received('alice')).toEqual([]);
+      expect((await videoRepository.findPublishedByIds([video]))[0].commentsCount).toBe(0);
+
+      // Sur la vidéo d'un autre, bob ne peut supprimer que ses propres commentaires.
+      const other = (await videoRepository.create({ userId: 'carol', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 })).id;
+      Object.assign(videoRepository.videos.get(other)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 't' });
+      const onCarol = await service.addComment('alice', other, 'Sur la vidéo de carol');
+      await expect(service.deleteComment('bob', onCarol.comment.id)).rejects.toBeInstanceOf(NotCommentAuthorError);
+    });
+
     it("seul l'auteur supprime son commentaire", async () => {
       const { comment } = await service.addComment('alice', video, 'à supprimer');
       await expect(service.deleteComment('carol', comment.id)).rejects.toBeInstanceOf(NotCommentAuthorError);

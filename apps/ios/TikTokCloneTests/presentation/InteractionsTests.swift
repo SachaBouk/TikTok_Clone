@@ -166,6 +166,36 @@ struct InteractionsTests {
         #expect(deltas == [1, -1])
     }
 
+    @Test("commentaires : sur sa propre vidéo, ceux des autres se suppriment aussi (ADR-042) ; pas sur la vidéo d'un autre")
+    func deleteOnOwnVideo() async {
+        let (_, session) = await makeModel()
+        repository.state.withLock { $0.comments["mine"] = [.sample("c1", videoID: "mine"), .sample("c2", videoID: "mine", author: .alice)] }
+        let sample = FeedVideo.sample("mine")
+        // Vidéo d'alice, le compte connecté.
+        let mine = FeedVideo(
+            id: sample.id, description: sample.description, hlsURL: sample.hlsURL, thumbnailURL: sample.thumbnailURL,
+            createdAt: sample.createdAt, stats: sample.stats, author: .alice, viewer: sample.viewer)
+        let viewModel = CommentsViewModel(
+            video: mine, loadComments: LoadCommentsUseCase(interactions: repository),
+            addComment: AddCommentUseCase(interactions: repository),
+            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        await viewModel.start()
+        let others = viewModel.comments[0]
+        #expect(viewModel.isOwnVideo)
+        #expect(!viewModel.isOwn(others))
+        #expect(viewModel.canDelete(others))
+        await viewModel.delete(others)
+        #expect(viewModel.comments.map(\.id) == ["c2"])
+
+        // Sur la vidéo de bob, le commentaire de bob ne se supprime pas.
+        let onBob = CommentsViewModel(
+            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
+            addComment: AddCommentUseCase(interactions: repository),
+            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        #expect(!onBob.isOwnVideo)
+        #expect(!onBob.canDelete(.sample("c9")))
+    }
+
     @Test("commentaires : suppression refusée → le commentaire revient à sa place")
     func deleteFailure() async {
         let (_, session) = await makeModel()

@@ -1847,7 +1847,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Commentaire supprimé."
+            "description": "Commentaire supprimé, par son auteur ou par l’auteur de la vidéo (ADR-042), sans prévenir personne."
           },
           "401": {
             "description": "Access token absent, invalide ou expiré.",
@@ -1860,7 +1860,7 @@
             }
           },
           "403": {
-            "description": "Commentaire d’un autre utilisateur.",
+            "description": "Commentaire d’un autre, sur la vidéo d’un autre.",
             "content": {
               "application/json": {
                 "schema": {
