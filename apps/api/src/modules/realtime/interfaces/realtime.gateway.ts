@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { OnGatewayConnection, OnGatewayDisconnect, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
-import { WebSocket, type WebSocketServer as WsServer } from 'ws';
+import { WebSocket, type RawData, type WebSocketServer as WsServer } from 'ws';
 import { RealtimeService } from '../application/realtime.service';
 import { CLOSE_SESSION_EXPIRED, HEARTBEAT_INTERVAL_MS, MAX_CLIENT_MESSAGE_BYTES, REALTIME_PATH } from '../domain/realtime';
 import { handshakeSession } from './realtime-ws.adapter';
@@ -40,7 +40,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.on('pong', () => this.alive.set(client, true));
     client.on('message', (raw, isBinary) => {
       if (isBinary) return;
-      this.realtime.receive(session.userId, raw.toString()).catch((error: Error) => this.logger.warn(`Message de l'app en échec : ${error.message}`));
+      this.realtime.receive(session.userId, rawText(raw)).catch((error: Error) => this.logger.warn(`Message de l'app en échec : ${error.message}`));
     });
     this.detach.set(
       client,
@@ -73,4 +73,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.ping();
     }
   }
+}
+
+// Texte d'un message reçu : un seul Buffer en général, plusieurs fragments ou un ArrayBuffer selon le réglage de `ws`.
+function rawText(raw: RawData): string {
+  if (Array.isArray(raw)) return Buffer.concat(raw).toString('utf8');
+  if (Buffer.isBuffer(raw)) return raw.toString('utf8');
+  return Buffer.from(raw).toString('utf8');
 }

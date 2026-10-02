@@ -363,7 +363,7 @@ describe('MessagingService', () => {
 
       expect(shared.message).toMatchObject({ content: '', sharedVideoId: video });
       expect(shared.sharedVideo).toMatchObject({ id: video, video: { hlsUrl: 'h.m3u8' }, author: { id: 'carol' } });
-      expect((await videoRepository.findPublishedByIds([video]))[0]!.sharesCount).toBe(1);
+      expect((await videoRepository.findPublishedByIds([video]))[0].sharesCount).toBe(1);
       await expect(service.sendMessage('alice', id, { content: 'regarde', videoId: video })).resolves.toMatchObject({
         message: { content: 'regarde' },
       });
@@ -378,7 +378,7 @@ describe('MessagingService', () => {
       await service.sendMessage('alice', id, { videoId: video });
       await videoRepository.delete(video);
       const [item] = (await service.listMessages('bob', id, null, 10)).items;
-      expect(item!.sharedVideo).toEqual({ id: video, video: null, author: null });
+      expect(item.sharedVideo).toEqual({ id: video, video: null, author: null });
     });
 
     it("vidéo d'un compte bloqué : refusée à l'envoi, indisponible pour le destinataire concerné", async () => {
@@ -390,18 +390,18 @@ describe('MessagingService', () => {
       const shared = (viewer: string) => events.created.find((c) => c.recipientId === viewer)!.item.sharedVideo;
       expect(shared('alice')).toMatchObject({ id: video, video: { id: video }, author: { id: 'carol' } });
       expect(shared('bob')).toEqual({ id: video, video: null, author: null });
-      expect((await service.listMessages('bob', id, null, 10)).items[0]!.sharedVideo).toEqual({ id: video, video: null, author: null });
-      expect((await service.listMessages('alice', id, null, 10)).items[0]!.sharedVideo).toMatchObject({ author: { id: 'carol' } });
-      expect((await service.listConversations('bob', null, 10)).items[0]!.lastMessage!.sharedVideo).toMatchObject({ video: null });
+      expect((await service.listMessages('bob', id, null, 10)).items[0].sharedVideo).toEqual({ id: video, video: null, author: null });
+      expect((await service.listMessages('alice', id, null, 10)).items[0].sharedVideo).toMatchObject({ author: { id: 'carol' } });
+      expect((await service.listConversations('bob', null, 10)).items[0].lastMessage!.sharedVideo).toMatchObject({ video: null });
 
       await expect(service.sendMessage('bob', id, { videoId: video })).rejects.toBeInstanceOf(SharedVideoNotFoundError);
     });
   });
 
   describe('limites d’envoi', () => {
-    it(`${MESSAGE_RATE_LIMITS[0]!.limit} messages par minute, puis 429 jusqu’à la minute suivante`, async () => {
+    it(`${MESSAGE_RATE_LIMITS[0].limit} messages par minute, puis 429 jusqu’à la minute suivante`, async () => {
       const id = await open('alice', 'bob');
-      for (let i = 0; i < MESSAGE_RATE_LIMITS[0]!.limit; i++) await send('alice', id, `m${i}`);
+      for (let i = 0; i < MESSAGE_RATE_LIMITS[0].limit; i++) await send('alice', id, `m${i}`);
       const refused = await send('alice', id, 'de trop').catch((error: unknown) => error);
       expect(refused).toBeInstanceOf(RateLimitedError);
       expect((refused as RateLimitedError).retryAfterSeconds).toBe(60);
@@ -412,10 +412,10 @@ describe('MessagingService', () => {
       await expect(send('alice', id, 'de nouveau')).resolves.toBeDefined();
     });
 
-    it(`${REQUEST_RATE_LIMITS[0]!.limit} nouvelles demandes par jour`, async () => {
-      const limit = REQUEST_RATE_LIMITS[0]!.limit;
+    it(`${REQUEST_RATE_LIMITS[0].limit} nouvelles demandes par jour`, async () => {
+      const limit = REQUEST_RATE_LIMITS[0].limit;
       for (const target of EXTRA_USERS.slice(0, limit)) await send('carol', await open('carol', target), 'salut');
-      const next = await open('carol', EXTRA_USERS[limit]!);
+      const next = await open('carol', EXTRA_USERS[limit]);
       await expect(send('carol', next, 'salut')).rejects.toBeInstanceOf(RateLimitedError);
       // La limite porte sur les nouvelles demandes, pas sur les messages d'une demande ouverte.
       await expect(send('carol', await open('carol', 'u1'), 'relance')).resolves.toBeDefined();

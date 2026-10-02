@@ -153,7 +153,7 @@ describe('NotificationsService', () => {
 
       expect(first.items.map((i) => i.notification.type)).toEqual(['comment', 'follow']);
       expect(first.items[0]).toMatchObject({ actor: { id: 'carol' }, video: { id: video, thumbnailUrl: 'miniature.jpg' } });
-      expect(first.items[1]!.video).toBeNull();
+      expect(first.items[1].video).toBeNull();
       expect(second.items.map((i) => i.notification.type)).toEqual(['like']);
       expect(second.nextCursor).toBeNull();
       expect(await service.list('alice', null, 10)).toEqual({ items: [], nextCursor: null });
@@ -271,7 +271,7 @@ describe('NotificationsService', () => {
         ['reportResolved', 1, []],
         ['contentRemoved', 1, []],
       ]);
-      expect(groups[2]!.group.latest.moderation).toEqual({ targetType: 'video', reason: 'spam', outcome: null, excerpt: 'Démo' });
+      expect(groups[2].group.latest.moderation).toEqual({ targetType: 'video', reason: 'spam', outcome: null, excerpt: 'Démo' });
       await expect(service.unreadCount('bob')).resolves.toBe(3);
     });
   });
@@ -284,7 +284,7 @@ describe('NotificationsService', () => {
       await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
       expect(await service.unreadCount('bob')).toBe(3);
 
-      await expect(service.markRead('bob', newest!.notification.id)).resolves.toBe(1);
+      await expect(service.markRead('bob', newest.notification.id)).resolves.toBe(1);
       const items = (await service.list('bob', null, 10)).items;
       expect(items.map((i) => [i.notification.actorId, i.notification.readAt])).toEqual([
         ['carol', null],

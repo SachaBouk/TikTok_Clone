@@ -18,8 +18,8 @@ export interface LoginState {
 // Connexion par email et mot de passe (`/auth/login` de l'API), réservée aux administrateurs : le rôle est
 // vérifié avant d'ouvrir la session du backoffice. Un compte sans rôle voit sa session API révoquée aussitôt.
 export async function login(_previous: LoginState, form: FormData): Promise<LoginState> {
-  const email = String(form.get('email') ?? '').trim();
-  const password = String(form.get('password') ?? '');
+  const email = textField(form, 'email').trim();
+  const password = textField(form, 'password');
   if (!email || !password) return { error: 'Saisis ton email et ton mot de passe.', email };
 
   try {
@@ -39,11 +39,17 @@ export async function login(_previous: LoginState, form: FormData): Promise<Logi
     }
     return { error: 'L’API est injoignable. Réessaie dans un instant.', email };
   }
-  redirect(safeReturnPath(String(form.get('suite') ?? '')));
+  redirect(safeReturnPath(textField(form, 'suite')));
 }
 
 export async function logout(): Promise<void> {
   const refreshToken = await clearSession();
   if (refreshToken) await auth.logout(refreshToken);
   redirect('/login');
+}
+
+// Champ texte d'un formulaire ; vide s'il manque ou si c'est un fichier.
+function textField(form: FormData, name: string): string {
+  const value = form.get(name);
+  return typeof value === 'string' ? value : '';
 }

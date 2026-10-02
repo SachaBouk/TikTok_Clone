@@ -130,7 +130,7 @@ export class ReportsService {
   async getTarget(target: ReportTarget): Promise<ReportTargetDetail> {
     const [open, reports] = await Promise.all([this.reports.findOpenTarget(target), this.reports.listForTarget(target, MAX_REPORTS_PER_TARGET)]);
     if (reports.length === 0) throw new ReportTargetNotFoundError();
-    return { target, targetUserId: reports[0]!.targetUserId, targetUsername: reports[0]!.targetUsername, open, reports };
+    return { target, targetUserId: reports[0].targetUserId, targetUsername: reports[0].targetUsername, open, reports };
   }
 
   // Contenu retiré par un administrateur : signalements ouverts clos d'abord (les triggers les cloraient sinon comme
@@ -171,7 +171,7 @@ export class ReportsService {
     const resolved = await this.reports.resolveTarget(target, 'dismissed', adminId, this.now());
     if (resolved.length === 0) return 0;
     await this.announce(resolved, 'dismissed');
-    await this.log(adminId, 'reportsDismissed', target, resolved[0]!.targetUserId, { excerpt: resolved[0]!.excerpt, reportsClosed: resolved.length });
+    await this.log(adminId, 'reportsDismissed', target, resolved[0].targetUserId, { excerpt: resolved[0].excerpt, reportsClosed: resolved.length });
     return resolved.length;
   }
 

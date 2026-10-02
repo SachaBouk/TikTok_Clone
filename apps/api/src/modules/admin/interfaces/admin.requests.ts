@@ -65,7 +65,7 @@ export class AdminWalletTransactionsQuery extends AdminPageQuery {
 
   @ApiPropertyOptional({ type: Boolean, description: 'Seulement les mouvements d’un client inconnu, à rapprocher.' })
   @IsOptional()
-  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @Transform(({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   unmatched?: boolean;
 }

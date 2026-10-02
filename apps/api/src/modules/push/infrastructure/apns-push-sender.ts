@@ -83,7 +83,7 @@ export class ApnsPushSender extends PushSender implements OnModuleDestroy {
     const forget = () => {
       if (this.sessions.get(host) === session) this.sessions.delete(host);
     };
-    session.on('error', (error) => {
+    session.on('error', (error: Error) => {
       this.logger.warn(`Connexion APNs ${host} : ${error.message}`);
       forget();
     });

@@ -153,15 +153,15 @@ describe('AuthService', () => {
       const tokens = await service.register(registration);
 
       expect(accounts.accounts[0]).toMatchObject({ email: 'alice@example.com', passwordHash: 'hashed:motdepasse' });
-      expect(tokens.accessToken).toBe(`access:${accounts.accounts[0]!.id}`);
+      expect(tokens.accessToken).toBe(`access:${accounts.accounts[0].id}`);
       expect(tokens.accessTokenExpiresIn).toBe(900);
       expect(tokens.refreshToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     });
 
     it('ne stocke jamais le refresh token en clair', async () => {
       const { refreshToken } = await service.register(registration);
-      expect(refreshTokens.tokens[0]!.tokenHash).not.toBe(refreshToken);
-      expect(refreshTokens.tokens[0]!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(refreshTokens.tokens[0].tokenHash).not.toBe(refreshToken);
+      expect(refreshTokens.tokens[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('refuse un email ou un pseudo déjà pris, et le pseudo réservé « me »', async () => {
@@ -190,8 +190,8 @@ describe('AuthService', () => {
 
       expect(second.refreshToken).not.toBe(first.refreshToken);
       expect(refreshTokens.tokens).toHaveLength(2);
-      expect(refreshTokens.tokens[0]!.familyId).toBe(refreshTokens.tokens[1]!.familyId);
-      expect(refreshTokens.tokens[0]!.revokedAt).toEqual(now);
+      expect(refreshTokens.tokens[0].familyId).toBe(refreshTokens.tokens[1].familyId);
+      expect(refreshTokens.tokens[0].revokedAt).toEqual(now);
     });
 
     it('détecte la réutilisation : rejouer un ancien token révoque toute la session', async () => {
@@ -247,7 +247,7 @@ describe('AuthService', () => {
         passwordHash: null,
         displayName: 'Bob',
       });
-      expect(accounts.accounts[0]!.username).toMatch(/^user\d{10}$/);
+      expect(accounts.accounts[0].username).toMatch(/^user\d{10}$/);
     });
 
     it('utilise un nom par défaut si Apple ne fournit pas de nom', async () => {
@@ -278,17 +278,17 @@ describe('AuthService', () => {
       await service.register(registration);
       await service.register({ ...registration, email: 'bob@example.com', username: 'bob' });
       const [alice, bob] = accounts.accounts;
-      accounts.adminIds.add(alice!.id);
+      accounts.adminIds.add(alice.id);
 
-      await expect(service.isAdmin(alice!.id)).resolves.toBe(true);
-      await expect(service.isAdmin(bob!.id)).resolves.toBe(false);
+      await expect(service.isAdmin(alice.id)).resolves.toBe(true);
+      await expect(service.isAdmin(bob.id)).resolves.toBe(false);
       await expect(service.isAdmin('inconnu')).resolves.toBe(false);
-      await expect(service.findAdminIds([alice!.id, bob!.id, alice!.id])).resolves.toEqual(new Set([alice!.id]));
+      await expect(service.findAdminIds([alice.id, bob.id, alice.id])).resolves.toEqual(new Set([alice.id]));
     });
 
     it('prend en compte un rôle retiré aussitôt', async () => {
       await service.register(registration);
-      const id = accounts.accounts[0]!.id;
+      const id = accounts.accounts[0].id;
       accounts.adminIds.add(id);
       await expect(service.isAdmin(id)).resolves.toBe(true);
       accounts.adminIds.delete(id);
@@ -301,8 +301,8 @@ describe('AuthService', () => {
       const session = await service.register(registration);
       await service.register({ ...registration, email: 'admin@example.com', username: 'admin' });
       const [alice, admin] = accounts.accounts;
-      accounts.adminIds.add(admin!.id);
-      return { session, alice: alice!.id, admin: admin!.id };
+      accounts.adminIds.add(admin.id);
+      return { session, alice: alice.id, admin: admin.id };
     }
 
     it('refuse la connexion après le bon mot de passe seulement, révoque les sessions et les access tokens', async () => {
@@ -352,8 +352,8 @@ describe('AuthService', () => {
       await service.loginWithApple({ identityToken: 'jeton' });
       await service.register({ ...registration, email: 'admin@example.com', username: 'admin' });
       const [appleAccount, admin] = accounts.accounts;
-      accounts.adminIds.add(admin!.id);
-      await service.suspend(appleAccount!.id, admin!.id, 'Spam');
+      accounts.adminIds.add(admin.id);
+      await service.suspend(appleAccount.id, admin.id, 'Spam');
       await expect(service.loginWithApple({ identityToken: 'jeton' })).rejects.toBeInstanceOf(AccountSuspendedError);
     });
 

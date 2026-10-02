@@ -137,12 +137,12 @@ describe('AdminService', () => {
       [CAROL, 'carol'],
     ]) {
       accounts.accounts.push({
-        id: id!,
+        id: id,
         email: `${username}@test.local`,
         passwordHash: null,
         appleSub: null,
-        username: username!,
-        displayName: username!,
+        username: username,
+        displayName: username,
       });
     }
     refreshTokens = new InMemoryRefreshTokenRepository();
@@ -267,7 +267,7 @@ describe('AdminService', () => {
       await reports.report(ALICE, { target: { type: 'message', id: message.id }, reason: 'harassment' });
 
       const [queued] = (await service.listReportTargets(null, 10)).items;
-      expect([queued!.target.type, queued!.targetUser?.id, queued!.available, queued!.excerpt]).toEqual(['message', BOB, true, 'Insulte']);
+      expect([queued.target.type, queued.targetUser?.id, queued.available, queued.excerpt]).toEqual(['message', BOB, true, 'Insulte']);
 
       await service.removeMessage(CAROL, message.id, 'harassment');
       await expect(messaging.getMessages([message.id])).resolves.toEqual([]);

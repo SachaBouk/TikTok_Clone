@@ -26,11 +26,12 @@ Build et tests en ligne de commande :
 
 ```bash
 scripts/test.sh            # comme la CI : résultat lu sur la ligne de fin de xcodebuild, journal dans build/
+scripts/lint.sh            # swift-format d'Xcode (.swift-format : 4 espaces, 150 colonnes), strict ; --fix reformate
 xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -skipPackagePluginValidation test
 ```
 
-CI (`.github/workflows/ios.yml`, ADR-033) : image `xcode-27` de GitHub, Xcode 27.0, XcodeGen 2.46.0 (vérifié par SHA-256),
+CI (`.github/workflows/ios.yml`, ADR-033) : image `xcode-27` de GitHub, Xcode 27.0, `scripts/lint.sh` (ADR-041), XcodeGen 2.46.0 (vérifié par SHA-256),
 puis `scripts/test.sh`, quand `apps/ios/**` ou `apps/api/openapi.json` changent, ou à la demande depuis l'onglet Actions.
 
 ## Organisation (ADR-002)

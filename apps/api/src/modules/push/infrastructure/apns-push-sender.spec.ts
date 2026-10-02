@@ -20,7 +20,7 @@ describe('ApnsPushSender', () => {
   beforeAll(async () => {
     server = createServer((request, response) => {
       let body = '';
-      request.on('data', (chunk) => (body += chunk));
+      request.on('data', (chunk: Buffer) => (body += chunk.toString()));
       request.on('end', () => {
         requests.push({ headers: request.headers, body });
         response.writeHead(reply.status, { 'content-type': 'application/json' });
@@ -74,7 +74,7 @@ describe('ApnsPushSender', () => {
   it('réutilise le jeton et la connexion d’un envoi à l’autre', async () => {
     await sender.send({ token: TOKEN, userId: 'u', environment: 'sandbox' }, message);
     await sender.send({ token: TOKEN, userId: 'u', environment: 'sandbox' }, message);
-    expect(requests[0]!.headers.authorization).toBe(requests[1]!.headers.authorization);
+    expect(requests[0].headers.authorization).toBe(requests[1].headers.authorization);
   });
 
   it('token invalide (410, BadDeviceToken) → invalidToken ; autre échec → erreur (relance)', async () => {

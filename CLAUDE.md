@@ -12,7 +12,7 @@ Une application type TikTok, développée par une seule personne. Elle comprend 
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer. Ne jamais marquer comme accepté un ADR que l'on rédige ou modifie.
 
-Les ADR 017 à 028 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté sans le remplacer (lien « Complété par » dans l'ADR d'origine). Une nouvelle décision de ce genre s'ajoute au complément concerné, ou dans un nouvel ADR `Proposé`, jamais dans le texte d'un ADR accepté. ADR-029 (`Proposé`, complète ADR-028) : contenus des comptes bloqués masqués. ADR-030 (`Proposé`) : limites de débit de la connexion et des partages. ADR-031 (`Proposé`, complète ADR-021) : signature HMAC du webhook RevenueCat. ADR-032 (`Proposé`, complète ADR-019) : portefeuille dans le backoffice. ADR-033 (`Proposé`, complète ADR-017) : CI iOS. ADR-034 (`Proposé`, complète ADR-017) : `Package.resolved` versionné. ADR-035 (`Proposé`, complète ADR-007) : métadonnées personnelles (position GPS) retirées des vidéos dans l'app. ADR-036 (`Proposé`, complète ADR-028) : « Suivre en retour » dans le centre d'activité. ADR-037 (`Proposé`, complète ADR-019) : suspension de compte. ADR-038 (`Proposé`, complète ADR-019) : signalements (module `reports` : messages compris, décisions annoncées, journal de modération). ADR-039 (`Proposé`, prolonge ADR-030) : limites de débit de l'inscription, des réactions, commentaires, follows, vues et envois de vidéos. ADR-040 (`Proposé`, complète ADR-007 et ADR-008) : durée maximale d'une vidéo (3 minutes).
+Les ADR 017 à 028 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté sans le remplacer (lien « Complété par » dans l'ADR d'origine). Une nouvelle décision de ce genre s'ajoute au complément concerné, ou dans un nouvel ADR `Proposé`, jamais dans le texte d'un ADR accepté. ADR-029 (`Proposé`, complète ADR-028) : contenus des comptes bloqués masqués. ADR-030 (`Proposé`) : limites de débit de la connexion et des partages. ADR-031 (`Proposé`, complète ADR-021) : signature HMAC du webhook RevenueCat. ADR-032 (`Proposé`, complète ADR-019) : portefeuille dans le backoffice. ADR-033 (`Proposé`, complète ADR-017) : CI iOS. ADR-034 (`Proposé`, complète ADR-017) : `Package.resolved` versionné. ADR-035 (`Proposé`, complète ADR-007) : métadonnées personnelles (position GPS) retirées des vidéos dans l'app. ADR-036 (`Proposé`, complète ADR-028) : « Suivre en retour » dans le centre d'activité. ADR-037 (`Proposé`, complète ADR-019) : suspension de compte. ADR-038 (`Proposé`, complète ADR-019) : signalements (module `reports` : messages compris, décisions annoncées, journal de modération). ADR-039 (`Proposé`, prolonge ADR-030) : limites de débit de l'inscription, des réactions, commentaires, follows, vues et envois de vidéos. ADR-040 (`Proposé`, complète ADR-007 et ADR-008) : durée maximale d'une vidéo (3 minutes). ADR-041 (`Proposé`, complète ADR-001) : lint et mise en forme (ESLint, Prettier, swift-format).
 
 Le projet est en construction, ADR par ADR. Sont en place : l'infrastructure Docker locale (ADR-015), le schéma Prisma (ADR-006), l'architecture backend (ADR-003) avec le module de référence `users`, l'authentification (ADR-010, module `auth`), le contrat OpenAPI (ADR-005), l'upload direct des vidéos (ADR-007, module `videos`), le traitement asynchrone BullMQ (ADR-012), le transcodage HLS du worker (ADR-008), le seed de démo, le feed aléatoire (ADR-016, module `feed`, cache Redis de l'ADR-014), les interactions sociales (module `interactions`), le centre d'activité (module `notifications`), le temps réel (ADR-011, module `realtime` : fin du transcodage, activité et badge en direct), la messagerie directe (module `messaging` : demandes, blocage, suppression, partage de vidéo, « en train d'écrire », limites d'envoi) les notifications push (module `push`, APNs) et le profil (module `users` : modification, photo de profil ; listes d'abonnés, relation, grilles, vues, historiques de visionnage et de commentaires dans `interactions` et `feed`), et l'app iOS (ADR-002) : socle (projet XcodeGen, client généré, authentification et Keychain, navigation native, mode invité), feed avec lecteur HLS, interactions (like, favori, republication, partage par lien d'app, follow, commentaires, vidéo seule), publication (galerie, envoi par parties avec reprise après relance, suivi du traitement), client WebSocket temps réel (reconnexion, 4001, relecture REST) profil (son profil et celui des autres, grilles, modification et photo, abonnés et abonnements, historiques, blocage, suppression du compte), centre d'activité (notifications, badge et arrivées en direct) messagerie (conversations, demandes, « Vu », « en train d'écrire », partage de vidéo, limites d'envoi) et mesure d'audience (ADR-013, PostHog : consentement, visionnage, engagement, onboarding, expérience A/B « invitation invité »), et le backoffice (ADR-004 : rôle administrateur, module `admin` de l'API, app Next.js avec tableau de bord, comptes, vidéos et commentaires ; suspension de compte, ADR-037 ; signalements, notifications de décision et journal de modération, ADR-038, module `reports`). Le portefeuille de jetons (ADR-009 : module `wallet`, webhook RevenueCat, paywall iOS) est en place. Restent notamment les notifications push de l'app iOS, Sign in with Apple côté app (compte Apple Developer), et la dépense des jetons (cadeaux, reportée par l'ADR-016). La documentation, les commentaires de code et les textes d'interface sont en français et doivent le rester.
 
@@ -25,6 +25,8 @@ pnpm install
 pnpm dev                    # api (:3000), worker, backoffice (:3001) ; builde packages/shared avant
 pnpm build
 pnpm typecheck
+pnpm lint                   # ESLint (règles qui lisent les types) ; builder shared avant (pnpm typecheck le fait)
+pnpm format                 # Prettier ; pnpm format:check en CI
 pnpm --filter api dev       # une seule app (api | worker | backoffice | @repo/shared)
 pnpm clean
 ```
@@ -75,7 +77,19 @@ pnpm admin:grant <email | @pseudo>   # rôle administrateur du backoffice (ADR-0
   - Clés composites pour les tables de liaison.
   - Suppression d'un compte en cascade, sauf `gifts_sent` (passage à `NULL`, l'historique est conservé).
 
-Tests : Vitest dans `apps/api`, `apps/worker` et `apps/backoffice` (fichiers `*.spec.ts`, exclus du build de l'api et du worker par `tsconfig.build.json`). Les tests du worker (`media/ffmpeg.spec.ts`) lancent le vrai FFmpeg sur des vidéos générées : FFmpeg et ffprobe doivent être installés. Pas encore de linter.
+Tests : Vitest dans `apps/api`, `apps/worker` et `apps/backoffice` (fichiers `*.spec.ts`, exclus du build de l'api et du worker par `tsconfig.build.json`). Les tests du worker (`media/ffmpeg.spec.ts`) lancent le vrai FFmpeg sur des vidéos générées : FFmpeg et ffprobe doivent être installés.
+
+Lint et mise en forme (ADR-041) :
+- **ESLint 9**, une seule configuration à la racine (`eslint.config.mjs`), lancée par `pnpm lint` :
+  - `typescript-eslint` `recommendedTypeChecked` : promesses non attendues, `any` non voulus… ; chaque fichier est analysé avec le tsconfig de son paquet (`projectService`), d'où le build de `@repo/shared` avant ;
+  - `eslint-config-next` restreint à `apps/backoffice` ;
+  - code généré ignoré (client Prisma, `components/ui`) ;
+  - écartés : `require-await` (adaptateurs en mémoire des ports asynchrones), et dans les tests `unbound-method` et `no-unsafe-assignment` (matchers de Vitest) ;
+  - pas d'ESLint 10 tant que les plugins de `eslint-config-next` ne l'acceptent pas ;
+  - une exception ponctuelle s'écrit `// eslint-disable-next-line <règle>`, avec sa raison sur la ligne d'avant.
+- **Prettier** (`.prettierrc.json` : guillemets simples, 150 colonnes ; `.prettierignore`) : TypeScript, JavaScript et JSON seulement. `pnpm format` reformate, `pnpm format:check` vérifie.
+- **Swift** : swift-format d'Xcode (`apps/ios/.swift-format` : 4 espaces, 150 colonnes), `apps/ios/scripts/lint.sh` (strict ; `--fix` reformate). Une nouvelle version d'Xcode peut changer la mise en forme.
+- **CI** : bloquants dans le job `verify` (après le typecheck) et dans la CI iOS (avant les tests).
 
 ```bash
 pnpm test                                        # tous les tests (turbo)
@@ -91,6 +105,7 @@ Le worker a besoin de FFmpeg (`brew install ffmpeg`, ou définir `FFMPEG_PATH`).
 ```bash
 cd apps/ios && xcodegen generate     # après tout ajout, retrait ou déplacement de fichier Swift
 apps/ios/scripts/test.sh             # tests dans le simulateur (iPhone 18 Pro), comme la CI iOS
+apps/ios/scripts/lint.sh             # lint Swift (swift-format) ; --fix reformate
 xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -skipPackagePluginValidation test
 ```
@@ -101,11 +116,11 @@ Piège rencontré : `~/Documents` est synchronisé par iCloud (File Provider), q
 Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clone (privé).
 
 CI GitHub Actions (`.github/workflows/ci.yml`), à chaque push sur `main` et sur chaque pull request, sans secret :
-- `verify` : `pnpm install --frozen-lockfile`, `typecheck`, `test` (FFmpeg de la distribution Ubuntu pour le worker), `build`, `openapi:check` ;
+- `verify` : `pnpm install --frozen-lockfile`, `typecheck`, `lint`, `format:check` (ADR-041), `test` (FFmpeg de la distribution Ubuntu pour le worker), `build`, `openapi:check` ;
 - `images` : construction des images Docker de l'api, du worker et du backoffice (matrice, cache GitHub Actions, sans publication) ;
 - `migrations` : PostgreSQL 18 vierge (service), `prisma migrate deploy`, puis `prisma migrate diff` doit être vide. Un schéma modifié sans migration, ou une migration SQL écrite à la main qui échoue, fait échouer la CI.
 
-CI iOS (`.github/workflows/ios.yml`, ADR-033) : image `xcode-27` de GitHub (macOS 27, arm64, préversion), Xcode 27.0 sélectionné, XcodeGen 2.46.0 téléchargé et vérifié par SHA-256 (le changer : nouvelle version **et** nouvelle empreinte, lue dans `https://api.github.com/repos/yonaskolb/XcodeGen/releases/tags/<version>`), cache des paquets Swift, puis `scripts/test.sh`. Seulement si `apps/ios/**`, `apps/api/openapi.json` ou le workflow changent (minutes macOS coûteuses), et à la demande. Échec : `.xcresult` et journal en artefacts (7 jours).
+CI iOS (`.github/workflows/ios.yml`, ADR-033) : image `xcode-27` de GitHub (macOS 27, arm64, préversion), Xcode 27.0 sélectionné, XcodeGen 2.46.0 téléchargé et vérifié par SHA-256 (le changer : nouvelle version **et** nouvelle empreinte, lue dans `https://api.github.com/repos/yonaskolb/XcodeGen/releases/tags/<version>`), lint Swift (`scripts/lint.sh`, ADR-041), cache des paquets Swift, puis `scripts/test.sh`. Seulement si `apps/ios/**`, `apps/api/openapi.json` ou le workflow changent (minutes macOS coûteuses), et à la demande. Échec : `.xcresult` et journal en artefacts (7 jours).
 Un changement du lockfile doit être committé (`--frozen-lockfile`). Pour reproduire la CI en local : mêmes commandes, dans cet ordre. Jamais versionnés (`.gitignore`) :
 - `.env` (seul `.env.example` l'est) et les clés `*.p8`, `*.pem`, `*.key` (clé APNs notamment) ;
 - builds et fichiers générés (`dist`, `.turbo`, `.next`, client Prisma) ;

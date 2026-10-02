@@ -41,7 +41,7 @@ describe('PushService', () => {
 
   it('oublie un appareil dont APNs refuse le token', async () => {
     await service.registerDevice('alice', TOKEN_A, 'production');
-    const device = (await devices.findByUser('alice'))[0]!;
+    const device = (await devices.findByUser('alice'))[0];
     await expect(service.deliver(device, message)).resolves.toBe('sent');
     sender.invalidTokens.add(TOKEN_A);
     await expect(service.deliver(device, message)).resolves.toBe('invalidToken');

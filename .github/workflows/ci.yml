@@ -1,5 +1,6 @@
 # Intégration continue : à chaque push sur main et sur chaque pull request.
-# - verify : typecheck, tests (le worker lance le vrai FFmpeg), build, contrat OpenAPI à jour (ADR-005) ;
+# - verify : typecheck, lint et mise en forme (ADR-041), tests (le worker lance le vrai FFmpeg), build, contrat OpenAPI
+#   à jour (ADR-005) ;
 # - migrations : les migrations (triggers et CHECK écrits à la main compris) s'appliquent sur une base vierge,
 #   et le schéma Prisma ne présente aucun écart avec elles ;
 # - images : les images Docker de l'api, du worker et du backoffice se construisent (ADR-015), sans publication.
@@ -20,7 +21,7 @@ permissions:
 
 jobs:
   verify:
-    name: Typecheck, tests, build, OpenAPI
+    name: Typecheck, lint, tests, build, OpenAPI
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -39,8 +40,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Le typecheck builde @repo/shared, dont le lint a besoin (règles qui lisent les types).
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Lint (ESLint)
+        run: pnpm lint
+
+      - name: Mise en forme (Prettier)
+        run: pnpm format:check
 
       - name: Tests
         run: pnpm test

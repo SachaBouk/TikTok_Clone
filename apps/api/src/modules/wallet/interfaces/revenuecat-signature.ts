@@ -21,7 +21,7 @@ export function checkRevenueCatSignature(
   const parts = header.split(',').map((part) => part.trim().split('='));
   const timestamp = parts.find(([name]) => name === 't')?.[1];
   // Plusieurs `v1` possibles (rotation du secret) : une seule doit correspondre.
-  const signatures = parts.filter(([name, value]) => name === 'v1' && value).map(([, value]) => value!);
+  const signatures = parts.filter(([name, value]) => name === 'v1' && value).map(([, value]) => value);
   if (!timestamp || !/^\d+$/.test(timestamp) || signatures.length === 0) return 'malformed';
   if (Math.abs(nowSeconds - Number(timestamp)) > SIGNATURE_TOLERANCE_SECONDS) return 'expired';
 

@@ -60,7 +60,7 @@ export class RelationshipsQuery {
     description: 'Identifiants des comptes, paramètre répété (`?userIds=…&userIds=…`).',
   })
   // Un seul identifiant arrive en chaîne, plusieurs en tableau.
-  @Transform(({ value }) => (typeof value === 'string' ? [value] : value))
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? [value] : value))
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(MAX_RELATIONSHIP_IDS)

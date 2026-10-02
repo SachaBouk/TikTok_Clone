@@ -98,7 +98,7 @@ final class MessagingModel {
         badges = .zero
         inbox.reset()
         requests.reset()
-        typingTasks.values.forEach { $0.cancel() }
+        for task in typingTasks.values { task.cancel() }
         typingTasks = [:]
         typingConversationIDs = []
         observers = []

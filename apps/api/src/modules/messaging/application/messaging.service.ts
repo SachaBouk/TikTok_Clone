@@ -154,16 +154,16 @@ export class MessagingService {
     // Demande refusée : ses messages suivants ne sont plus remis au destinataire (l'expéditeur n'en sait rien).
     // La vidéo partagée est vue par chacun (indisponible pour celui qui a un blocage avec son auteur).
     const recipients = view.declined && !accept ? [userId] : [userId, otherId];
-    const received = recipients.includes(otherId) ? (await this.withVideos(otherId, [message]))[0]! : null;
+    const received = recipients.includes(otherId) ? (await this.withVideos(otherId, [message]))[0] : null;
     for (const recipientId of recipients) {
-      await this.events.messageCreated(recipientId, recipientId === userId ? item! : received!, await this.badges(recipientId));
+      await this.events.messageCreated(recipientId, recipientId === userId ? item : received!, await this.badges(recipientId));
     }
     if (accept && view.requestSenderId !== null) {
       for (const recipientId of [userId, otherId])
         await this.events.conversationAccepted(recipientId, conversationId, await this.badges(recipientId));
     }
     if (received) await this.events.pushNewMessage(otherId, await this.users.getById(userId), received, status === 'requestSent');
-    return item!;
+    return item;
   }
 
   // Retrait par l'expéditeur, pour les deux participants, sans limite de temps.

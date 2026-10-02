@@ -125,11 +125,11 @@ describe('VideosService', () => {
       const [first, second] = uploadAllParts(video.uploadId!, 25 * MIB, 3);
       const third = { partNumber: 3, etag: '"etag-jamais-recu"' };
 
-      await expect(service.completeUpload(ALICE, video.id, [first!, second!, third])).rejects.toBeInstanceOf(UploadIncompleteError);
+      await expect(service.completeUpload(ALICE, video.id, [first, second, third])).rejects.toBeInstanceOf(UploadIncompleteError);
       expect((await videos.findById(video.id))!.status).toBe('uploading');
 
       const resent = { partNumber: 3, etag: storage.putPart(video.uploadId!, 3, 5 * MIB) };
-      await expect(service.completeUpload(ALICE, video.id, [first!, second!, resent])).resolves.toMatchObject({ status: 'processing' });
+      await expect(service.completeUpload(ALICE, video.id, [first, second, resent])).resolves.toMatchObject({ status: 'processing' });
     });
 
     // S3 assemble n'importe quel sous-ensemble des parties envoyées : sans ce contrôle,
@@ -139,7 +139,7 @@ describe('VideosService', () => {
       const parts = uploadAllParts(video.uploadId!, 25 * MIB, 3);
 
       await expect(service.completeUpload(ALICE, video.id, parts.slice(0, 2))).rejects.toBeInstanceOf(UploadIncompleteError);
-      await expect(service.completeUpload(ALICE, video.id, [parts[0]!, parts[0]!, parts[2]!])).rejects.toBeInstanceOf(UploadIncompleteError);
+      await expect(service.completeUpload(ALICE, video.id, [parts[0], parts[0], parts[2]])).rejects.toBeInstanceOf(UploadIncompleteError);
       expect(storage.objects.has(video.rawKey)).toBe(false);
       await expect(service.completeUpload(ALICE, video.id, parts)).resolves.toMatchObject({ status: 'processing' });
     });
@@ -423,7 +423,7 @@ describe('VideosService', () => {
         .reverse();
 
       expect((await service.listVideoDetails({}, null, 10)).map((v) => v.id)).toEqual(all);
-      expect((await service.listVideoDetails({}, all[0]!, 10)).map((v) => v.id)).toEqual(all.slice(1));
+      expect((await service.listVideoDetails({}, all[0], 10)).map((v) => v.id)).toEqual(all.slice(1));
       expect((await service.listVideoDetails({ status: 'ready' }, null, 10)).map((v) => v.id).sort()).toEqual([ready.id, other.id].sort());
       expect(await service.listVideoDetails({ status: 'ready', userId: ALICE }, null, 10)).toMatchObject([
         { id: ready.id, status: 'ready', likesCount: 0 },

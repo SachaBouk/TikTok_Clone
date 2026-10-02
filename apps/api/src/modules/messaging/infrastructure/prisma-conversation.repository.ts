@@ -49,7 +49,7 @@ export class PrismaConversationRepository extends ConversationRepository {
         LIMIT 1`;
       if (existing) return existing.conversation_id;
       const created = await tx.conversation.create({
-        data: { participants: { create: [{ userId: a! }, { userId: b! }] } },
+        data: { participants: { create: [{ userId: a }, { userId: b }] } },
         select: { id: true },
       });
       return created.id;

@@ -120,7 +120,7 @@ describe('FeedService', () => {
   it("joint l'auteur de chaque vidéo", async () => {
     await publish('bob');
     const { items } = await feed.getPage(undefined, 10);
-    expect(items[0]!.author).toMatchObject({ id: 'bob', displayName: 'BOB' });
+    expect(items[0].author).toMatchObject({ id: 'bob', displayName: 'BOB' });
   });
 
   it("donne l'état des boutons à l'utilisateur connecté, et rien en mode invité", async () => {
@@ -170,7 +170,7 @@ describe('FeedService', () => {
     await Promise.all(Array.from({ length: 6 }, () => publish()));
     const first = await feed.getPage(undefined, 3);
     const upcoming = seededShuffle(snapshots.snapshots.values().next().value!.videoIds, decodeSeed(first.nextCursor!));
-    await videoRepository.delete(upcoming[3]!);
+    await videoRepository.delete(upcoming[3]);
 
     const second = await feed.getPage(first.nextCursor!, 3);
     expect(second.items.map((i) => i.video.id)).toEqual(upcoming.slice(4, 6));
@@ -180,7 +180,7 @@ describe('FeedService', () => {
   it('repart sur une nouvelle session si la photo a expiré', async () => {
     await Promise.all(Array.from({ length: 4 }, () => publish()));
     const first = await feed.getPage(undefined, 2);
-    snapshots.expire([...snapshots.snapshots.keys()][0]!);
+    snapshots.expire([...snapshots.snapshots.keys()][0]);
 
     const page = await feed.getPage(first.nextCursor!, 2);
     expect(page.items).toHaveLength(2);
@@ -229,9 +229,9 @@ describe('FeedService', () => {
       const video = await publish('bob');
       await interactions.setReaction('alice', video, 'like', true);
       const { items } = await feed.listAuthorVideos('bob', undefined, 10, 'alice');
-      expect(items[0]!.author).toMatchObject({ id: 'bob' });
-      expect(items[0]!.viewer).toEqual({ liked: true, favorited: false, reposted: false, followingAuthor: false });
-      expect((await feed.listAuthorVideos('bob', undefined, 10, null)).items[0]!.viewer).toBeNull();
+      expect(items[0].author).toMatchObject({ id: 'bob' });
+      expect(items[0].viewer).toEqual({ liked: true, favorited: false, reposted: false, followingAuthor: false });
+      expect((await feed.listAuthorVideos('bob', undefined, 10, null)).items[0].viewer).toBeNull();
     });
 
     it('liste les republications, de la plus récente à la plus ancienne', async () => {
@@ -244,13 +244,13 @@ describe('FeedService', () => {
       const { items } = await feed.listReposts('alice', undefined, 10, 'bob');
       // Chaque vidéo garde son propre auteur ; `viewer` est celui du compte connecté (bob).
       expect(items.map((i) => i.author.id)).toEqual(['alice', 'bob', 'bob']);
-      expect(items[1]!.viewer).toMatchObject({ reposted: true });
+      expect(items[1].viewer).toMatchObject({ reposted: true });
     });
 
     it('saute une vidéo supprimée depuis, sans décaler la pagination', async () => {
       const ids = [await publish('bob'), await publish('bob'), await publish('bob')];
       for (const id of ids) await interactions.setReaction('alice', id, 'repost', true);
-      await videoRepository.delete(ids[1]!);
+      await videoRepository.delete(ids[1]);
       const first = await feed.listReposts('alice', undefined, 2, null);
       expect(first.items.map((i) => i.video.id)).toEqual([ids[2]]);
       const second = await feed.listReposts('alice', first.nextCursor!, 2, null);
@@ -293,7 +293,7 @@ describe('FeedService', () => {
       const pages = await readAll((cursor) => feed.listHistory('alice', cursor, 2));
       expect(pages).toEqual([[a, c], [b]]);
       const { items } = await feed.listHistory('alice', undefined, 10);
-      expect(items[0]!.video.viewsCount).toBe(1);
+      expect(items[0].video.viewsCount).toBe(1);
       expect(items.every((i) => i.viewer !== null)).toBe(true);
 
       // Vidéo supprimée depuis : sautée.
@@ -349,11 +349,11 @@ describe('FeedService', () => {
       expect((await scrollAll(3)).flat().sort()).toEqual([...others].sort());
       const page = await feed.getPage(undefined, 10, 'alice');
       expect(page.items.map((i) => i.video.id).sort()).toEqual([...others].sort());
-      await expect(feed.getItem(bobs[0]!, null)).rejects.toBeInstanceOf(FeedItemNotFoundError);
+      await expect(feed.getItem(bobs[0], null)).rejects.toBeInstanceOf(FeedItemNotFoundError);
       await expect(feed.listAuthorVideos('bob', undefined, 10, null)).resolves.toMatchObject({ items: [] });
 
       await suspended.remove('bob');
-      await expect(feed.getItem(bobs[0]!, null)).resolves.toMatchObject({ video: { id: bobs[0] } });
+      await expect(feed.getItem(bobs[0], null)).resolves.toMatchObject({ video: { id: bobs[0] } });
     });
   });
 
@@ -482,5 +482,5 @@ describe('seededShuffle', () => {
 });
 
 function decodeSeed(cursor: string): number {
-  return JSON.parse(Buffer.from(cursor, 'base64url').toString()).r as number;
+  return (JSON.parse(Buffer.from(cursor, 'base64url').toString()) as { r: number }).r;
 }

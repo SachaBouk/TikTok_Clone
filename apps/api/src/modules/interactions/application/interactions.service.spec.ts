@@ -168,11 +168,11 @@ describe('InteractionsService', () => {
       const other = await createVideo();
       for (let i = 0; i < 600; i++) await service.recordView('alice', video);
       await expect(service.recordView('alice', other)).resolves.toBeUndefined();
-      expect((await videoRepository.findPublishedByIds([other]))[0]!.viewsCount).toBe(0);
+      expect((await videoRepository.findPublishedByIds([other]))[0].viewsCount).toBe(0);
       expect((await service.listViewedVideos('alice', null, 10)).map((v) => v.videoId)).toEqual([video]);
       clock = Date.UTC(2026, 0, 1, 1);
       await service.recordView('alice', other);
-      expect((await videoRepository.findPublishedByIds([other]))[0]!.viewsCount).toBe(1);
+      expect((await videoRepository.findPublishedByIds([other]))[0].viewsCount).toBe(1);
     });
   });
 
@@ -230,7 +230,7 @@ describe('InteractionsService', () => {
       expect(comment.content).toBe('Bravo !');
       expect(author.id).toBe('alice');
       const [published] = await videoRepository.findPublishedByIds([video]);
-      expect(published!.commentsCount).toBe(1);
+      expect(published.commentsCount).toBe(1);
     });
 
     it('refuse un commentaire vide ou sur une vidéo non publiée', async () => {
@@ -248,7 +248,7 @@ describe('InteractionsService', () => {
 
       expect(contents).toEqual(['commentaire 5', 'commentaire 4', 'commentaire 3', 'commentaire 2', 'commentaire 1']);
       expect(third.nextCursor).toBeNull();
-      expect(first.items[0]!.author.id).toBe('alice');
+      expect(first.items[0].author.id).toBe('alice');
     });
 
     it("seul l'auteur supprime son commentaire", async () => {
@@ -257,7 +257,7 @@ describe('InteractionsService', () => {
       await service.deleteComment('alice', comment.id);
       await expect(service.deleteComment('alice', comment.id)).rejects.toBeInstanceOf(CommentNotFoundError);
       const [published] = await videoRepository.findPublishedByIds([video]);
-      expect(published!.commentsCount).toBe(0);
+      expect(published.commentsCount).toBe(0);
     });
   });
 
@@ -345,7 +345,7 @@ describe('InteractionsService', () => {
       const second = await lists.listFollows('followers', 'u1', undefined, first.nextCursor, 3);
       expect(usernames(second)).toEqual(['u2']);
       expect(second.nextCursor).toBeNull();
-      expect(second.items[0]!.followedAt).toBeInstanceOf(Date);
+      expect(second.items[0].followedAt).toBeInstanceOf(Date);
     });
 
     it('liste les abonnements', async () => {
@@ -422,8 +422,8 @@ describe('InteractionsService', () => {
 
       const page = await service.listCommentHistory('alice', null, 2);
       expect(page.items.map((i) => i.comment.content)).toEqual(['Troisième', 'Deuxième']);
-      expect(page.items[1]!.video.id).toBe(other);
-      expect(page.items[1]!.videoAuthor.id).toBe('bob');
+      expect(page.items[1].video.id).toBe(other);
+      expect(page.items[1].videoAuthor.id).toBe('bob');
       expect(page.nextCursor).toBe(second.comment.id);
       const next = await service.listCommentHistory('alice', page.nextCursor, 2);
       expect(next).toMatchObject({ nextCursor: null });
@@ -445,7 +445,7 @@ describe('InteractionsService', () => {
   });
 
   describe('historique de visionnage', () => {
-    const viewsCount = async (id: string) => (await videoRepository.findPublishedByIds([id]))[0]!.viewsCount;
+    const viewsCount = async (id: string) => (await videoRepository.findPublishedByIds([id]))[0].viewsCount;
 
     it('compte une vue par compte et par vidéo, revisionnages exclus', async () => {
       await service.recordView('alice', video);

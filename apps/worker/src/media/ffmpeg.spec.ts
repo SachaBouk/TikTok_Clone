@@ -117,7 +117,7 @@ describe('createThumbnail', () => {
 
     expect(existsSync(output)).toBe(true);
     expect(readFileSync(output).subarray(0, 2).toString('hex')).toBe('ffd8'); // signature JPEG
-    const image = ffprobeJson(output).streams[0]!;
+    const image = ffprobeJson(output).streams[0];
     expect(`${image.width}x${image.height}`).toBe('720x1280');
   });
 });

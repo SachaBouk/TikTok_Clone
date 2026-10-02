@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { INestApplicationContext } from '@nestjs/common';
 import { WsAdapter } from '@nestjs/platform-ws';
+import type { WebSocketServer } from 'ws';
 import type { RealtimeService } from '../application/realtime.service';
 import type { RealtimeSession } from '../domain/realtime';
 
@@ -23,7 +24,8 @@ export class RealtimeWsAdapter extends WsAdapter {
     super(app);
   }
 
-  override create(port: number, options: Record<string, unknown> & { path?: string } = {}) {
+  // `WsAdapter.create` est typé `any` : le serveur `ws` qu'il crée est rendu explicite.
+  override create(port: number, options: Record<string, unknown> & { path?: string } = {}): WebSocketServer {
     return super.create(port, {
       ...options,
       verifyClient: (info: { req: IncomingMessage }, done: (verified: boolean, code?: number, message?: string) => void) => {
@@ -36,7 +38,7 @@ export class RealtimeWsAdapter extends WsAdapter {
           () => done(false, 500, 'Internal Server Error'),
         );
       },
-    });
+    }) as WebSocketServer;
   }
 }
 

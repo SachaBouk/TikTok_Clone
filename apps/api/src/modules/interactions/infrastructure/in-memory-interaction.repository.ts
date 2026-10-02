@@ -207,7 +207,7 @@ export class InMemoryInteractionRepository extends InteractionRepository {
   async listBlocked(blockerId: string): Promise<string[]> {
     return this.blocks
       .filter((key) => key.startsWith(`${blockerId}:`))
-      .map((key) => key.split(':')[1]!)
+      .map((key) => key.split(':')[1])
       .reverse();
   }
 

@@ -1,16 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import type {
-  NewReport,
-  OpenReportTarget,
-  Report,
-  ReportReason,
-  ReportResolution,
-  ReportTarget,
-  ReportTargetType,
-  ResolvedReport,
-} from '../domain/report';
+import type { NewReport, OpenReportTarget, Report, ReportResolution, ReportTarget, ReportTargetType, ResolvedReport } from '../domain/report';
 import { ReportRepository } from '../domain/report.repository';
 
 const reportSelect = {
@@ -146,7 +137,7 @@ export class PrismaReportRepository extends ReportRepository {
       openCount: row.open_count,
       reasons: counts
         .filter((c) => c.targetType === row.target_type && c.targetId === row.target_id)
-        .map((c) => ({ reason: c.reason as ReportReason, count: c._count._all }))
+        .map((c) => ({ reason: c.reason, count: c._count._all }))
         .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason)),
       latestId: row.latest_id,
       latestAt: row.latest_at,

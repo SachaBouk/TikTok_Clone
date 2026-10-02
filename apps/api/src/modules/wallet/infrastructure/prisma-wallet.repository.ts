@@ -41,8 +41,8 @@ export class PrismaWalletRepository extends WalletRepository {
         if (entry.userId) {
           await tx.wallet.createMany({ data: [{ userId: entry.userId }], skipDuplicates: true });
           const [wallet] = await tx.$queryRaw<{ balance: number }[]>`SELECT balance FROM wallets WHERE user_id = ${entry.userId}::uuid FOR UPDATE`;
-          applied = appliedAmount(wallet!.balance, entry.amount);
-          balance = wallet!.balance + applied;
+          applied = appliedAmount(wallet.balance, entry.amount);
+          balance = wallet.balance + applied;
           await tx.wallet.update({ where: { userId: entry.userId }, data: { balance } });
         }
         await tx.walletTransaction.create({

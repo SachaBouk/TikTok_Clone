@@ -142,8 +142,8 @@ async function main() {
 
     const published: { id: string; account: Account }[] = [];
     for (const [index, file] of files.entries()) {
-      const account = accounts[index % accounts.length]!;
-      const id = await publish(account, file, CAPTIONS[index % CAPTIONS.length]!);
+      const account = accounts[index % accounts.length];
+      const id = await publish(account, file, CAPTIONS[index % CAPTIONS.length]);
       published.push({ id, account });
       console.log(`  ${index + 1}/${files.length}  @${account.username}  ${id}`);
     }
@@ -250,7 +250,7 @@ async function generateVideos(count: number, directory: string): Promise<string[
   const files: string[] = [];
   for (let index = 0; index < count; index++) {
     const file = join(directory, `demo-${String(index + 1).padStart(2, '0')}.mp4`);
-    const source = PATTERNS[index % PATTERNS.length]!;
+    const source = PATTERNS[index % PATTERNS.length];
     const title = `drawtext=font=Arial:text='Démo ${index + 1}':fontsize=120:fontcolor=white:borderw=6:bordercolor=black:x=(w-tw)/2:y=h*0.42`;
     const encode = (filters: string) =>
       execFileAsync(FFMPEG, [
@@ -421,7 +421,7 @@ async function seedConversations(accounts: Account[]) {
       const start = hash('start', first.username, second.username) % DIRECT_MESSAGES.length;
       for (let n = 0; n < count; n++) {
         const sender = n % 2 === 0 ? first : second;
-        const content = DIRECT_MESSAGES[(start + n) % DIRECT_MESSAGES.length]!;
+        const content = DIRECT_MESSAGES[(start + n) % DIRECT_MESSAGES.length];
         await expectOk(
           request('POST', `/conversations/${conversation.id}/messages`, { token: sender.token, body: { content } }),
           `message de @${sender.username}`,
@@ -448,7 +448,7 @@ async function sendRequest(from: Account, to: Account): Promise<boolean> {
   if (response.status !== 200) throw apiError(`demande à @${to.username}`, response);
   const conversation = response.body as ConversationDto;
   if (conversation.lastMessage || !conversation.canSend) return false;
-  const content = REQUEST_MESSAGES[hash('request-text', from.username, to.username) % REQUEST_MESSAGES.length]!;
+  const content = REQUEST_MESSAGES[hash('request-text', from.username, to.username) % REQUEST_MESSAGES.length];
   await expectOk(
     request('POST', `/conversations/${conversation.id}/messages`, { token: from.token, body: { content } }),
     `demande à @${to.username}`,
@@ -481,7 +481,7 @@ async function ensureComment(account: Account, videoId: string): Promise<boolean
     cursor = page.nextCursor;
   } while (cursor);
 
-  const content = COMMENTS[hash('text', account.username, videoId) % COMMENTS.length]!;
+  const content = COMMENTS[hash('text', account.username, videoId) % COMMENTS.length];
   await expectOk(request('POST', `/videos/${videoId}/comments`, { token: account.token, body: { content } }), `commentaire sur ${videoId}`);
   return true;
 }

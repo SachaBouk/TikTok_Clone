@@ -81,7 +81,7 @@ export class AdminService {
 
   async getAccount(userId: string): Promise<AdminAccount> {
     const [account] = await this.describeAccounts([await this.account(userId)]);
-    return account!;
+    return account;
   }
 
   // Suspension (ADR-037) : les règles sont dans auth (motif obligatoire, pas d'administrateur, sessions révoquées) ;

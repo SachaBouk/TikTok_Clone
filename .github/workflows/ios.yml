@@ -54,6 +54,11 @@ jobs:
           sudo xcode-select --switch /Applications/Xcode_27.app
           xcodebuild -version
 
+      # swift-format d'Xcode 27.0 (ADR-041) : avant les tests, un écart de forme échoue vite et sans simulateur.
+      - name: Lint Swift (swift-format)
+        working-directory: apps/ios
+        run: ./scripts/lint.sh
+
       - name: XcodeGen ${{ env.XCODEGEN_VERSION }}
         run: |
           curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
