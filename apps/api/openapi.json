@@ -4075,6 +4075,15 @@
               "maxLength": 100,
               "type": "string"
             }
+          },
+          {
+            "name": "suspended",
+            "required": false,
+            "in": "query",
+            "description": "Comptes suspendus seulement (ADR-037), du plus récemment suspendu au plus ancien ; `q` est alors ignoré.",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

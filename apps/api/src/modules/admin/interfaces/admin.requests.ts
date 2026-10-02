@@ -31,6 +31,15 @@ export class AdminUsersQuery extends AdminPageQuery {
   @IsString()
   @MaxLength(100)
   q?: string;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Comptes suspendus seulement (ADR-037), du plus récemment suspendu au plus ancien ; `q` est alors ignoré.',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  suspended?: boolean;
 }
 
 export class AdminVideosQuery extends AdminPageQuery {

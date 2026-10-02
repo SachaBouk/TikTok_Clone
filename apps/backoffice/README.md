@@ -48,7 +48,8 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 - **Suspension** (ADR-037) : bouton « Suspendre » de la fiche d'un compte (pas pour un administrateur), avec un motif interne
   obligatoire (500 caractères au plus, jamais montré à la personne). Le compte est déconnecté de ses appareils, ne peut plus
   se connecter, et ses contenus disparaissent pour les autres jusqu'à la levée ; rien n'est supprimé. Encadré « Compte
-  suspendu » (date, auteur, motif) et « Lever la suspension » ; badge « Suspendu » dans la liste.
+  suspendu » (date, auteur, motif) et « Lever la suspension » ; badge « Suspendu » dans la liste, et filtre « Suspendus » de
+  la page Comptes : du plus récemment suspendu au plus ancien, avec date, motif et administrateur.
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
@@ -74,7 +75,6 @@ disparaît pour les deux participants.
 ## Limites
 
 - Pas de contestation d'une décision par l'auteur ; le rôle administrateur (script `admin:grant`) n'est pas journalisé.
-- Pas de liste des comptes suspendus : on les retrouve par la recherche (pseudo, nom).
 - Rafraîchissement dédupliqué propre au processus : avec plusieurs instances du backoffice, il faudrait un magasin partagé (Redis via l'API, ou affinité de session).
 - Pas de copie des données PostHog : liens seulement.
 - Limite des échecs de connexion par IP (ADR-030) : sans `TRUST_PROXY` désignant le backoffice, tous les administrateurs partagent l'adresse du serveur Next.

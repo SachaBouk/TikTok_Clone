@@ -2,8 +2,9 @@ import 'server-only';
 import type { AdminSuspendUserDto, AdminUserDto, AdminUserPageDto } from '@repo/shared';
 import { apiRequest, orNull } from '@/lib/api-client';
 
-export function listUsers(filter: { q?: string; cursor?: string }): Promise<AdminUserPageDto> {
-  return apiRequest('GET', '/admin/users', { q: filter.q, cursor: filter.cursor, limit: 25 });
+// `suspended` : comptes suspendus seulement (ADR-037), du plus récemment suspendu au plus ancien ; `q` est alors ignoré.
+export function listUsers(filter: { q?: string; cursor?: string; suspended?: boolean }): Promise<AdminUserPageDto> {
+  return apiRequest('GET', '/admin/users', { q: filter.q, cursor: filter.cursor, suspended: filter.suspended ? 'true' : undefined, limit: 25 });
 }
 
 export function getUser(id: string): Promise<AdminUserDto | null> {

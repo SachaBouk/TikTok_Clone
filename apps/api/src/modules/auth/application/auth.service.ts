@@ -178,6 +178,11 @@ export class AuthService {
     return this.accounts.countSuspended();
   }
 
+  // Comptes suspendus, du plus récemment suspendu au plus ancien (backoffice), après le compte `afterUserId`.
+  listSuspended(afterUserId: string | null, limit: number): Promise<string[]> {
+    return this.accounts.listSuspended(afterUserId, limit);
+  }
+
   // Au démarrage de l'API : le registre Redis est reconstruit depuis la base, qui fait foi.
   async syncSuspendedAccounts(): Promise<number> {
     const ids = await this.accounts.listSuspendedIds();

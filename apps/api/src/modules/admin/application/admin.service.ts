@@ -79,6 +79,16 @@ export class AdminService {
     return { items: await this.describeAccounts(page), nextCursor: rows.length > limit ? page.at(-1)!.id : null };
   }
 
+  // Comptes suspendus (ADR-037), du plus récemment suspendu au plus ancien. Curseur : identifiant du dernier compte lu,
+  // même s'il a été sauté (supprimé entre les deux lectures) ; une page vide si sa suspension a été levée depuis.
+  async listSuspendedAccounts(cursor: string | null, limit: number): Promise<Page<AdminAccount>> {
+    const ids = await this.auth.listSuspended(cursor, limit + 1);
+    const page = ids.slice(0, limit);
+    const users = await this.usersById(page);
+    const ordered = page.flatMap((id) => users.get(id) ?? []);
+    return { items: await this.describeAccounts(ordered), nextCursor: ids.length > limit ? page.at(-1)! : null };
+  }
+
   async getAccount(userId: string): Promise<AdminAccount> {
     const [account] = await this.describeAccounts([await this.account(userId)]);
     return account;

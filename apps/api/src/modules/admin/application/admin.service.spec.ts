@@ -315,6 +315,28 @@ describe('AdminService', () => {
       expect((await service.getStats()).users.suspended).toBe(0);
     });
 
+    it('liste les comptes suspendus, du plus récemment suspendu au plus ancien, par pages ; une levée les retire', async () => {
+      accounts.adminIds.add(CAROL);
+      await service.suspendAccount(CAROL, ALICE, 'Spam');
+      await service.suspendAccount(CAROL, BOB, 'Harcèlement');
+      // Alice suspendue une minute plus tôt.
+      accounts.suspensions.set(ALICE, { ...accounts.suspensions.get(ALICE)!, suspendedAt: new Date(NOW.getTime() - 60_000) });
+
+      const first = await service.listSuspendedAccounts(null, 1);
+      expect(first.items.map((a) => [a.user.username, a.suspension?.reason, a.suspension?.suspendedBy?.username])).toEqual([
+        ['bob', 'Harcèlement', 'carol'],
+      ]);
+      expect(first.nextCursor).toBe(BOB);
+      const second = await service.listSuspendedAccounts(first.nextCursor, 1);
+      expect(second.items.map((a) => a.user.username)).toEqual(['alice']);
+      expect(second.nextCursor).toBeNull();
+
+      await service.liftSuspension(CAROL, BOB);
+      expect((await service.listSuspendedAccounts(null, 10)).items.map((a) => a.user.username)).toEqual(['alice']);
+      // Curseur d'un compte dont la suspension a été levée depuis : page vide.
+      await expect(service.listSuspendedAccounts(BOB, 10)).resolves.toEqual({ items: [], nextCursor: null });
+    });
+
     it("refuse un administrateur ou soi-même (409) ; compte inconnu (404) ; rien n'est fermé", async () => {
       accounts.adminIds.add(CAROL);
       accounts.adminIds.add(ALICE);

@@ -92,7 +92,9 @@ export class AdminController {
   @ApiOkResponse({ type: AdminUserPageResponse })
   @ApiBadRequestResponse(INVALID_QUERY)
   async listAdminUsers(@Query() query: AdminUsersQuery): Promise<AdminUserPageDto> {
-    const page = await this.adminService.listAccounts(query.q ?? null, query.cursor ?? null, query.limit);
+    const page = query.suspended
+      ? await this.adminService.listSuspendedAccounts(query.cursor ?? null, query.limit)
+      : await this.adminService.listAccounts(query.q ?? null, query.cursor ?? null, query.limit);
     return { items: page.items.map(toAdminUserDto), nextCursor: page.nextCursor };
   }
 

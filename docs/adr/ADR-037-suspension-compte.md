@@ -47,7 +47,8 @@ Mise en œuvre :
 - **Backoffice** :
   - routes `PUT /admin/users/:id/suspension` (`{ reason }`) et `DELETE /admin/users/:id/suspension`, qui renvoient le compte ;
   - `suspension` (date, motif, administrateur auteur) sur la fiche d'un compte, et `users.suspended` dans les statistiques ;
-  - côté app web : bouton « Suspendre » avec saisie du motif, encadré de suspension avec « Lever la suspension », badge dans la liste, compteur sur le tableau de bord.
+  - côté app web : bouton « Suspendre » avec saisie du motif, encadré de suspension avec « Lever la suspension », badge dans la liste, compteur sur le tableau de bord ;
+  - liste des comptes suspendus : `GET /admin/users?suspended=true`, du plus récemment suspendu au plus ancien (pagination par clé sur la date de suspension et l'identifiant, curseur = identifiant du dernier compte lu), avec date, motif et administrateur ; filtre « Suspendus » de la page Comptes.
 - **App iOS** : `AppError.accountSuspended` à la connexion (403) et `AppError.profileSuspended` pour un profil (410).
 
 ## Alternatives
@@ -70,7 +71,7 @@ Mise en œuvre :
 - Après la levée, un access token encore valide (moins de 15 minutes) fonctionne de nouveau. Les sessions, elles, restent révoquées.
 - Les compteurs (abonnés, likes, commentaires) comptent toujours les contributions du compte suspendu.
 - Le badge des notifications n'est pas renvoyé en direct au moment de la suspension : il est relu ensuite.
-- Pas de liste des comptes suspendus dans le backoffice (recherche par pseudo). Suspensions et levées sont inscrites au journal de modération (ADR-038).
+- Dans la liste des comptes suspendus, le curseur d'un compte dont la suspension a été levée entre deux pages donne une page vide (revenir au début). Suspensions et levées sont inscrites au journal de modération (ADR-038).
 - Une personne suspendue ne peut pas supprimer elle-même son compte : une demande de suppression passe par l'exploitant.
 
 ## Liens

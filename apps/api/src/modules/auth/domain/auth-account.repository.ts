@@ -16,5 +16,8 @@ export abstract class AuthAccountRepository {
   // Idempotent.
   abstract liftSuspension(userId: string): Promise<void>;
   abstract listSuspendedIds(): Promise<string[]>;
+  // Comptes suspendus du plus récemment suspendu au plus ancien (backoffice), après le compte `afterUserId` s'il est
+  // donné ; vide si ce compte n'est plus suspendu.
+  abstract listSuspended(afterUserId: string | null, limit: number): Promise<string[]>;
   abstract countSuspended(): Promise<number>;
 }

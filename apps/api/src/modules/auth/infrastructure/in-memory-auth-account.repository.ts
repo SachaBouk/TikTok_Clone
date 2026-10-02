@@ -49,6 +49,18 @@ export class InMemoryAuthAccountRepository extends AuthAccountRepository {
     return [...this.suspensions.keys()];
   }
 
+  async listSuspended(afterUserId: string | null, limit: number): Promise<string[]> {
+    const ordered = [...this.suspensions.values()].sort(
+      (a, b) => b.suspendedAt.getTime() - a.suspendedAt.getTime() || (a.userId < b.userId ? 1 : a.userId > b.userId ? -1 : 0),
+    );
+    let start = 0;
+    if (afterUserId) {
+      start = ordered.findIndex((s) => s.userId === afterUserId) + 1;
+      if (start === 0) return [];
+    }
+    return ordered.slice(start, start + limit).map((s) => s.userId);
+  }
+
   async countSuspended(): Promise<number> {
     return this.suspensions.size;
   }

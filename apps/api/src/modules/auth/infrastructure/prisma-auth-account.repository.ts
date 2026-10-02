@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { violatedUniqueConstraint } from '../../../database/prisma-errors';
+import type { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { AccountSuspension, AuthAccount, NewAccount } from '../domain/auth-account';
 import { AuthAccountRepository } from '../domain/auth-account.repository';
@@ -61,6 +62,23 @@ export class PrismaAuthAccountRepository extends AuthAccountRepository {
 
   async listSuspendedIds(): Promise<string[]> {
     const rows = await this.prisma.user.findMany({ where: { suspendedAt: { not: null } }, select: { id: true } });
+    return rows.map((row) => row.id);
+  }
+
+  // Pagination par clé (date de suspension, identifiant), sur l'index partiel des comptes suspendus.
+  async listSuspended(afterUserId: string | null, limit: number): Promise<string[]> {
+    let after: Prisma.UserWhereInput = {};
+    if (afterUserId) {
+      const anchor = await this.prisma.user.findUnique({ where: { id: afterUserId }, select: { suspendedAt: true } });
+      if (!anchor?.suspendedAt) return [];
+      after = { OR: [{ suspendedAt: { lt: anchor.suspendedAt } }, { suspendedAt: anchor.suspendedAt, id: { lt: afterUserId } }] };
+    }
+    const rows = await this.prisma.user.findMany({
+      where: { suspendedAt: { not: null }, ...after },
+      orderBy: [{ suspendedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { id: true },
+    });
     return rows.map((row) => row.id);
   }
 
