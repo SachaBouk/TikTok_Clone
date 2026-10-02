@@ -40,6 +40,7 @@
 | [ADR-036](ADR-036-suivre-en-retour-activite.md) | « Suivre en retour » dans le centre d'activité (complète ADR-028) | Proposé |
 | [ADR-037](ADR-037-suspension-compte.md) | Suspension de compte (complète ADR-019) | Proposé |
 | [ADR-038](ADR-038-signalements.md) | Signalements (complète ADR-019) | Proposé |
+| [ADR-039](ADR-039-limites-debit-actions.md) | Limites de débit : inscription, réactions, commentaires, follows, vues et envois (prolonge ADR-030) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

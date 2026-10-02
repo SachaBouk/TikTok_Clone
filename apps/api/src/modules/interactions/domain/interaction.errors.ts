@@ -1,5 +1,24 @@
+import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
+
 // Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
 export abstract class InteractionError extends Error {}
+
+// Trop d'actions récentes de ce type (ADR-039) : 429 avec Retry-After.
+export type LimitedAction = 'reaction' | 'comment' | 'follow';
+const LIMITED_ACTIONS: Record<LimitedAction, string> = {
+  reaction: 'Trop de réactions',
+  comment: 'Trop de commentaires',
+  follow: 'Trop d’abonnements',
+};
+export class TooManyActionsError extends InteractionError {
+  constructor(
+    readonly action: LimitedAction,
+    readonly retryAfterSeconds: number,
+  ) {
+    super(`${LIMITED_ACTIONS[action]} en peu de temps : réessayez dans ${formatRetryDelay(retryAfterSeconds)}`);
+    this.name = 'TooManyActionsError';
+  }
+}
 
 // Vidéo inexistante ou pas encore publiée : on ne réagit qu'à une vidéo visible de tous.
 export class VideoNotAvailableError extends InteractionError {

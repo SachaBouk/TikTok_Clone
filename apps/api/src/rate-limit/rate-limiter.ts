@@ -1,5 +1,6 @@
 // Limites de débit (ADR-014 : compteurs dans Redis), partagées par les modules qui en ont besoin : envois de
-// messages (messaging), échecs de connexion (auth), partages comptés (interactions). Port sans dépendance
+// messages (messaging), échecs de connexion et inscriptions (auth), partages, réactions, commentaires, follows
+// et vues (interactions), signalements (reports), envois de vidéos (videos). Voir ADR-030 et ADR-039. Port sans dépendance
 // à NestJS ni à Redis : les couches domain/ et application/ des modules peuvent l'importer (ADR-003).
 // Fenêtres fixes, partagées entre les instances de l'API. Clés préfixées par `ratelimit:` dans Redis.
 // Stockage indisponible : l'action est permise (au pire, pas de limite le temps de la panne), et journalisée.
@@ -25,6 +26,13 @@ export abstract class RateLimiter {
 
   // Vrai la première fois pour `key` sur une période glissante de `seconds`, faux ensuite (dédoublonnage).
   abstract once(key: string, seconds: number): Promise<boolean>;
+}
+
+// Délai d'attente lisible, pour les messages d'erreur (« 45 s », « 12 min », « 3 h »).
+export function formatRetryDelay(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.ceil(seconds / 60)} min`;
+  return `${Math.ceil(seconds / 3600)} h`;
 }
 
 // Fenêtre fixe en cours d'une règle : suffixe de clé et secondes avant sa fin.

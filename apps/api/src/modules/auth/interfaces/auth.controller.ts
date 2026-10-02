@@ -11,6 +11,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { AuthTokensDto } from '@repo/shared';
+import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { AuthService } from '../application/auth.service';
 import type { AuthTokens } from '../domain/auth-account';
@@ -30,8 +31,9 @@ export class AuthController {
   @Post('register')
   @ApiCreatedResponse({ type: AuthTokensResponse })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Email ou pseudo déjà pris.' })
-  async register(@Body() body: RegisterRequest): Promise<AuthTokensDto> {
-    return toTokensDto(await this.auth.register(body));
+  @ApiTooManyRequests('Trop de comptes créés récemment depuis cette adresse IP')
+  async register(@Body() body: RegisterRequest, @Ip() ip: string | undefined): Promise<AuthTokensDto> {
+    return toTokensDto(await this.auth.register(body, ip || null));
   }
 
   @Post('login')

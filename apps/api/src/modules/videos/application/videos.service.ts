@@ -9,6 +9,7 @@ import {
   partCount,
   SUPPORTED_VIDEO_TYPES,
   UPLOAD_PART_SIZE_BYTES,
+  UPLOAD_RATE_LIMITS,
   UPLOAD_URL_TTL_SECONDS,
 } from '../domain/upload-rules';
 import {
@@ -22,6 +23,7 @@ import {
   type VideoStatus,
 } from '../domain/video';
 import {
+  TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
   VideoNotAwaitingUploadError,
@@ -30,6 +32,7 @@ import {
 } from '../domain/video.errors';
 import type { VideoRepository } from '../domain/video.repository';
 import type { PresignedPart, UploadedPart, VideoStorage } from '../domain/video-storage';
+import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 
 export interface CreateUploadInput {
   contentType: string;
@@ -53,6 +56,7 @@ export class VideosService {
     private readonly transcoding: TranscodingQueue,
     private readonly events: VideoEventPublisher,
     private readonly cleanup: VideoCleanupQueue,
+    private readonly rateLimiter: RateLimiter,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -60,6 +64,9 @@ export class VideosService {
   async createUpload(userId: string, input: CreateUploadInput): Promise<VideoUpload> {
     if (!isSupportedVideoType(input.contentType)) throw new UnsupportedVideoTypeError(input.contentType);
     if (input.fileSize > MAX_VIDEO_SIZE_BYTES) throw new VideoTooLargeError();
+    // Limite de débit (ADR-039), après les contrôles de la requête : une requête invalide ne compte pas.
+    const retryAfter = await this.rateLimiter.consume(`upload:${userId}`, UPLOAD_RATE_LIMITS);
+    if (retryAfter !== null) throw new TooManyUploadsError(retryAfter);
 
     // Clé préfixée par l'auteur : permet de retrouver ses objets (suppression de compte, nettoyage).
     const rawKey = `${userId}/${randomUUID()}.${SUPPORTED_VIDEO_TYPES[input.contentType]}`;

@@ -1,3 +1,5 @@
+import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
+
 // Interactions sociales (ADR-016). Les compteurs associés (likes_count, followers_count…) sont maintenus
 // par des triggers PostgreSQL (migration interaction_counters) : ce module n'écrit que ses propres tables.
 
@@ -76,6 +78,26 @@ export type Sharer = { userId: string } | { ip: string };
 // Partages comptés (ADR-030) : au plus un par vidéo et par personne (compte ou IP) sur 24 h glissantes.
 // Les suivants sont acceptés sans être comptés : le compteur ne se gonfle pas en rappelant la route.
 export const SHARE_DEDUP_SECONDS = 24 * 3600;
+
+// Limites de débit des actions (ADR-039), par compte, fenêtres fixes. Seuls les ajouts comptent : retirer un like
+// ou se désabonner reste toujours possible ; ce sont les ajouts qui notifient (et envoient des push).
+// Au-delà : 429 avec Retry-After. Une tentative refusée (par la limite ou un autre contrôle) n'est pas comptée.
+// Like, favori et republication partagent la même limite.
+export const REACTION_RATE_LIMITS: RateLimitRule[] = [
+  { limit: 60, windowSeconds: 60 },
+  { limit: 600, windowSeconds: 3600 },
+];
+export const COMMENT_RATE_LIMITS: RateLimitRule[] = [
+  { limit: 10, windowSeconds: 60 },
+  { limit: 100, windowSeconds: 3600 },
+];
+export const FOLLOW_RATE_LIMITS: RateLimitRule[] = [
+  { limit: 30, windowSeconds: 60 },
+  { limit: 200, windowSeconds: 24 * 3600 },
+];
+// Vues : envoyées seules par l'app après 1 s de lecture. Au-delà, la vue est ignorée sans erreur (204), comme un
+// partage en double : ni comptée ni ajoutée à l'historique.
+export const VIEW_RATE_LIMITS: RateLimitRule[] = [{ limit: 600, windowSeconds: 3600 }];
 
 export const MAX_COMMENT_LENGTH = 500;
 export const DEFAULT_COMMENTS_PAGE_SIZE = 20;

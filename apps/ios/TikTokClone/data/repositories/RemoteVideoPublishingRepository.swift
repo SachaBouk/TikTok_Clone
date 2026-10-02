@@ -9,6 +9,7 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
         let body = Components.Schemas.CreateUploadRequest(contentType: .init(contentType), fileSize: fileSize, description: description)
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
+        case .tooManyRequests(let error): throw AppError.tooManyActions(.uploads, retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .unauthorized: throw AppError.sessionExpired
         case .undocumented: throw AppError.unexpected

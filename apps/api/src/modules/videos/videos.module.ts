@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { PushModule } from '../push/push.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { VideosService } from './application/videos.service';
@@ -39,8 +40,9 @@ import { StorageConfig } from '../../storage/storage.config';
         transcoding: TranscodingQueue,
         events: VideoEventPublisher,
         cleanup: VideoCleanupQueue,
-      ) => new VideosService(videos, storage, transcoding, events, cleanup),
-      inject: [VideoRepository, VideoStorage, TranscodingQueue, VideoEventPublisher, VideoCleanupQueue],
+        rateLimiter: RateLimiter,
+      ) => new VideosService(videos, storage, transcoding, events, cleanup, rateLimiter),
+      inject: [VideoRepository, VideoStorage, TranscodingQueue, VideoEventPublisher, VideoCleanupQueue, RateLimiter],
     },
     TranscodeResultsConsumer,
     VideoCleanupConsumer,

@@ -31,6 +31,7 @@ struct RemoteAuthRepository: AuthRepository {
         case .created(let created): try save(try created.body.json)
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .tooManyRequests(let error): throw AppError.tooManyActions(.signup, retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .undocumented: throw AppError.unexpected
         }
     }

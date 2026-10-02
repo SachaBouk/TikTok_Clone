@@ -74,6 +74,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 - Connexion et inscription par email ; mode invité au lancement (l'accueil est lisible, les autres onglets invitent à se connecter).
 - Trop d'échecs de connexion (ADR-030, 429) : `AppError.tooManyLoginAttempts(retryAfter:)`, « Trop de tentatives de connexion. Réessaie dans N min. ».
+- Autres limites de débit (ADR-039, 429) : inscription, likes, favoris, republications, commentaires, follows et envois de vidéos → `AppError.tooManyActions(LimitedAction, retryAfter:)`, « Trop de … Réessaie dans N min. » (délai de l'en-tête `Retry-After`). L'affichage optimiste est annulé ; un envoi refusé passe en « interrompu ». Les vues au-delà de la limite sont ignorées par l'API sans erreur.
 - Compte suspendu (ADR-037) : 403 à la connexion → « Ton compte est suspendu. » (`AppError.accountSuspended`). Suspendu pendant l'usage : le WebSocket est fermé (4001), le rafraîchissement échoue, l'app repasse en invité. Le profil d'un compte suspendu (410, `.gone`) affiche « Profil indisponible — Ce compte a été suspendu. ».
 - Tokens dans le Keychain (`KeychainTokenStore`, `AfterFirstUnlockThisDeviceOnly`), avec la date d'expiration de l'access token.
 - `AuthMiddleware` (sur toutes les routes sauf `login`, `register`, `refresh`, `logout`, `loginWithApple`) :

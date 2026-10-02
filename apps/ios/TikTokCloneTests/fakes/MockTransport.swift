@@ -55,3 +55,10 @@ func tokensJSON(access: String, refresh: String) -> String {
 func errorJSON(_ status: Int, _ message: String) -> String {
     #"{"statusCode":\#(status),"message":"\#(message)"}"#
 }
+
+// Réponse 429 d'une route limitée (ADR-030, ADR-039), avec l'en-tête Retry-After.
+func tooManyRequests(retryAfter: Int) -> (HTTPResponse, HTTPBody?) {
+    var response = HTTPResponse(status: .tooManyRequests, headerFields: [.contentType: "application/json"])
+    response.headerFields[HTTPField.Name("Retry-After")!] = String(retryAfter)
+    return (response, HTTPBody(errorJSON(429, "Trop de requêtes")))
+}

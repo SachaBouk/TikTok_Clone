@@ -25,11 +25,13 @@ import {
   EmptyCommentError,
   NotCommentAuthorError,
   TargetUserNotFoundError,
+  TooManyActionsError,
   VideoNotAvailableError,
+  type LimitedAction,
 } from '../domain/interaction.errors';
-import { SHARE_DEDUP_SECONDS } from '../domain/interaction';
+import { COMMENT_RATE_LIMITS, FOLLOW_RATE_LIMITS, REACTION_RATE_LIMITS, SHARE_DEDUP_SECONDS, VIEW_RATE_LIMITS } from '../domain/interaction';
 import type { InteractionRepository } from '../domain/interaction.repository';
-import type { RateLimiter } from '../../../rate-limit/rate-limiter';
+import type { RateLimiter, RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
 export interface InteractionState {
@@ -101,6 +103,8 @@ export class InteractionsService {
     // Blocage : ni like ni republication (visibles et notifiés). Le favori, privé, reste possible ;
     // retirer une réaction aussi.
     if (active && kind !== 'favorite') await this.assertNotBlocked(userId, authorId);
+    // Limite de débit (ADR-039) : les ajouts seulement, comptés après les autres contrôles.
+    if (active) await this.limit('reaction', userId, REACTION_RATE_LIMITS);
     if (active) await this.interactions.addReaction(kind, userId, videoId);
     else await this.interactions.removeReaction(kind, userId, videoId);
 
@@ -121,6 +125,8 @@ export class InteractionsService {
   async recordView(userId: string, videoId: string): Promise<void> {
     const video = await this.publishedVideo(videoId);
     if (video.userId === userId) return;
+    // Au-delà de la limite (ADR-039), la vue est ignorée sans erreur : l'app l'envoie seule.
+    if ((await this.rateLimiter.consume(`view:${userId}`, VIEW_RATE_LIMITS)) !== null) return;
     await this.interactions.recordView(userId, videoId);
   }
 
@@ -159,6 +165,7 @@ export class InteractionsService {
     // Compte suspendu (ADR-037) : introuvable pour un nouvel abonnement ; se désabonner reste possible.
     if (active && (await this.suspended.has(target.id))) throw new TargetUserNotFoundError(username);
     if (active) await this.assertNotBlocked(followerId, target.id);
+    if (active) await this.limit('follow', followerId, FOLLOW_RATE_LIMITS);
     if (active) await this.interactions.follow(followerId, target.id);
     else await this.interactions.unfollow(followerId, target.id);
 
@@ -210,6 +217,7 @@ export class InteractionsService {
     const video = await this.publishedVideo(videoId);
     await this.assertNotSuspended(video.userId, videoId);
     await this.assertNotBlocked(userId, video.userId);
+    await this.limit('comment', userId, COMMENT_RATE_LIMITS);
     const comment = await this.interactions.createComment({ videoId, userId, content: text });
     await this.notifications.notify({
       type: 'comment',
@@ -420,5 +428,11 @@ export class InteractionsService {
       if (error instanceof UserNotFoundError) throw new TargetUserNotFoundError(username);
       throw error;
     }
+  }
+
+  // Compte une action de `userId` (ADR-039), ou refuse en 429 si une règle est atteinte (rien n'est alors compté).
+  private async limit(action: LimitedAction, userId: string, rules: RateLimitRule[]): Promise<void> {
+    const retryAfter = await this.rateLimiter.consume(`${action}:${userId}`, rules);
+    if (retryAfter !== null) throw new TooManyActionsError(action, retryAfter);
   }
 }

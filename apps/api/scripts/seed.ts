@@ -466,14 +466,33 @@ interface ApiResponse {
   body: unknown;
 }
 
+// Limites de débit de l'API (ADR-030, ADR-039) : une limite par minute est attendue (`Retry-After`), puis la requête
+// est rejouée ; une limite plus longue (par heure, par jour) arrête le seed avec un message.
+const MAX_RATE_LIMIT_WAIT_SECONDS = 120;
+
 async function request(method: string, path: string, { token, body }: { token?: string; body?: unknown } = {}): Promise<ApiResponse> {
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  return { status: response.status, body: text ? JSON.parse(text) : null };
+  for (;;) {
+    const response = await fetch(`${API_URL}${path}`, {
+      method,
+      headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    if (response.status === 429) {
+      const wait = Number(response.headers.get('retry-after') ?? 60);
+      if (wait > MAX_RATE_LIMIT_WAIT_SECONDS) {
+        throw new Error(
+          `Limite de débit de l'API atteinte (${method} ${path}, ${wait} s d'attente). ` +
+            'Publier moins de vidéos, ou supprimer les clés Redis ratelimit:* (base locale seulement).',
+        );
+      }
+      console.log(`  limite de débit (${method} ${path}) : attente de ${wait} s`);
+      // Attente non bloquante : la boucle d'événements doit voir les connexions keep-alive fermées (piège du seed).
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+      continue;
+    }
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  }
 }
 
 function apiError(action: string, response: ApiResponse): Error {

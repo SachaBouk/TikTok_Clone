@@ -1,8 +1,10 @@
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CLEANUP_DELAY_MS } from '../domain/cleanup-queue';
 import { TranscodingQueue, type TranscodingJob } from '../domain/transcoding-queue';
 import { MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
 import {
+  TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
   VideoNotAwaitingUploadError,
@@ -44,7 +46,7 @@ describe('VideosService', () => {
     queue = new RecordingTranscodingQueue();
     events = new InMemoryVideoEventPublisher();
     cleanup = new InMemoryVideoCleanupQueue();
-    service = new VideosService(videos, storage, queue, events, cleanup, () => new Date('2026-01-01T00:00:00Z'));
+    service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(), () => new Date('2026-01-01T00:00:00Z'));
   });
 
   // Ce que fait l'app : envoie chaque partie sur son URL et collecte les ETags.
@@ -81,6 +83,30 @@ describe('VideosService', () => {
       );
       expect(videos.videos.size).toBe(0);
       expect(storage.uploads.size).toBe(0);
+    });
+
+    it('limite les envois démarrés (ADR-039) : 10 par heure et 30 par jour ; une requête invalide ne compte pas', async () => {
+      let clock = Date.UTC(2026, 0, 1);
+      service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(() => clock));
+      await expect(service.createUpload(ALICE, { contentType: 'image/png', fileSize: 1000 })).rejects.toBeInstanceOf(UnsupportedVideoTypeError);
+      for (let i = 0; i < 10; i++) await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      const refused = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 }).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(TooManyUploadsError);
+      expect((refused as TooManyUploadsError).retryAfterSeconds).toBe(3600);
+      expect((refused as TooManyUploadsError).message).toBe('Trop de vidéos envoyées récemment : réessayez dans 1 h');
+      expect(videos.videos.size).toBe(10);
+      // Un autre compte n'est pas touché.
+      await expect(service.createUpload('0192f3a0-0000-7000-8000-0000000000bb', { contentType: 'video/mp4', fileSize: 1000 })).resolves.toBeDefined();
+
+      // Heures suivantes : 10 de plus chacune, jusqu'à 30 dans la journée.
+      for (const hour of [1, 2]) {
+        clock = Date.UTC(2026, 0, 1, hour);
+        for (let i = 0; i < 10; i++) await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      }
+      clock = Date.UTC(2026, 0, 1, 3);
+      const daily = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 }).catch((e: unknown) => e);
+      expect((daily as TooManyUploadsError).retryAfterSeconds).toBe(21 * 3600);
+      expect((daily as TooManyUploadsError).message).toBe('Trop de vidéos envoyées récemment : réessayez dans 21 h');
     });
   });
 
@@ -222,7 +248,7 @@ describe('VideosService', () => {
     beforeEach(() => {
       now = new Date('2026-01-01T00:00:00Z');
       videos = new InMemoryVideoRepository(() => now);
-      service = new VideosService(videos, storage, queue, events, cleanup, () => now);
+      service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(), () => now);
     });
 
     it('supprime les uploads non confirmés depuis plus de 24 h et annule leur multipart', async () => {

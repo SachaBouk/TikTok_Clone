@@ -14,6 +14,13 @@ struct RemoteVideoPublishingRepositoryTests {
         RemoteVideoPublishingRepository(client: makeClient(transport: MockTransport { _, operationID in respond(operationID) }))
     }
 
+    @Test("createUpload : 429 (ADR-039) → trop d'envois, avec le délai de Retry-After")
+    func createUploadRateLimited() async {
+        await #expect(throws: AppError.tooManyActions(.uploads, retryAfter: 5400)) {
+            try await repository { _ in tooManyRequests(retryAfter: 5400) }.createUpload(contentType: .mp4, fileSize: 1000, description: nil)
+        }
+    }
+
     @Test("createUpload : une URL par partie, taille des parties, expiration")
     func createUpload() async throws {
         let body = """

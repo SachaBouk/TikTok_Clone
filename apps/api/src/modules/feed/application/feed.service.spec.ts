@@ -75,7 +75,7 @@ describe('FeedService', () => {
     videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
     users = new InMemoryUserRepository([user('alice'), user('bob'), user('dave')]);
     snapshots = new InMemoryFeedSnapshotStore();
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
+    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
     suspended = new InMemorySuspendedAccounts();
     const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
     const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher(), suspended);

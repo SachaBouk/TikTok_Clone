@@ -14,6 +14,8 @@ enum AppError: Error, Equatable, Sendable {
     case rateLimited(retryAfter: Int)
     // Trop d'échecs de connexion récents pour cet email ou cette adresse (ADR-030) : réessayer après ce nombre de secondes.
     case tooManyLoginAttempts(retryAfter: Int)
+    // Trop d'actions de ce type récemment (ADR-039) : réessayer après ce nombre de secondes.
+    case tooManyActions(LimitedAction, retryAfter: Int)
     // Son propre compte, suspendu par un administrateur (ADR-037) : connexion refusée (403), sans motif.
     case accountSuspended
     // Le profil d'un compte suspendu n'est plus lisible (410).
@@ -32,12 +34,34 @@ enum AppError: Error, Equatable, Sendable {
         case .blocked: "Action impossible : l’un de vous a bloqué l’autre."
         case .notFound: "Ce contenu n’est plus disponible."
         case .rateLimited(let seconds): "Trop de messages envoyés. Réessaie dans \(seconds) s."
-        case .tooManyLoginAttempts(let seconds):
-            "Trop de tentatives de connexion. Réessaie dans \(seconds < 60 ? "\(seconds) s" : "\((seconds + 59) / 60) min")."
+        case .tooManyLoginAttempts(let seconds): "Trop de tentatives de connexion. Réessaie dans \(Self.delay(seconds))."
+        case .tooManyActions(let action, let seconds): "\(action.tooMany) Réessaie dans \(Self.delay(seconds))."
         case .accountSuspended: "Ton compte est suspendu."
         case .profileSuspended: "Ce compte a été suspendu."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
+        }
+    }
+
+    // « 45 s », « 12 min », « 3 h » : mêmes paliers que l'API.
+    static func delay(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds) s" }
+        if seconds < 3600 { return "\((seconds + 59) / 60) min" }
+        return "\((seconds + 3599) / 3600) h"
+    }
+}
+
+// Actions limitées par l'API (ADR-039).
+enum LimitedAction: Sendable {
+    case signup, reactions, comments, follows, uploads
+
+    var tooMany: String {
+        switch self {
+        case .signup: "Trop de comptes créés depuis cette connexion."
+        case .reactions: "Trop de réactions en peu de temps."
+        case .comments: "Trop de commentaires en peu de temps."
+        case .follows: "Trop d’abonnements en peu de temps."
+        case .uploads: "Trop de vidéos envoyées récemment."
         }
     }
 }

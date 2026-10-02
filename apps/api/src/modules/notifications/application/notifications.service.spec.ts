@@ -1,3 +1,4 @@
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
@@ -47,7 +48,7 @@ describe('NotificationsService', () => {
     videoRepository = new InMemoryVideoRepository();
     userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol'), user('dave')]);
     repository = new InMemoryNotificationRepository();
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
+    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
     publisher = new InMemoryNotificationPublisher();
     suspended = new InMemorySuspendedAccounts();
     service = new NotificationsService(repository, new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended), videos, publisher, suspended, () => readAt);

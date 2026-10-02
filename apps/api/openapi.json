@@ -67,6 +67,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop de comptes créés récemment depuis cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -713,6 +732,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop d’envois de vidéos démarrés récemment (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1043,6 +1081,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop de likes, favoris ou republications récents (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1134,6 +1191,25 @@
           },
           "404": {
             "description": "Vidéo inconnue ou pas encore publiée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de likes, favoris ou republications récents (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1249,6 +1325,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop de likes, favoris ou republications récents (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1319,7 +1414,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Visionnage enregistré (à envoyer après ~1 s de lecture). Sans effet sur ses propres vidéos."
+            "description": "Visionnage enregistré (à envoyer après ~1 s de lecture). Sans effet sur ses propres vidéos, ni au-delà de 600 vues par heure (ignorée sans erreur, ADR-039)."
           },
           "401": {
             "description": "Access token absent, invalide ou expiré.",
@@ -1648,6 +1743,25 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Trop de commentaires récents (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1827,6 +1941,25 @@
           },
           "404": {
             "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop d’abonnements récents (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

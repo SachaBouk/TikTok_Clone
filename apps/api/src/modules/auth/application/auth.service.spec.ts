@@ -10,6 +10,7 @@ import {
   InvalidRefreshTokenError,
   InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
+  TooManySignupsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
@@ -114,6 +115,36 @@ describe('AuthService', () => {
       for (let i = 0; i < 30; i++) await service.login('alice@example.com', 'motdepasse', '10.0.0.1');
       for (let i = 0; i < 5; i++) await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(InvalidCredentialsError);
       await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+    });
+  });
+
+  describe('limite des inscriptions par adresse IP (ADR-039)', () => {
+    const signup = (i: number, ip: string | null = '10.0.0.1') =>
+      service.register({ email: `n${i}@example.com`, password: 'motdepasse', username: `compte${i}`, displayName: 'Nouveau' }, ip);
+
+    it('5 comptes par IP par heure, puis 429 ; seules les créations réussies comptent', async () => {
+      for (let i = 0; i < 5; i++) await signup(i);
+      // Pseudo déjà pris : refusé par la règle, sans compter.
+      await expect(service.register({ ...registration, username: 'compte0' }, '10.0.0.2')).rejects.toBeInstanceOf(UsernameAlreadyUsedError);
+      const refused = await signup(5).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(TooManySignupsError);
+      expect((refused as TooManySignupsError).retryAfterSeconds).toBe(3600);
+      expect(await accounts.findByEmail('n5@example.com')).toBeNull();
+      // Autre adresse, ou sans adresse (hors HTTP) : pas touchées.
+      await expect(signup(6, '10.0.0.2')).resolves.toHaveProperty('accessToken');
+      await expect(signup(7, null)).resolves.toHaveProperty('accessToken');
+
+      now = new Date(now.getTime() + 3600 * 1000);
+      await expect(signup(8)).resolves.toHaveProperty('accessToken');
+    });
+
+    it('20 comptes par IP et par jour', async () => {
+      for (let hour = 0; hour < 4; hour++) {
+        now = new Date(Date.UTC(2026, 0, 1, hour));
+        for (let i = 0; i < 5; i++) await signup(hour * 5 + i);
+      }
+      now = new Date(Date.UTC(2026, 0, 1, 4));
+      await expect(signup(20)).rejects.toBeInstanceOf(TooManySignupsError);
     });
   });
 

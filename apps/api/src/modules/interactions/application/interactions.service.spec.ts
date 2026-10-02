@@ -22,6 +22,7 @@ import {
   InvalidFollowCursorError,
   NotCommentAuthorError,
   TargetUserNotFoundError,
+  TooManyActionsError,
   VideoNotAvailableError,
 } from '../domain/interaction.errors';
 import { InMemoryInteractionRepository } from '../infrastructure/in-memory-interaction.repository';
@@ -71,7 +72,7 @@ describe('InteractionsService', () => {
     const userRepository = new InMemoryUserRepository([user('alice'), user('bob'), user('carol')]);
     suspended = new InMemorySuspendedAccounts();
     users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
-    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
+    const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
     notificationRepository = new InMemoryNotificationRepository();
     const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
     clock = Date.UTC(2026, 0, 1);
@@ -105,6 +106,66 @@ describe('InteractionsService', () => {
       await expect(service.setReaction('alice', 'inconnue', 'like', true)).rejects.toBeInstanceOf(VideoNotAvailableError);
       const processing = await createVideo('processing');
       await expect(service.setReaction('alice', processing, 'like', true)).rejects.toBeInstanceOf(VideoNotAvailableError);
+    });
+  });
+
+  describe('limites de débit (ADR-039)', () => {
+    it('réactions : 60 ajouts par minute, like, favori et republication ensemble ; retirer reste possible', async () => {
+      for (let i = 0; i < 20; i++) {
+        await service.setReaction('alice', video, 'like', true);
+        await service.setReaction('alice', video, 'favorite', true);
+        await service.setReaction('alice', video, 'repost', true);
+        await service.setReaction('alice', video, 'like', false);
+      }
+      const refused = await service.setReaction('alice', video, 'like', true).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(TooManyActionsError);
+      expect((refused as TooManyActionsError).retryAfterSeconds).toBe(60);
+      expect((refused as TooManyActionsError).message).toBe('Trop de réactions en peu de temps : réessayez dans 1 min');
+      await expect(service.setReaction('alice', video, 'repost', false)).resolves.toEqual({ active: false, count: 0 });
+      await expect(service.setReaction('carol', video, 'like', true)).resolves.toEqual({ active: true, count: 1 });
+      // Le like refusé n'a rien notifié : une notification de like (supprimée au retrait) et la dernière republication retirée.
+      expect(await received('bob')).toEqual(['like:carol']);
+
+      clock += 60_000;
+      await expect(service.setReaction('alice', video, 'like', true)).resolves.toEqual({ active: true, count: 2 });
+    });
+
+    it('réactions : 600 par heure', async () => {
+      for (let minute = 0; minute < 10; minute++) {
+        clock = Date.UTC(2026, 0, 1, 0, minute);
+        for (let i = 0; i < 60; i++) await service.setReaction('alice', video, 'favorite', true);
+      }
+      clock = Date.UTC(2026, 0, 1, 0, 10);
+      await expect(service.setReaction('alice', video, 'favorite', true)).rejects.toBeInstanceOf(TooManyActionsError);
+    });
+
+    it('commentaires : 10 par minute ; un commentaire vide ne compte pas', async () => {
+      await expect(service.addComment('alice', video, '   ')).rejects.toBeInstanceOf(EmptyCommentError);
+      for (let i = 0; i < 10; i++) await service.addComment('alice', video, `Commentaire ${i}`);
+      await expect(service.addComment('alice', video, 'Un de trop')).rejects.toBeInstanceOf(TooManyActionsError);
+      expect((await service.listComments(video, null, 50)).items).toHaveLength(10);
+      await expect(service.addComment('carol', video, 'Autre compte')).resolves.toBeDefined();
+    });
+
+    it('follows : 30 par minute ; se désabonner reste possible', async () => {
+      for (let i = 0; i < 15; i++) {
+        await service.setFollow('alice', 'bob', true);
+        await service.setFollow('alice', 'carol', true);
+      }
+      await expect(service.setFollow('alice', 'bob', false)).resolves.toEqual({ active: false, count: 0 });
+      const refused = await service.setFollow('alice', 'bob', true).catch((e: unknown) => e);
+      expect((refused as TooManyActionsError).message).toBe('Trop d’abonnements en peu de temps : réessayez dans 1 min');
+    });
+
+    it('vues : au-delà de 600 par heure, ignorées sans erreur (ni comptées ni dans l’historique)', async () => {
+      const other = await createVideo();
+      for (let i = 0; i < 600; i++) await service.recordView('alice', video);
+      await expect(service.recordView('alice', other)).resolves.toBeUndefined();
+      expect((await videoRepository.findPublishedByIds([other]))[0]!.viewsCount).toBe(0);
+      expect((await service.listViewedVideos('alice', null, 10)).map((v) => v.videoId)).toEqual([video]);
+      clock = Date.UTC(2026, 0, 1, 1);
+      await service.recordView('alice', other);
+      expect((await videoRepository.findPublishedByIds([other]))[0]!.viewsCount).toBe(1);
     });
   });
 
@@ -247,7 +308,7 @@ describe('InteractionsService', () => {
       userRepository = new InMemoryUserRepository([1, 2, 3, 4, 5].map((n) => ({ ...user(id(n)), username: `u${n}` })));
       suspended = new InMemorySuspendedAccounts();
       const usersService = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
-      const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue());
+      const videos = new VideosService(videoRepository, new InMemoryVideoStorage(), new NoopTranscodingQueue(), new InMemoryVideoEventPublisher(), new InMemoryVideoCleanupQueue(), new InMemoryRateLimiter());
       const notifications = new NotificationsService(new InMemoryNotificationRepository(), usersService, videos, new InMemoryNotificationPublisher(), suspended);
       repository = new InMemoryInteractionRepository(videoRepository, userRepository);
       lists = new InteractionsService(repository, videos, usersService, notifications, new InMemoryRateLimiter(), suspended);

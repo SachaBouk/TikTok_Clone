@@ -62,6 +62,16 @@ struct RemoteAuthRepositoryTests {
         }
     }
 
+    @Test("trop de comptes créés depuis cette adresse (ADR-039) : 429 → délai, rien d'enregistré")
+    func registerTooManySignups() async {
+        await #expect(throws: AppError.tooManyActions(.signup, retryAfter: 1800)) {
+            try await repository { _ in tooManyRequests(retryAfter: 1800) }
+                .register(Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice"))
+        }
+        #expect(store.load() == nil)
+        #expect(AppError.tooManyActions(.signup, retryAfter: 1800).message == "Trop de comptes créés depuis cette connexion. Réessaie dans 30 min.")
+    }
+
     @Test("erreurs de validation : messages réunis")
     func validationMessages() async {
         let body = #"{"statusCode":400,"message":["email must be an email","password too short"]}"#

@@ -10,6 +10,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { VideoDto, VideoUploadDto } from '@repo/shared';
+import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { Public } from '../../auth/interfaces/public.decorator';
@@ -36,6 +37,7 @@ export class VideosController {
   })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Format non pris en charge ou fichier trop volumineux.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiTooManyRequests('Trop d’envois de vidéos démarrés récemment (ADR-039)')
   async createUpload(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateUploadRequest): Promise<VideoUploadDto> {
     return toUploadDto(await this.videos.createUpload(user.userId, body));
   }

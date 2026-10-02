@@ -10,9 +10,10 @@ import {
   InvalidRefreshTokenError,
   InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
+  TooManySignupsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
-import { LOGIN_EMAIL_RATE_LIMITS, LOGIN_IP_RATE_LIMITS } from '../domain/login-rules';
+import { LOGIN_EMAIL_RATE_LIMITS, LOGIN_IP_RATE_LIMITS, SIGNUP_IP_RATE_LIMITS } from '../domain/login-rules';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { RESERVED_USERNAMES } from '../../users/domain/profile-rules';
@@ -58,8 +59,15 @@ export class AuthService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  async register(input: RegisterInput): Promise<AuthTokens> {
+  // `ip` : adresse du client (null hors HTTP). Comptes créés limités par IP (ADR-039) : la limite est vérifiée
+  // avant la création, et seule une création réussie est comptée.
+  async register(input: RegisterInput, ip: string | null = null): Promise<AuthTokens> {
     if (RESERVED_USERNAMES.has(input.username)) throw new UsernameAlreadyUsedError(input.username);
+    const ipKey = ip ? `signup-ip:${ip}` : null;
+    if (ipKey) {
+      const retryAfter = await this.rateLimiter.check(ipKey, SIGNUP_IP_RATE_LIMITS);
+      if (retryAfter !== null) throw new TooManySignupsError(retryAfter);
+    }
 
     const account = await this.accounts.create({
       email: normalizeEmail(input.email),
@@ -68,6 +76,7 @@ export class AuthService {
       username: input.username,
       displayName: input.displayName.trim(),
     });
+    if (ipKey) await this.rateLimiter.hit(ipKey, SIGNUP_IP_RATE_LIMITS);
     return this.startSession(account.id);
   }
 

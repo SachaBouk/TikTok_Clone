@@ -1,3 +1,5 @@
+import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
+
 // Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
 export abstract class AuthError extends Error {}
 
@@ -41,13 +43,17 @@ export class UsernameAlreadyUsedError extends AuthError {
 // Le message ne dit pas laquelle des deux limites est atteinte.
 export class TooManyLoginAttemptsError extends AuthError {
   constructor(readonly retryAfterSeconds: number) {
-    super(`Trop de tentatives de connexion : réessayez dans ${formatDelay(retryAfterSeconds)}`);
+    super(`Trop de tentatives de connexion : réessayez dans ${formatRetryDelay(retryAfterSeconds)}`);
     this.name = 'TooManyLoginAttemptsError';
   }
 }
 
-function formatDelay(seconds: number): string {
-  return seconds < 60 ? `${seconds} s` : `${Math.ceil(seconds / 60)} min`;
+// Trop de comptes créés récemment depuis cette adresse IP (ADR-039) : 429 avec Retry-After.
+export class TooManySignupsError extends AuthError {
+  constructor(readonly retryAfterSeconds: number) {
+    super(`Trop de comptes créés depuis cette connexion : réessayez dans ${formatRetryDelay(retryAfterSeconds)}`);
+    this.name = 'TooManySignupsError';
+  }
 }
 
 // Compte suspendu par un administrateur (ADR-037) : 403 à la connexion, avec un message générique (le motif reste

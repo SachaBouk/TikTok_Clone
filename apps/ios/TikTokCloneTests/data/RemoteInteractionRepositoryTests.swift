@@ -24,6 +24,23 @@ struct RemoteInteractionRepositoryTests {
         #expect(log.operations == ["likeVideo", "unlikeVideo", "favoriteVideo", "unfavoriteVideo", "repostVideo", "unrepostVideo"])
     }
 
+    @Test("429 (ADR-039) : réactions, abonnements, commentaires, avec le délai de Retry-After")
+    func rateLimited() async {
+        await #expect(throws: AppError.tooManyActions(.reactions, retryAfter: 42)) {
+            try await repository { _ in tooManyRequests(retryAfter: 42) }.setReaction(.repost, videoID: "v1", active: true)
+        }
+        await #expect(throws: AppError.tooManyActions(.follows, retryAfter: 3600)) {
+            try await repository { _ in tooManyRequests(retryAfter: 3600) }.setFollow(username: "bob", active: true)
+        }
+        await #expect(throws: AppError.tooManyActions(.comments, retryAfter: 90)) {
+            try await repository { _ in tooManyRequests(retryAfter: 90) }.addComment(videoID: "v1", content: "Salut")
+        }
+        #expect(AppError.tooManyActions(.reactions, retryAfter: 42).message == "Trop de réactions en peu de temps. Réessaie dans 42 s.")
+        #expect(AppError.tooManyActions(.comments, retryAfter: 90).message == "Trop de commentaires en peu de temps. Réessaie dans 2 min.")
+        #expect(AppError.tooManyActions(.follows, retryAfter: 3600).message == "Trop d’abonnements en peu de temps. Réessaie dans 1 h.")
+        #expect(AppError.tooManyActions(.uploads, retryAfter: 7201).message == "Trop de vidéos envoyées récemment. Réessaie dans 3 h.")
+    }
+
     @Test("403 → blocage, 404 → introuvable, 401 → session expirée")
     func errors() async {
         await #expect(throws: AppError.blocked) {

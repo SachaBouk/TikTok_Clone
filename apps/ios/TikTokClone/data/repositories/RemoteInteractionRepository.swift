@@ -2,7 +2,7 @@ import Foundation
 import TikTokAPI
 
 // Interactions par l'API (module interactions). Codes traduits en erreurs du domaine :
-// 401 → session expirée, 403 → blocage, 404 → contenu disparu, 400 → message de l'API.
+// 401 → session expirée, 403 → blocage, 404 → contenu disparu, 400 → message de l'API, 429 → limite (ADR-039).
 struct RemoteInteractionRepository: InteractionRepository {
     static let commentsPageSize = 20
 
@@ -13,6 +13,7 @@ struct RemoteInteractionRepository: InteractionRepository {
         case (.like, true):
             switch try await call({ try await client.likeVideo(path: .init(id: videoID)) }) {
             case .ok(let ok): return InteractionState(try ok.body.json)
+            case .tooManyRequests(let error): throw AppError.tooManyActions(.reactions, retryAfter: max(1, error.headers.retryAfter ?? 60))
             case .unauthorized: throw AppError.sessionExpired
             case .forbidden: throw AppError.blocked
             case .notFound: throw AppError.notFound
@@ -28,6 +29,7 @@ struct RemoteInteractionRepository: InteractionRepository {
         case (.favorite, true):
             switch try await call({ try await client.favoriteVideo(path: .init(id: videoID)) }) {
             case .ok(let ok): return InteractionState(try ok.body.json)
+            case .tooManyRequests(let error): throw AppError.tooManyActions(.reactions, retryAfter: max(1, error.headers.retryAfter ?? 60))
             case .unauthorized: throw AppError.sessionExpired
             case .notFound: throw AppError.notFound
             case .undocumented: throw AppError.unexpected
@@ -42,6 +44,7 @@ struct RemoteInteractionRepository: InteractionRepository {
         case (.repost, true):
             switch try await call({ try await client.repostVideo(path: .init(id: videoID)) }) {
             case .ok(let ok): return InteractionState(try ok.body.json)
+            case .tooManyRequests(let error): throw AppError.tooManyActions(.reactions, retryAfter: max(1, error.headers.retryAfter ?? 60))
             case .unauthorized: throw AppError.sessionExpired
             case .forbidden: throw AppError.blocked
             case .notFound: throw AppError.notFound
@@ -61,6 +64,7 @@ struct RemoteInteractionRepository: InteractionRepository {
         if active {
             switch try await call({ try await client.followUser(path: .init(username: username)) }) {
             case .ok(let ok): return InteractionState(try ok.body.json)
+            case .tooManyRequests(let error): throw AppError.tooManyActions(.follows, retryAfter: max(1, error.headers.retryAfter ?? 60))
             case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
             case .unauthorized: throw AppError.sessionExpired
             case .forbidden: throw AppError.blocked
@@ -102,6 +106,7 @@ struct RemoteInteractionRepository: InteractionRepository {
     func addComment(videoID: String, content: String) async throws -> VideoComment {
         switch try await call({ try await client.addComment(path: .init(id: videoID), body: .json(.init(content: content))) }) {
         case .created(let created): return VideoComment(try created.body.json)
+        case .tooManyRequests(let error): throw AppError.tooManyActions(.comments, retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .unauthorized: throw AppError.sessionExpired
         case .forbidden: throw AppError.blocked

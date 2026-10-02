@@ -21,6 +21,7 @@ import type {
   UserRelationshipListDto,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
+import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { Public } from '../../auth/interfaces/public.decorator';
 import { toUserSummary } from '../../users/interfaces/user-summary.response';
@@ -43,6 +44,7 @@ const VIDEO_ID = new ParseUUIDPipe();
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 const VIDEO_NOT_FOUND = { type: ErrorResponse, description: 'Vidéo inconnue ou pas encore publiée.' };
 const BLOCKED = { type: ErrorResponse, description: 'L’un des deux comptes a bloqué l’autre.' };
+const TOO_MANY_REACTIONS = 'Trop de likes, favoris ou republications récents (ADR-039)';
 
 // Interactions sociales (ADR-016). Liker, commenter, republier et suivre exigent un compte (ADR-010).
 // Like, favori, republication et follow sont idempotents : PUT active, DELETE désactive, et la réponse
@@ -58,6 +60,7 @@ export class InteractionsController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
   @ApiForbiddenResponse(BLOCKED)
+  @ApiTooManyRequests(TOO_MANY_REACTIONS)
   likeVideo(@CurrentUser() user: AuthenticatedUser, @Param('id', VIDEO_ID) id: string): Promise<InteractionStateDto> {
     return this.interactions.setReaction(user.userId, id, 'like', true);
   }
@@ -74,6 +77,7 @@ export class InteractionsController {
   @ApiOkResponse({ type: InteractionStateResponse })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
+  @ApiTooManyRequests(TOO_MANY_REACTIONS)
   favoriteVideo(@CurrentUser() user: AuthenticatedUser, @Param('id', VIDEO_ID) id: string): Promise<InteractionStateDto> {
     return this.interactions.setReaction(user.userId, id, 'favorite', true);
   }
@@ -91,6 +95,7 @@ export class InteractionsController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
   @ApiForbiddenResponse(BLOCKED)
+  @ApiTooManyRequests(TOO_MANY_REACTIONS)
   repostVideo(@CurrentUser() user: AuthenticatedUser, @Param('id', VIDEO_ID) id: string): Promise<InteractionStateDto> {
     return this.interactions.setReaction(user.userId, id, 'repost', true);
   }
@@ -107,7 +112,8 @@ export class InteractionsController {
   @Post('videos/:id/view')
   @HttpCode(204)
   @ApiNoContentResponse({
-    description: 'Visionnage enregistré (à envoyer après ~1 s de lecture). Sans effet sur ses propres vidéos.',
+    description:
+      'Visionnage enregistré (à envoyer après ~1 s de lecture). Sans effet sur ses propres vidéos, ni au-delà de 600 vues par heure (ignorée sans erreur, ADR-039).',
   })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
@@ -173,6 +179,7 @@ export class InteractionsController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
   @ApiForbiddenResponse(BLOCKED)
+  @ApiTooManyRequests('Trop de commentaires récents (ADR-039)')
   async addComment(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', VIDEO_ID) id: string,
@@ -206,6 +213,7 @@ export class InteractionsController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Pseudo inconnu.' })
   @ApiForbiddenResponse(BLOCKED)
+  @ApiTooManyRequests('Trop d’abonnements récents (ADR-039)')
   followUser(@CurrentUser() user: AuthenticatedUser, @Param('username') username: string): Promise<InteractionStateDto> {
     return this.interactions.setFollow(user.userId, username, true);
   }

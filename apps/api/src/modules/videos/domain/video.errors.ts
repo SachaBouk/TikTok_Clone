@@ -1,7 +1,17 @@
+import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
+
 import { MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from './upload-rules';
 
 // Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
 export abstract class VideoError extends Error {}
+
+// Trop d'envois de vidéos démarrés récemment (ADR-039) : 429 avec Retry-After.
+export class TooManyUploadsError extends VideoError {
+  constructor(readonly retryAfterSeconds: number) {
+    super(`Trop de vidéos envoyées récemment : réessayez dans ${formatRetryDelay(retryAfterSeconds)}`);
+    this.name = 'TooManyUploadsError';
+  }
+}
 
 export class VideoNotFoundError extends VideoError {
   constructor(id: string) {
