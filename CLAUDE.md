@@ -90,6 +90,7 @@ Lint et mise en forme (ADR-041) :
 - **Prettier** (`.prettierrc.json` : guillemets simples, 150 colonnes ; `.prettierignore`) : TypeScript, JavaScript et JSON seulement. `pnpm format` reformate, `pnpm format:check` vérifie.
 - **Swift** : swift-format d'Xcode (`apps/ios/.swift-format` : 4 espaces, 150 colonnes), `apps/ios/scripts/lint.sh` (strict ; `--fix` reformate). Une nouvelle version d'Xcode peut changer la mise en forme.
 - **CI** : bloquants dans le job `verify` (après le typecheck) et dans la CI iOS (avant les tests).
+- **`git blame`** : `.git-blame-ignore-revs` liste les commits de pure mise en forme (574368b), lu tout seul par GitHub ; en local, `git config blame.ignoreRevsFile .git-blame-ignore-revs`. Un futur reformatage d'ensemble s'y ajoute (hash complet).
 
 ```bash
 pnpm test                                        # tous les tests (turbo)

@@ -1,0 +1,5 @@
+# Commits sans changement de fond, ignorés par `git blame` (GitHub le lit tout seul ; en local :
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
+# Mise en forme : Prettier et swift-format appliqués au code existant (ADR-041)
+574368b3cc2cf154ac21ef6e25ddf490bd2ecae7
