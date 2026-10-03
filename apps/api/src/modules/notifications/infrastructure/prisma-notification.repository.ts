@@ -74,26 +74,34 @@ export class PrismaNotificationRepository extends NotificationRepository {
     return toNotification(created);
   }
 
-  async remove(activity: RetractableActivity): Promise<boolean> {
-    const { count } = await this.prisma.notification.deleteMany({
-      where:
-        activity.type === 'follow'
-          ? { type: 'follow', actorId: activity.actorId, userId: activity.recipientId }
-          : { type: activity.type, actorId: activity.actorId, videoId: activity.videoId },
-    });
-    return count > 0;
+  remove(activity: RetractableActivity): Promise<Notification[]> {
+    return this.removeWhere(
+      activity.type === 'follow'
+        ? { type: 'follow', actorId: activity.actorId, userId: activity.recipientId }
+        : { type: activity.type, actorId: activity.actorId, videoId: activity.videoId },
+    );
   }
 
-  async removeBetween(userId: string, otherId: string): Promise<string[]> {
-    const where = {
+  removeBetween(userId: string, otherId: string): Promise<Notification[]> {
+    return this.removeWhere({
       OR: [
         { userId, actorId: otherId },
         { userId: otherId, actorId: userId },
       ],
-    };
-    const recipients = await this.prisma.notification.findMany({ where, distinct: ['userId'], select: { userId: true } });
-    await this.prisma.notification.deleteMany({ where });
-    return recipients.map((r) => r.userId);
+    });
+  }
+
+  removeForComment(commentId: string): Promise<Notification[]> {
+    return this.removeWhere({ commentId });
+  }
+
+  // Lignes lues, puis supprimées par leurs identifiants. Deux retraits simultanés de la même notification (rare : deux
+  // appareils) peuvent l'annoncer deux fois ; l'app ignore la seconde annonce (identifiant déjà retiré).
+  private async removeWhere(where: Prisma.NotificationWhereInput): Promise<Notification[]> {
+    const rows = await this.prisma.notification.findMany({ where, select: notificationSelect });
+    if (rows.length === 0) return [];
+    await this.prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
+    return rows.map(toNotification);
   }
 
   async listForRecipient(

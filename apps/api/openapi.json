@@ -7681,6 +7681,66 @@
           "data"
         ]
       },
+      "RemovedNotificationData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "description": "Clé du groupe de la notification, comme `NotificationGroupResponse.key`."
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Auteur de l’action ; absent pour une notification de modération."
+          }
+        },
+        "required": [
+          "id",
+          "key"
+        ]
+      },
+      "NotificationsRemovedData": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemovedNotificationData"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Badge à jour."
+          }
+        },
+        "required": [
+          "removed",
+          "unreadCount"
+        ]
+      },
+      "NotificationsRemovedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "notificationsRemoved"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationsRemovedData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "MessageCreatedData": {
         "type": "object",
         "properties": {
@@ -8005,6 +8065,9 @@
             "$ref": "#/components/schemas/UnreadNotificationsChangedEvent"
           },
           {
+            "$ref": "#/components/schemas/NotificationsRemovedEvent"
+          },
+          {
             "$ref": "#/components/schemas/MessageCreatedEvent"
           },
           {
@@ -8032,6 +8095,7 @@
             "videoProcessed": "#/components/schemas/VideoProcessedEvent",
             "notificationCreated": "#/components/schemas/NotificationCreatedEvent",
             "unreadNotificationsChanged": "#/components/schemas/UnreadNotificationsChangedEvent",
+            "notificationsRemoved": "#/components/schemas/NotificationsRemovedEvent",
             "messageCreated": "#/components/schemas/MessageCreatedEvent",
             "messageDeleted": "#/components/schemas/MessageDeletedEvent",
             "conversationRead": "#/components/schemas/ConversationReadEvent",

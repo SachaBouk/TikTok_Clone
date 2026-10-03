@@ -228,8 +228,8 @@ export class InteractionsService {
   }
 
   // L'auteur du commentaire le supprime, ou l'auteur de la vidéo (ADR-042), quel que soit le statut de la vidéo.
-  // En silence : personne n'est prévenu. Sa notification disparaît avec lui (cascade de la base), et ses signalements
-  // ouverts sont clos par la base (ADR-038, « supprimé hors modération »).
+  // En silence : personne n'est prévenu. Sa notification disparaît avec lui, et ses signalements ouverts sont clos par la
+  // base (ADR-038, « supprimé hors modération »).
   async deleteComment(userId: string, commentId: string): Promise<void> {
     const comment = await this.interactions.findComment(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);
@@ -237,13 +237,17 @@ export class InteractionsService {
       const [video] = await this.videos.getVideoDetails([comment.videoId]);
       if (video?.userId !== userId) throw new NotCommentAuthorError();
     }
+    // Sa notification est retirée d'abord, pour être annoncée en direct (ADR-043).
+    await this.notifications.retractComment(commentId);
     await this.interactions.deleteComment(commentId);
   }
 
   // Retrait d'un commentaire par un administrateur (backoffice, ADR-004), quel que soit son auteur.
-  // Sa notification disparaît avec lui (cascade de la base) ; l'auteur n'est pas prévenu.
+  // Sa notification disparaît avec lui ; l'auteur est prévenu par le module reports (ADR-038).
   async removeComment(commentId: string): Promise<void> {
     if (!(await this.interactions.findComment(commentId))) throw new CommentNotFoundError(commentId);
+    // Sa notification est retirée d'abord, pour être annoncée en direct (ADR-043).
+    await this.notifications.retractComment(commentId);
     await this.interactions.deleteComment(commentId);
   }
 

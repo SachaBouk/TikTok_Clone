@@ -7,11 +7,13 @@ export abstract class NotificationRepository {
   abstract add(event: ActivityEvent): Promise<Notification | null>;
   // Notification de modération (ADR-038) : toujours créée.
   abstract addModeration(event: ModerationEvent): Promise<Notification>;
-  // Sans effet si la notification n'existe pas. Renvoie true si une notification a été supprimée.
-  abstract remove(activity: RetractableActivity): Promise<boolean>;
-
-  // Supprime les notifications échangées entre deux comptes (blocage). Renvoie les destinataires touchés.
-  abstract removeBetween(userId: string, otherId: string): Promise<string[]>;
+  // Les suppressions renvoient les notifications supprimées (vide si aucune), pour les retirer en direct (ADR-043).
+  // Retrait d'une réaction ou d'un abonnement.
+  abstract remove(activity: RetractableActivity): Promise<Notification[]>;
+  // Notifications échangées entre deux comptes (blocage).
+  abstract removeBetween(userId: string, otherId: string): Promise<Notification[]>;
+  // Notification d'un commentaire, avant sa suppression (sinon la cascade l'emporterait sans prévenir).
+  abstract removeForComment(commentId: string): Promise<Notification[]>;
 
   // Lectures : sans les notifications des auteurs `excludedActorIds` (comptes suspendus, ADR-037 ; une notification de
   // modération, sans auteur, n'est jamais exclue), qui ne comptent

@@ -19,7 +19,21 @@ export interface NotificationCreatedEventDto {
   data: { notification: NotificationDto; unreadCount: number };
 }
 
-// Badge changé sans nouvelle notification : marquage lu (sur cet appareil ou un autre), notification retirée.
+// Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire supprimé. L'app retire chacune
+// de son groupe (`key`, comme `NotificationGroupDto.key`) : un de moins, l'auteur retiré des noms affichés.
+export interface RemovedNotificationDto {
+  id: string;
+  key: string;
+  // Absent pour une notification sans auteur (modération).
+  actorId?: string;
+}
+
+export interface NotificationsRemovedEventDto {
+  event: 'notificationsRemoved';
+  data: { removed: RemovedNotificationDto[]; unreadCount: number };
+}
+
+// Badge changé sans nouvelle notification : marquage lu (sur cet appareil ou un autre).
 export interface UnreadNotificationsChangedEventDto {
   event: 'unreadNotificationsChanged';
   data: { unreadCount: number };
@@ -80,6 +94,7 @@ export type RealtimeEventDto =
   | VideoProcessedEventDto
   | NotificationCreatedEventDto
   | UnreadNotificationsChangedEventDto
+  | NotificationsRemovedEventDto
   | MessageCreatedEventDto
   | MessageDeletedEventDto
   | ConversationReadEventDto

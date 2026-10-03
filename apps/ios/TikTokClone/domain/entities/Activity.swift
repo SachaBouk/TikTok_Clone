@@ -90,6 +90,13 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
     }
 }
 
+// Notification supprimée, annoncée en direct (ADR-043) : retirée de son groupe (`key`, même clé que l'API).
+struct RemovedActivity: Equatable, Sendable {
+    let id: String
+    let key: String
+    let actorID: String?
+}
+
 struct ActivityPage: Equatable, Sendable {
     let notifications: [ActivityNotification]
     let nextCursor: String?
@@ -158,6 +165,18 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .repost: return plural ? "ont republié ta vidéo." : "a republié ta vidéo."
         case .reportResolved, .contentRemoved: return moderation?.text(kind) ?? ""
         }
+    }
+
+    // Une notification de moins (ADR-043) : son auteur quitte les noms affichés ; nil si le groupe est vide. Les deux noms
+    // affichés ne sont pas complétés (l'auteur suivant n'est pas connu) avant le prochain chargement.
+    func removing(_ removed: RemovedActivity) -> ActivityGroup? {
+        guard count > 1 else { return nil }
+        var updated = ActivityGroup(
+            key: key, kind: kind, actors: actors.filter { $0.id != removed.actorID }, count: count - 1,
+            video: video, comment: comment, read: read, latestID: latestID, createdAt: createdAt, moderation: moderation
+        )
+        updated.actorRelationship = actorRelationship
+        return updated
     }
 
     // Clé du groupe d'une notification, comme l'API.

@@ -60,20 +60,25 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return created;
   }
 
-  async remove(activity: RetractableActivity): Promise<boolean> {
+  async remove(activity: RetractableActivity): Promise<Notification[]> {
     const found = this.find(activity);
-    return found ? this.notifications.delete(found.id) : false;
+    if (!found) return [];
+    this.notifications.delete(found.id);
+    return [found];
   }
 
-  async removeBetween(userId: string, otherId: string): Promise<string[]> {
-    const recipients = new Set<string>();
-    for (const [id, n] of this.notifications) {
-      if ((n.recipientId === userId && n.actorId === otherId) || (n.recipientId === otherId && n.actorId === userId)) {
-        this.notifications.delete(id);
-        recipients.add(n.recipientId);
-      }
-    }
-    return [...recipients];
+  async removeBetween(userId: string, otherId: string): Promise<Notification[]> {
+    return this.removeWhere((n) => (n.recipientId === userId && n.actorId === otherId) || (n.recipientId === otherId && n.actorId === userId));
+  }
+
+  async removeForComment(commentId: string): Promise<Notification[]> {
+    return this.removeWhere((n) => n.commentId === commentId);
+  }
+
+  private removeWhere(matches: (notification: Notification) => boolean): Notification[] {
+    const removed = [...this.notifications.values()].filter(matches);
+    for (const n of removed) this.notifications.delete(n.id);
+    return removed;
   }
 
   async listForRecipient(

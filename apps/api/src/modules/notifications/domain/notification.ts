@@ -96,6 +96,13 @@ export interface NotificationGroupWithContext {
 // Nombre d'auteurs affichés par groupe (« Inès, Nathan et 3 autres »).
 export const GROUP_ACTORS_SHOWN = 2;
 
+// Notification supprimée, annoncée à son destinataire pour la retirer de son groupe (ADR-043).
+export interface RemovedNotification {
+  id: string;
+  key: string;
+  actorId: string | null;
+}
+
 export function groupKey(notification: Notification): string {
   switch (notification.type) {
     case 'like':

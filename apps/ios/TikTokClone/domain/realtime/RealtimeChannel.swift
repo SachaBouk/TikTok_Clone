@@ -6,8 +6,10 @@ enum RealtimeUpdate: Equatable, Sendable {
     case videoProcessed(OwnVideo)
     // Nouvelle notification d'activité, avec le badge à jour.
     case notificationCreated(ActivityNotification, unreadCount: Int)
-    // Badge seul (retrait d'une réaction, notifications lues sur un autre appareil).
+    // Badge seul (notifications lues sur un autre appareil).
     case unreadNotificationsChanged(Int)
+    // Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire supprimé ; badge à jour.
+    case notificationsRemoved([RemovedActivity], unreadCount: Int)
     // Messagerie, avec les badges du compte connecté. Nouveau message (y compris envoyé depuis un autre appareil).
     case messageCreated(DirectMessage, MessagingBadges)
     // Message retiré par son expéditeur.

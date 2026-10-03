@@ -105,7 +105,8 @@ struct ActivityGroupView: View {
 
     var body: some View {
         List {
-            ForEach(list.items) { notification in
+            // Notifications supprimées depuis l'ouverture (ADR-043) masquées.
+            ForEach(list.items.filter { !container.activity.removedIDs.contains($0.id) }) { notification in
                 ActivityRow(
                     notification: notification,
                     follow: notification.kind == .follow

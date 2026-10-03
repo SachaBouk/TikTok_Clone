@@ -10,7 +10,11 @@ import {
   TypingClientMessage,
   TypingEvent,
 } from '../modules/messaging/interfaces/messaging.events';
-import { NotificationCreatedEvent, UnreadNotificationsChangedEvent } from '../modules/notifications/interfaces/notifications.events';
+import {
+  NotificationCreatedEvent,
+  NotificationsRemovedEvent,
+  UnreadNotificationsChangedEvent,
+} from '../modules/notifications/interfaces/notifications.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
 import { WalletUpdatedEvent } from '../modules/wallet/interfaces/wallet.events';
 
@@ -23,6 +27,7 @@ const REALTIME_EVENTS = {
   videoProcessed: VideoProcessedEvent,
   notificationCreated: NotificationCreatedEvent,
   unreadNotificationsChanged: UnreadNotificationsChangedEvent,
+  notificationsRemoved: NotificationsRemovedEvent,
   messageCreated: MessageCreatedEvent,
   messageDeleted: MessageDeletedEvent,
   conversationRead: ConversationReadEvent,

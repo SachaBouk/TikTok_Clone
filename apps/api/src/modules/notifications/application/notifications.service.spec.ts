@@ -130,15 +130,40 @@ describe('NotificationsService', () => {
       expect(publisher.unreadCounts).toEqual([]);
     });
 
-    it('envoie le badge après un retrait et après un marquage lu', async () => {
+    it('annonce un retrait avec sa notification, sa clé de groupe et le badge ; le marquage lu envoie le badge seul', async () => {
       await service.notify(like('alice'));
       await service.notify(like('carol'));
+      const removedId = (await service.list('bob', null, 10)).items.find((i) => i.actor?.id === 'alice')!.notification.id;
       await service.retract(like('alice'));
-      await service.markRead('bob', null);
-      expect(publisher.unreadCounts).toEqual([
-        { recipientId: 'bob', unreadCount: 1 },
-        { recipientId: 'bob', unreadCount: 0 },
+      expect(publisher.removed).toEqual([
+        { recipientId: 'bob', removed: [{ id: removedId, key: `like:${video}`, actorId: 'alice' }], unreadCount: 1 },
       ]);
+      await service.markRead('bob', null);
+      expect(publisher.unreadCounts).toEqual([{ recipientId: 'bob', unreadCount: 0 }]);
+    });
+
+    it('annonce les suppressions du blocage à chaque destinataire, et celle d’un commentaire supprimé', async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'follow', actorId: 'bob', recipientId: 'alice' });
+      await service.notify({ type: 'comment', actorId: 'carol', recipientId: 'bob', videoId: video, commentId: 'c1', commentText: 'Top' });
+      await service.removeBetween('alice', 'bob');
+      expect(publisher.removed.map((r) => [r.recipientId, r.removed.map((n) => n.key), r.unreadCount])).toEqual([
+        ['bob', [`like:${video}`], 1],
+        ['alice', ['follow'], 0],
+      ]);
+
+      await service.retractComment('c1');
+      const last = publisher.removed.at(-1)!;
+      expect([last.recipientId, last.removed[0].key.startsWith('comment:'), last.removed[0].actorId, last.unreadCount]).toEqual([
+        'bob',
+        true,
+        'carol',
+        0,
+      ]);
+      await expect(service.list('bob', null, 10)).resolves.toMatchObject({ items: [] });
+      // Rien à retirer : rien n'est annoncé.
+      await service.retractComment('c1');
+      expect(publisher.removed).toHaveLength(3);
     });
   });
 

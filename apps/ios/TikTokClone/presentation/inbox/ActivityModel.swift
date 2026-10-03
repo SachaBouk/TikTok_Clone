@@ -9,6 +9,7 @@ import Observation
 // - Tant que le centre d'activité est affiché, ce qui y apparaît est marqué lu (la plus récente affichée et
 //   les plus anciennes) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché.
 // - Les lignes gardent leur mise en avant « non lue » jusqu'au prochain chargement.
+// - Une notification supprimée (réaction retirée, blocage, commentaire supprimé ; ADR-043) quitte son groupe en direct.
 // - Abonnement d'un seul compte : bouton « Suivre en retour », avec la relation lue à part (ADR-036), aussi pour
 //   un abonnement reçu en direct.
 @MainActor
@@ -16,6 +17,9 @@ import Observation
 final class ActivityModel {
     private(set) var unreadCount = 0
     let list: PagedList<ActivityGroup>
+    // Notifications supprimées depuis la connexion : une annonce en double est ignorée, et la liste complète d'un groupe
+    // ouverte les masque (`ActivityGroupView`).
+    private(set) var removedIDs: Set<String> = []
 
     private let loadGroups: LoadActivityGroupsUseCase
     private let loadActorRelationships: LoadActorRelationshipsUseCase
@@ -109,11 +113,25 @@ final class ActivityModel {
         unreadCount = count
     }
 
+    // Événement `notificationsRemoved` (ADR-043) : chaque notification quitte son groupe, vide alors retiré.
+    func removed(_ removed: [RemovedActivity], unreadCount: Int) {
+        self.unreadCount = unreadCount
+        for item in removed where removedIDs.insert(item.id).inserted {
+            guard let group = list.items.first(where: { $0.key == item.key }) else { continue }
+            if let updated = group.removing(item) {
+                list.replace(updated)
+            } else {
+                list.remove { $0.key == item.key }
+            }
+        }
+    }
+
     // Déconnexion : rien ne doit rester d'un compte à l'autre.
     func reset() {
         markTask?.cancel()
         unreadCount = 0
         lastMarkedID = nil
+        removedIDs = []
         list.reset()
     }
 

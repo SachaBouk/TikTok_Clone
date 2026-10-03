@@ -2,6 +2,7 @@ import type { UsersService } from '../../users/application/users.service';
 import type { VideosService } from '../../videos/application/videos.service';
 import {
   type ActivityEvent,
+  groupKey,
   isModeration,
   type ModerationEvent,
   type Notification,
@@ -9,6 +10,7 @@ import {
   type NotificationGroup,
   type NotificationGroupWithContext,
   type NotificationWithContext,
+  type RemovedNotification,
   type RetractableActivity,
 } from '../domain/notification';
 import type { NotificationPublisher } from '../domain/notification-publisher';
@@ -62,14 +64,21 @@ export class NotificationsService {
 
   // Unlike, retrait d'une republication, unfollow : la notification disparaît, lue ou non.
   // Si l'action revient, `notify` en crée une nouvelle, en tête de liste.
+  // Chaque suppression est annoncée à son destinataire avec le badge (ADR-043) : l'app la retire de son groupe.
   async retract(activity: RetractableActivity): Promise<void> {
     if (activity.actorId === activity.recipientId) return;
-    if (await this.notifications.remove(activity)) await this.publishUnreadCount(activity.recipientId);
+    await this.announceRemoved(await this.notifications.remove(activity));
   }
 
-  // Blocage : les notifications échangées entre les deux comptes disparaissent ; les badges touchés sont renvoyés.
+  // Blocage : les notifications échangées entre les deux comptes disparaissent.
   async removeBetween(userId: string, otherId: string): Promise<void> {
-    for (const recipientId of await this.notifications.removeBetween(userId, otherId)) await this.publishUnreadCount(recipientId);
+    await this.announceRemoved(await this.notifications.removeBetween(userId, otherId));
+  }
+
+  // Commentaire sur le point d'être supprimé (par son auteur, l'auteur de la vidéo ou un administrateur) : sa
+  // notification est supprimée d'abord, pour être annoncée ; la cascade de la base l'emporterait sans prévenir.
+  async retractComment(commentId: string): Promise<void> {
+    await this.announceRemoved(await this.notifications.removeForComment(commentId));
   }
 
   // Du plus récent au plus ancien. Le curseur est l'identifiant de la dernière notification reçue
@@ -116,6 +125,16 @@ export class NotificationsService {
 
   private async countUnread(recipientId: string): Promise<number> {
     return this.notifications.countUnread(recipientId, await this.excludedActors());
+  }
+
+  private async announceRemoved(removed: Notification[]): Promise<void> {
+    const byRecipient = new Map<string, RemovedNotification[]>();
+    for (const n of removed) {
+      byRecipient.set(n.recipientId, [...(byRecipient.get(n.recipientId) ?? []), { id: n.id, key: groupKey(n), actorId: n.actorId }]);
+    }
+    for (const [recipientId, items] of byRecipient) {
+      await this.publisher.notificationsRemoved(recipientId, items, await this.countUnread(recipientId));
+    }
   }
 
   private async publishUnreadCount(recipientId: string): Promise<number> {

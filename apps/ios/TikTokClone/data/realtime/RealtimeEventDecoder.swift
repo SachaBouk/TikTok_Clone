@@ -20,6 +20,9 @@ struct RealtimeEventDecoder: Sendable {
             return .notificationCreated(ActivityNotification(event.data.notification), unreadCount: event.data.unreadCount)
         case .unreadNotificationsChanged(let event):
             return .unreadNotificationsChanged(event.data.unreadCount)
+        case .notificationsRemoved(let event):
+            return .notificationsRemoved(
+                event.data.removed.map { RemovedActivity(id: $0.id, key: $0.key, actorID: $0.actorId) }, unreadCount: event.data.unreadCount)
         case .messageCreated(let event):
             let data = event.data
             return .messageCreated(DirectMessage(data.message), badges(data.unreadConversations, data.pendingRequests))

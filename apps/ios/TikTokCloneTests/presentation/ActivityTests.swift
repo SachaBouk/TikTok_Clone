@@ -242,6 +242,44 @@ struct ActivityModelTests {
         #expect(model.list.items.map(\.key) == ["like:v2", "like:v1", "follow"])
     }
 
+    @Test("notifications supprimées en direct (ADR-043) : un de moins dans le groupe, groupe vide retiré, doublon ignoré")
+    func liveRemoval() async {
+        repository.add(.sample("n1", read: true, actor: .alice))
+        repository.add(.sample("n2", read: true, actor: .bob))
+        repository.add(.sample("n3", kind: .follow, read: false))
+        let (model, _) = await makeModel()
+        await model.reload()
+        #expect(model.list.items.map(\.key) == ["follow", "like:v1"])
+
+        let unlike = RemovedActivity(id: "n2", key: "like:v1", actorID: UserSummary.bob.id)
+        model.removed([unlike], unreadCount: 1)
+        let likes = model.list.items.first { $0.key == "like:v1" }
+        #expect(likes?.count == 1)
+        #expect(likes?.actorNames == "Alice")
+        #expect(model.unreadCount == 1)
+        // Annonce en double : sans effet.
+        model.removed([unlike], unreadCount: 1)
+        #expect(model.list.items.first { $0.key == "like:v1" }?.count == 1)
+
+        // Dernier abonné retiré : le groupe disparaît.
+        model.removed([RemovedActivity(id: "n3", key: "follow", actorID: UserSummary.bob.id)], unreadCount: 0)
+        #expect(model.list.items.map(\.key) == ["like:v1"])
+        #expect(model.unreadCount == 0)
+        #expect(model.removedIDs == ["n2", "n3"])
+    }
+
+    @Test("événement notificationsRemoved décodé")
+    func removedDecoding() {
+        let json = """
+            {"event":"notificationsRemoved","data":{"removed":[{"id":"n1","key":"like:v1","actorId":"u2"},{"id":"n9","key":"moderation:n9"}],"unreadCount":3}}
+            """
+        #expect(
+            RealtimeEventDecoder().decode(json)
+                == .notificationsRemoved(
+                    [RemovedActivity(id: "n1", key: "like:v1", actorID: "u2"), RemovedActivity(id: "n9", key: "moderation:n9", actorID: nil)],
+                    unreadCount: 3))
+    }
+
     @Test("textes des groupes : singulier, deux noms, « et 1 autre », commentaire seul")
     func groupTexts() {
         func group(_ kind: ActivityKind, actors: [UserSummary], count: Int) -> ActivityGroup {
