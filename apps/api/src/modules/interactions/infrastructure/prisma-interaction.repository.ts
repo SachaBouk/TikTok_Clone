@@ -85,12 +85,14 @@ export class PrismaInteractionRepository extends InteractionRepository {
     await this.prisma.viewHistory.deleteMany({ where: { userId } });
   }
 
-  async follow(followerId: string, followingId: string): Promise<void> {
-    await this.prisma.follow.createMany({ data: [{ followerId, followingId }], skipDuplicates: true });
+  async follow(followerId: string, followingId: string): Promise<boolean> {
+    const { count } = await this.prisma.follow.createMany({ data: [{ followerId, followingId }], skipDuplicates: true });
+    return count > 0;
   }
 
-  async unfollow(followerId: string, followingId: string): Promise<void> {
-    await this.prisma.follow.deleteMany({ where: { followerId, followingId } });
+  async unfollow(followerId: string, followingId: string): Promise<boolean> {
+    const { count } = await this.prisma.follow.deleteMany({ where: { followerId, followingId } });
+    return count > 0;
   }
 
   // Pagination par clé (date du follow, identifiant du compte), sur les index (following_id, created_at)
@@ -176,8 +178,8 @@ export class PrismaInteractionRepository extends InteractionRepository {
     return this.prisma.comment.count({ where: createdSince ? { createdAt: { gte: createdSince } } : undefined });
   }
 
-  async block(blockerId: string, blockedId: string): Promise<void> {
-    await this.prisma.$transaction([
+  async block(blockerId: string, blockedId: string): Promise<boolean> {
+    const [, unfollowed] = await this.prisma.$transaction([
       this.prisma.block.createMany({ data: [{ blockerId, blockedId }], skipDuplicates: true }),
       this.prisma.follow.deleteMany({
         where: {
@@ -188,6 +190,7 @@ export class PrismaInteractionRepository extends InteractionRepository {
         },
       }),
     ]);
+    return unfollowed.count > 0;
   }
 
   async unblock(blockerId: string, blockedId: string): Promise<void> {

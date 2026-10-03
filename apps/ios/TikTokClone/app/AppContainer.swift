@@ -121,7 +121,9 @@ final class AppContainer {
             session: session,
             analytics: analytics
         )
-        realtime = RealtimeCoordinator(channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet)
+        realtime = RealtimeCoordinator(
+            channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet,
+            ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)))
     }
 
     // RevenueCat avec une clé (Config/Local.xcconfig) ; sinon achats indisponibles. En Debug, `-fakePurchases`

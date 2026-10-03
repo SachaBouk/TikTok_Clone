@@ -8027,6 +8027,41 @@
           "data"
         ]
       },
+      "ProfileCountersData": {
+        "type": "object",
+        "properties": {
+          "followersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "followingCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "followersCount",
+          "followingCount"
+        ]
+      },
+      "ProfileCountersChangedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "profileCountersChanged"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/ProfileCountersData"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "WalletUpdatedEvent": {
         "type": "object",
         "properties": {
@@ -8109,6 +8144,9 @@
             "$ref": "#/components/schemas/TypingEvent"
           },
           {
+            "$ref": "#/components/schemas/ProfileCountersChangedEvent"
+          },
+          {
             "$ref": "#/components/schemas/WalletUpdatedEvent"
           }
         ],
@@ -8125,6 +8163,7 @@
             "conversationAccepted": "#/components/schemas/ConversationAcceptedEvent",
             "conversationDeleted": "#/components/schemas/ConversationDeletedEvent",
             "typing": "#/components/schemas/TypingEvent",
+            "profileCountersChanged": "#/components/schemas/ProfileCountersChangedEvent",
             "walletUpdated": "#/components/schemas/WalletUpdatedEvent"
           }
         }

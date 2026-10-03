@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { AuthService } from '../../auth/application/auth.service';
 import { AccessTokenIssuer } from '../../auth/domain/access-token-issuer';
 import { AppleIdentityVerifier } from '../../auth/domain/apple-identity-verifier';
@@ -168,6 +169,7 @@ describe('AdminService', () => {
       notifications,
       new InMemoryRateLimiter(),
       suspended,
+      new InMemoryProfileCountersPublisher(),
     );
     const auth = new AuthService(
       accounts,

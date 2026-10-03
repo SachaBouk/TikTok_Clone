@@ -31,8 +31,9 @@ export abstract class InteractionRepository {
   abstract removeView(userId: string, videoId: string): Promise<void>;
   abstract clearViews(userId: string): Promise<void>;
 
-  abstract follow(followerId: string, followingId: string): Promise<void>;
-  abstract unfollow(followerId: string, followingId: string): Promise<void>;
+  // Vrai si l'abonnement a réellement été ajouté ou retiré (compteurs changés).
+  abstract follow(followerId: string, followingId: string): Promise<boolean>;
+  abstract unfollow(followerId: string, followingId: string): Promise<boolean>;
   // Abonnés (`followers`) ou abonnements (`following`) de `userId`, du follow le plus récent au plus ancien
   // (à date égale, par identifiant décroissant), strictement après `after` s'il est donné.
   abstract listFollows(direction: FollowDirection, userId: string, after: FollowPosition | null, limit: number): Promise<FollowPosition[]>;
@@ -54,7 +55,8 @@ export abstract class InteractionRepository {
   abstract countComments(createdSince: Date | null): Promise<number>;
 
   // Blocage : ajoute le blocage et supprime les follows dans les deux sens (les triggers ajustent les compteurs).
-  abstract block(blockerId: string, blockedId: string): Promise<void>;
+  // Vrai si un follow a été supprimé.
+  abstract block(blockerId: string, blockedId: string): Promise<boolean>;
   abstract unblock(blockerId: string, blockedId: string): Promise<void>;
   // L'un des deux a-t-il bloqué l'autre ?
   abstract isBlockedBetween(userId: string, otherId: string): Promise<boolean>;

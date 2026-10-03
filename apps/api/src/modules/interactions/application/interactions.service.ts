@@ -31,6 +31,7 @@ import {
 } from '../domain/interaction.errors';
 import { COMMENT_RATE_LIMITS, FOLLOW_RATE_LIMITS, REACTION_RATE_LIMITS, SHARE_DEDUP_SECONDS, VIEW_RATE_LIMITS } from '../domain/interaction';
 import type { InteractionRepository } from '../domain/interaction.repository';
+import type { ProfileCountersPublisher } from '../domain/profile-counters-publisher';
 import type { RateLimiter, RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
 
@@ -92,6 +93,7 @@ export class InteractionsService {
     private readonly notifications: NotificationsService,
     private readonly rateLimiter: RateLimiter,
     private readonly suspended: SuspendedAccounts,
+    private readonly counters: ProfileCountersPublisher,
   ) {}
 
   // Like, favori ou republication (`active`), ou leur retrait. Idempotent. Seulement sur une vidéo publiée.
@@ -166,13 +168,13 @@ export class InteractionsService {
     if (active && (await this.suspended.has(target.id))) throw new TargetUserNotFoundError(username);
     if (active) await this.assertNotBlocked(followerId, target.id);
     if (active) await this.limit('follow', followerId, FOLLOW_RATE_LIMITS);
-    if (active) await this.interactions.follow(followerId, target.id);
-    else await this.interactions.unfollow(followerId, target.id);
+    const changed = active ? await this.interactions.follow(followerId, target.id) : await this.interactions.unfollow(followerId, target.id);
 
     const activity = { type: 'follow', actorId: followerId, recipientId: target.id } as const;
     if (active) await this.notifications.notify(activity);
     else await this.notifications.retract(activity);
     const updated = await this.users.getById(target.id);
+    if (changed) await this.publishCounters([followerId, target.id]);
     return { active, count: updated.followersCount };
   }
 
@@ -366,8 +368,17 @@ export class InteractionsService {
     const target = await this.userByUsername(username);
     if (target.id === blockerId) throw new CannotBlockYourselfError();
     if (!active) return this.interactions.unblock(blockerId, target.id);
-    await this.interactions.block(blockerId, target.id);
+    const unfollowed = await this.interactions.block(blockerId, target.id);
     await this.notifications.removeBetween(blockerId, target.id);
+    if (unfollowed) await this.publishCounters([blockerId, target.id]);
+  }
+
+  // Compteurs d'abonnés et d'abonnements, relus après le changement (triggers de la base) et poussés à chaque compte
+  // concerné (ADR-045) : son propre profil se tient à jour sur tous ses appareils.
+  private async publishCounters(userIds: string[]): Promise<void> {
+    for (const user of await this.users.getByIds(userIds)) {
+      await this.counters.countersChanged({ userId: user.id, followersCount: user.followersCount, followingCount: user.followingCount });
+    }
   }
 
   // Comptes bloqués par `userId`, du plus récent au plus ancien (réglages de l'app, pour débloquer).

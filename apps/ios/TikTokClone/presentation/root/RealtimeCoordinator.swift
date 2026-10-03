@@ -2,7 +2,8 @@ import Foundation
 
 // Ouvre la connexion temps réel quand un compte est connecté et l'app au premier plan, la ferme sinon
 // (l'app suspendue ne reçoit rien ; les notifications push prendront le relais), et distribue les événements
-// aux écrans : fin du transcodage des publications, centre d'activité, messagerie, solde de jetons.
+// aux écrans : fin du transcodage des publications, centre d'activité, messagerie, solde de jetons, compteurs du
+// profil.
 @MainActor
 final class RealtimeCoordinator {
     private let channel: any RealtimeChannel
@@ -10,17 +11,22 @@ final class RealtimeCoordinator {
     private let activity: ActivityModel
     private let messaging: MessagingModel
     private let wallet: WalletModel
+    private let ownProfile: OwnProfileSync
     private var wantsConnection = false
     // Connexions et déconnexions appliquées dans l'ordre.
     private var lastOperation: Task<Void, Never>?
     private var listener: Task<Void, Never>?
 
-    init(channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel) {
+    init(
+        channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel,
+        ownProfile: OwnProfileSync
+    ) {
         self.channel = channel
         self.publishing = publishing
         self.activity = activity
         self.messaging = messaging
         self.wallet = wallet
+        self.ownProfile = ownProfile
     }
 
     func update(signedIn: Bool, active: Bool) {
@@ -53,6 +59,7 @@ final class RealtimeCoordinator {
             Task { await activity.refresh() }
             Task { await messaging.refresh() }
             Task { await wallet.refresh() }
+            Task { await ownProfile.refresh() }
         case .videoProcessed(let video):
             publishing.videoProcessed(video)
         case .notificationCreated(let notification, let unreadCount):
@@ -63,6 +70,8 @@ final class RealtimeCoordinator {
             activity.removed(removed, groups: groups, unreadCount: unreadCount)
         case .messageCreated, .messageDeleted, .conversationRead, .conversationAccepted, .conversationDeleted, .typing:
             messaging.handle(update)
+        case .profileCountersChanged(let followers, let following):
+            ownProfile.countersChanged(followers: followers, following: following)
         case .walletUpdated(let balance):
             wallet.balanceChanged(balance)
         }

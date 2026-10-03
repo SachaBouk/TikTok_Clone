@@ -84,6 +84,13 @@ export interface TypingEventDto {
   data: { conversationId: string; userId: string };
 }
 
+// Compteurs du profil du compte connecté changés (ADR-045) : abonnement ou désabonnement (le sien ou celui d'un autre
+// envers lui), blocage qui retire un abonnement. Valeurs à jour, à tous les appareils du compte.
+export interface ProfileCountersChangedEventDto {
+  event: 'profileCountersChanged';
+  data: { followersCount: number; followingCount: number };
+}
+
 // Solde de jetons changé (achat crédité, remboursement), envoyé à tous les appareils du compte (ADR-009).
 export interface WalletUpdatedEventDto {
   event: 'walletUpdated';
@@ -101,6 +108,7 @@ export type RealtimeEventDto =
   | ConversationAcceptedEventDto
   | ConversationDeletedEventDto
   | TypingEventDto
+  | ProfileCountersChangedEventDto
   | WalletUpdatedEventDto;
 
 // Messages de l'app vers le serveur, sur le même WebSocket. Les autres sont ignorés.

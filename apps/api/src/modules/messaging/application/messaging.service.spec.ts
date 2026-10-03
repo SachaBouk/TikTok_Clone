@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
 import { NotificationsService } from '../../notifications/application/notifications.service';
@@ -100,6 +101,7 @@ describe('MessagingService', () => {
       notifications,
       new InMemoryRateLimiter(),
       suspended,
+      new InMemoryProfileCountersPublisher(),
     );
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();

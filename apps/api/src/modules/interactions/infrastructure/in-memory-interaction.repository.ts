@@ -88,19 +88,21 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     for (const key of [...this.views.keys()]) if (key.startsWith(`${userId}:`)) this.views.delete(key);
   }
 
-  async follow(followerId: string, followingId: string): Promise<void> {
+  async follow(followerId: string, followingId: string): Promise<boolean> {
     const key = `${followerId}:${followingId}`;
-    if (this.follows.has(key)) return;
+    if (this.follows.has(key)) return false;
     // Dates strictement croissantes, pour un ordre déterministe dans les tests.
     this.follows.set(key, new Date(Date.UTC(2026, 0, 1) + ++this.sequence * 1000));
     this.users.adjustCounter(followingId, 'followersCount', 1);
     this.users.adjustCounter(followerId, 'followingCount', 1);
+    return true;
   }
 
-  async unfollow(followerId: string, followingId: string): Promise<void> {
-    if (!this.follows.delete(`${followerId}:${followingId}`)) return;
+  async unfollow(followerId: string, followingId: string): Promise<boolean> {
+    if (!this.follows.delete(`${followerId}:${followingId}`)) return false;
     this.users.adjustCounter(followingId, 'followersCount', -1);
     this.users.adjustCounter(followerId, 'followingCount', -1);
+    return true;
   }
 
   async listFollows(direction: FollowDirection, userId: string, after: FollowPosition | null, limit: number): Promise<FollowPosition[]> {
@@ -171,11 +173,12 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     return [...this.comments.values()].filter((c) => !createdSince || c.createdAt >= createdSince).length;
   }
 
-  async block(blockerId: string, blockedId: string): Promise<void> {
+  async block(blockerId: string, blockedId: string): Promise<boolean> {
     const key = `${blockerId}:${blockedId}`;
     if (!this.blocks.includes(key)) this.blocks.push(key);
-    await this.unfollow(blockerId, blockedId);
-    await this.unfollow(blockedId, blockerId);
+    const first = await this.unfollow(blockerId, blockedId);
+    const second = await this.unfollow(blockedId, blockerId);
+    return first || second;
   }
 
   async unblock(blockerId: string, blockedId: string): Promise<void> {

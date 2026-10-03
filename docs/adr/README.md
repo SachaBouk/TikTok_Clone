@@ -46,6 +46,7 @@
 | [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) | Suppression des commentaires par l'auteur de la vidéo (complète ADR-016 et ADR-028) | Proposé |
 | [ADR-043](ADR-043-notifications-supprimees-en-direct.md) | Notifications supprimées annoncées en direct, groupes recalculés (complète ADR-022 et ADR-011) | Proposé |
 | [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) | Renvoi d'un message en échec : identifiant d'envoi (complète ADR-028 et ADR-022) | Proposé |
+| [ADR-045](ADR-045-compteurs-profil-en-direct.md) | Compteurs de son profil en direct (complète ADR-022 et ADR-011) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

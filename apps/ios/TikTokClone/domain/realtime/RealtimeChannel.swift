@@ -24,6 +24,8 @@ enum RealtimeUpdate: Equatable, Sendable {
     // L'autre participant est en train d'écrire.
     case typing(conversationID: String, userID: String)
     // Solde de jetons changé (achat crédité, remboursement).
+    // Compteurs de son propre profil (ADR-045) : abonnement ou désabonnement, le sien ou celui d'un autre envers lui.
+    case profileCountersChanged(followers: Int, following: Int)
     case walletUpdated(balance: Int)
 }
 

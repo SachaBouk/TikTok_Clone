@@ -402,3 +402,47 @@ struct ProfileViewModelTests {
         #expect(publishingRepository.deleted == ["mine"])
     }
 }
+
+@MainActor
+@Suite("Profil : compteurs en direct (ADR-045)")
+struct OwnProfileSyncTests {
+    @Test("événement profileCountersChanged décodé")
+    func decoding() {
+        let update = RealtimeEventDecoder().decode(#"{"event":"profileCountersChanged","data":{"followersCount":12,"followingCount":4}}"#)
+        #expect(update == .profileCountersChanged(followers: 12, following: 4))
+    }
+
+    @Test("compteurs reçus : son profil à jour dans la session ; sans effet en invité")
+    func countersChanged() async {
+        let profiles = FakeProfileRepository()
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true), profiles: profiles)
+        await session.restore()
+        let sync = OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles))
+
+        sync.countersChanged(followers: 10, following: 2)
+        #expect(session.profile?.followersCount == 10)
+        #expect(session.profile?.followingCount == 2)
+        #expect(session.profile?.username == "alice")
+
+        await session.signOut()
+        sync.countersChanged(followers: 99, following: 99)
+        #expect(session.profile == nil)
+    }
+
+    @Test("reconnexion : profil relu par l'API ; échec réseau sans effet")
+    func refresh() async {
+        let profiles = FakeProfileRepository()
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true), profiles: profiles)
+        await session.restore()
+        let sync = OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles))
+
+        profiles.result.withLock { $0 = .success(UserProfile.alice.with(followersCount: 7, followingCount: 5)) }
+        await sync.refresh()
+        #expect(session.profile?.followersCount == 7)
+        #expect(session.profile?.followingCount == 5)
+
+        profiles.result.withLock { $0 = .failure(.network) }
+        await sync.refresh()
+        #expect(session.profile?.followersCount == 7)
+    }
+}

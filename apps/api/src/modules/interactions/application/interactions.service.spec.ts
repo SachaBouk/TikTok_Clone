@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryProfileCountersPublisher } from '../infrastructure/in-memory-profile-counters-publisher';
 import { NotificationsService } from '../../notifications/application/notifications.service';
 import { InMemoryNotificationPublisher } from '../../notifications/infrastructure/in-memory-notification-publisher';
 import { InMemoryNotificationRepository } from '../../notifications/infrastructure/in-memory-notification.repository';
@@ -56,6 +57,8 @@ describe('InteractionsService', () => {
   let clock: number;
   let notificationRepository: InMemoryNotificationRepository;
   let video: string;
+  // Compteurs du profil poussés en direct (ADR-045).
+  let counters: InMemoryProfileCountersPublisher;
 
   // Notifications reçues, résumées en « type:acteur ».
   const received = async (recipientId: string) =>
@@ -83,6 +86,7 @@ describe('InteractionsService', () => {
     notificationRepository = new InMemoryNotificationRepository();
     const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
     clock = Date.UTC(2026, 0, 1);
+    counters = new InMemoryProfileCountersPublisher();
     service = new InteractionsService(
       new InMemoryInteractionRepository(videoRepository, userRepository),
       videos,
@@ -90,6 +94,7 @@ describe('InteractionsService', () => {
       notifications,
       new InMemoryRateLimiter(() => clock),
       suspended,
+      counters,
     );
     video = await createVideo();
   });
@@ -216,6 +221,24 @@ describe('InteractionsService', () => {
 
       await expect(service.setFollow('alice', 'bob', false)).resolves.toEqual({ active: false, count: 1 });
       expect((await users.getById('alice')).followingCount).toBe(0);
+    });
+
+    it('pousse les compteurs à jour aux deux comptes, seulement quand l’abonnement change (ADR-045)', async () => {
+      await service.setFollow('alice', 'bob', true);
+      expect(counters.published).toEqual([
+        { userId: 'alice', followersCount: 0, followingCount: 1 },
+        { userId: 'bob', followersCount: 1, followingCount: 0 },
+      ]);
+      // Rejoué : rien ne change, rien n'est poussé.
+      await service.setFollow('alice', 'bob', true);
+      await service.setFollow('carol', 'bob', false);
+      expect(counters.published).toHaveLength(2);
+
+      await service.setFollow('alice', 'bob', false);
+      expect(counters.published.slice(2)).toEqual([
+        { userId: 'alice', followersCount: 0, followingCount: 0 },
+        { userId: 'bob', followersCount: 0, followingCount: 0 },
+      ]);
     });
 
     it('refuse de se suivre soi-même, ou un compte inconnu', async () => {
@@ -348,7 +371,15 @@ describe('InteractionsService', () => {
         suspended,
       );
       repository = new InMemoryInteractionRepository(videoRepository, userRepository);
-      lists = new InteractionsService(repository, videos, usersService, notifications, new InMemoryRateLimiter(), suspended);
+      lists = new InteractionsService(
+        repository,
+        videos,
+        usersService,
+        notifications,
+        new InMemoryRateLimiter(),
+        suspended,
+        new InMemoryProfileCountersPublisher(),
+      );
       // u2, u3, u4, u5 suivent u1, dans cet ordre ; u1 suit u3 ; u2 suit u5.
       for (const n of [2, 3, 4, 5]) await lists.setFollow(id(n), 'u1', true);
       await lists.setFollow(id(1), 'u3', true);
@@ -548,6 +579,15 @@ describe('InteractionsService', () => {
       expect((await users.getById('alice')).followersCount).toBe(0);
       expect(await received('bob')).toEqual(['follow:carol']);
       expect(await received('alice')).toEqual([]);
+      // Compteurs poussés aux deux comptes (ADR-045).
+      expect(counters.published.slice(-2)).toEqual([
+        { userId: 'bob', followersCount: 1, followingCount: 0 },
+        { userId: 'alice', followersCount: 0, followingCount: 0 },
+      ]);
+      // Bloquer sans abonnement entre eux : rien n'est poussé.
+      const before = counters.published.length;
+      await service.setBlock('carol', 'alice', true);
+      expect(counters.published).toHaveLength(before);
     });
 
     it('interdit follow, like, republication et commentaire dans les deux sens ; favori et retraits restent possibles', async () => {

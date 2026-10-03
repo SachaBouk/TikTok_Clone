@@ -15,6 +15,7 @@ import {
   NotificationsRemovedEvent,
   UnreadNotificationsChangedEvent,
 } from '../modules/notifications/interfaces/notifications.events';
+import { ProfileCountersChangedEvent } from '../modules/interactions/interfaces/interactions.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
 import { WalletUpdatedEvent } from '../modules/wallet/interfaces/wallet.events';
 
@@ -34,6 +35,7 @@ const REALTIME_EVENTS = {
   conversationAccepted: ConversationAcceptedEvent,
   conversationDeleted: ConversationDeletedEvent,
   typing: TypingEvent,
+  profileCountersChanged: ProfileCountersChangedEvent,
   walletUpdated: WalletUpdatedEvent,
 };
 // Messages de l'app vers le serveur (union `RealtimeClientMessage`), à encoder avec les types générés.

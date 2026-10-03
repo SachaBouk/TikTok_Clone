@@ -48,6 +48,8 @@ struct RealtimeEventDecoder: Sendable {
             return .conversationDeleted(conversationID: data.conversationId, badges(data.unreadConversations, data.pendingRequests))
         case .typing(let event):
             return .typing(conversationID: event.data.conversationId, userID: event.data.userId)
+        case .profileCountersChanged(let event):
+            return .profileCountersChanged(followers: event.data.followersCount, following: event.data.followingCount)
         case .walletUpdated(let event):
             return .walletUpdated(balance: event.data.balance)
         }

@@ -122,6 +122,7 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Grilles en 3 colonnes : vidéos et republications ; favoris et likes sur son seul profil. Toucher une vidéo ouvre le lecteur vertical sur elle, avec la suite de la liste. En tête de ses vidéos : ses publications en cours ou en échec.
 - « Modifier le profil » : nom, pseudo, bio, photo (recadrée en carré de 512 px, envoyée directement au stockage).
 - Abonnés et abonnements : listes avec bouton d'abonnement (« Suivre », « Suivre en retour », « Abonné(e) », « Ami(e)s »).
+- Compteurs de son profil en direct (ADR-045) : abonnés et abonnements suivent l'événement `profileCountersChanged` (un abonnement reçu, ou fait depuis un autre appareil) ; le profil est relu à chaque reconnexion du temps réel.
 - Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
 - Bloquer ou débloquer un compte : menu « … » de son profil. Ses vidéos, commentaires et lignes d'abonnés disparaissent aussitôt des écrans déjà chargés ; l'API ne les renvoie plus ensuite (ADR-029).
 - Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
