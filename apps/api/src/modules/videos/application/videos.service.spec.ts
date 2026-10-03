@@ -314,6 +314,28 @@ describe('VideosService', () => {
       expect(cleanup.scheduled).toEqual([]);
     });
 
+    it('prévient les écouteurs avant la suppression en base, par son auteur ou un administrateur ; un échec la fait échouer', async () => {
+      const seen: [string, boolean][] = [];
+      service.onVideoRemoving(async (videoId) => {
+        seen.push([videoId, videos.videos.has(videoId)]);
+      });
+      const first = await videoWithStatus('ready');
+      const second = await videoWithStatus('failed');
+      await service.deleteVideo(ALICE, first.id);
+      await service.removeVideo(second.id);
+      expect(seen).toEqual([
+        [first.id, true],
+        [second.id, true],
+      ]);
+
+      const third = await videoWithStatus('ready');
+      service.onVideoRemoving(async () => {
+        throw new Error('base indisponible');
+      });
+      await expect(service.deleteVideo(ALICE, third.id)).rejects.toThrow('base indisponible');
+      expect(videos.videos.has(third.id)).toBe(true);
+    });
+
     it('ne supprime pas la vidéo si le nettoyage ne peut pas être programmé', async () => {
       const video = await videoWithStatus('ready');
       cleanup.schedule = async () => {

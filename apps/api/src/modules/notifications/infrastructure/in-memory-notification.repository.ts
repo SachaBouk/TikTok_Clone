@@ -75,6 +75,14 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return this.removeWhere((n) => n.commentId === commentId);
   }
 
+  async removeForVideo(videoId: string): Promise<Notification[]> {
+    return this.removeWhere((n) => n.videoId === videoId);
+  }
+
+  async removeByActor(actorId: string): Promise<Notification[]> {
+    return this.removeWhere((n) => n.actorId === actorId);
+  }
+
   private removeWhere(matches: (notification: Notification) => boolean): Notification[] {
     const removed = [...this.notifications.values()].filter(matches);
     for (const n of removed) this.notifications.delete(n.id);
@@ -95,8 +103,22 @@ export class InMemoryNotificationRepository extends NotificationRepository {
   }
 
   async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
+    return this.groups(this.newestFirst(recipientId, excludedActorIds))
+      .filter((g) => !beforeId || g.latest.id < beforeId)
+      .slice(0, limit);
+  }
+
+  async findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]> {
+    return this.groups(
+      this.newestFirst(recipientId, excludedActorIds).filter((n) =>
+        filters.some((f) => n.type === f.type && (!f.videoId || n.videoId === f.videoId)),
+      ),
+    );
+  }
+
+  private groups(newestFirst: Notification[]): NotificationGroup[] {
     const groups = new Map<string, NotificationGroup>();
-    for (const n of this.newestFirst(recipientId, excludedActorIds)) {
+    for (const n of newestFirst) {
       const group = groups.get(groupKey(n));
       if (!group) {
         groups.set(groupKey(n), { latest: n, count: 1, unread: !n.readAt, recentActorIds: n.actorId ? [n.actorId] : [] });
@@ -106,7 +128,7 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       group.unread ||= !n.readAt;
       if (n.actorId && group.recentActorIds.length < GROUP_ACTORS_SHOWN) group.recentActorIds.push(n.actorId);
     }
-    return [...groups.values()].filter((g) => !beforeId || g.latest.id < beforeId).slice(0, limit);
+    return [...groups.values()];
   }
 
   private newestFirst(recipientId: string, excludedActorIds: string[] = []): Notification[] {

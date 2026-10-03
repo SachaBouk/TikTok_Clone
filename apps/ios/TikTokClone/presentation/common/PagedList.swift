@@ -122,6 +122,11 @@ final class PagedList<Item: Identifiable & Equatable> {
         items.removeAll(where: shouldRemove)
     }
 
+    // Élément arrivé en direct, à une place donnée (0 : en tête).
+    func insert(_ item: Item, at index: Int) {
+        items.insert(item, at: min(index, items.count))
+    }
+
     func replace(_ item: Item) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index] = item

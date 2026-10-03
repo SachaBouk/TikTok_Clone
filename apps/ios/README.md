@@ -143,6 +143,7 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
 - « Suivre en retour » (ADR-036) : sur l'abonnement d'un seul compte et sur chaque ligne de « Nouveaux abonnés », puis « Ami(e)s » (toucher à nouveau : ne plus suivre). La relation est lue à part, une requête par page (`getRelationships`).
 - Une notification reçue en direct rejoint son groupe, qui remonte en tête.
+- Une notification supprimée (réaction ou abonnement retirés, blocage, commentaire, vidéo ou compte supprimés ; ADR-043) : l'événement `notificationsRemoved` porte l'état recalculé de chaque groupe touché, qui remplace l'affiché (noms complétés, nombre, place selon sa plus récente) ; un groupe vide disparaît.
 - Badge de l'onglet : notifications non lues, mis à jour en direct par le WebSocket (`notificationCreated`, `unreadNotificationsChanged`) et relu à chaque reconnexion.
 - Afficher le centre d'activité marque lu ce qui y apparaît (`markNotificationsRead` avec la plus récente affichée) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché. Les nouvelles lignes restent mises en avant jusqu'au prochain chargement.
 

@@ -202,6 +202,21 @@ describe('UsersService', () => {
       await expect(service.getById(alice.id)).resolves.toMatchObject({ id: alice.id });
     });
 
+    it('prévient les écouteurs avant la suppression en base ; un échec la fait échouer', async () => {
+      const seen: [string, boolean][] = [];
+      service.onAccountDeleting(async (userId) => {
+        seen.push([userId, (await service.getById(userId)).id === userId]);
+      });
+      await service.deleteAccount(alice.id);
+      expect(seen).toEqual([[alice.id, true]]);
+
+      service.onAccountDeleting(async () => {
+        throw new Error('base indisponible');
+      });
+      await expect(service.deleteAccount(bob.id)).rejects.toThrow('base indisponible');
+      await expect(service.getById(bob.id)).resolves.toMatchObject({ id: bob.id });
+    });
+
     it('supprime le compte et ses photos, puis lève UserNotFoundError si on le supprime à nouveau', async () => {
       await service.setAvatar(alice.id, await uploadAvatar(alice.id, 'image/jpeg', JPEG));
       const bobAvatar = await uploadAvatar(bob.id, 'image/png', PNG);

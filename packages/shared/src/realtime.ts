@@ -1,5 +1,5 @@
 import type { MessageDto } from './messaging.js';
-import type { NotificationDto } from './notifications.js';
+import type { NotificationDto, NotificationGroupDto } from './notifications.js';
 import type { VideoDto } from './videos.js';
 import type { WalletDto } from './wallet.js';
 
@@ -19,18 +19,18 @@ export interface NotificationCreatedEventDto {
   data: { notification: NotificationDto; unreadCount: number };
 }
 
-// Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire supprimé. L'app retire chacune
-// de son groupe (`key`, comme `NotificationGroupDto.key`) : un de moins, l'auteur retiré des noms affichés.
+// Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire, vidéo ou compte supprimés.
+// `removed` : chaque notification avec la clé de son groupe (`key`, comme `NotificationGroupDto.key`).
+// `groups` : l'état recalculé de chaque groupe touché qui n'est pas vide (auteurs, nombre, plus récente, lu) ; un groupe
+// touché absent de `groups` est vide, l'app le retire.
 export interface RemovedNotificationDto {
   id: string;
   key: string;
-  // Absent pour une notification sans auteur (modération).
-  actorId?: string;
 }
 
 export interface NotificationsRemovedEventDto {
   event: 'notificationsRemoved';
-  data: { removed: RemovedNotificationDto[]; unreadCount: number };
+  data: { removed: RemovedNotificationDto[]; groups: NotificationGroupDto[]; unreadCount: number };
 }
 
 // Badge changé sans nouvelle notification : marquage lu (sur cet appareil ou un autre).

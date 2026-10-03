@@ -47,7 +47,7 @@ export type ActivityEvent =
   | { type: 'follow'; actorId: string; recipientId: string };
 
 // Actions réversibles : leur notification disparaît quand elles sont annulées (unlike, unfollow…).
-// Un commentaire supprimé emporte sa notification par cascade dans la base.
+// Un commentaire, une vidéo ou un compte supprimés emportent aussi les leurs (retirées juste avant, pour être annoncées).
 export type RetractableActivity = Extract<ActivityEvent, { type: 'like' | 'repost' | 'follow' }>;
 
 export interface Notification {
@@ -100,7 +100,6 @@ export const GROUP_ACTORS_SHOWN = 2;
 export interface RemovedNotification {
   id: string;
   key: string;
-  actorId: string | null;
 }
 
 export function groupKey(notification: Notification): string {
@@ -116,6 +115,20 @@ export function groupKey(notification: Notification): string {
     case 'reportResolved':
     case 'contentRemoved':
       return `moderation:${notification.id}`;
+  }
+}
+
+// Groupe d'une notification qui peut en contenir d'autres (like, republication, follow), pour le recalculer après un
+// retrait (ADR-043) ; null pour un groupe d'une seule notification (commentaire, modération), vide après son retrait.
+export function groupFilter(notification: Notification): NotificationFilter | null {
+  switch (notification.type) {
+    case 'like':
+    case 'repost':
+      return { type: notification.type, videoId: notification.videoId ?? undefined };
+    case 'follow':
+      return { type: 'follow' };
+    default:
+      return null;
   }
 }
 

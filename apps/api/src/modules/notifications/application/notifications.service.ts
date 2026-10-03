@@ -2,6 +2,7 @@ import type { UsersService } from '../../users/application/users.service';
 import type { VideosService } from '../../videos/application/videos.service';
 import {
   type ActivityEvent,
+  groupFilter,
   groupKey,
   isModeration,
   type ModerationEvent,
@@ -31,8 +32,8 @@ export interface NotificationGroupPage {
 // - Écriture : appelé par le module interactions après chaque interaction (notify) ou son annulation (retract).
 // - Lecture : notifications du compte connecté, avec leurs auteurs et vidéos lus via `users` et `videos`.
 // Stockage : une ligne par action. Le regroupement (« X et 12 autres ») est calculé à la lecture (`listGroups`).
-// Chaque changement est poussé aux appareils connectés du destinataire (WebSocket, ADR-011) :
-// nouvelle notification avec le badge, ou badge seul.
+// Chaque changement est poussé aux appareils connectés du destinataire (WebSocket, ADR-011) : nouvelle notification
+// avec le badge, notifications supprimées avec leurs groupes recalculés (ADR-043), ou badge seul.
 export class NotificationsService {
   constructor(
     private readonly notifications: NotificationRepository,
@@ -75,10 +76,21 @@ export class NotificationsService {
     await this.announceRemoved(await this.notifications.removeBetween(userId, otherId));
   }
 
-  // Commentaire sur le point d'être supprimé (par son auteur, l'auteur de la vidéo ou un administrateur) : sa
-  // notification est supprimée d'abord, pour être annoncée ; la cascade de la base l'emporterait sans prévenir.
+  // Contenu ou compte sur le point d'être supprimé : ses notifications sont supprimées d'abord, pour être annoncées ; la
+  // cascade de la base les emporterait sans prévenir. Si la suppression échoue ensuite, elles restent perdues.
+  // Commentaire (par son auteur, l'auteur de la vidéo ou un administrateur).
   async retractComment(commentId: string): Promise<void> {
     await this.announceRemoved(await this.notifications.removeForComment(commentId));
+  }
+
+  // Vidéo (par son auteur ou un administrateur) : ses likes, republications et commentaires, chez son auteur.
+  async retractVideo(videoId: string): Promise<void> {
+    await this.announceRemoved(await this.notifications.removeForVideo(videoId));
+  }
+
+  // Compte supprimé : ses actions, chez les autres. Les notifications qu'il a reçues partent avec lui.
+  async retractActor(actorId: string): Promise<void> {
+    await this.announceRemoved(await this.notifications.removeByActor(actorId));
   }
 
   // Du plus récent au plus ancien. Le curseur est l'identifiant de la dernière notification reçue
@@ -127,13 +139,25 @@ export class NotificationsService {
     return this.notifications.countUnread(recipientId, await this.excludedActors());
   }
 
+  // Un événement par destinataire, avec ses groupes touchés recalculés (auteurs affichés, nombre, plus récente) : l'app
+  // remplace chacun, ou le retire s'il est absent (vide, ou sauté faute de vidéo ou d'auteurs).
   private async announceRemoved(removed: Notification[]): Promise<void> {
-    const byRecipient = new Map<string, RemovedNotification[]>();
-    for (const n of removed) {
-      byRecipient.set(n.recipientId, [...(byRecipient.get(n.recipientId) ?? []), { id: n.id, key: groupKey(n), actorId: n.actorId }]);
-    }
-    for (const [recipientId, items] of byRecipient) {
-      await this.publisher.notificationsRemoved(recipientId, items, await this.countUnread(recipientId));
+    const byRecipient = new Map<string, Notification[]>();
+    for (const n of removed) byRecipient.set(n.recipientId, [...(byRecipient.get(n.recipientId) ?? []), n]);
+    const excluded = byRecipient.size > 0 ? await this.excludedActors() : [];
+    for (const [recipientId, notifications] of byRecipient) {
+      const filters = new Map<string, NotificationFilter>();
+      for (const n of notifications) {
+        const filter = groupFilter(n);
+        if (filter) filters.set(groupKey(n), filter);
+      }
+      const groups = await this.groupsWithContext(await this.notifications.findGroups(recipientId, [...filters.values()], excluded));
+      await this.publisher.notificationsRemoved(
+        recipientId,
+        notifications.map((n): RemovedNotification => ({ id: n.id, key: groupKey(n) })),
+        groups,
+        await this.notifications.countUnread(recipientId, excluded),
+      );
     }
   }
 

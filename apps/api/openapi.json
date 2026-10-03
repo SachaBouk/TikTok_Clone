@@ -7691,11 +7691,6 @@
           "key": {
             "type": "string",
             "description": "Clé du groupe de la notification, comme `NotificationGroupResponse.key`."
-          },
-          "actorId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Auteur de l’action ; absent pour une notification de modération."
           }
         },
         "required": [
@@ -7712,6 +7707,13 @@
               "$ref": "#/components/schemas/RemovedNotificationData"
             }
           },
+          "groups": {
+            "description": "État recalculé des groupes touchés qui ne sont pas vides ; un groupe touché absent est vide.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationGroupResponse"
+            }
+          },
           "unreadCount": {
             "type": "integer",
             "minimum": 0,
@@ -7720,6 +7722,7 @@
         },
         "required": [
           "removed",
+          "groups",
           "unreadCount"
         ]
       },

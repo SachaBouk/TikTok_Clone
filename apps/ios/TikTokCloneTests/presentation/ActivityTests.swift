@@ -242,42 +242,107 @@ struct ActivityModelTests {
         #expect(model.list.items.map(\.key) == ["like:v2", "like:v1", "follow"])
     }
 
-    @Test("notifications supprimées en direct (ADR-043) : un de moins dans le groupe, groupe vide retiré, doublon ignoré")
+    // Groupe tel que l'API le recalcule, à partir de ses notifications (de la plus ancienne à la plus récente).
+    func group(_ notifications: ActivityNotification...) -> ActivityGroup {
+        notifications.reduce(nil) { ActivityGroup.merging($1, into: $0) }!
+    }
+
+    @Test("notifications supprimées en direct (ADR-043) : groupe remplacé par l'état recalculé, groupe vide retiré, doublon ignoré")
     func liveRemoval() async {
-        repository.add(.sample("n1", read: true, actor: .alice))
-        repository.add(.sample("n2", read: true, actor: .bob))
-        repository.add(.sample("n3", kind: .follow, read: false))
+        let carol = UserSummary(id: "carol-id", username: "carol", displayName: "Carol", avatarURL: nil)
+        repository.add(.sample("n1", read: true, actor: carol))
+        repository.add(.sample("n2", read: true, actor: .alice))
+        repository.add(.sample("n3", read: true, actor: .bob))
+        repository.add(.sample("n4", kind: .follow, read: false))
         let (model, _) = await makeModel()
         await model.reload()
         #expect(model.list.items.map(\.key) == ["follow", "like:v1"])
+        #expect(model.list.items[1].actorNames == "Bob, Alice et 1 autre")
 
-        let unlike = RemovedActivity(id: "n2", key: "like:v1", actorID: UserSummary.bob.id)
-        model.removed([unlike], unreadCount: 1)
-        let likes = model.list.items.first { $0.key == "like:v1" }
-        #expect(likes?.count == 1)
-        #expect(likes?.actorNames == "Alice")
+        // Bob retire son like : les noms sont complétés (Carol), la plus récente redevient n2.
+        let unlike = RemovedActivity(id: "n3", key: "like:v1")
+        let likes = group(.sample("n1", read: true, actor: carol), .sample("n2", read: true, actor: .alice))
+        model.removed([unlike], groups: [likes], unreadCount: 1)
+        #expect(model.list.items.map(\.key) == ["follow", "like:v1"])
+        #expect(model.list.items[1].actorNames == "Alice et Carol")
+        #expect(model.list.items[1].latestID == "n2")
         #expect(model.unreadCount == 1)
         // Annonce en double : sans effet.
-        model.removed([unlike], unreadCount: 1)
-        #expect(model.list.items.first { $0.key == "like:v1" }?.count == 1)
+        model.removed([unlike], groups: [group(.sample("n1", read: true, actor: carol))], unreadCount: 1)
+        #expect(model.list.items[1].count == 2)
 
-        // Dernier abonné retiré : le groupe disparaît.
-        model.removed([RemovedActivity(id: "n3", key: "follow", actorID: UserSummary.bob.id)], unreadCount: 0)
+        // Dernier abonné retiré : absent des groupes recalculés, le groupe disparaît.
+        model.removed([RemovedActivity(id: "n4", key: "follow")], groups: [], unreadCount: 0)
         #expect(model.list.items.map(\.key) == ["like:v1"])
         #expect(model.unreadCount == 0)
-        #expect(model.removedIDs == ["n2", "n3"])
+        #expect(model.removedIDs == ["n3", "n4"])
     }
 
-    @Test("événement notificationsRemoved décodé")
-    func removedDecoding() {
+    @Test("notifications supprimées en direct : un groupe dont la plus récente est retirée reprend sa place dans l'ordre")
+    func liveRemovalReorders() async {
+        repository.add(.sample("n1", read: true, actor: .alice))
+        repository.add(.sample("n2", kind: .follow, read: true, actor: .alice))
+        repository.add(.sample("n3", read: true, actor: .bob))
+        repository.add(.sample("n4", kind: .follow, read: true))
+        let (model, _) = await makeModel()
+        await model.reload()
+        #expect(model.list.items.map(\.key) == ["follow", "like:v1"])
+        #expect(model.list.nextCursor == nil)
+
+        // Bob se désabonne : le groupe repart derrière like:v1 (n3), selon sa plus récente (n2).
+        model.removed(
+            [RemovedActivity(id: "n4", key: "follow")], groups: [group(.sample("n2", kind: .follow, read: true, actor: .alice))], unreadCount: 0)
+        #expect(model.list.items.map(\.key) == ["like:v1", "follow"])
+    }
+
+    @Test("notifications supprimées en direct : replacé au-delà du dernier groupe chargé, le groupe attend la page suivante")
+    func liveRemovalBeyondLoaded() async {
+        repository.add(.sample("n1", read: true, videoID: "v2"))
+        repository.add(.sample("n2", kind: .follow, read: true, actor: .alice))
+        repository.add(.sample("n3", read: true))
+        repository.add(.sample("n4", kind: .follow, read: true))
+        let (model, _) = await makeModel()
+        await model.reload()
+        // Deux groupes par page : like:v2 reste à charger.
+        #expect(model.list.items.map(\.key) == ["follow", "like:v1"])
+        #expect(model.list.nextCursor != nil)
+
+        model.removed(
+            [RemovedActivity(id: "n4", key: "follow")], groups: [group(.sample("n2", kind: .follow, read: true, actor: .alice))], unreadCount: 0)
+        #expect(model.list.items.map(\.key) == ["like:v1"])
+    }
+
+    @Test("notifications supprimées en direct : un abonnement redevenu seul affiche « Suivre en retour », relation lue ensuite")
+    func liveRemovalFollowBack() async {
+        let followsMe = Relationship(following: false, followedBy: true, blockedByMe: false)
+        relationships.state.withLock { $0.relationshipsByID[UserSummary.bob.id] = followsMe }
+        repository.add(.sample("n1", kind: .follow, read: true, actor: .bob))
+        repository.add(.sample("n2", kind: .follow, read: true, actor: .alice))
+        let (model, _) = await makeModel()
+        await model.reload()
+        #expect(model.list.items.first?.followBackActor == nil)
+
+        model.removed(
+            [RemovedActivity(id: "n2", key: "follow")], groups: [group(.sample("n1", kind: .follow, read: true, actor: .bob))], unreadCount: 0)
+        #expect(model.list.items.first?.followBackActor == .bob)
+        #expect(await eventually { model.list.items.first?.actorRelationship == followsMe })
+    }
+
+    @Test("événement notificationsRemoved décodé, avec les groupes recalculés")
+    func removedDecoding() throws {
         let json = """
-            {"event":"notificationsRemoved","data":{"removed":[{"id":"n1","key":"like:v1","actorId":"u2"},{"id":"n9","key":"moderation:n9"}],"unreadCount":3}}
+            {"event":"notificationsRemoved","data":{"removed":[{"id":"n1","key":"like:v1"},{"id":"n9","key":"moderation:n9"}],\
+            "groups":[{"key":"like:v1","kind":"like","actors":[{"id":"u3","username":"carol","displayName":"Carol","avatarUrl":null}],"count":1,\
+            "video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},"read":true,"latestId":"n0","createdAt":"2026-10-03T10:00:00.000Z"}],"unreadCount":3}}
             """
-        #expect(
-            RealtimeEventDecoder().decode(json)
-                == .notificationsRemoved(
-                    [RemovedActivity(id: "n1", key: "like:v1", actorID: "u2"), RemovedActivity(id: "n9", key: "moderation:n9", actorID: nil)],
-                    unreadCount: 3))
+        guard case .notificationsRemoved(let removed, let groups, let unreadCount) = RealtimeEventDecoder().decode(json) else {
+            Issue.record("événement non décodé")
+            return
+        }
+        #expect(removed == [RemovedActivity(id: "n1", key: "like:v1"), RemovedActivity(id: "n9", key: "moderation:n9")])
+        #expect(unreadCount == 3)
+        let group = try #require(groups.first)
+        #expect([group.key, group.actorNames, group.latestID] == ["like:v1", "Carol", "n0"])
     }
 
     @Test("textes des groupes : singulier, deux noms, « et 1 autre », commentaire seul")

@@ -8,8 +8,9 @@ enum RealtimeUpdate: Equatable, Sendable {
     case notificationCreated(ActivityNotification, unreadCount: Int)
     // Badge seul (notifications lues sur un autre appareil).
     case unreadNotificationsChanged(Int)
-    // Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire supprimé ; badge à jour.
-    case notificationsRemoved([RemovedActivity], unreadCount: Int)
+    // Notifications supprimées (ADR-043) : réaction ou abonnement retirés, blocage, commentaire, vidéo ou compte supprimés.
+    // `groups` : état recalculé des groupes touchés encore non vides ; badge à jour.
+    case notificationsRemoved([RemovedActivity], groups: [ActivityGroup], unreadCount: Int)
     // Messagerie, avec les badges du compte connecté. Nouveau message (y compris envoyé depuis un autre appareil).
     case messageCreated(DirectMessage, MessagingBadges)
     // Message retiré par son expéditeur.

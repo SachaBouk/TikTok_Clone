@@ -360,6 +360,10 @@ model Notification {
   @@unique([actorId, videoId], map: "notifications_repost_key", where: raw("type = 'repost'"))
   @@unique([actorId, userId], map: "notifications_follow_key", where: raw("type = 'follow'"))
   @@index([userId, createdAt])
+  // Suppression d'une vidéo ou d'un compte : ses notifications sont relues, retirées et annoncées (ADR-043), avant la
+  // cascade qui cherche aussi par ces colonnes.
+  @@index([videoId])
+  @@index([actorId])
   @@map("notifications")
 }
 

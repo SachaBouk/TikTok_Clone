@@ -59,8 +59,8 @@ final class RealtimeCoordinator {
             activity.received(notification, unreadCount: unreadCount)
         case .unreadNotificationsChanged(let count):
             activity.unreadChanged(count)
-        case .notificationsRemoved(let removed, let unreadCount):
-            activity.removed(removed, unreadCount: unreadCount)
+        case .notificationsRemoved(let removed, let groups, let unreadCount):
+            activity.removed(removed, groups: groups, unreadCount: unreadCount)
         case .messageCreated, .messageDeleted, .conversationRead, .conversationAccepted, .conversationDeleted, .typing:
             messaging.handle(update)
         case .walletUpdated(let balance):

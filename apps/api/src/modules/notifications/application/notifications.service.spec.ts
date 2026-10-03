@@ -130,16 +130,35 @@ describe('NotificationsService', () => {
       expect(publisher.unreadCounts).toEqual([]);
     });
 
-    it('annonce un retrait avec sa notification, sa clé de groupe et le badge ; le marquage lu envoie le badge seul', async () => {
+    it('annonce un retrait avec sa notification, sa clé de groupe, le groupe recalculé et le badge ; le marquage lu envoie le badge seul', async () => {
       await service.notify(like('alice'));
       await service.notify(like('carol'));
-      const removedId = (await service.list('bob', null, 10)).items.find((i) => i.actor?.id === 'alice')!.notification.id;
-      await service.retract(like('alice'));
-      expect(publisher.removed).toEqual([
-        { recipientId: 'bob', removed: [{ id: removedId, key: `like:${video}`, actorId: 'alice' }], unreadCount: 1 },
+      await service.notify(like('dave'));
+      const removedId = (await service.list('bob', null, 10)).items.find((i) => i.actor?.id === 'dave')!.notification.id;
+      const carolId = (await service.list('bob', null, 10)).items.find((i) => i.actor?.id === 'carol')!.notification.id;
+      await service.retract(like('dave'));
+      expect(publisher.removed).toHaveLength(1);
+      const [event] = publisher.removed;
+      expect(event).toMatchObject({ recipientId: 'bob', removed: [{ id: removedId, key: `like:${video}` }], unreadCount: 2 });
+      // Les deux noms affichés sont complétés (Alice remonte), la plus récente redevient celle de Carol.
+      expect(event.groups.map((g) => [g.actors.map((a) => a.id), g.group.count, g.group.latest.id, g.group.unread])).toEqual([
+        [['carol', 'alice'], 2, carolId, true],
       ]);
       await service.markRead('bob', null);
       expect(publisher.unreadCounts).toEqual([{ recipientId: 'bob', unreadCount: 0 }]);
+    });
+
+    it('un groupe vidé est absent des groupes recalculés ; seuls les groupes touchés sont relus', async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'repost', actorId: 'carol', recipientId: 'bob', videoId: video });
+      await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
+      await service.notify({ type: 'follow', actorId: 'dave', recipientId: 'bob' });
+      await service.retract(like('alice'));
+      expect(publisher.removed.at(-1)!.groups).toEqual([]);
+      await service.retract({ type: 'follow', actorId: 'carol', recipientId: 'bob' });
+      expect(publisher.removed.at(-1)!.groups.map((g) => [g.group.latest.type, g.actors.map((a) => a.id), g.group.count])).toEqual([
+        ['follow', ['dave'], 1],
+      ]);
     });
 
     it('annonce les suppressions du blocage à chaque destinataire, et celle d’un commentaire supprimé', async () => {
@@ -147,23 +166,53 @@ describe('NotificationsService', () => {
       await service.notify({ type: 'follow', actorId: 'bob', recipientId: 'alice' });
       await service.notify({ type: 'comment', actorId: 'carol', recipientId: 'bob', videoId: video, commentId: 'c1', commentText: 'Top' });
       await service.removeBetween('alice', 'bob');
-      expect(publisher.removed.map((r) => [r.recipientId, r.removed.map((n) => n.key), r.unreadCount])).toEqual([
-        ['bob', [`like:${video}`], 1],
-        ['alice', ['follow'], 0],
+      expect(publisher.removed.map((r) => [r.recipientId, r.removed.map((n) => n.key), r.groups, r.unreadCount])).toEqual([
+        ['bob', [`like:${video}`], [], 1],
+        ['alice', ['follow'], [], 0],
       ]);
 
       await service.retractComment('c1');
       const last = publisher.removed.at(-1)!;
-      expect([last.recipientId, last.removed[0].key.startsWith('comment:'), last.removed[0].actorId, last.unreadCount]).toEqual([
-        'bob',
-        true,
-        'carol',
-        0,
-      ]);
+      expect([last.recipientId, last.removed[0].key.startsWith('comment:'), last.groups, last.unreadCount]).toEqual(['bob', true, [], 0]);
       await expect(service.list('bob', null, 10)).resolves.toMatchObject({ items: [] });
       // Rien à retirer : rien n'est annoncé.
       await service.retractComment('c1');
       expect(publisher.removed).toHaveLength(3);
+    });
+
+    it('vidéo supprimée : ses likes, republications et commentaires sont retirés et annoncés, le reste demeure', async () => {
+      const other = await videoRepository.create({ userId: 'bob', description: null, rawKey: 'k2', uploadId: 'u2', rawSize: 1 });
+      Object.assign(videoRepository.videos.get(other.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 'autre.jpg' });
+      await service.notify(like('alice'));
+      await service.notify({ type: 'repost', actorId: 'carol', recipientId: 'bob', videoId: video });
+      await service.notify({ type: 'comment', actorId: 'dave', recipientId: 'bob', videoId: video, commentId: 'c1', commentText: 'Top' });
+      await service.notify({ type: 'like', actorId: 'alice', recipientId: 'bob', videoId: other.id });
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      await service.retractVideo(video);
+      const [event] = publisher.removed;
+      expect([event.recipientId, event.removed.map((r) => r.key).sort(), event.groups, event.unreadCount]).toEqual([
+        'bob',
+        [`comment:${event.removed.find((r) => r.key.startsWith('comment:'))!.id}`, `like:${video}`, `repost:${video}`].sort(),
+        [],
+        2,
+      ]);
+      expect((await service.listGroups('bob', null, 10)).items.map((g) => g.group.latest.type)).toEqual(['follow', 'like']);
+    });
+
+    it('compte supprimé : ses actions sont retirées chez chaque destinataire, groupes recalculés', async () => {
+      await service.notify(like('alice'));
+      await service.notify(like('carol'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'carol' });
+      await service.notify({ type: 'follow', actorId: 'carol', recipientId: 'alice' });
+      await service.retractActor('alice');
+      expect(
+        publisher.removed.map((r) => [r.recipientId, r.removed.map((n) => n.key), r.groups.map((g) => g.actors.map((a) => a.id)), r.unreadCount]),
+      ).toEqual([
+        ['bob', [`like:${video}`], [['carol']], 1],
+        ['carol', ['follow'], [], 0],
+      ]);
+      // Les notifications reçues par le compte ne sont pas annoncées : elles partent avec lui.
+      expect(await service.unreadCount('alice')).toBe(1);
     });
   });
 

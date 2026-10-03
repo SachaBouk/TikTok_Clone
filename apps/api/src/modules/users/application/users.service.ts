@@ -47,6 +47,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // Sans décorateur NestJS : le module l'instancie via une factory, le métier ne dépend pas du framework.
 // Exporté par UsersModule : les autres modules accèdent aux comptes par ce service, jamais par le repository.
 export class UsersService {
+  // Prévenus avant la suppression en base d'un compte (voir `onAccountDeleting`).
+  private readonly deletionListeners: ((userId: string) => Promise<void>)[] = [];
+
   constructor(
     private readonly users: UserRepository,
     private readonly avatars: AvatarStorage,
@@ -165,12 +168,21 @@ export class UsersService {
   // Suppression du compte depuis l'app (ADR-010, exigence Apple). La base supprime en cascade
   // les données du compte, sessions comprises ; l'historique des cadeaux est conservé (ADR-006).
   // Avant la base : programmer le nettoyage des fichiers vidéo (sans effet tant que les vidéos existent),
-  // puis supprimer les photos de profil. Si l'un échoue, le compte reste et la suppression peut être relancée.
+  // puis supprimer les photos de profil, puis prévenir les autres modules (`onAccountDeleting`). Si l'un échoue, le compte
+  // reste et la suppression peut être relancée.
   async deleteAccount(id: string): Promise<void> {
     await this.getById(id);
     await this.contentCleanup.scheduleCleanup(id);
     await this.deleteAvatarFiles(id);
+    for (const listener of this.deletionListeners) await listener(id);
     if (!(await this.users.delete(id))) throw new UserNotFoundError(id);
+  }
+
+  // Un autre module agit juste avant la suppression en base d'un compte (ex. notifications : retirer et annoncer celles
+  // dont il est l'auteur, ADR-043). Le module users ne dépend ainsi pas de lui. Un échec de l'écouteur fait échouer la
+  // suppression.
+  onAccountDeleting(listener: (userId: string) => Promise<void>): void {
+    this.deletionListeners.push(listener);
   }
 
   private async isValidAvatar(key: string, object: StoredObject): Promise<boolean> {

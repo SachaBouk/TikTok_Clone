@@ -2,9 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { PUSH_BODY_MAX_LENGTH } from '../../push/domain/push';
 import { PushService } from '../../push/application/push.service';
 import { RealtimeService } from '../../realtime/application/realtime.service';
-import type { ModerationOutcome, ModerationReason, ModerationTargetType, NotificationWithContext, RemovedNotification } from '../domain/notification';
+import type {
+  ModerationOutcome,
+  ModerationReason,
+  ModerationTargetType,
+  NotificationGroupWithContext,
+  NotificationWithContext,
+  RemovedNotification,
+} from '../domain/notification';
 import { NotificationPublisher } from '../domain/notification-publisher';
-import { toNotificationDto } from '../interfaces/notifications.responses';
+import { toNotificationDto, toNotificationGroupDto } from '../interfaces/notifications.responses';
 
 // Prévient le destinataire sur ses appareils : WebSocket (module realtime, ADR-011), au même format que
 // `GET /notifications`, et notification push (module push) pour une nouvelle notification.
@@ -41,11 +48,16 @@ export class AppNotificationPublisher extends NotificationPublisher {
     return this.realtime.sendToUser(recipientId, { event: 'unreadNotificationsChanged', data: { unreadCount } });
   }
 
-  // Pas de push : une notification retirée ne se signale qu'aux écrans ouverts.
-  notificationsRemoved(recipientId: string, removed: RemovedNotification[], unreadCount: number): Promise<void> {
+  // Pas de push : une notification retirée ne se signale qu'aux écrans ouverts. Groupes au format de `GET /notifications/groups`.
+  notificationsRemoved(
+    recipientId: string,
+    removed: RemovedNotification[],
+    groups: NotificationGroupWithContext[],
+    unreadCount: number,
+  ): Promise<void> {
     return this.realtime.sendToUser(recipientId, {
       event: 'notificationsRemoved',
-      data: { removed: removed.map((r) => ({ id: r.id, key: r.key, ...(r.actorId ? { actorId: r.actorId } : {}) })), unreadCount },
+      data: { removed: removed.map((r) => ({ id: r.id, key: r.key })), groups: groups.map(toNotificationGroupDto), unreadCount },
     });
   }
 }

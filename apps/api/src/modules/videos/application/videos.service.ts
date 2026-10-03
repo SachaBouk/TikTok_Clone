@@ -50,6 +50,9 @@ export interface VideoUpload {
 // Service applicatif du module videos (ADR-003). Upload direct via URLs signées (ADR-007) :
 // l'API ne reçoit aucun octet vidéo, elle ne manipule que des métadonnées.
 export class VideosService {
+  // Prévenus avant la suppression en base d'une vidéo (voir `onVideoRemoving`).
+  private readonly removalListeners: ((videoId: string) => Promise<void>)[] = [];
+
   constructor(
     private readonly videos: VideoRepository,
     private readonly storage: VideoStorage,
@@ -149,7 +152,7 @@ export class VideosService {
   }
 
   // Suppression d'une vidéo par son auteur, quel que soit son statut. La base supprime en cascade likes,
-  // favoris, republications, commentaires et notifications ; les messages qui la partageaient la montrent
+  // favoris, republications, commentaires et notifications (retirées juste avant, voir `onVideoRemoving`) ; les messages qui la partageaient la montrent
   // indisponible. Les fichiers sont supprimés ensuite, par la file de nettoyage (voir CLEANUP_DELAY_MS).
   async deleteVideo(userId: string, videoId: string): Promise<void> {
     const video = await this.videos.findById(videoId);
@@ -257,6 +260,13 @@ export class VideosService {
     return this.videos.countByAuthors([...new Set(userIds)]);
   }
 
+  // Un autre module agit juste avant la suppression en base d'une vidéo, par son auteur ou un administrateur (ex.
+  // notifications : retirer et annoncer les siennes, ADR-043). Le module videos ne dépend ainsi pas de lui. Un échec de
+  // l'écouteur fait échouer la suppression.
+  onVideoRemoving(listener: (videoId: string) => Promise<void>): void {
+    this.removalListeners.push(listener);
+  }
+
   // Une vidéo pas encore `ready` n'est visible que par son auteur (suivi du traitement).
   async getVideo(videoId: string, viewerId: string | null): Promise<Video> {
     const video = await this.videos.findById(videoId);
@@ -265,10 +275,11 @@ export class VideosService {
   }
 
   // Suppression réelle : nettoyage des fichiers programmé d'abord (sans effet tant que la vidéo existe),
-  // job de transcodage retiré s'il attend encore, puis suppression en base (cascade).
+  // job de transcodage retiré s'il attend encore, autres modules prévenus, puis suppression en base (cascade).
   private async remove(video: Video): Promise<void> {
     await this.cleanup.schedule([filesOf(video)], CLEANUP_DELAY_MS);
     if (video.status === 'processing') await this.transcoding.cancel(video.id);
+    for (const listener of this.removalListeners) await listener(video.id);
     await this.videos.delete(video.id);
   }
 }

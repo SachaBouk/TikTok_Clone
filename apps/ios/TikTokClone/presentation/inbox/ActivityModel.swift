@@ -9,7 +9,9 @@ import Observation
 // - Tant que le centre d'activité est affiché, ce qui y apparaît est marqué lu (la plus récente affichée et
 //   les plus anciennes) ; ce qui arrive ensuite reste non lu jusqu'à ce qu'il soit affiché.
 // - Les lignes gardent leur mise en avant « non lue » jusqu'au prochain chargement.
-// - Une notification supprimée (réaction retirée, blocage, commentaire supprimé ; ADR-043) quitte son groupe en direct.
+// - Une notification supprimée (réaction retirée, blocage, commentaire, vidéo ou compte supprimés ; ADR-043) : son groupe
+//   est remplacé en direct par son état recalculé par l'API (noms complétés), à sa place dans l'ordre, ou retiré s'il
+//   est vide.
 // - Abonnement d'un seul compte : bouton « Suivre en retour », avec la relation lue à part (ADR-036), aussi pour
 //   un abonnement reçu en direct.
 @MainActor
@@ -113,16 +115,26 @@ final class ActivityModel {
         unreadCount = count
     }
 
-    // Événement `notificationsRemoved` (ADR-043) : chaque notification quitte son groupe, vide alors retiré.
-    func removed(_ removed: [RemovedActivity], unreadCount: Int) {
+    // Événement `notificationsRemoved` (ADR-043) : chaque groupe touché et affiché est remplacé par son état recalculé
+    // (`groups`), replacé selon sa notification la plus récente, ou retiré s'il n'y est pas (vide). Placé après le dernier
+    // groupe chargé alors qu'il reste des pages, il est laissé à la page suivante.
+    func removed(_ removed: [RemovedActivity], groups: [ActivityGroup], unreadCount: Int) {
         self.unreadCount = unreadCount
-        for item in removed where removedIDs.insert(item.id).inserted {
-            guard let group = list.items.first(where: { $0.key == item.key }) else { continue }
-            if let updated = group.removing(item) {
-                list.replace(updated)
-            } else {
-                list.remove { $0.key == item.key }
+        // Annonce en double : déjà traitée.
+        let keys = Set(removed.filter { removedIDs.insert($0.id).inserted }.map(\.key))
+        let recomputed = Dictionary(groups.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        for key in keys {
+            guard let current = list.items.first(where: { $0.key == key }) else { continue }
+            list.remove { $0.key == key }
+            guard var group = recomputed[key] else { continue }
+            // Identifiants UUID v7 : l'ordre du texte est celui du temps, comme l'API.
+            let index = list.items.firstIndex { $0.latestID < group.latestID } ?? list.items.count
+            guard index < list.items.count || list.nextCursor == nil else { continue }
+            if let actor = group.followBackActor {
+                if current.followBackActor?.id == actor.id { group.actorRelationship = current.actorRelationship }
+                if group.actorRelationship == nil { Task { await loadRelationship(of: actor, in: group) } }
             }
+            list.insert(group, at: index)
         }
     }
 

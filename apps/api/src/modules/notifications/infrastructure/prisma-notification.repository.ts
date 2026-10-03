@@ -95,6 +95,14 @@ export class PrismaNotificationRepository extends NotificationRepository {
     return this.removeWhere({ commentId });
   }
 
+  removeForVideo(videoId: string): Promise<Notification[]> {
+    return this.removeWhere({ videoId });
+  }
+
+  removeByActor(actorId: string): Promise<Notification[]> {
+    return this.removeWhere({ actorId });
+  }
+
   // Lignes lues, puis supprimées par leurs identifiants. Deux retraits simultanés de la même notification (rare : deux
   // appareils) peuvent l'annoncer deux fois ; l'app ignore la seconde annonce (identifiant déjà retiré).
   private async removeWhere(where: Prisma.NotificationWhereInput): Promise<Notification[]> {
@@ -129,8 +137,29 @@ export class PrismaNotificationRepository extends NotificationRepository {
   // Regroupement en SQL, sur les seules notifications du compte (index `user_id`) : une ligne par groupe, avec
   // la notification la plus récente (UUID v7 : l'ordre du texte est l'ordre du temps), le nombre, l'état de
   // lecture et les auteurs les plus récents. Les notifications les plus récentes sont ensuite relues par Prisma.
-  async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
+  listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
     const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
+    return this.groups(recipientId, Prisma.empty, before, limit, excludedActorIds);
+  }
+
+  // Mêmes groupes, restreints aux notifications de `filters` avant le regroupement.
+  findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]> {
+    if (filters.length === 0) return Promise.resolve([]);
+    const conditions = filters.map((filter) =>
+      filter.videoId
+        ? Prisma.sql`(type = ${filter.type}::notification_type AND video_id = ${filter.videoId}::uuid)`
+        : Prisma.sql`type = ${filter.type}::notification_type`,
+    );
+    return this.groups(recipientId, Prisma.sql`AND (${Prisma.join(conditions, ' OR ')})`, Prisma.empty, filters.length, excludedActorIds);
+  }
+
+  private async groups(
+    recipientId: string,
+    only: Prisma.Sql,
+    before: Prisma.Sql,
+    limit: number,
+    excludedActorIds: string[],
+  ): Promise<NotificationGroup[]> {
     // Sans auteur (modération) : jamais exclue (`actor_id <> ALL(…)` vaudrait NULL).
     const excluded = excludedActorIds.length ? Prisma.sql`AND (actor_id IS NULL OR actor_id <> ALL(${excludedActorIds}::uuid[]))` : Prisma.empty;
     const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] | null }[]>`
@@ -140,7 +169,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
                bool_or(read_at IS NULL) AS unread,
                (array_agg(actor_id::text ORDER BY notification_id DESC) FILTER (WHERE actor_id IS NOT NULL))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
         FROM notifications
-        WHERE user_id = ${recipientId}::uuid ${excluded}
+        WHERE user_id = ${recipientId}::uuid ${excluded} ${only}
         GROUP BY type,
                  CASE WHEN type IN ('like', 'repost') THEN video_id END,
                  CASE WHEN type NOT IN ('like', 'repost', 'follow') THEN notification_id END

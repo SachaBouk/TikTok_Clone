@@ -16,6 +16,7 @@ import { NotificationsController } from './interfaces/notifications.controller';
 // Centre d'activité (ADR-016). Alimenté par le module interactions via le service exporté (ADR-003) ;
 // auteurs et vidéos lus via les services de `users` et `videos`. Ne dépend pas d'interactions (pas de cycle).
 // Nouvelles notifications et badge poussés en direct par le module realtime (ADR-011), et en notification push.
+// Prévenu par `videos` et `users` avant la suppression d'une vidéo ou d'un compte (écouteurs, sans dépendance inverse).
 @Module({
   imports: [UsersModule, VideosModule, RealtimeModule, PushModule],
   controllers: [NotificationsController],
@@ -30,7 +31,13 @@ import { NotificationsController } from './interfaces/notifications.controller';
         videos: VideosService,
         publisher: NotificationPublisher,
         suspended: SuspendedAccounts,
-      ) => new NotificationsService(notifications, users, videos, publisher, suspended),
+      ) => {
+        const service = new NotificationsService(notifications, users, videos, publisher, suspended);
+        // Vidéo ou compte supprimés : leurs notifications sont retirées et annoncées avant la cascade (ADR-043).
+        videos.onVideoRemoving((videoId) => service.retractVideo(videoId));
+        users.onAccountDeleting((userId) => service.retractActor(userId));
+        return service;
+      },
       inject: [NotificationRepository, UsersService, VideosService, NotificationPublisher, SuspendedAccounts],
     },
   ],

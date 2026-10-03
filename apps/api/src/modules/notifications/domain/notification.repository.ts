@@ -12,8 +12,13 @@ export abstract class NotificationRepository {
   abstract remove(activity: RetractableActivity): Promise<Notification[]>;
   // Notifications échangées entre deux comptes (blocage).
   abstract removeBetween(userId: string, otherId: string): Promise<Notification[]>;
-  // Notification d'un commentaire, avant sa suppression (sinon la cascade l'emporterait sans prévenir).
+  // Avant la suppression d'un contenu ou d'un compte (sinon la cascade les emporterait sans prévenir) :
+  // notification d'un commentaire ;
   abstract removeForComment(commentId: string): Promise<Notification[]>;
+  // notifications d'une vidéo (like, republication, commentaire) ;
+  abstract removeForVideo(videoId: string): Promise<Notification[]>;
+  // notifications dont le compte est l'auteur, chez les autres.
+  abstract removeByActor(actorId: string): Promise<Notification[]>;
 
   // Lectures : sans les notifications des auteurs `excludedActorIds` (comptes suspendus, ADR-037 ; une notification de
   // modération, sans auteur, n'est jamais exclue), qui ne comptent
@@ -29,6 +34,9 @@ export abstract class NotificationRepository {
   // Groupes (voir `groupKey`), du plus récemment actif au plus ancien : ceux dont la notification la plus récente
   // est strictement avant `beforeId`. `recentActorIds` : `GROUP_ACTORS_SHOWN` au plus.
   abstract listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]>;
+  // Les groupes désignés par `filters` (voir `groupFilter`), recalculés après un retrait (ADR-043) ; un groupe vide est
+  // absent.
+  abstract findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]>;
   abstract countUnread(recipientId: string, excludedActorIds: string[]): Promise<number>;
   // Marque lues les notifications non lues de `recipientId` jusqu'à `upToId` inclus (toutes s'il est null).
   abstract markRead(recipientId: string, upToId: string | null, readAt: Date): Promise<void>;
