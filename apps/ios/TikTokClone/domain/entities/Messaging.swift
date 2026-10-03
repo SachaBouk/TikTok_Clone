@@ -31,6 +31,8 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     let content: String
     let sharedVideo: SharedVideo?
     let createdAt: Date
+    // Identifiant d'envoi (ADR-044), seulement sur la réponse à son propre envoi et son écho temps réel.
+    var clientMessageID: String? = nil
 
     // Aperçu d'une ligne de la boîte de réception.
     func preview(ownID: String?) -> String {
@@ -157,5 +159,27 @@ enum MessageRules {
             previous = message.createdAt
         }
         return result
+    }
+}
+
+// Message écrit sur cet appareil, pas encore accepté par l'API (ADR-044) : « Envoi… », puis « Non envoyé » en cas
+// d'échec, à réessayer à la main. Gardé pendant la session de l'app (MessagingModel), jamais sur le disque.
+struct OutgoingMessage: Identifiable, Equatable, Sendable {
+    enum State: Equatable, Sendable {
+        case sending
+        case failed
+    }
+
+    // Identifiant d'envoi joint à la requête (`clientMessageId`), le même à chaque essai : un renvoi ne crée pas de
+    // second message si le premier était arrivé.
+    let id: String
+    let conversationID: String
+    let content: String
+    var state: State = .sending
+
+    init(conversationID: String, content: String, id: String = UUID().uuidString.lowercased()) {
+        self.id = id
+        self.conversationID = conversationID
+        self.content = content
     }
 }

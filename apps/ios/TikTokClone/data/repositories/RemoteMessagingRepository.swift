@@ -68,9 +68,10 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
-    func send(conversationID: String, content: String?, videoID: String?) async throws -> DirectMessage {
+    func send(conversationID: String, content: String?, videoID: String?, clientMessageID: String?) async throws -> DirectMessage {
         let output = try await mappingErrors {
-            try await client.sendMessage(path: .init(id: conversationID), body: .json(.init(content: content, videoId: videoID)))
+            try await client.sendMessage(
+                path: .init(id: conversationID), body: .json(.init(content: content, videoId: videoID, clientMessageId: clientMessageID)))
         }
         switch output {
         case .created(let created): return DirectMessage(try created.body.json)
@@ -81,6 +82,8 @@ struct RemoteMessagingRepository: MessagingRepository {
         case .notFound: throw AppError.notFound
         // Limite d'envoi : délai de l'en-tête Retry-After (une minute s'il manque).
         case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        // Identifiant d'envoi déjà pris par un message d'une autre conversation : ne devrait pas arriver.
+        case .conflict: throw AppError.unexpected
         case .undocumented: throw AppError.unexpected
         }
     }
@@ -152,7 +155,8 @@ extension DirectMessage {
             senderID: dto.senderId,
             content: dto.content,
             sharedVideo: dto.sharedVideo.map(SharedVideo.init),
-            createdAt: dto.createdAt
+            createdAt: dto.createdAt,
+            clientMessageID: dto.clientMessageId
         )
     }
 }

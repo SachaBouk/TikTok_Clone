@@ -29,6 +29,9 @@ export interface SharedVideo {
 export interface MessageItem {
   message: Message;
   sharedVideo: SharedVideo | null;
+  // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
+  // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
+  clientMessageId?: string;
 }
 
 export interface ConversationMember {

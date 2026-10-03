@@ -17,6 +17,8 @@ const after = (id: string, marker: string | null) => !marker || id > marker;
 export class InMemoryConversationRepository extends ConversationRepository {
   readonly conversations = new Map<string, StoredConversation>();
   readonly messages: Message[] = [];
+  // Identifiant d'envoi de chaque message (ADR-044), comme la colonne `client_message_id`.
+  private readonly clientMessageIds = new Map<string, string>();
   private sequence = 0;
 
   async findOrCreateDirect(userId: string, otherUserId: string): Promise<string> {
@@ -67,9 +69,11 @@ export class InMemoryConversationRepository extends ConversationRepository {
     senderId: string;
     content: string;
     sharedVideoId: string | null;
+    clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
-  }): Promise<Message> {
+  }): Promise<Message | null> {
+    if (input.clientMessageId && (await this.findByClientMessageId(input.senderId, input.clientMessageId))) return null;
     const created: Message = {
       id: this.nextId(),
       conversationId: input.conversationId,
@@ -79,11 +83,16 @@ export class InMemoryConversationRepository extends ConversationRepository {
       createdAt: new Date(),
     };
     this.messages.push(created);
+    if (input.clientMessageId) this.clientMessageIds.set(created.id, input.clientMessageId);
     const conversation = this.conversations.get(input.conversationId)!;
     conversation.members.get(input.senderId)!.lastReadMessageId = created.id;
     if (input.accept) Object.assign(conversation, { acceptedAt: new Date(), declinedAt: null });
     if (input.openRequest) conversation.requestSenderId = input.senderId;
     return created;
+  }
+
+  async findByClientMessageId(senderId: string, clientMessageId: string): Promise<Message | null> {
+    return this.messages.find((m) => m.senderId === senderId && this.clientMessageIds.get(m.id) === clientMessageId) ?? null;
   }
 
   async findMessage(messageId: string): Promise<Message | null> {

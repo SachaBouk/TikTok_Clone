@@ -22,6 +22,9 @@ export interface MessageDto {
   content: string;
   // Absent si le message ne partage pas de vidéo.
   sharedVideo?: SharedVideoDto;
+  // Identifiant d'envoi choisi par l'app (ADR-044) : seulement dans la réponse à l'envoi et l'écho temps réel adressé à
+  // l'expéditeur, pour reconnaître la bulle en attente.
+  clientMessageId?: string;
   createdAt: string;
 }
 

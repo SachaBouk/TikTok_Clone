@@ -144,7 +144,14 @@ struct ConversationViewModelTests {
 
     func makeViewModel(_ route: ConversationRoute = ConversationRoute(username: "bob")) async -> (ConversationViewModel, MessagingModel) {
         let (messaging, session) = await makeMessaging(repository, channel: channel)
-        let viewModel = ConversationViewModel(
+        return (makeConversationViewModel(route, messaging: messaging, session: session), messaging)
+    }
+
+    // Un autre écran de conversation sur le même modèle partagé (conversation fermée puis rouverte).
+    func makeConversationViewModel(
+        _ route: ConversationRoute = ConversationRoute(username: "bob"), messaging: MessagingModel, session: SessionStore
+    ) -> ConversationViewModel {
+        ConversationViewModel(
             route: route,
             loadConversation: LoadConversationUseCase(messaging: repository),
             loadMessages: LoadMessagesUseCase(messaging: repository),
@@ -158,7 +165,6 @@ struct ConversationViewModelTests {
             analytics: makeAnalytics(),
             now: { [clock] in clock.now }
         )
-        return (viewModel, messaging)
     }
 
     @Test("ouverture par pseudo : messages du plus ancien au plus récent, plus anciens chargés en remontant")
@@ -202,6 +208,8 @@ struct ConversationViewModelTests {
         viewModel.draft = "  Coucou  "
         await viewModel.send()
         #expect(repository.sentContents == ["Coucou"])
+        // Identifiant d'envoi joint (ADR-044).
+        #expect(repository.sentClientMessageIDs.allSatisfy { $0 != nil })
         #expect(viewModel.messages.last?.content == "Coucou")
         #expect(viewModel.pending.isEmpty)
         #expect(viewModel.draft.isEmpty)
@@ -211,18 +219,114 @@ struct ConversationViewModelTests {
         #expect(viewModel.seenMessageID == sent)
     }
 
-    @Test("limite d'envoi : texte rendu, envoi bloqué pendant le délai de l'API")
-    func rateLimited() async {
+    @Test("limite d'envoi : message « Non envoyé », envoi et renvoi bloqués pendant le délai de l'API")
+    func rateLimited() async throws {
         let (viewModel, _) = await makeViewModel()
         await viewModel.load()
         repository.failSending(with: .rateLimited(retryAfter: 30))
         viewModel.draft = "Encore"
         await viewModel.send()
-        #expect(viewModel.draft == "Encore")
+        let failed = try #require(viewModel.pending.first)
+        #expect(failed.state == .failed)
+        #expect(viewModel.draft.isEmpty)
         #expect(viewModel.secondsBeforeSending(at: clock.now) == 30)
+        viewModel.draft = "Autre"
         #expect(!viewModel.canSend(at: clock.now))
         #expect(viewModel.canSend(at: clock.now.addingTimeInterval(30)))
         #expect(viewModel.errorMessage == nil)
+
+        // Réessayer trop tôt : le délai est rappelé, rien n'est envoyé.
+        await viewModel.retry(failed)
+        #expect(viewModel.errorMessage == "Trop de messages envoyés. Réessaie dans 30 s.")
+        #expect(repository.sentContents == ["Encore"])
+        viewModel.errorMessage = nil
+
+        clock.advance(by: 30)
+        repository.failSending(with: nil)
+        await viewModel.retry(failed)
+        #expect(viewModel.pending.isEmpty)
+        #expect(viewModel.messages.last?.content == "Encore")
+        #expect(repository.sentClientMessageIDs == [failed.id, failed.id])
+    }
+
+    @Test("coupure : « Non envoyé » sans alerte, gardé en quittant la conversation, réessayé avec le même identifiant")
+    func networkFailureAndRetry() async throws {
+        let (viewModel, messaging) = await makeViewModel()
+        await viewModel.load()
+        repository.failSending(with: .network)
+        viewModel.draft = "Tu es là ?"
+        await viewModel.send()
+        let failed = try #require(viewModel.pending.first)
+        #expect(failed.state == .failed)
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.draft.isEmpty)
+
+        // Conversation fermée puis rouverte : le message attend toujours (gardé par MessagingModel).
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
+        await session.restore()
+        let reopened = makeConversationViewModel(messaging: messaging, session: session)
+        await reopened.load()
+        #expect(reopened.pending == [failed])
+
+        repository.failSending(with: nil)
+        await reopened.retry(failed)
+        #expect(reopened.pending.isEmpty)
+        #expect(reopened.messages.last?.content == "Tu es là ?")
+        #expect(repository.sentClientMessageIDs == [failed.id, failed.id])
+    }
+
+    @Test("réponse perdue : le renvoi rend le message déjà enregistré, sans doublon")
+    func lostResponseRetry() async throws {
+        let (viewModel, _) = await makeViewModel()
+        await viewModel.load()
+        repository.losesResponse(true)
+        viewModel.draft = "Une seule fois"
+        await viewModel.send()
+        let failed = try #require(viewModel.pending.first)
+        #expect(failed.state == .failed)
+
+        repository.losesResponse(false)
+        await viewModel.retry(failed)
+        #expect(repository.messages(of: "c1").count { $0.content == "Une seule fois" } == 1)
+        #expect(viewModel.messages.count { $0.content == "Une seule fois" } == 1)
+        #expect(viewModel.pending.isEmpty)
+    }
+
+    @Test("écho temps réel d'un envoi dont la réponse s'est perdue : la bulle « Non envoyé » disparaît")
+    func echoClearsFailed() async throws {
+        let (viewModel, messaging) = await makeViewModel()
+        await viewModel.load()
+        repository.failSending(with: .network)
+        viewModel.draft = "Arrivé quand même"
+        await viewModel.send()
+        let failed = try #require(viewModel.pending.first)
+
+        var echo = DirectMessage.sample("m30", from: me, content: "Arrivé quand même")
+        echo.clientMessageID = failed.id
+        messaging.handle(.messageCreated(echo, .zero))
+        #expect(viewModel.pending.isEmpty)
+        #expect(viewModel.messages.last?.id == "m30")
+    }
+
+    @Test("supprimer un message non envoyé ; ses messages non envoyés partent avec la conversation, et à la déconnexion")
+    func discardFailed() async throws {
+        let (viewModel, messaging) = await makeViewModel()
+        await viewModel.load()
+        repository.failSending(with: .network)
+        viewModel.draft = "Un"
+        await viewModel.send()
+        viewModel.draft = "Deux"
+        await viewModel.send()
+        #expect(viewModel.pending.map(\.content) == ["Un", "Deux"])
+        viewModel.discard(viewModel.pending[0])
+        #expect(viewModel.pending.map(\.content) == ["Deux"])
+
+        messaging.removed("c1")
+        #expect(viewModel.pending.isEmpty)
+        viewModel.draft = "Trois"
+        await viewModel.send()
+        messaging.reset()
+        #expect(messaging.outgoing.isEmpty)
     }
 
     @Test("envoi refusé (blocage) : message affiché, conversation relue")
@@ -234,6 +338,9 @@ struct ConversationViewModelTests {
         viewModel.draft = "Salut"
         await viewModel.send()
         #expect(viewModel.errorMessage == "Impossible d’écrire à ce compte")
+        // « Non envoyé », sans « Réessayer » (la conversation ne permet plus d'écrire).
+        #expect(viewModel.pending.map(\.state) == [.failed])
+        #expect(!viewModel.canRetry(at: clock.now))
         #expect(viewModel.conversation?.canSend == false)
         #expect(viewModel.conversation?.composerNotice == "Tu ne peux pas écrire à ce compte.")
     }

@@ -20,6 +20,7 @@ import {
 import {
   BlockedConversationError,
   CannotMessageYourselfError,
+  ClientMessageIdConflictError,
   ConversationNotFoundError,
   EmptyMessageError,
   MessageNotFoundError,
@@ -58,6 +59,8 @@ export interface MessagePage {
 export interface SendMessageInput {
   content?: string;
   videoId?: string;
+  // Identifiant d'envoi choisi par l'app (ADR-044) : renvoyer le même rend le message déjà créé.
+  clientMessageId?: string;
 }
 
 // Service applicatif de la messagerie directe (ADR-016, ADR-003).
@@ -128,6 +131,11 @@ export class MessagingService {
 
     const view = await this.conversations.findView(conversationId, userId);
     if (!view) throw new ConversationNotFoundError(conversationId);
+    // Renvoi d'un envoi déjà enregistré (réponse perdue, ADR-044) : le message existant, sans contrôle ni limite ni
+    // événement, même si la conversation ne permet plus d'écrire (il était parti avant).
+    const clientMessageId = input.clientMessageId ?? null;
+    const sent = clientMessageId ? await this.conversations.findByClientMessageId(userId, clientMessageId) : null;
+    if (sent) return this.alreadySent(userId, conversationId, sent, clientMessageId!);
     const otherId = view.participantId;
     const blocks = await this.interactions.getBlocks(userId, [otherId]);
     if (blocks.blockedByMe.size > 0 || blocks.blockedMe.size > 0) throw new BlockedConversationError();
@@ -147,9 +155,24 @@ export class MessagingService {
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
 
-    const message = await this.conversations.addMessage({ conversationId, senderId: userId, content, sharedVideoId, accept, openRequest });
+    const message = await this.conversations.addMessage({
+      conversationId,
+      senderId: userId,
+      content,
+      sharedVideoId,
+      clientMessageId,
+      accept,
+      openRequest,
+    });
+    if (!message) {
+      // Même identifiant enregistré entre-temps par un envoi simultané : c'est lui qui annonce le message.
+      const concurrent = await this.conversations.findByClientMessageId(userId, clientMessageId!);
+      if (!concurrent) throw new ClientMessageIdConflictError();
+      return this.alreadySent(userId, conversationId, concurrent, clientMessageId!);
+    }
     if (sharedVideoId) await this.videos.recordShare(sharedVideoId);
     const [item] = await this.withVideos(userId, [message]);
+    if (clientMessageId) item.clientMessageId = clientMessageId;
 
     // Demande refusée : ses messages suivants ne sont plus remis au destinataire (l'expéditeur n'en sait rien).
     // La vidéo partagée est vue par chacun (indisponible pour celui qui a un blocage avec son auteur).
@@ -164,6 +187,12 @@ export class MessagingService {
     }
     if (received) await this.events.pushNewMessage(otherId, await this.users.getById(userId), received, status === 'requestSent');
     return item;
+  }
+
+  private async alreadySent(userId: string, conversationId: string, message: Message, clientMessageId: string): Promise<MessageItem> {
+    if (message.conversationId !== conversationId) throw new ClientMessageIdConflictError();
+    const [item] = await this.withVideos(userId, [message]);
+    return { ...item, clientMessageId };
   }
 
   // Retrait par l'expéditeur, pour les deux participants, sans limite de temps.

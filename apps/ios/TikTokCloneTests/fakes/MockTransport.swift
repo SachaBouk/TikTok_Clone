@@ -7,10 +7,19 @@ import TikTokAPI
 // Transport HTTP simulé : le client généré et ses middlewares s'exécutent pour de vrai, sans réseau.
 struct MockTransport: ClientTransport {
     let handler: @Sendable (_ request: HTTPRequest, _ operationID: String) async throws -> (HTTPResponse, HTTPBody?)
+    // Corps des requêtes envoyées, s'il faut les vérifier.
+    var bodies: BodyLog? = nil
 
     func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
-        try await handler(request, operationID)
+        if let bodies, let body { bodies.record(try await String(collecting: body, upTo: 1 << 20)) }
+        return try await handler(request, operationID)
     }
+}
+
+final class BodyLog: Sendable {
+    private let entries = Mutex<[String]>([])
+    func record(_ body: String) { entries.withLock { $0.append(body) } }
+    var all: [String] { entries.withLock { $0 } }
 }
 
 // Requêtes reçues par le transport, pour les vérifier.

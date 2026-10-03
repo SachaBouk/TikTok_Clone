@@ -133,7 +133,8 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Badge de l'onglet : notifications non lues, conversations non lues et demandes reçues, suivis en direct.
 - Conversation : messages texte et vidéos partagées (toucher : la vidéo en plein écran), « Vu » sous son dernier message lu, « … » quand l'autre écrit. Appui long : copier, retirer son message (pour les deux). Menu « … » : profil, supprimer la conversation.
 - Demande reçue : « Accepter », « Refuser », ou répondre (ce qui l'accepte). Demande envoyée : quelques messages avant acceptation, indiqués sous le champ. Blocage : le champ laisse place à une explication.
-- Limite d'envoi atteinte : le texte reste dans le champ et l'envoi est bloqué, avec un compte à rebours.
+- Message non envoyé (coupure, limite, refus ; ADR-044) : la bulle reste affichée « Non envoyé · Toucher pour réessayer ». Un toucher ouvre « Réessayer », « Copier », « Supprimer ». Chaque essai porte le même identifiant d'envoi (`clientMessageId`) : un renvoi ne crée pas de doublon si le premier était arrivé. Gardé pendant la session de l'app, même conversation fermée.
+- Limite d'envoi atteinte : l'envoi et le renvoi sont bloqués, avec un compte à rebours.
 - Écrire à un compte : bouton « Message » de son profil.
 - Partager une vidéo par message : « Partager », puis « Envoyer par message » dans la feuille système, et « Envoyer » à côté de chaque destinataire (conversations récentes, puis abonnements).
 

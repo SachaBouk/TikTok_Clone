@@ -75,6 +75,14 @@ export class NotAPendingRequestError extends MessagingError {
   }
 }
 
+// Identifiant d'envoi (ADR-044) déjà utilisé par l'expéditeur dans une autre conversation : erreur de l'app.
+export class ClientMessageIdConflictError extends MessagingError {
+  constructor() {
+    super('Identifiant d’envoi déjà utilisé pour un autre message');
+    this.name = 'ClientMessageIdConflictError';
+  }
+}
+
 export class RateLimitedError extends MessagingError {
   constructor(readonly retryAfterSeconds: number) {
     super(`Trop de messages envoyés : réessayez dans ${retryAfterSeconds} s`);

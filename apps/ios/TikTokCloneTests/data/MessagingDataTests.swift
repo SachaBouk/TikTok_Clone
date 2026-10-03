@@ -61,7 +61,7 @@ struct MessagingDataTests {
                     return (response, HTTPBody(errorJSON(429, "Trop de messages")))
                 }))
         await #expect(throws: AppError.rateLimited(retryAfter: 42)) {
-            try await tooMany.send(conversationID: "c1", content: "Salut", videoID: nil)
+            try await tooMany.send(conversationID: "c1", content: "Salut", videoID: nil, clientMessageID: nil)
         }
 
         let forbidden = RemoteMessagingRepository(
@@ -70,18 +70,30 @@ struct MessagingDataTests {
                     json(.forbidden, errorJSON(403, "Impossible d’écrire à ce compte"))
                 }))
         await #expect(throws: AppError.rejected("Impossible d’écrire à ce compte")) {
-            try await forbidden.send(conversationID: "c1", content: "Salut", videoID: nil)
+            try await forbidden.send(conversationID: "c1", content: "Salut", videoID: nil, clientMessageID: nil)
         }
 
+        let bodies = BodyLog()
         let created = RemoteMessagingRepository(
             client: makeClient(
-                transport: MockTransport { request, operation in
-                    #expect(operation == "sendMessage")
-                    #expect(request.path == "/conversations/c1/messages")
-                    return json(.created, messageJSON)
-                }))
-        let message = try await created.send(conversationID: "c1", content: nil, videoID: "v1")
+                transport: MockTransport(
+                    handler: { request, operation in
+                        #expect(operation == "sendMessage")
+                        #expect(request.path == "/conversations/c1/messages")
+                        return json(.created, messageJSON)
+                    }, bodies: bodies)))
+        let message = try await created.send(conversationID: "c1", content: nil, videoID: "v1", clientMessageID: "k1")
         #expect(message.sharedVideo?.id == "v1")
+        // Identifiant d'envoi joint à la requête (ADR-044).
+        let body = try #require(bodies.all.first)
+        let fields = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        #expect(fields["clientMessageId"] as? String == "k1")
+
+        let conflict = RemoteMessagingRepository(
+            client: makeClient(transport: MockTransport { _, _ in json(.conflict, errorJSON(409, "Identifiant d’envoi déjà utilisé")) }))
+        await #expect(throws: AppError.unexpected) {
+            try await conflict.send(conversationID: "c1", content: "Salut", videoID: nil, clientMessageID: "k1")
+        }
     }
 
     @Test("badges, marquage lu, demandes ; retrait déjà fait (404) sans erreur ; 401 → session expirée")

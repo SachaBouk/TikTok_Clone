@@ -11,10 +11,12 @@ final class FakeMessagingRepository: MessagingRepository {
         var messages: [String: [DirectMessage]] = [:]
         var badges = MessagingBadges.zero
         var calls: [String] = []
-        var sent: [(conversationID: String, content: String?, videoID: String?)] = []
+        var sent: [(conversationID: String, content: String?, videoID: String?, clientMessageID: String?)] = []
         var markedUpTo: [String?] = []
         var error: AppError?
         var sendError: AppError?
+        // Le message est enregistré, puis la réponse se perd (coupure) : l'envoi échoue en `.network`.
+        var losesResponse = false
         // Identifiants « n101 »… : après les « mNN » des tests (ordre des UUID v7).
         var nextID = 100
     }
@@ -25,6 +27,8 @@ final class FakeMessagingRepository: MessagingRepository {
     var markedUpTo: [String?] { state.withLock { $0.markedUpTo } }
     var sentContents: [String?] { state.withLock { $0.sent.map(\.content) } }
     var sentVideoIDs: [String?] { state.withLock { $0.sent.map(\.videoID) } }
+    var sentClientMessageIDs: [String?] { state.withLock { $0.sent.map(\.clientMessageID) } }
+    func losesResponse(_ loses: Bool) { state.withLock { $0.losesResponse = loses } }
     func fail(with error: AppError?) { state.withLock { $0.error = error } }
     func failSending(with error: AppError?) { state.withLock { $0.sendError = error } }
     func setBadges(_ badges: MessagingBadges) { state.withLock { $0.badges = badges } }
@@ -96,19 +100,25 @@ final class FakeMessagingRepository: MessagingRepository {
         }
     }
 
-    func send(conversationID: String, content: String?, videoID: String?) async throws -> DirectMessage {
+    // Comme l'API (ADR-044) : un envoi déjà enregistré avec le même `clientMessageID` rend le message existant.
+    func send(conversationID: String, content: String?, videoID: String?, clientMessageID: String?) async throws -> DirectMessage {
         try state.withLock { state in
-            state.sent.append((conversationID, content, videoID))
+            state.sent.append((conversationID, content, videoID, clientMessageID))
+            if let clientMessageID, let existing = state.messages[conversationID]?.first(where: { $0.clientMessageID == clientMessageID }) {
+                return existing
+            }
             if let error = state.sendError ?? state.error { throw error }
             state.nextID += 1
-            let message = DirectMessage.sample(
+            var message = DirectMessage.sample(
                 "n\(state.nextID)", in: conversationID, from: UserProfile.alice.id, content: content ?? "",
                 sharedVideoID: videoID)
+            message.clientMessageID = clientMessageID
             state.messages[conversationID, default: []].append(message)
             if var conversation = state.conversations[conversationID] {
                 conversation.lastMessage = message
                 state.conversations[conversationID] = conversation
             }
+            if state.losesResponse { throw AppError.network }
             return message
         }
     }

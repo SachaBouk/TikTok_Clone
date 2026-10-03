@@ -53,6 +53,12 @@ export class MessageResponse implements MessageDto {
   @ApiPropertyOptional({ type: SharedVideoResponse })
   sharedVideo?: SharedVideoResponse;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Identifiant d’envoi choisi par l’app (ADR-044) : seulement dans la réponse à l’envoi et l’écho temps réel adressé à l’expéditeur.',
+  })
+  clientMessageId?: string;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 }
@@ -134,7 +140,7 @@ export class UnreadConversationsResponse implements UnreadConversationsDto {
 
 // Mappings explicites : rien n'est exposé par accident (ADR-003). Partagés par le controller et
 // les événements WebSocket (AppMessagingEventPublisher).
-export function toMessageDto({ message, sharedVideo }: MessageItem): MessageDto {
+export function toMessageDto({ message, sharedVideo, clientMessageId }: MessageItem): MessageDto {
   const dto: MessageDto = {
     id: message.id,
     conversationId: message.conversationId,
@@ -143,6 +149,7 @@ export function toMessageDto({ message, sharedVideo }: MessageItem): MessageDto 
     createdAt: message.createdAt.toISOString(),
   };
   if (sharedVideo) dto.sharedVideo = toSharedVideoDto(sharedVideo);
+  if (clientMessageId) dto.clientMessageId = clientMessageId;
   return dto;
 }
 

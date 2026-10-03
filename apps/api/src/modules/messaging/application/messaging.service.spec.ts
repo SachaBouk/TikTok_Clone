@@ -19,6 +19,7 @@ import { MESSAGE_RATE_LIMITS, REQUEST_MESSAGE_LIMIT, REQUEST_RATE_LIMITS } from 
 import {
   BlockedConversationError,
   CannotMessageYourselfError,
+  ClientMessageIdConflictError,
   ConversationNotFoundError,
   EmptyMessageError,
   MessageNotFoundError,
@@ -167,6 +168,67 @@ describe('MessagingService', () => {
       await expect(send('carol', id, 'intrus')).rejects.toBeInstanceOf(ConversationNotFoundError);
       await expect(service.listMessages('carol', id, null, 10)).rejects.toBeInstanceOf(ConversationNotFoundError);
       await expect(service.getConversation('carol', id)).rejects.toBeInstanceOf(ConversationNotFoundError);
+    });
+  });
+
+  describe('identifiant d’envoi (ADR-044)', () => {
+    const KEY = '0192f3a0-0000-7000-8000-0000000000aa';
+
+    it('un renvoi avec le même identifiant rend le message déjà créé, sans second message ni événement ni comptage', async () => {
+      const video = await videoRepository.create({ userId: 'carol', description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
+      Object.assign(videoRepository.videos.get(video.id)!, { status: 'ready', hlsUrl: 'h.m3u8', thumbnailUrl: 't.jpg' });
+      const id = await open('alice', 'bob');
+      const first = await service.sendMessage('alice', id, { content: 'Salut', videoId: video.id, clientMessageId: KEY });
+      expect(first.clientMessageId).toBe(KEY);
+      // L'écho de l'expéditeur porte l'identifiant, pas celui du destinataire.
+      expect(events.created.map((c) => [c.recipientId, c.item.clientMessageId])).toEqual([
+        ['alice', KEY],
+        ['bob', undefined],
+      ]);
+
+      const again = await service.sendMessage('alice', id, { content: 'Salut', videoId: video.id, clientMessageId: KEY });
+      expect(again).toMatchObject({ message: { id: first.message.id }, clientMessageId: KEY, sharedVideo: { id: video.id } });
+      expect(conversations.messages).toHaveLength(1);
+      expect(events.created).toHaveLength(2);
+      expect(events.pushes).toHaveLength(1);
+      expect((await videoRepository.findPublishedByIds([video.id]))[0].sharesCount).toBe(1);
+      // Liste des messages : identifiant jamais exposé.
+      expect((await service.listMessages('alice', id, null, 10)).items[0].clientMessageId).toBeUndefined();
+    });
+
+    it('renvoi accepté même si la conversation ne permet plus d’écrire ou la limite est atteinte (le message était parti)', async () => {
+      const id = await open('alice', 'bob');
+      const first = await service.sendMessage('alice', id, { content: 'avant', clientMessageId: KEY });
+      for (let i = 1; i < MESSAGE_RATE_LIMITS[0].limit; i++) await send('alice', id, `m${i}`);
+      await expect(send('alice', id, 'de trop')).rejects.toBeInstanceOf(RateLimitedError);
+      await interactions.setBlock('bob', 'alice', true);
+      await expect(service.sendMessage('alice', id, { content: 'avant', clientMessageId: KEY })).resolves.toMatchObject({
+        message: { id: first.message.id },
+      });
+    });
+
+    it('chaque compte a ses identifiants ; le même dans une autre conversation est refusé (409)', async () => {
+      const id = await open('alice', 'bob');
+      const other = await open('alice', 'carol');
+      await service.sendMessage('alice', id, { content: 'un', clientMessageId: KEY });
+      await expect(service.sendMessage('bob', id, { content: 'deux', clientMessageId: KEY })).resolves.toMatchObject({
+        message: { senderId: 'bob' },
+      });
+      await expect(service.sendMessage('alice', other, { content: 'trois', clientMessageId: KEY })).rejects.toBeInstanceOf(
+        ClientMessageIdConflictError,
+      );
+      // Sans identifiant : chaque envoi crée un message, comme avant.
+      await send('alice', id, 'quatre');
+      await send('alice', id, 'quatre');
+      expect(conversations.messages.map((m) => m.content)).toEqual(['un', 'deux', 'quatre', 'quatre']);
+    });
+
+    it('message retiré depuis : le renvoi en crée un nouveau', async () => {
+      const id = await open('alice', 'bob');
+      const first = await service.sendMessage('alice', id, { content: 'oups', clientMessageId: KEY });
+      await service.deleteMessage('alice', first.message.id);
+      const again = await service.sendMessage('alice', id, { content: 'oups', clientMessageId: KEY });
+      expect(again.message.id).not.toBe(first.message.id);
     });
   });
 

@@ -5,7 +5,9 @@ import Observation
 // « Message » d'un profil (conversation obtenue ou créée par pseudo).
 // - Messages du plus ancien au plus récent ; les plus anciens se chargent en remontant.
 // - Envoi : le message s'affiche aussitôt (« Envoi… »), puis prend sa place une fois accepté par l'API. En cas
-//   d'échec, le texte revient dans le champ ; une limite d'envoi (429) bloque l'envoi pendant le délai indiqué.
+//   d'échec, il reste affiché « Non envoyé », à réessayer ou supprimer (ADR-044) ; il est gardé par MessagingModel
+//   pendant la session de l'app. Chaque essai porte le même identifiant d'envoi : un renvoi ne crée pas de doublon.
+//   Une limite d'envoi (429) bloque l'envoi et le renvoi pendant le délai indiqué.
 // - Tant que l'écran est affiché, ce qui y arrive est marqué lu (« Vu » chez l'autre, badges à jour).
 // - « En train d'écrire » : envoyé au plus toutes les 3 s pendant la saisie, dans une conversation libre.
 @MainActor
@@ -17,17 +19,10 @@ final class ConversationViewModel: ConversationObserver {
         case failed(String)
     }
 
-    // Message en cours d'envoi, affiché en attendant la réponse de l'API.
-    struct PendingMessage: Identifiable, Equatable {
-        let id = UUID()
-        let content: String
-    }
-
     let username: String
     private(set) var conversation: Conversation?
     // Du plus ancien au plus récent.
     private(set) var messages: [DirectMessage] = []
-    private(set) var pending: [PendingMessage] = []
     private(set) var state: State = .loading
     private(set) var hasOlderMessages = false
     // Limite d'envoi atteinte : envoi impossible jusqu'à cette date.
@@ -88,6 +83,8 @@ final class ConversationViewModel: ConversationObserver {
     }
 
     var conversationID: String? { conversation?.id }
+    // Messages écrits ici et pas encore acceptés : « Envoi… » ou « Non envoyé », après les messages.
+    var pending: [OutgoingMessage] { conversationID.map(messaging.outgoing(in:)) ?? [] }
     var ownID: String? { session.profile?.id }
     var isOtherTyping: Bool { conversationID.map(messaging.isTyping(in:)) ?? false }
 
@@ -106,7 +103,12 @@ final class ConversationViewModel: ConversationObserver {
 
     // Le bouton d'envoi : conversation qui le permet, texte valide, pas de limite d'envoi en cours.
     func canSend(at date: Date) -> Bool {
-        guard conversation?.canSend == true, MessageRules.isValid(draft) else { return false }
+        MessageRules.isValid(draft) && canRetry(at: date)
+    }
+
+    // « Réessayer » sur un message non envoyé : conversation qui le permet, pas de limite d'envoi en cours.
+    func canRetry(at date: Date) -> Bool {
+        guard conversation?.canSend == true else { return false }
         return sendBlockedUntil.map { date >= $0 } ?? true
     }
 
@@ -172,23 +174,28 @@ final class ConversationViewModel: ConversationObserver {
 
     func send() async {
         guard let conversation, canSend(at: now()), let text = MessageRules.cleaned(draft) else { return }
-        let pendingMessage = PendingMessage(content: text)
-        pending.append(pendingMessage)
+        let outgoing = OutgoingMessage(conversationID: conversation.id, content: text)
+        messaging.addOutgoing(outgoing)
         draft = ""
         lastTypingSent = nil
-        do {
-            let message = try await sendMessage(conversationID: conversation.id, text: text)
-            analytics.track(.messageSent(conversationID: conversation.id, status: conversation.status))
-            pending.removeAll { $0.id == pendingMessage.id }
-            insert(message)
-            let updated = (self.conversation ?? conversation).afterSending(message)
-            self.conversation = updated
-            messaging.sent(message, in: updated)
-        } catch {
-            pending.removeAll { $0.id == pendingMessage.id }
-            if draft.isEmpty { draft = text }
-            await handleSendError(error)
+        await deliver(outgoing)
+    }
+
+    // Nouvel essai d'un message non envoyé, avec le même identifiant d'envoi.
+    func retry(_ outgoing: OutgoingMessage) async {
+        guard outgoing.state == .failed else { return }
+        if let seconds = secondsBeforeSending(at: now()) {
+            errorMessage = AppError.rateLimited(retryAfter: seconds).message
+            return
         }
+        guard canRetry(at: now()) else { return }
+        messaging.setOutgoing(outgoing.id, in: outgoing.conversationID, state: .sending)
+        await deliver(outgoing)
+    }
+
+    // Supprimer un message non envoyé : il n'est jamais parti (sinon son écho l'aurait déjà retiré).
+    func discard(_ outgoing: OutgoingMessage) {
+        messaging.removeOutgoing(outgoing.id, in: outgoing.conversationID)
     }
 
     // Retrait d'un de ses messages, pour les deux participants.
@@ -232,12 +239,8 @@ final class ConversationViewModel: ConversationObserver {
 
     func received(_ message: DirectMessage) {
         guard message.conversationID == conversationID else { return }
-        if message.senderID == ownID {
-            // Envoyé depuis cet écran (l'événement précède parfois la réponse) ou un autre appareil.
-            if let index = pending.firstIndex(where: { $0.content == message.content }) { pending.remove(at: index) }
-        } else {
-            needsMarkRead = true
-        }
+        // Son propre envoi (ici ou sur un autre appareil) : MessagingModel a retiré sa bulle en attente.
+        if message.senderID != ownID { needsMarkRead = true }
         insert(message)
         conversation?.lastMessage = messages.last
         markReadIfNeeded()
@@ -316,10 +319,29 @@ final class ConversationViewModel: ConversationObserver {
         Task { await messaging.sendTyping(in: conversation.id) }
     }
 
+    private func deliver(_ outgoing: OutgoingMessage) async {
+        do {
+            let message = try await sendMessage(conversationID: outgoing.conversationID, text: outgoing.content, clientMessageID: outgoing.id)
+            messaging.removeOutgoing(outgoing.id, in: outgoing.conversationID)
+            insert(message)
+            guard let conversation else { return }
+            analytics.track(.messageSent(conversationID: conversation.id, status: conversation.status))
+            let updated = conversation.afterSending(message)
+            self.conversation = updated
+            messaging.sent(message, in: updated)
+        } catch {
+            messaging.setOutgoing(outgoing.id, in: outgoing.conversationID, state: .failed)
+            await handleSendError(error)
+        }
+    }
+
     private func handleSendError(_ error: any Error) async {
         switch AppError.from(error) {
         case .sessionExpired:
             session.sessionExpired()
+        case .network:
+            // Coupure : la bulle « Non envoyé » suffit, à réessayer une fois la connexion revenue.
+            break
         case .rateLimited(let seconds):
             sendBlockedUntil = now().addingTimeInterval(TimeInterval(seconds))
         case .rejected(let message):

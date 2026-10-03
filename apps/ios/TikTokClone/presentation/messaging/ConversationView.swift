@@ -2,7 +2,8 @@ import SwiftUI
 
 // Fil d'une conversation : messages (texte, vidéo partagée), « Vu », « en train d'écrire », champ de saisie.
 // Demande reçue : accepter ou refuser (ou répondre, ce qui l'accepte). Appui long sur un message : copier,
-// retirer le sien (pour les deux), signaler celui de l'autre (ADR-038).
+// retirer le sien (pour les deux), signaler celui de l'autre (ADR-038). Message non envoyé : toucher pour réessayer,
+// copier ou supprimer (ADR-044).
 struct ConversationView: View {
     @State private var viewModel: ConversationViewModel
     let container: AppContainer
@@ -152,11 +153,14 @@ struct ConversationView: View {
                                 .accessibilityIdentifier("conversation.seen")
                         }
                     }
-                    ForEach(viewModel.pending) { pending in
-                        TextBubble(text: pending.content, isOwn: true)
-                            .opacity(0.5)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .accessibilityLabel("Envoi : \(pending.content)")
+                    let canRetry = viewModel.conversation?.canSend == true
+                    ForEach(viewModel.pending) { outgoing in
+                        OutgoingBubble(
+                            message: outgoing,
+                            canRetry: canRetry,
+                            retry: { Task { await viewModel.retry(outgoing) } },
+                            discard: { viewModel.discard(outgoing) }
+                        )
                     }
                     if viewModel.isOtherTyping {
                         TypingBubble()
@@ -171,7 +175,7 @@ struct ConversationView: View {
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.messages.last?.id) { scrollToBottom(proxy) }
-            .onChange(of: viewModel.pending.count) { scrollToBottom(proxy) }
+            .onChange(of: viewModel.pending.map(\.id)) { scrollToBottom(proxy) }
             .onChange(of: viewModel.isOtherTyping) { scrollToBottom(proxy) }
             .onChange(of: isComposing) { scrollToBottom(proxy) }
         }
@@ -326,6 +330,46 @@ private struct MessageBubble: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: isOwn ? .trailing : .leading)
+    }
+}
+
+// Message écrit ici, pas encore accepté (ADR-044) : « Envoi… » estompé, ou « Non envoyé » avec un menu natif.
+private struct OutgoingBubble: View {
+    let message: OutgoingMessage
+    // Faux si la conversation ne permet plus d'écrire (blocage, demande épuisée) : copier ou supprimer seulement.
+    let canRetry: Bool
+    let retry: () -> Void
+    let discard: () -> Void
+
+    var body: some View {
+        switch message.state {
+        case .sending:
+            TextBubble(text: message.content, isOwn: true)
+                .opacity(0.5)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("Envoi : \(message.content)")
+        case .failed:
+            Menu {
+                if canRetry { Button("Réessayer", systemImage: "arrow.clockwise", action: retry) }
+                Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                Button("Supprimer", systemImage: "trash", role: .destructive, action: discard)
+            } label: {
+                VStack(alignment: .trailing, spacing: 4) {
+                    // Le « ! » à droite : la bulle occupe un cadre de 280 pt, aligné à droite.
+                    HStack(spacing: 6) {
+                        TextBubble(text: message.content, isOwn: true)
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                    Text(canRetry ? "Non envoyé · Toucher pour réessayer" : "Non envoyé")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel("Non envoyé : \(message.content)")
+            .accessibilityIdentifier("conversation.failedMessage")
+        }
     }
 }
 

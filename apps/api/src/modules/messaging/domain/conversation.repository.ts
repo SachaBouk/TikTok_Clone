@@ -18,15 +18,19 @@ export abstract class ConversationRepository {
   abstract listPendingRequestSenders(userId: string): Promise<string[]>;
 
   // Ajoute le message, le marque lu pour son expéditeur et, selon le cas, accepte la conversation
-  // ou y ouvre une demande de l'expéditeur.
+  // ou y ouvre une demande de l'expéditeur. Null si l'expéditeur a déjà un message de ce `clientMessageId` (envoi
+  // simultané, ADR-044) : rien n'est alors écrit.
   abstract addMessage(message: {
     conversationId: string;
     senderId: string;
     content: string;
     sharedVideoId: string | null;
+    clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
-  }): Promise<Message>;
+  }): Promise<Message | null>;
+  // Message de l'expéditeur portant cet identifiant d'envoi (ADR-044).
+  abstract findByClientMessageId(senderId: string, clientMessageId: string): Promise<Message | null>;
   abstract findMessage(messageId: string): Promise<Message | null>;
   // Messages existants parmi `ids`, dans un ordre quelconque.
   abstract findMessagesByIds(ids: string[]): Promise<Message[]>;

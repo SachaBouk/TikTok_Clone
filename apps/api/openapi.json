@@ -3624,6 +3624,16 @@
               }
             }
           },
+          "409": {
+            "description": "Identifiant d’envoi déjà utilisé pour un message d’une autre conversation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
             "headers": {
@@ -6524,6 +6534,11 @@
           "sharedVideo": {
             "$ref": "#/components/schemas/SharedVideoResponse"
           },
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant d’envoi choisi par l’app (ADR-044) : seulement dans la réponse à l’envoi et l’écho temps réel adressé à l’expéditeur."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -6682,6 +6697,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Vidéo publiée à partager (comptée comme un partage)."
+          },
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant d’envoi choisi par l’app (ADR-044). Le renvoyer pour le même message rend celui déjà créé (même réponse), sans en créer un second ni le compter dans les limites."
           }
         }
       },

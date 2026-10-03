@@ -13,6 +13,7 @@ import type { Response } from 'express';
 import {
   BlockedConversationError,
   CannotMessageYourselfError,
+  ClientMessageIdConflictError,
   EmptyMessageError,
   MessagingError,
   NotAPendingRequestError,
@@ -37,7 +38,7 @@ function toHttpException(error: MessagingError): HttpException {
   if (error instanceof BlockedConversationError || error instanceof RequestLimitReachedError || error instanceof NotMessageSenderError) {
     return new ForbiddenException(error.message);
   }
-  if (error instanceof NotAPendingRequestError) return new ConflictException(error.message);
+  if (error instanceof NotAPendingRequestError || error instanceof ClientMessageIdConflictError) return new ConflictException(error.message);
   if (error instanceof RateLimitedError) {
     return new HttpException(
       { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },

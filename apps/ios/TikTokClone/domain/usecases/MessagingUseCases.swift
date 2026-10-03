@@ -49,13 +49,13 @@ struct LoadMessagesUseCase: Sendable {
 struct SendMessageUseCase: Sendable {
     let messaging: any MessagingRepository
 
-    func callAsFunction(conversationID: String, text: String, videoID: String? = nil) async throws -> DirectMessage {
+    func callAsFunction(conversationID: String, text: String, videoID: String? = nil, clientMessageID: String? = nil) async throws -> DirectMessage {
         let content = MessageRules.cleaned(text)
         if let content, content.count > MessageRules.maxLength {
             throw AppError.rejected("Un message compte \(MessageRules.maxLength) caractères au plus.")
         }
         guard content != nil || videoID != nil else { throw AppError.rejected("Le message est vide.") }
-        return try await messaging.send(conversationID: conversationID, content: content, videoID: videoID)
+        return try await messaging.send(conversationID: conversationID, content: content, videoID: videoID, clientMessageID: clientMessageID)
     }
 }
 
@@ -65,7 +65,7 @@ struct ShareVideoByMessageUseCase: Sendable {
 
     func callAsFunction(videoID: String, to username: String) async throws -> DirectMessage {
         let conversation = try await messaging.open(username: username)
-        return try await messaging.send(conversationID: conversation.id, content: nil, videoID: videoID)
+        return try await messaging.send(conversationID: conversation.id, content: nil, videoID: videoID, clientMessageID: nil)
     }
 }
 

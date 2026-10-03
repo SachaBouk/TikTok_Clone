@@ -11,7 +11,8 @@ protocol MessagingRepository: Sendable {
     // Du plus récent au plus ancien.
     func messages(conversationID: String, cursor: String?) async throws -> MessagePage
     // Texte, vidéo partagée, ou les deux.
-    func send(conversationID: String, content: String?, videoID: String?) async throws -> DirectMessage
+    // `clientMessageID` (ADR-044) : renvoyer le même rend le message déjà créé.
+    func send(conversationID: String, content: String?, videoID: String?, clientMessageID: String?) async throws -> DirectMessage
     // Lu jusqu'à `upToID` (tout si nil) ; renvoie les badges.
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges
     func accept(conversationID: String) async throws -> Conversation

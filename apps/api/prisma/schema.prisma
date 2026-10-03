@@ -295,20 +295,25 @@ model ConversationParticipant {
 }
 
 model Message {
-  id             String   @id @default(uuid(7)) @map("message_id") @db.Uuid
-  conversationId String   @map("conversation_id") @db.Uuid
-  senderId       String   @map("sender_id") @db.Uuid
+  id              String   @id @default(uuid(7)) @map("message_id") @db.Uuid
+  conversationId  String   @map("conversation_id") @db.Uuid
+  senderId        String   @map("sender_id") @db.Uuid
   // Vide si le message ne fait que partager une vidéo (contrainte CHECK : texte ou vidéo).
-  content        String
+  content         String
   // Vidéo partagée. Sans clé étrangère : une vidéo supprimée reste signalée « indisponible » dans le message.
-  sharedVideoId  String?  @map("shared_video_id") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at")
+  sharedVideoId   String?  @map("shared_video_id") @db.Uuid
+  // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
+  // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
+  clientMessageId String?  @map("client_message_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   // Pagination et dernier message d'une conversation, par identifiant (UUID v7, ordonné dans le temps).
   @@index([conversationId, id])
+  // Un identifiant d'envoi par expéditeur (les valeurs nulles ne se gênent pas).
+  @@unique([senderId, clientMessageId], map: "messages_client_message_key")
   @@map("messages")
 }
 

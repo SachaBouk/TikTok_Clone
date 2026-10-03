@@ -20,6 +20,8 @@ protocol ConversationObserver: AnyObject {
 // - Les badges sont relus à chaque (re)connexion du temps réel, puis pris dans chaque événement.
 // - Un nouveau message fait remonter sa conversation en tête (ou l'ajoute, relue par l'API).
 // - Les écrans de conversation ouverts reçoivent les événements de la leur (`ConversationObserver`).
+// - Messages écrits sur cet appareil et pas encore acceptés par l'API (ADR-044), par conversation : « Envoi… » ou
+//   « Non envoyé », gardés pendant la session de l'app (même conversation fermée), oubliés à l'écho de leur envoi.
 @MainActor
 @Observable
 final class MessagingModel {
@@ -30,6 +32,8 @@ final class MessagingModel {
     let requests: PagedList<Conversation>
     // Conversations dont l'autre participant est en train d'écrire.
     private(set) var typingConversationIDs: Set<String> = []
+    // Messages sortants par conversation, du plus ancien au plus récent.
+    private(set) var outgoing: [String: [OutgoingMessage]] = [:]
 
     private let loadConversation: LoadConversationUseCase
     private let countUnread: CountUnreadMessagesUseCase
@@ -101,12 +105,36 @@ final class MessagingModel {
         for task in typingTasks.values { task.cancel() }
         typingTasks = [:]
         typingConversationIDs = []
+        outgoing = [:]
         observers = []
     }
 
     // « En train d'écrire » dans une conversation (throttlé par l'écran).
     func sendTyping(in conversationID: String) async {
         await sendTypingIndicator(conversationID: conversationID)
+    }
+
+    // MARK: - Messages sortants (ADR-044)
+
+    func outgoing(in conversationID: String) -> [OutgoingMessage] {
+        outgoing[conversationID] ?? []
+    }
+
+    // Nouveau message à envoyer : à la suite des autres.
+    func addOutgoing(_ message: OutgoingMessage) {
+        outgoing[message.conversationID, default: []].append(message)
+    }
+
+    // Nouvel état d'un message encore en attente (sans effet s'il est déjà parti : écho reçu, ou supprimé).
+    func setOutgoing(_ id: String, in conversationID: String, state: OutgoingMessage.State) {
+        guard let index = outgoing[conversationID]?.firstIndex(where: { $0.id == id }) else { return }
+        outgoing[conversationID]?[index].state = state
+    }
+
+    // Accepté par l'API, ou supprimé par l'utilisateur.
+    func removeOutgoing(_ id: String, in conversationID: String) {
+        outgoing[conversationID]?.removeAll { $0.id == id }
+        if outgoing[conversationID]?.isEmpty == true { outgoing[conversationID] = nil }
     }
 
     // MARK: - Actions des écrans
@@ -129,10 +157,11 @@ final class MessagingModel {
         moveToTop(conversation, in: inbox)
     }
 
-    // Conversation supprimée, ou demande refusée, depuis cet appareil.
+    // Conversation supprimée, ou demande refusée, depuis cet appareil : ses messages non envoyés avec.
     func removed(_ conversationID: String) {
         inbox.remove { $0.id == conversationID }
         requests.remove { $0.id == conversationID }
+        outgoing[conversationID] = nil
     }
 
     // Glisser dans la boîte de réception : supprimer pour soi. Renvoie un message d'erreur.
@@ -191,6 +220,8 @@ final class MessagingModel {
     private func messageCreated(_ message: DirectMessage) {
         let fromOther = message.senderID != session.profile?.id
         if fromOther { hideTyping(in: message.conversationID) }
+        // Écho de son propre envoi (il précède parfois la réponse, ou la remplace si elle s'est perdue).
+        if let clientMessageID = message.clientMessageID { removeOutgoing(clientMessageID, in: message.conversationID) }
         for observer in liveObservers(of: message.conversationID) { observer.received(message) }
 
         let list = [inbox, requests].first { list in list.items.contains { $0.id == message.conversationID } }

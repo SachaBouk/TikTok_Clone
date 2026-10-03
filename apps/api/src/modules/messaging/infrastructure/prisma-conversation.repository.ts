@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
+import { violatedUniqueConstraint } from '../../../database/prisma-errors';
 import { PrismaService } from '../../../database/prisma.service';
 import { ConversationRepository } from '../domain/conversation.repository';
 import type { Conversation, ConversationView, Message } from '../domain/messaging';
@@ -104,17 +105,46 @@ export class PrismaConversationRepository extends ConversationRepository {
   }
 
   // Le message, le repère de lecture de l'expéditeur et l'état de la conversation, ensemble.
-  addMessage(input: {
+  async addMessage(input: {
     conversationId: string;
     senderId: string;
     content: string;
     sharedVideoId: string | null;
+    clientMessageId: string | null;
+    accept: boolean;
+    openRequest: boolean;
+  }): Promise<Message | null> {
+    try {
+      return await this.addMessageNow(input);
+    } catch (error) {
+      // Index unique `messages_client_message_key` : même identifiant d'envoi déjà enregistré (envois simultanés).
+      if (violatedUniqueConstraint(error) === 'messages_client_message_key') return null;
+      throw error;
+    }
+  }
+
+  findByClientMessageId(senderId: string, clientMessageId: string): Promise<Message | null> {
+    return this.prisma.message.findUnique({ where: { senderId_clientMessageId: { senderId, clientMessageId } }, select: messageSelect });
+  }
+
+  private addMessageNow(input: {
+    conversationId: string;
+    senderId: string;
+    content: string;
+    sharedVideoId: string | null;
+    clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
   }): Promise<Message> {
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.message.create({
-        data: { conversationId: input.conversationId, senderId: input.senderId, content: input.content, sharedVideoId: input.sharedVideoId },
+        data: {
+          conversationId: input.conversationId,
+          senderId: input.senderId,
+          content: input.content,
+          sharedVideoId: input.sharedVideoId,
+          clientMessageId: input.clientMessageId,
+        },
         select: messageSelect,
       });
       await tx.conversationParticipant.updateMany({
