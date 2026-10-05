@@ -48,6 +48,7 @@
 | [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) | Renvoi d'un message en échec : identifiant d'envoi (complète ADR-028 et ADR-022) | Proposé |
 | [ADR-045](ADR-045-compteurs-profil-en-direct.md) | Compteurs de son profil en direct (complète ADR-022 et ADR-011) | Proposé |
 | [ADR-046](ADR-046-dimensions-photo-profil.md) | Dimensions de la photo de profil vérifiées par l'API (complète ADR-016) | Proposé |
+| [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

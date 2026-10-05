@@ -8,6 +8,8 @@ export interface FfmpegOptions {
   ffprobePath: string;
   x264Preset: string;
   timeoutMs: number;
+  // Filtres `zscale` et `tonemap` présents (vérifié au démarrage) : une vidéo HDR est tone mappée (ADR-047).
+  toneMapping: boolean;
 }
 
 export interface MediaInfo {
@@ -16,6 +18,8 @@ export interface MediaInfo {
   height: number;
   durationSeconds: number;
   hasAudio: boolean;
+  // Transfert HDR (PQ ou HLG, vidéos HDR et Dolby Vision d'iPhone) : à tone mapper vers le SDR (ADR-047).
+  hdr: boolean;
 }
 
 // Le fichier n'est pas une vidéo lisible : inutile de réessayer.
@@ -34,6 +38,31 @@ const KEYFRAME_INTERVAL_SECONDS = 2;
 const AUDIO_KBPS = 128;
 // Largeur visée pour la miniature (côté court), assez pour un écran d'iPhone en grille.
 const THUMBNAIL_SHORT_SIDE = 720;
+
+// Transferts HDR (ffprobe `color_transfer`) : PQ (HDR10, Dolby Vision 5) et HLG (iPhone, Dolby Vision 8.4).
+const HDR_TRANSFERS = new Set(['smpte2084', 'arib-std-b67']);
+
+// HDR → SDR BT.709 (ADR-047) : passage en lumière linéaire (100 nits = blanc SDR), primaires BT.709, tone mapping
+// `mobius` (tons moyens gardés, hautes lumières compressées en douceur, sans désaturation), puis transfert et matrice
+// BT.709 en plage limitée, 8 bits 4:2:0. Sans lui, une vidéo HDR 10 bits sort délavée et grise.
+export const TONE_MAPPING_FILTER =
+  'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+// Étiquettes de couleur des fichiers tone mappés : sans elles, la source (BT.2020, PQ ou HLG) serait recopiée.
+const BT709_TAGS = ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709'];
+
+// Les filtres du tone mapping sont-ils présents dans ce FFmpeg ? (`zscale` exige une compilation avec zimg.)
+export async function supportsToneMapping(ffmpegPath: string): Promise<boolean> {
+  try {
+    const filters = await run(ffmpegPath, ['-hide_banner', '-filters'], 30_000);
+    return /\szscale\s/.test(filters) && /\stonemap\s/.test(filters);
+  } catch {
+    return false;
+  }
+}
+
+function toneMapped(media: MediaInfo, options: FfmpegOptions): boolean {
+  return media.hdr && options.toneMapping;
+}
 
 export async function probe(file: string, options: FfmpegOptions): Promise<MediaInfo> {
   let output: string;
@@ -57,6 +86,7 @@ export async function probe(file: string, options: FfmpegOptions): Promise<Media
     height: quarterTurn ? video.width : video.height,
     durationSeconds: duration,
     hasAudio: streams.some((s) => s.codec_type === 'audio'),
+    hdr: HDR_TRANSFERS.has(video.color_transfer ?? ''),
   };
 }
 
@@ -66,7 +96,9 @@ export async function transcodeToHls(input: string, outDir: string, renditions: 
   await Promise.all(renditions.map((r) => mkdir(join(outDir, r.name), { recursive: true })));
 
   // La rotation est appliquée au décodage (autorotate, par défaut) : les dimensions sont celles affichées.
-  const split = `[0:v]split=${renditions.length}${renditions.map((_, i) => `[s${i}]`).join('')}`;
+  // Vidéo HDR : tone mappée une seule fois, avant d'être déclinée en résolutions.
+  const toneMap = toneMapped(media, options) ? `${TONE_MAPPING_FILTER},` : '';
+  const split = `[0:v]${toneMap}split=${renditions.length}${renditions.map((_, i) => `[s${i}]`).join('')}`;
   const scales = renditions.map((r, i) => `[s${i}]scale=${r.width}:${r.height},setsar=1[v${i}]`);
   const args = ['-nostdin', '-y', '-loglevel', 'error', '-i', input, '-filter_complex', [split, ...scales].join(';')];
 
@@ -93,6 +125,7 @@ export async function transcodeToHls(input: string, outDir: string, renditions: 
     '-map_metadata',
     '-1',
   );
+  if (toneMap) args.push(...BT709_TAGS);
   if (media.hasAudio) args.push('-c:a', 'aac', '-b:a', `${AUDIO_KBPS}k`, '-ac', '2', '-ar', '48000');
 
   const streamMap = renditions.map((r, i) => (media.hasAudio ? `v:${i},a:${i},name:${r.name}` : `v:${i},name:${r.name}`)).join(' ');
@@ -126,9 +159,11 @@ export async function createThumbnail(input: string, output: string, media: Medi
   const shortSide = Math.min(THUMBNAIL_SHORT_SIDE, media.width, media.height);
   // -2 : l'autre côté suit le format, arrondi à un nombre pair.
   const scale = portrait ? `scale=${shortSide}:-2` : `scale=-2:${shortSide}`;
+  // Vidéo HDR : même tone mapping que le HLS, pour que la miniature ait les mêmes couleurs.
+  const filter = toneMapped(media, options) ? `${TONE_MAPPING_FILTER},${scale}` : scale;
   await run(
     options.ffmpegPath,
-    ['-nostdin', '-y', '-loglevel', 'error', '-ss', String(at), '-i', input, '-frames:v', '1', '-vf', scale, '-q:v', '3', output],
+    ['-nostdin', '-y', '-loglevel', 'error', '-ss', String(at), '-i', input, '-frames:v', '1', '-vf', filter, '-q:v', '3', output],
     options.timeoutMs,
   );
 }
@@ -149,6 +184,7 @@ interface FfprobeOutput {
     width?: number;
     height?: number;
     duration?: string;
+    color_transfer?: string;
     disposition?: { attached_pic?: number };
     tags?: { rotate?: string };
     side_data_list?: { rotation?: number }[];

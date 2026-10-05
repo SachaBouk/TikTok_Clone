@@ -17,12 +17,19 @@ export interface TranscodeOutput {
 // Pipeline d'une vidéo (ADR-008) : téléchargement du brut, analyse (durée de 3 min au plus, ADR-040), HLS multi-résolutions,
 // miniature, envoi au bucket HLS. Tout passe par un dossier temporaire, supprimé à la fin.
 // Rejouable : une nouvelle tentative réécrit les mêmes clés sous `<videoId>/`.
-export async function transcode(job: TranscodeJobData, config: WorkerConfig, storage: VideoStorage): Promise<TranscodeOutput> {
+// `toneMapping` : filtres présents dans FFmpeg (vérifié au démarrage, ADR-047).
+export async function transcode(
+  job: TranscodeJobData,
+  config: WorkerConfig,
+  storage: VideoStorage,
+  { toneMapping }: { toneMapping: boolean },
+): Promise<TranscodeOutput> {
   const options: FfmpegOptions = {
     ffmpegPath: config.ffmpegPath,
     ffprobePath: config.ffprobePath,
     x264Preset: config.x264Preset,
     timeoutMs: config.ffmpegTimeoutMs,
+    toneMapping,
   };
   const workDir = await mkdtemp(join(tmpdir(), `transcode-${job.videoId}-`));
   try {

@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, type TranscodeJobData, type TranscodeResult } from '@repo/shared';
 import { Job, Queue, UnrecoverableError, Worker, type ConnectionOptions } from 'bullmq';
 import { loadConfig, type WorkerConfig } from './config';
-import { InvalidMediaError } from './media/ffmpeg';
+import { InvalidMediaError, supportsToneMapping } from './media/ffmpeg';
 import { RawVideoNotFoundError, VideoStorage } from './storage';
 import { transcode } from './transcode';
 
@@ -28,6 +28,12 @@ async function main() {
     console.error(`[worker] FFmpeg introuvable (${config.ffmpegPath}). Installez-le ou définissez FFMPEG_PATH.`);
     process.exit(1);
   }
+  // Tone mapping HDR (ADR-047) : sans `zscale` ni `tonemap`, le worker tourne quand même ; les vidéos HDR sortent alors
+  // aux couleurs ternes, comme avant.
+  const toneMapping = await supportsToneMapping(config.ffmpegPath);
+  if (!toneMapping) {
+    console.warn('[worker] Filtres zscale ou tonemap absents de FFmpeg : les vidéos HDR seront converties sans tone mapping.');
+  }
 
   const connection: ConnectionOptions = { url: config.redisUrl };
   const storage = new VideoStorage(config.s3);
@@ -43,7 +49,7 @@ async function main() {
       const started = Date.now();
       let output;
       try {
-        output = await transcode(job.data, config, storage);
+        output = await transcode(job.data, config, storage, { toneMapping });
       } catch (error) {
         // Fichier illisible ou disparu : les nouvelles tentatives échoueraient de la même façon.
         if (error instanceof InvalidMediaError || error instanceof RawVideoNotFoundError) {
