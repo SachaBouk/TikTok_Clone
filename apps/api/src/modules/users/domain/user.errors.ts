@@ -33,7 +33,7 @@ export class AvatarNotUploadedError extends UserError {
 // Fichier envoyé qui n'est pas une image JPEG ou PNG valide, ou trop gros.
 export class InvalidAvatarError extends UserError {
   constructor() {
-    super('La photo de profil doit être une image JPEG ou PNG de 5 Mio au plus');
+    super('La photo de profil doit être une image JPEG ou PNG carrée, de 64 à 2048 px et 5 Mio au plus');
     this.name = 'InvalidAvatarError';
   }
 }

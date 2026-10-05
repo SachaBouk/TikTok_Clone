@@ -78,7 +78,8 @@ export class UsersController {
   @ApiOkResponse({ type: UserProfileResponse, description: 'Profil à jour.' })
   @ApiBadRequestResponse({
     type: ErrorResponse,
-    description: 'Fichier absent (envoi pas fait, expiré ou remplacé depuis), ou qui n’est pas une image JPEG ou PNG valide.',
+    description:
+      'Fichier absent (envoi pas fait, expiré ou remplacé depuis), ou qui n’est pas une image JPEG ou PNG valide et carrée de 64 à 2048 px (ADR-046).',
   })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)

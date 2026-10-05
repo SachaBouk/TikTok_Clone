@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AccountContentCleanup } from '../domain/account-content-cleanup';
 import type { AvatarStorage, StoredObject } from '../domain/avatar-storage';
 import {
-  AVATAR_SIGNATURE_LENGTH,
+  AVATAR_HEADER_LENGTH,
   AVATAR_UPLOAD_URL_TTL_SECONDS,
   type AvatarContentType,
   MAX_AVATAR_SIZE_BYTES,
@@ -13,7 +13,7 @@ import {
   avatarKey,
   avatarPrefix,
   isAvatarContentType,
-  matchesAvatarSignature,
+  isValidAvatarContent,
 } from '../domain/profile-rules';
 import type { ProfileChanges, User } from '../domain/user';
 import {
@@ -189,7 +189,8 @@ export class UsersService {
     // Type et taille sont signés dans l'URL d'envoi ; on revérifie quand même, puis le contenu réel.
     const contentType: AvatarContentType | null = isAvatarContentType(object.contentType) ? object.contentType : null;
     if (!contentType || object.size < 1 || object.size > MAX_AVATAR_SIZE_BYTES) return false;
-    return matchesAvatarSignature(contentType, await this.avatars.readStart(key, AVATAR_SIGNATURE_LENGTH));
+    // Signature du type déclaré, puis dimensions (ADR-046), lues dans les premiers octets.
+    return isValidAvatarContent(contentType, await this.avatars.readStart(key, AVATAR_HEADER_LENGTH));
   }
 
   // Tous les fichiers de photo du compte, sauf `keep`.

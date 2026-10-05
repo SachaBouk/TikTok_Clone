@@ -563,7 +563,7 @@
             }
           },
           "400": {
-            "description": "Fichier absent (envoi pas fait, expiré ou remplacé depuis), ou qui n’est pas une image JPEG ou PNG valide.",
+            "description": "Fichier absent (envoi pas fait, expiré ou remplacé depuis), ou qui n’est pas une image JPEG ou PNG valide et carrée de 64 à 2048 px (ADR-046).",
             "content": {
               "application/json": {
                 "schema": {

@@ -31,8 +31,18 @@ const alice: User = {
 const bob: User = { ...alice, id: '0192f3a0-0000-7000-8000-000000000002', username: 'bob', displayName: 'Bob', bio: null };
 
 const NOW = new Date('2026-09-25T12:00:00Z');
-const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
-const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+// En-têtes JPEG (SOI, APP0 JFIF, SOF0) et PNG (signature, IHDR) d'une image de `size` px de côté (ADR-046).
+function jpeg(width: number, height = width): Uint8Array {
+  const app0 = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+  const sof0 = [0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, ...new Array<number>(9).fill(0)];
+  return Uint8Array.from([0xff, 0xd8, ...app0, ...sof0, 0xff, 0xd9]);
+}
+function png(width: number, height = width): Uint8Array {
+  const ihdr = [0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0, 0, width >> 8, width & 0xff, 0, 0, height >> 8, height & 0xff, 8, 2, 0, 0, 0];
+  return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...ihdr, 0, 0, 0, 0]);
+}
+const JPEG = jpeg(512);
+const PNG = png(512);
 
 describe('UsersService', () => {
   let avatars: InMemoryAvatarStorage;
@@ -182,6 +192,21 @@ describe('UsersService', () => {
 
       const pngAsJpeg = await uploadAvatar(alice.id, 'image/jpeg', PNG);
       await expect(service.setAvatar(alice.id, pngAsJpeg)).rejects.toBeInstanceOf(InvalidAvatarError);
+    });
+
+    it('refuse et supprime une image qui n’est pas un carré de 64 à 2048 px (ADR-046)', async () => {
+      for (const [contentType, bytes] of [
+        ['image/jpeg', jpeg(512, 384)],
+        ['image/png', png(32)],
+        ['image/jpeg', jpeg(4096)],
+      ] as const) {
+        const avatarId = await uploadAvatar(alice.id, contentType, bytes);
+        await expect(service.setAvatar(alice.id, avatarId)).rejects.toBeInstanceOf(InvalidAvatarError);
+      }
+      expect(avatars.objects.size).toBe(0);
+      await expect(service.setAvatar(alice.id, await uploadAvatar(alice.id, 'image/png', png(2048)))).resolves.toMatchObject({
+        avatarUrl: expect.any(String) as unknown,
+      });
     });
 
     it('retire la photo et supprime ses fichiers', async () => {

@@ -242,7 +242,7 @@ case .data: break
 
 - `updateMyProfile` : seuls les champs envoyés changent (`username`, `displayName`, `bio` ; `bio: nil` explicite ou `""` l'efface). `.conflict` : pseudo déjà pris.
 - Photo de profil, en trois temps :
-  1. recadrer l'image en carré (512 px) et l'encoder en JPEG (ou PNG), puis `createAvatarUpload(body: .json(.init(contentType: .imageJpeg, fileSize: data.count)))` ;
+  1. recadrer l'image en carré (512 px ; l'API exige un carré de 64 à 2048 px, ADR-046) et l'encoder en JPEG (ou PNG), puis `createAvatarUpload(body: .json(.init(contentType: .imageJpeg, fileSize: data.count)))` ;
   2. envoyer le fichier **directement au stockage** : `PUT` sur `uploadUrl` avec `Content-Type` identique (le `Content-Length` est ajouté par `URLSession`). Type et taille sont signés : autre valeur → 403 du stockage. URL valable 15 min ;
      ```swift
      var request = URLRequest(url: URL(string: upload.uploadUrl)!)
