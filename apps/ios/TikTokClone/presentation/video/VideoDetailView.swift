@@ -10,6 +10,8 @@ struct VideoDetailView: View {
     @State private var shareVideo: FeedVideo?
     @State private var reportedVideo: FeedVideo?
     @State private var alertMessage: String?
+    // Pile de la vidéo seule : une page de hashtag touché dans la description y est poussée (ADR-049).
+    @State private var path = NavigationPath()
     @Environment(\.dismiss) private var dismiss
 
     init(viewModel: VideoDetailViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer) {
@@ -20,7 +22,7 @@ struct VideoDetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             GeometryReader { geometry in
                 content(bottomInset: geometry.safeAreaInsets.bottom)
                     .ignoresSafeArea()
@@ -38,6 +40,7 @@ struct VideoDetailView: View {
             // Profils ouverts depuis la vidéo, dans la même pile.
             .appDestinations(container)
         }
+        .providesNavigationPath($path)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in
@@ -79,7 +82,8 @@ struct VideoDetailView: View {
                     comments: { commentsVideo = interactions.display(video) },
                     share: { shareVideo = interactions.display(video) },
                     report: { report(video) },
-                    alert: { alertMessage = $0 }
+                    alert: { alertMessage = $0 },
+                    openHashtag: { path.append(HashtagRoute(name: $0)) }
                 )
             )
         }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
+import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
 import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
@@ -45,13 +46,23 @@ export class PrismaVideoRepository extends VideoRepository {
   }
 
   // `status: 'processing'` dans le WHERE : un résultat en double ou tardif n'écrase rien.
-  async finishTranscoding(id: string, outcome: TranscodeOutcome): Promise<boolean> {
+  async finishTranscoding(id: string, outcome: TranscodeOutcome, hashtags: string[]): Promise<boolean> {
     const data =
       outcome.status === 'ready'
         ? { status: 'ready' as const, hlsUrl: outcome.hlsUrl, thumbnailUrl: outcome.thumbnailUrl }
         : { status: 'failed' as const };
-    const { count } = await this.prisma.video.updateMany({ where: { id, status: 'processing' }, data });
-    return count === 1;
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.video.updateMany({ where: { id, status: 'processing' }, data });
+      if (count !== 1) return false;
+      if (outcome.status === 'ready' && hashtags.length > 0) {
+        // ON CONFLICT DO NOTHING : un hashtag créé en même temps par une autre publication est relu ensuite.
+        await tx.hashtag.createMany({ data: hashtags.map((name) => ({ name })), skipDuplicates: true });
+        const rows = await tx.hashtag.findMany({ where: { name: { in: hashtags } }, select: { id: true } });
+        // `videos_count` suit par trigger (migration search_hashtags).
+        await tx.videoHashtag.createMany({ data: rows.map((row) => ({ videoId: id, hashtagId: row.id })), skipDuplicates: true });
+      }
+      return true;
+    });
   }
 
   findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]> {
@@ -154,6 +165,46 @@ export class PrismaVideoRepository extends VideoRepository {
 
   countCreatedSince(since: Date): Promise<number> {
     return this.prisma.video.count({ where: { createdAt: { gte: since } } });
+  }
+
+  findHashtag(name: string): Promise<Hashtag | null> {
+    return this.prisma.hashtag.findUnique({ where: { name }, select: { name: true, videosCount: true } });
+  }
+
+  // `LIKE` sur l'index trigrammes ; « _ » est un joker de LIKE : échappé.
+  searchHashtags(prefix: string, limit: number): Promise<Hashtag[]> {
+    const pattern = `${prefix.replace(/[\\%_]/g, '\\$&')}%`;
+    return this.prisma.$queryRaw<Hashtag[]>`
+      SELECT name, videos_count AS "videosCount" FROM hashtags
+      WHERE name LIKE ${pattern} AND videos_count > 0
+      ORDER BY videos_count DESC, name
+      LIMIT ${limit}`;
+  }
+
+  findTrendingHashtags(since: Date, limit: number): Promise<Hashtag[]> {
+    return this.prisma.$queryRaw<Hashtag[]>`
+      SELECT h.name, h.videos_count AS "videosCount"
+      FROM hashtags h
+      LEFT JOIN (
+        SELECT hashtag_id, count(*) AS recent FROM video_hashtags WHERE created_at >= ${since} GROUP BY hashtag_id
+      ) r ON r.hashtag_id = h.hashtag_id
+      WHERE h.videos_count > 0
+      ORDER BY coalesce(r.recent, 0) DESC, h.videos_count DESC, h.name
+      LIMIT ${limit}`;
+  }
+
+  // Pagination par clé (created_at, video_id), sur l'index (hashtag_id, created_at).
+  async listHashtagVideos(name: string, after: HashtagVideoPosition | null, limit: number): Promise<HashtagVideoPosition[]> {
+    const rows = await this.prisma.videoHashtag.findMany({
+      where: {
+        hashtag: { name },
+        ...(after ? { OR: [{ createdAt: { lt: after.taggedAt } }, { createdAt: after.taggedAt, videoId: { lt: after.videoId } }] } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { videoId: 'desc' }],
+      take: limit,
+      select: { videoId: true, createdAt: true },
+    });
+    return rows.map((row) => ({ videoId: row.videoId, taggedAt: row.createdAt }));
   }
 
   async countByAuthors(userIds: string[]): Promise<Map<string, number>> {

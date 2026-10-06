@@ -97,6 +97,14 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Deux lecteurs verticaux partagent le pool : un feed devient actif **après** la mise en pause de l'autre (`FeedView.updateActivity`, tâche différée), l'ordre des `onChange` de deux vues sœurs n'étant pas garanti.
 - En simulateur, les vidéos viennent de MinIO en HTTP (`localhost:9000`) : ATS l'autorise par `NSAllowsLocalNetworking`.
 
+## Recherche et hashtags (ADR-049)
+
+- Loupe en haut à droite du feed : écran de recherche (comptes et hashtags). Avant la saisie : recherches récentes (sur l'appareil seulement, effacées à la connexion et à la déconnexion) et hashtags tendance.
+- Pendant la saisie : hashtags qui commencent par le texte, puis comptes avec « Suivre ». `#…` ne cherche que des hashtags, `@…` que des comptes.
+- Page d'un hashtag : nombre de vidéos et grille ; les hashtags des descriptions sont cliquables.
+- Publication : taper `#pla` à la fin de la description propose les hashtags existants (`#plage · 12`) ; toucher complète la saisie.
+- Test manuel : coller le texte cherché (`xcrun simctl pbcopy booted`), le clavier du simulateur étant en AZERTY.
+
 ## Interactions
 
 - Colonne de droite : like, commentaires, favori, republication, partage ; « + » sur l'avatar pour suivre l'auteur. Double toucher sur la vidéo : like.
@@ -260,6 +268,7 @@ case .data: break
 - Sur son propre profil, `listMyPendingVideos` donne en tête de grille les vidéos `.processing` (« en cours de publication ») et `.failed` ; l'événement `videoProcessed` les fait passer dans `listAccountVideos`.
 - Supprimer une de ses vidéos : `deleteVideo` (`.noContent`), quel que soit son statut, y compris pendant l'envoi. Retirer la vidéo de la grille et du lecteur ; les autres la voient disparaître du feed, et un message qui la partageait la montre indisponible.
 - Vues : connecté, `recordView` après ~1 s de lecture de chaque vidéo (feed, grilles, message partagé) ; ne pas l'appeler en mode invité (`.unauthorized`). `viewsCount` compte les comptes distincts.
+- Recherche (ADR-049, routes publiques) : `searchUsers(query: .init(q:cursor:limit:))` (`items` : `user`, `followersCount`, `viewer` optionnel ; 100 résultats au plus), `searchHashtags(query: .init(q:limit:))`, `listTrendingHashtags()`, `getHashtag(path: .init(name:))` (`.badRequest` pour un nom invalide), `listHashtagVideos(path:query:)` (même élément que le feed, plus récentes d'abord).
 - Feed des abonnements (ADR-048) : `getFollowingFeed(query: .init(cursor:limit:))`, même élément que le feed, du plus récent au plus ancien ; `nextCursor` nil = fin ; `.unauthorized` en invité.
 - Ouvrir une vidéo seule dans le lecteur (notification, historique des commentaires, message partagé, lien) : `getFeedItem`, même élément que le feed ; `.notFound` si elle a été supprimée.
 - Historique des commentaires (centre d'activités) : `listMyComments`, chaque élément avec la vidéo commentée (miniature, auteur) ; supprimer avec `deleteComment`.

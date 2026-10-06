@@ -6,6 +6,7 @@
 // Contraintes CHECK ajoutées à la main dans les migrations (Prisma ne sait pas les exprimer) :
 // pas d'auto-follow, solde de portefeuille ≥ 0, montant de cadeau > 0 (migration initiale) ;
 // notification cohérente avec son type et jamais adressée à son auteur (migration notifications).
+// Hashtag de 1 à 50 caractères, nombre de vidéos ≥ 0 ; extension pg_trgm (migration search_hashtags, ADR-049).
 
 generator client {
   provider            = "prisma-client"
@@ -90,6 +91,9 @@ model User {
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
   @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
+  // Recherche de comptes (ADR-049) : pseudo ou nom contenant le texte cherché (`ILIKE`), extension pg_trgm.
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_username_trgm_idx")
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_display_name_trgm_idx")
   @@map("users")
 }
 
@@ -155,11 +159,44 @@ model Video {
   comments      Comment[]
   viewHistory   ViewHistory[]
   notifications Notification[]
+  hashtags      VideoHashtag[]
 
   @@index([userId, createdAt])
   // Le feed ne sert que les vidéos `ready`.
   @@index([status])
   @@map("videos")
+}
+
+// Hashtag extrait des descriptions (ADR-049) : nom sans « # », en minuscules, 1 à 50 caractères (CHECK écrit à la
+// main). `videos_count` (vidéos publiées) est tenu par un trigger ; un hashtag sans vidéo reste en base.
+model Hashtag {
+  id          String   @id @default(uuid(7)) @map("hashtag_id") @db.Uuid
+  name        String   @unique
+  videosCount Int      @default(0) @map("videos_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  videos VideoHashtag[]
+
+  // Hashtags qui commencent par le texte saisi (`LIKE 'abc%'`), extension pg_trgm.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "hashtags_name_trgm_idx")
+  @@map("hashtags")
+}
+
+// Hashtags d'une vidéo publiée (ADR-049) : lignes créées au passage en `ready`, `created_at` = date de publication.
+model VideoHashtag {
+  videoId   String   @map("video_id") @db.Uuid
+  hashtagId String   @map("hashtag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  video   Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  hashtag Hashtag @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@id([videoId, hashtagId])
+  // Page d'un hashtag, de la vidéo publiée la plus récente à la plus ancienne.
+  @@index([hashtagId, createdAt])
+  // Hashtags tendance : vidéos publiées ces 7 derniers jours.
+  @@index([createdAt])
+  @@map("video_hashtags")
 }
 
 // ─── Interactions (ADR-006, ADR-016) ─────────────────────────────────────────

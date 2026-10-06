@@ -49,3 +49,11 @@ export class UploadIncompleteError extends VideoError {
     this.name = 'UploadIncompleteError';
   }
 }
+
+// Nom de hashtag invalide (ADR-049) : 400.
+export class InvalidHashtagError extends VideoError {
+  constructor(name: string) {
+    super(`Hashtag invalide : ${name}`);
+    this.name = 'InvalidHashtagError';
+  }
+}

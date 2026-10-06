@@ -3073,6 +3073,249 @@
         "security": []
       }
     },
+    "/hashtags/{name}/videos": {
+      "get": {
+        "operationId": "listHashtagVideos",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos publiées du hashtag, de la plus récemment publiée à la plus ancienne. Comptes masqués retirés (page plus courte).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nom de hashtag, curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ],
+        "security": []
+      }
+    },
+    "/search/users": {
+      "get": {
+        "operationId": "searchUsers",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "Texte cherché dans le pseudo et le nom ; « @ » initial ignoré.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 50,
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comptes dont le pseudo ou le nom contient `q`, sans tenir compte de la casse : pseudo identique, pseudo qui commence par `q`, puis abonnés décroissants. 100 résultats au plus. Comptes suspendus exclus ; connecté, comptes bloqués exclus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSearchPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Texte, curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "search"
+        ],
+        "security": []
+      }
+    },
+    "/search/hashtags": {
+      "get": {
+        "operationId": "searchHashtags",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "Début du nom du hashtag ; « # » initial ignoré.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 51,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hashtags qui commencent par `q` (« # » initial ignoré) et ont au moins une vidéo, du plus utilisé au moins utilisé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HashtagListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Texte ou nombre invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "search"
+        ],
+        "security": []
+      }
+    },
+    "/search/trending-hashtags": {
+      "get": {
+        "operationId": "listTrendingHashtags",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Hashtags tendance, 10 au plus : vidéos publiées ces 7 derniers jours, puis nombre total de vidéos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HashtagListResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "search"
+        ],
+        "security": []
+      }
+    },
+    "/hashtags/{name}": {
+      "get": {
+        "operationId": "getHashtag",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Un nom valide inconnu a 0 vidéo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HashtagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nom de hashtag invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "search"
+        ],
+        "security": []
+      }
+    },
     "/conversations": {
       "get": {
         "operationId": "listConversations",
@@ -6527,6 +6770,77 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "AccountSearchItemResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "followersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/FollowViewerStateResponse"
+          }
+        },
+        "required": [
+          "user",
+          "followersCount"
+        ]
+      },
+      "AccountSearchPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountSearchItemResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "HashtagResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nom sans « # », en minuscules."
+          },
+          "videosCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Vidéos publiées portant ce hashtag."
+          }
+        },
+        "required": [
+          "name",
+          "videosCount"
+        ]
+      },
+      "HashtagListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HashtagResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "ConversationStatus": {

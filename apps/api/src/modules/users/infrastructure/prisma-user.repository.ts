@@ -71,6 +71,20 @@ export class PrismaUserRepository extends UserRepository {
     });
   }
 
+  // Index trigrammes sur le pseudo et le nom (migration search_hashtags). `%`, `_` et `\` échappés pour LIKE.
+  searchPublic(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]> {
+    const needle = query.toLowerCase();
+    const escaped = needle.replace(/[\\%_]/g, '\\$&');
+    return this.prisma.$queryRaw<User[]>`
+      SELECT user_id AS id, username, display_name AS "displayName", avatar_url AS "avatarUrl", bio,
+             followers_count AS "followersCount", following_count AS "followingCount", created_at AS "createdAt"
+      FROM users
+      WHERE (username ILIKE ${`%${escaped}%`} OR display_name ILIKE ${`%${escaped}%`})
+        AND user_id <> ALL(${excludedIds}::uuid[])
+      ORDER BY (username = ${needle}) DESC, (username LIKE ${`${escaped}%`}) DESC, followers_count DESC, user_id DESC
+      OFFSET ${offset} LIMIT ${limit}`;
+  }
+
   count(createdSince: Date | null): Promise<number> {
     return this.prisma.user.count({ where: createdSince ? { createdAt: { gte: createdSince } } : undefined });
   }

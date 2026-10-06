@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
 import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
 type Counter = 'viewsCount' | 'likesCount' | 'commentsCount' | 'favoritesCount' | 'sharesCount' | 'repostsCount';
-type StoredVideo = Video & { updatedAt: Date; counters: Record<Counter, number> };
+// `hashtags` : écrits au passage en `ready` (ADR-049), avec la date de publication.
+type StoredVideo = Video & { updatedAt: Date; counters: Record<Counter, number>; hashtags?: { names: string[]; taggedAt: Date } };
 
 // Adaptateur en mémoire pour les tests. `now` permet de dater les écritures (tests de maintenance).
 export class InMemoryVideoRepository extends VideoRepository {
@@ -45,10 +47,11 @@ export class InMemoryVideoRepository extends VideoRepository {
     if (video) Object.assign(video, { status: 'failed', uploadId: null, updatedAt: this.now() });
   }
 
-  async finishTranscoding(id: string, outcome: TranscodeOutcome): Promise<boolean> {
+  async finishTranscoding(id: string, outcome: TranscodeOutcome, hashtags: string[]): Promise<boolean> {
     const video = this.videos.get(id);
     if (!video || video.status !== 'processing') return false;
     Object.assign(video, outcome, { updatedAt: this.now() });
+    if (outcome.status === 'ready' && hashtags.length > 0) video.hashtags = { names: hashtags, taggedAt: this.now() };
     return true;
   }
 
@@ -153,6 +156,61 @@ export class InMemoryVideoRepository extends VideoRepository {
     const video = this.videos.get(id);
     if (video) video.counters[counter] = Math.max(0, video.counters[counter] + delta);
   }
+
+  async findHashtag(name: string): Promise<Hashtag | null> {
+    const count = this.tagged().filter((v) => v.hashtags.names.includes(name)).length;
+    return count > 0 ? { name, videosCount: count } : null;
+  }
+
+  async searchHashtags(prefix: string, limit: number): Promise<Hashtag[]> {
+    return this.hashtagCounts(null)
+      .filter((h) => h.name.startsWith(prefix))
+      .sort((a, b) => b.videosCount - a.videosCount || compareNames(a.name, b.name))
+      .slice(0, limit)
+      .map(({ name, videosCount }) => ({ name, videosCount }));
+  }
+
+  async findTrendingHashtags(since: Date, limit: number): Promise<Hashtag[]> {
+    return this.hashtagCounts(since)
+      .sort((a, b) => b.recent - a.recent || b.videosCount - a.videosCount || compareNames(a.name, b.name))
+      .slice(0, limit)
+      .map(({ name, videosCount }) => ({ name, videosCount }));
+  }
+
+  async listHashtagVideos(name: string, after: HashtagVideoPosition | null, limit: number): Promise<HashtagVideoPosition[]> {
+    const newest = (a: HashtagVideoPosition, b: HashtagVideoPosition) =>
+      newestFirst({ createdAt: a.taggedAt, id: a.videoId }, { createdAt: b.taggedAt, id: b.videoId });
+    return this.tagged()
+      .filter((v) => v.hashtags.names.includes(name))
+      .map((v) => ({ videoId: v.id, taggedAt: v.hashtags.taggedAt }))
+      .sort(newest)
+      .filter((position) => !after || newest(after, position) < 0)
+      .slice(0, limit);
+  }
+
+  // Vidéos publiées avec des hashtags (la cascade de la base les retire avec la vidéo).
+  private tagged() {
+    return [...this.videos.values()].flatMap((v) => (v.status === 'ready' && v.hashtags ? [{ ...v, hashtags: v.hashtags }] : []));
+  }
+
+  // Nombre de vidéos par hashtag, et celles publiées depuis `since`.
+  private hashtagCounts(since: Date | null) {
+    const counts = new Map<string, { name: string; videosCount: number; recent: number }>();
+    for (const video of this.tagged()) {
+      for (const name of video.hashtags.names) {
+        const entry = counts.get(name) ?? { name, videosCount: 0, recent: 0 };
+        entry.videosCount++;
+        if (since && video.hashtags.taggedAt >= since) entry.recent++;
+        counts.set(name, entry);
+      }
+    }
+    return [...counts.values()];
+  }
+}
+
+// Ordre des noms pour les tests (comparaison simple, sans classement linguistique : suffisant ici).
+function compareNames(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function toVideo({ updatedAt: _updatedAt, counters: _counters, ...video }: StoredVideo): Video {

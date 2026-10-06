@@ -1,3 +1,4 @@
+import type { Hashtag, HashtagVideoPosition } from './hashtags';
 import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from './video';
 
 export abstract class VideoRepository {
@@ -8,8 +9,9 @@ export abstract class VideoRepository {
   abstract markUploaded(id: string): Promise<Video | null>;
   abstract markFailed(id: string): Promise<void>;
   // Applique le résultat du transcodage, seulement si la vidéo est encore en `processing`.
-  // Renvoie false sinon (résultat en double, vidéo supprimée entre-temps).
-  abstract finishTranscoding(id: string, outcome: TranscodeOutcome): Promise<boolean>;
+  // Renvoie false sinon (résultat en double, vidéo supprimée entre-temps). Vidéo publiée : ses `hashtags` (noms
+  // normalisés, ADR-049) sont écrits dans la même transaction.
+  abstract finishTranscoding(id: string, outcome: TranscodeOutcome, hashtags: string[]): Promise<boolean>;
   // Vidéos restées en `uploading` depuis avant `createdBefore` (uploads abandonnés).
   abstract findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]>;
   // Vidéos en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu).
@@ -39,4 +41,15 @@ export abstract class VideoRepository {
   abstract countCreatedSince(since: Date): Promise<number>;
   // Nombre de vidéos (tous statuts) de chaque compte de `userIds` ; un compte sans vidéo est absent.
   abstract countByAuthors(userIds: string[]): Promise<Map<string, number>>;
+
+  // Hashtags (ADR-049), écrits par `finishTranscoding`.
+  abstract findHashtag(name: string): Promise<Hashtag | null>;
+  // Hashtags ayant au moins une vidéo et dont le nom commence par `prefix`, du plus utilisé au moins utilisé
+  // (puis par nom).
+  abstract searchHashtags(prefix: string, limit: number): Promise<Hashtag[]>;
+  // Hashtags ayant au moins une vidéo : vidéos publiées depuis `since`, puis nombre total, puis nom.
+  abstract findTrendingHashtags(since: Date, limit: number): Promise<Hashtag[]>;
+  // Vidéos publiées du hashtag, de la plus récente à la plus ancienne (date de publication, puis identifiant
+  // décroissant), strictement après `after` s'il est donné.
+  abstract listHashtagVideos(name: string, after: HashtagVideoPosition | null, limit: number): Promise<HashtagVideoPosition[]>;
 }

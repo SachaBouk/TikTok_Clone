@@ -15,6 +15,7 @@ import { VideosService } from '../../videos/application/videos.service';
 import { TranscodingQueue } from '../../videos/domain/transcoding-queue';
 import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
 import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory-video-cleanup-queue';
+import { InvalidHashtagError } from '../../videos/domain/video.errors';
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
 import { encodeCursor, InvalidFeedCursorError } from '../domain/feed-cursor';
@@ -423,6 +424,42 @@ describe('FeedService', () => {
 
     it('refuse un curseur qui n’a pas été produit par l’API', async () => {
       await expect(feed.listFollowing('alice', 'pas-un-curseur', 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    });
+  });
+
+  describe('page d’un hashtag (ADR-049)', () => {
+    // Vidéo publiée avec ses hashtags, comme après `finishTranscoding`.
+    let published = 0;
+    async function publishTagged(userId: string, ...names: string[]) {
+      const id = await publish(userId);
+      videoRepository.videos.get(id)!.hashtags = { names, taggedAt: new Date(Date.UTC(2026, 1, 1) + ++published * 1000) };
+      return id;
+    }
+
+    it('donne les vidéos du hashtag, de la plus récemment publiée à la plus ancienne, par pages, avec l’état des boutons', async () => {
+      const ids = [
+        await publishTagged('bob', 'chat'),
+        await publishTagged('dave', 'chien'),
+        await publishTagged('dave', 'chat', 'chien'),
+        await publishTagged('bob', 'chat'),
+      ];
+      await interactions.setReaction('alice', ids[3], 'like', true);
+      const first = await feed.listHashtagVideos('#Chat', undefined, 2, 'alice');
+      expect(first.items.map((i) => i.video.id)).toEqual([ids[3], ids[2]]);
+      expect(first.items[0].viewer).toMatchObject({ liked: true });
+      const second = await feed.listHashtagVideos('chat', first.nextCursor!, 2, null);
+      expect(second).toMatchObject({ items: [{ video: { id: ids[0] }, viewer: null }], nextCursor: null });
+    });
+
+    it('retire les vidéos des comptes suspendus et bloqués ; refuse un nom ou un curseur invalide', async () => {
+      await publishTagged('bob', 'chat');
+      const daves = await publishTagged('dave', 'chat');
+      await suspended.add('bob');
+      expect((await feed.listHashtagVideos('chat', undefined, 10, null)).items.map((i) => i.video.id)).toEqual([daves]);
+      await interactions.setBlock('dave', 'alice', true);
+      expect((await feed.listHashtagVideos('chat', undefined, 10, 'alice')).items).toEqual([]);
+      await expect(feed.listHashtagVideos('pas valide', undefined, 10, null)).rejects.toBeInstanceOf(InvalidHashtagError);
+      await expect(feed.listHashtagVideos('chat', 'pas-un-curseur', 10, null)).rejects.toBeInstanceOf(InvalidFeedCursorError);
     });
   });
 

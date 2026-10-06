@@ -7,6 +7,7 @@ import SwiftUI
 //   abonnement ou un désabonnement fait dans l'app (`VideoInteractionsModel.followsVersion`), ou quand l'un d'eux
 //   aboutit pendant qu'il est affiché. Il s'arrête à sa fin.
 // - En invité, il invite à se connecter.
+// - La loupe ouvre la recherche (ADR-049), dans la pile de l'accueil.
 struct HomeFeedView: View {
     enum Selection: Hashable {
         case following, forYou
@@ -39,6 +40,20 @@ struct HomeFeedView: View {
         }
         .background(.black)
         .overlay(alignment: .top) { FeedSelector(selection: $selection) }
+        // Recherche de comptes et hashtags (ADR-049).
+        .overlay(alignment: .topTrailing) {
+            NavigationLink(value: SearchRoute()) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 3)
+                    .frame(width: 44, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Rechercher")
+            .accessibilityIdentifier("feed.search")
+            .padding(.trailing, 8)
+        }
         .onChange(of: selection) { showFollowingIfSelected() }
         // Abonnement confirmé par l'API alors que le feed des abonnements est déjà affiché (toucher « Abonnements »
         // pendant l'envoi, désabonnement depuis un profil ouvert par-dessus).

@@ -10,7 +10,8 @@ extension VideoPageActions {
         comments: @escaping () -> Void,
         share: @escaping () -> Void,
         report: @escaping () -> Void = {},
-        alert: @escaping (String) -> Void
+        alert: @escaping (String) -> Void,
+        openHashtag: @escaping (String) -> Void = { _ in }
     ) {
         self.init(
             togglePause: togglePause,
@@ -20,7 +21,8 @@ extension VideoPageActions {
             share: share,
             follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } },
             report: report,
-            delete: { Task { if let message = await interactions.delete(video) { alert(message) } } }
+            delete: { Task { if let message = await interactions.delete(video) { alert(message) } } },
+            openHashtag: openHashtag
         )
     }
 }

@@ -12,6 +12,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
     private enum Key {
         static let analyticsConsent = "analyticsConsent"
         static let guestPromptDecided = "guestPromptDecided"
+        static let searchHistory = "searchHistory"
     }
 
     var analyticsConsent: Bool? {
@@ -28,5 +29,20 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
 
     func markGuestPromptDecided() {
         defaults.set(true, forKey: Key.guestPromptDecided)
+    }
+}
+
+// Historique des recherches (ADR-049) : sur l'appareil seulement.
+extension UserDefaultsPreferencesStore: SearchHistoryStore {
+    var searchHistory: [String] {
+        defaults.stringArray(forKey: Key.searchHistory) ?? []
+    }
+
+    func setSearchHistory(_ queries: [String]) {
+        if queries.isEmpty {
+            defaults.removeObject(forKey: Key.searchHistory)
+        } else {
+            defaults.set(queries, forKey: Key.searchHistory)
+        }
     }
 }

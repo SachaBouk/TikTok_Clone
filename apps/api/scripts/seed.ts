@@ -52,18 +52,18 @@ const ACCOUNTS = [
 ];
 
 const CAPTIONS = [
-  'Premier essai, soyez indulgents',
-  'Le coucher de soleil de ce soir',
-  'Recette express en 30 secondes',
-  'Quand le lundi matin arrive',
-  'Petit tour en ville',
-  'Mon setup de travail',
-  'Tentative de trend, avis ?',
-  'Ambiance du week-end',
-  'Tuto rapide pour débutants',
-  'Les coulisses du tournage',
-  'Défi du jour relevé',
-  'Moment détente',
+  'Premier essai, soyez indulgents #premièrevidéo',
+  'Le coucher de soleil de ce soir #sunset #été',
+  'Recette express en 30 secondes #recette #cuisine',
+  'Quand le lundi matin arrive #lundi #humour',
+  'Petit tour en ville #balade',
+  'Mon setup de travail #setup #tech',
+  'Tentative de trend, avis ? #trend #humour',
+  'Ambiance du week-end #weekend #été',
+  'Tuto rapide pour débutants #tuto #tech',
+  'Les coulisses du tournage #coulisses',
+  'Défi du jour relevé #défi #trend',
+  'Moment détente #détente',
 ];
 
 // Motifs générés par FFmpeg pour les vidéos de démo, en vertical comme sur TikTok.

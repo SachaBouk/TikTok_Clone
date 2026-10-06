@@ -50,6 +50,7 @@
 | [ADR-046](ADR-046-dimensions-photo-profil.md) | Dimensions de la photo de profil vérifiées par l'API (complète ADR-016) | Accepté |
 | [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Accepté |
 | [ADR-048](ADR-048-feed-abonnements.md) | Feed des abonnements (complète ADR-016) | Proposé |
+| [ADR-049](ADR-049-recherche-hashtags.md) | Recherche de comptes et hashtags (complète ADR-016 et ADR-003) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

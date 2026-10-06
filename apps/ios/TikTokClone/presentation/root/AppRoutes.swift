@@ -22,6 +22,28 @@ enum AccountRoute: Hashable {
     case wallet(PaywallSource)
 }
 
+// Recherche (ADR-049), ouverte par la loupe du feed.
+struct SearchRoute: Hashable {}
+
+// Page d'un hashtag (ADR-049) : nom sans « # ».
+struct HashtagRoute: Hashable, Identifiable {
+    var id: String { name }
+    let name: String
+}
+
+// Chemin de la pile qui affiche l'écran, pour pousser une route par valeur depuis du code : hashtag touché dans une
+// description, résultat de recherche (ADR-049). Un `NavigationLink(value:)` ne pousse rien dans un écran poussé par
+// `navigationDestination(item:)`, et ne se déclenche plus si on lui ajoute un geste (`simultaneousGesture`).
+extension EnvironmentValues {
+    @Entry var navigationPath: Binding<NavigationPath>? = nil
+}
+
+extension View {
+    func providesNavigationPath(_ path: Binding<NavigationPath>) -> some View {
+        environment(\.navigationPath, path)
+    }
+}
+
 // Lecteur vertical ouvert depuis une grille, sur la vidéo touchée.
 struct VideoPlayerRoute: Hashable {
     let id = UUID()
@@ -41,6 +63,12 @@ extension View {
             }
             .navigationDestination(for: FollowListRoute.self) { route in
                 FollowListView(viewModel: container.makeFollowListViewModel(route))
+            }
+            .navigationDestination(for: SearchRoute.self) { _ in
+                SearchView(viewModel: container.makeSearchViewModel())
+            }
+            .navigationDestination(for: HashtagRoute.self) { route in
+                HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
             }
             .navigationDestination(for: VideoPlayerRoute.self) { route in
                 VideoListPlayerView(route: route, container: container)

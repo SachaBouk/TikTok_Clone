@@ -90,6 +90,12 @@ export class UsersService {
     return this.users.search(needle, beforeId, limit);
   }
 
+  // Pour le module search (ADR-049) : recherche publique dans le pseudo et le nom, classée (voir le dépôt), hors
+  // `excludedIds` (comptes masqués, décidés par l'appelant : `users` ne connaît pas les blocages).
+  searchProfiles(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]> {
+    return this.users.searchPublic(query, [...new Set(excludedIds)], offset, limit);
+  }
+
   // Backoffice : nombre de comptes, créés depuis `createdSince` s'il est donné.
   countAccounts(createdSince: Date | null = null): Promise<number> {
     return this.users.count(createdSince);

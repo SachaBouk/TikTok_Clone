@@ -11,6 +11,9 @@ struct MainTabView: View {
     @State private var selection: Destination = .home
     // Écrans poussés au-dessus du feed (profils, lecteur d'une grille) : le feed se met en pause.
     @State private var feedPath = NavigationPath()
+    // Chemins des autres onglets : une page de hashtag y est poussée par valeur (ADR-049).
+    @State private var inboxPath = NavigationPath()
+    @State private var profilePath = NavigationPath()
     private var router: AppRouter { container.router }
 
     var body: some View {
@@ -28,6 +31,7 @@ struct MainTabView: View {
                     .toolbar(.hidden, for: .navigationBar)
                     .appDestinations(container)
                 }
+                .providesNavigationPath($feedPath)
                 .environment(\.isTabActive, selection == .home && router.presentedVideo == nil)
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
@@ -39,10 +43,11 @@ struct MainTabView: View {
             .badge(container.publishing.inProgressCount)
             Tab("Boîte de réception", systemImage: "tray", value: .inbox) {
                 SignedInOnly(title: "Boîte de réception", systemImage: "tray", reason: "Connecte-toi pour voir ton activité et tes messages.") {
-                    NavigationStack {
+                    NavigationStack(path: $inboxPath) {
                         InboxView(container: container)
                             .appDestinations(container)
                     }
+                    .providesNavigationPath($inboxPath)
                     .environment(\.isTabActive, selection == .inbox && router.presentedVideo == nil)
                 }
             }
@@ -53,10 +58,11 @@ struct MainTabView: View {
                     title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.",
                     showsPrivacy: true
                 ) {
-                    NavigationStack {
+                    NavigationStack(path: $profilePath) {
                         ProfileView(viewModel: container.makeProfileViewModel(username: nil), container: container)
                             .appDestinations(container)
                     }
+                    .providesNavigationPath($profilePath)
                     .environment(\.isTabActive, selection == .profile && router.presentedVideo == nil)
                 }
             }

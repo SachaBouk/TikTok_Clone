@@ -143,6 +143,14 @@ struct RemoteVideoListRepository: VideoListRepository {
             case .unauthorized: throw AppError.sessionExpired
             case .undocumented: throw AppError.unexpected
             }
+        case .hashtag(let name):
+            switch try await mappingErrors({
+                try await client.listHashtagVideos(path: .init(name: name), query: .init(cursor: cursor, limit: Self.pageSize))
+            }) {
+            case .ok(let ok): dto = try ok.body.json
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            case .undocumented: throw AppError.unexpected
+            }
         }
         return FeedPage(videos: dto.items.compactMap(FeedVideo.init), nextCursor: dto.nextCursor)
     }

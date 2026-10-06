@@ -22,6 +22,8 @@ final class AppContainer {
     let analytics: AnalyticsModel
     // Portefeuille de jetons et achats (ADR-009).
     let wallet: WalletModel
+    // Historique des recherches (ADR-049), sur l'appareil.
+    let searchHistory: SearchHistoryModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -34,6 +36,10 @@ final class AppContainer {
     private let activityRepository: any ActivityRepository
     private let messagingRepository: any MessagingRepository
     private let walletRepository: any WalletRepository
+    private let search: any SearchRepository
+    // Compte connecté ou non au dernier changement d'activité : l'historique des recherches est effacé à chaque
+    // changement de session.
+    private var lastSignedIn: Bool?
 
     init(configuration: AppConfiguration, tokenStore: any TokenStore = KeychainTokenStore()) {
         // Le rafraîchissement passe par un client sans AuthMiddleware, sinon il se rappellerait lui-même.
@@ -54,6 +60,8 @@ final class AppContainer {
         relationships = RemoteRelationshipRepository(client: client)
         reports = RemoteReportRepository(client: client)
         videoLists = RemoteVideoListRepository(client: client)
+        search = RemoteSearchRepository(client: client)
+        searchHistory = SearchHistoryModel(store: UserDefaultsPreferencesStore())
         let videos = RemoteVideoPublishingRepository(client: client)
         let uploads = FileUploadStore()
         self.uploads = uploads
@@ -137,6 +145,9 @@ final class AppContainer {
 
     // Connexion, déconnexion, passage au premier plan ou en arrière-plan.
     func activityChanged(signedIn: Bool, active: Bool) {
+        // Connexion, déconnexion ou suppression du compte (pas au lancement) : historique des recherches effacé.
+        if let lastSignedIn, lastSignedIn != signedIn { searchHistory.clear() }
+        lastSignedIn = signedIn
         realtime.update(signedIn: signedIn, active: active)
         Task { await publishing.update(signedIn: signedIn, active: active) }
         if !signedIn {
@@ -210,7 +221,9 @@ final class AppContainer {
     }
 
     func makePublishDraftViewModel() -> PublishDraftViewModel {
-        PublishDraftViewModel(publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()))
+        PublishDraftViewModel(
+            publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()),
+            searchHashtags: SearchHashtagsUseCase(search: search))
     }
 
     func makeLoginViewModel() -> LoginViewModel {
@@ -230,6 +243,31 @@ final class AppContainer {
             analytics: analytics
         )
     }
+
+    // Recherche de comptes et hashtags (ADR-049).
+    func makeSearchViewModel() -> SearchViewModel {
+        SearchViewModel(
+            searchAccounts: SearchAccountsUseCase(search: search),
+            searchHashtags: SearchHashtagsUseCase(search: search),
+            loadTrending: LoadTrendingHashtagsUseCase(search: search),
+            history: searchHistory,
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    func makeHashtagViewModel(name: String) -> HashtagViewModel {
+        HashtagViewModel(
+            name: name,
+            loadHashtag: LoadHashtagUseCase(search: search),
+            loadVideos: LoadVideoListUseCase(videos: videoLists, list: .hashtag(name: name)),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    // Suggestions de hashtags de la publication (ADR-049).
+    var searchHashtags: SearchHashtagsUseCase { SearchHashtagsUseCase(search: search) }
 
     // Feed des abonnements (ADR-048) : du plus récent au plus ancien, il s'arrête à sa fin.
     func makeFollowingFeedViewModel() -> FeedViewModel {

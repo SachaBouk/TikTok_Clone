@@ -56,6 +56,17 @@ export class InMemoryUserRepository extends UserRepository {
       .slice(0, limit);
   }
 
+  async searchPublic(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]> {
+    const needle = query.toLowerCase();
+    const excluded = new Set(excludedIds);
+    const rank = (user: User) => (user.username === needle ? 2 : user.username.startsWith(needle) ? 1 : 0);
+    return [...this.users.values()]
+      .filter((user) => !excluded.has(user.id))
+      .filter((user) => user.username.toLowerCase().includes(needle) || user.displayName.toLowerCase().includes(needle))
+      .sort((a, b) => rank(b) - rank(a) || b.followersCount - a.followersCount || (a.id < b.id ? 1 : -1))
+      .slice(offset, offset + limit);
+  }
+
   async count(createdSince: Date | null): Promise<number> {
     return [...this.users.values()].filter((user) => !createdSince || user.createdAt >= createdSince).length;
   }

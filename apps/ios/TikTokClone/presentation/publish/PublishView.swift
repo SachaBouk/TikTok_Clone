@@ -105,6 +105,7 @@ struct PublishView: View {
                         .lineLimit(4...8)
                         .focused($isEditingDescription)
                         .accessibilityIdentifier("publish.description")
+                    hashtagSuggestions
                     Text(draft.remainingCharacters, format: .number)
                         .font(.caption)
                         .foregroundStyle(draft.remainingCharacters < 0 ? .red : .secondary)
@@ -124,6 +125,29 @@ struct PublishView: View {
             .accessibilityIdentifier("publish.submit")
             picker(title: "Changer de vidéo")
             Button("Annuler", role: .destructive) { draft.discard() }
+        }
+    }
+
+    // Suggestions en écrivant « # » (ADR-049) : toucher complète le hashtag en cours de saisie.
+    @ViewBuilder
+    private var hashtagSuggestions: some View {
+        if !draft.hashtagSuggestions.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(draft.hashtagSuggestions) { hashtag in
+                        Button {
+                            draft.applySuggestion(hashtag)
+                        } label: {
+                            Text("\(hashtag.title) · \(hashtag.videosCount.formatted(.number.notation(.compactName)))")
+                                .font(.subheadline)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("\(hashtag.title), \(hashtag.videosLabel)")
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .accessibilityIdentifier("publish.hashtagSuggestions")
         }
     }
 

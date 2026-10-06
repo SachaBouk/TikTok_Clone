@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { ABANDONED_UPLOAD_AFTER_MS, MAINTENANCE_BATCH_SIZE, STUCK_TRANSCODE_AFTER_MS } from '../domain/maintenance-rules';
 import { CLEANUP_DELAY_MS, type VideoCleanupQueue, type VideoFilesCleanup } from '../domain/cleanup-queue';
+import {
+  extractHashtags,
+  type Hashtag,
+  type HashtagVideoPosition,
+  normalizeHashtagName,
+  normalizeHashtagPrefix,
+  TRENDING_HASHTAGS,
+  TRENDING_WINDOW_MS,
+} from '../domain/hashtags';
 import type { TranscodingQueue } from '../domain/transcoding-queue';
 import type { VideoEventPublisher } from '../domain/video-events';
 import {
@@ -23,6 +32,7 @@ import {
   type VideoStatus,
 } from '../domain/video';
 import {
+  InvalidHashtagError,
   TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
@@ -141,8 +151,11 @@ export class VideosService {
   // ou pour une vidéo qui n'est plus en `processing`, est ignoré. Renvoie true s'il a été appliqué.
   // L'auteur est prévenu par WebSocket (ADR-008, ADR-011), une seule fois : pas pour un résultat ignoré.
   // Vidéo supprimée pendant son transcodage : le worker a pu publier des fichiers depuis, on les nettoie.
+  // Vidéo publiée : ses hashtags sont extraits de sa description (ADR-049).
   async applyTranscodeResult(videoId: string, outcome: TranscodeOutcome): Promise<boolean> {
-    if (!(await this.videos.finishTranscoding(videoId, outcome))) {
+    const current = await this.videos.findById(videoId);
+    const hashtags = outcome.status === 'ready' ? extractHashtags(current?.description ?? null) : [];
+    if (!current || !(await this.videos.finishTranscoding(videoId, outcome, hashtags))) {
       if (!(await this.videos.findById(videoId))) await this.cleanup.schedule([{ videoId, rawKey: null, uploadId: null }], 0);
       return false;
     }
@@ -265,6 +278,29 @@ export class VideosService {
     return this.videos.countByAuthors([...new Set(userIds)]);
   }
 
+  // Hashtags (ADR-049). Pour le module search : hashtags qui commencent par `prefix` (« # » initial ignoré), ayant au
+  // moins une vidéo, du plus utilisé au moins utilisé. Début de nom invalide : aucun.
+  searchHashtags(prefix: string, limit: number): Promise<Hashtag[]> {
+    const normalized = normalizeHashtagPrefix(prefix);
+    return normalized ? this.videos.searchHashtags(normalized, limit) : Promise.resolve([]);
+  }
+
+  // Hashtags tendance : vidéos publiées ces 7 derniers jours, puis nombre total de vidéos.
+  trendingHashtags(): Promise<Hashtag[]> {
+    return this.videos.findTrendingHashtags(new Date(this.now().getTime() - TRENDING_WINDOW_MS), TRENDING_HASHTAGS);
+  }
+
+  // Un hashtag et son nombre de vidéos ; un nom valide inconnu en a 0. Lève InvalidHashtagError.
+  async getHashtag(name: string): Promise<Hashtag> {
+    const normalized = this.hashtagName(name);
+    return (await this.videos.findHashtag(normalized)) ?? { name: normalized, videosCount: 0 };
+  }
+
+  // Pour le module feed : vidéos publiées d'un hashtag, de la plus récente à la plus ancienne. Lève InvalidHashtagError.
+  async listHashtagVideos(name: string, after: HashtagVideoPosition | null, limit: number): Promise<HashtagVideoPosition[]> {
+    return this.videos.listHashtagVideos(this.hashtagName(name), after, limit);
+  }
+
   // Un autre module agit juste avant la suppression en base d'une vidéo, par son auteur ou un administrateur (ex.
   // notifications : retirer et annoncer les siennes, ADR-043). Le module videos ne dépend ainsi pas de lui. Un échec de
   // l'écouteur fait échouer la suppression.
@@ -277,6 +313,12 @@ export class VideosService {
     const video = await this.videos.findById(videoId);
     if (!video || (video.status !== 'ready' && video.userId !== viewerId)) throw new VideoNotFoundError(videoId);
     return video;
+  }
+
+  private hashtagName(name: string): string {
+    const normalized = normalizeHashtagName(name);
+    if (!normalized) throw new InvalidHashtagError(name);
+    return normalized;
   }
 
   // Suppression réelle : nettoyage des fichiers programmé d'abord (sans effet tant que la vidéo existe),

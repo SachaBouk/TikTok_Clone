@@ -20,18 +20,27 @@ final class PublishDraftViewModel {
         case failed(String)
     }
 
-    var description = ""
+    var description = "" {
+        didSet { if description != oldValue { suggestHashtags() } }
+    }
     private(set) var state: State = .empty
+    // Hashtags existants qui commencent comme celui tapé à la fin de la description (ADR-049).
+    private(set) var hashtagSuggestions: [Hashtag] = []
     var errorMessage: String?
 
     private let publishing: PublishingModel
     private let prepareVideo: PrepareVideoUseCase
     private let makePreview: @Sendable (URL) async -> UIImage?
     private let loadDuration: @Sendable (URL) async -> Duration?
+    private let searchHashtags: SearchHashtagsUseCase?
+    private let suggestionDelay: Duration
+    private var suggestionTask: Task<Void, Never>?
 
     init(
         publishing: PublishingModel,
         prepareVideo: PrepareVideoUseCase,
+        searchHashtags: SearchHashtagsUseCase? = nil,
+        suggestionDelay: Duration = .milliseconds(250),
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
         loadDuration: @escaping @Sendable (URL) async -> Duration? = { await VideoPreview.duration(of: $0) }
     ) {
@@ -39,6 +48,39 @@ final class PublishDraftViewModel {
         self.prepareVideo = prepareVideo
         self.makePreview = makePreview
         self.loadDuration = loadDuration
+        self.searchHashtags = searchHashtags
+        self.suggestionDelay = suggestionDelay
+    }
+
+    static let maxHashtagSuggestions = 8
+
+    // Suggestion touchée : elle complète le hashtag en cours de saisie.
+    func applySuggestion(_ hashtag: Hashtag) {
+        description = HashtagRules.completing(description, with: hashtag.name)
+        hashtagSuggestions = []
+    }
+
+    // Attendu par les tests.
+    func waitForSuggestions() async {
+        await suggestionTask?.value
+    }
+
+    // Seulement pour le hashtag tapé à la fin du texte (la position du curseur n'est pas suivie), après un court délai
+    // sans frappe. Un échec ne montre rien.
+    private func suggestHashtags() {
+        suggestionTask?.cancel()
+        guard let searchHashtags, let prefix = HashtagRules.typedPrefix(in: description) else {
+            hashtagSuggestions = []
+            return
+        }
+        suggestionTask = Task { [suggestionDelay] in
+            try? await Task.sleep(for: suggestionDelay)
+            guard !Task.isCancelled else { return }
+            let found = (try? await searchHashtags(prefix: prefix, limit: Self.maxHashtagSuggestions)) ?? []
+            guard !Task.isCancelled else { return }
+            // Le hashtag déjà tapé en entier n'est pas proposé seul.
+            hashtagSuggestions = found.count == 1 && found[0].name == prefix ? [] : found
+        }
     }
 
     var remainingCharacters: Int {

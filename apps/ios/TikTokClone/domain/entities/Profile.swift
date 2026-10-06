@@ -82,6 +82,8 @@ enum VideoList: Hashable, Sendable {
     case myFavorites
     case myLikes
     case myHistory
+    // Page d'un hashtag (ADR-049), sans « # ».
+    case hashtag(name: String)
 
     init(_ grid: ProfileGrid, username: String) {
         switch grid {

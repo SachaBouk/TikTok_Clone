@@ -16,6 +16,10 @@ struct FeedView: View {
     @State private var shareVideo: FeedVideo?
     @State private var reportedVideo: FeedVideo?
     @State private var alertMessage: String?
+    // Page d'un hashtag touché dans une description (ADR-049) : poussée par valeur dans la pile (`navigationPath`) ; à
+    // défaut, par `navigationDestination(item:)`.
+    @State private var hashtagRoute: HashtagRoute?
+    @Environment(\.navigationPath) private var navigationPath
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
     @Environment(SessionStore.self) private var session
@@ -57,7 +61,11 @@ struct FeedView: View {
         .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
         .videoInteractionSheets(
             comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
-            container: container)
+            container: container
+        )
+        .navigationDestination(item: $hashtagRoute) { route in
+            HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
+        }
     }
 
     private func reload() async {
@@ -117,7 +125,14 @@ struct FeedView: View {
                             comments: { commentsVideo = interactions.display(entry.video) },
                             share: { shareVideo = interactions.display(entry.video) },
                             report: { report(entry.video) },
-                            alert: { alertMessage = $0 }
+                            alert: { alertMessage = $0 },
+                            openHashtag: { name in
+                                if let navigationPath {
+                                    navigationPath.wrappedValue.append(HashtagRoute(name: name))
+                                } else {
+                                    hashtagRoute = HashtagRoute(name: name)
+                                }
+                            }
                         )
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
@@ -195,6 +210,8 @@ struct VideoPageActions {
     // Menu « … » : celle d'un autre, « Signaler » (ADR-038) ; sa propre vidéo, « Supprimer », confirmé dans la colonne.
     var report: () -> Void
     var delete: () -> Void
+    // Hashtag touché dans la description (ADR-049) : sa page.
+    var openHashtag: (String) -> Void = { _ in }
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
@@ -265,8 +282,12 @@ struct FeedPageView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("video.author")
                         if let description = video.description, !description.isEmpty {
-                            Text(description).font(.subheadline).lineLimit(3)
-                                .allowsHitTesting(false)
+                            // Hashtags cliquables (ADR-049) ; sans hashtag, le texte laisse passer les touchers.
+                            HashtagText(text: description, onHashtag: actions.openHashtag)
+                                .font(.subheadline).lineLimit(3)
+                                .tint(.white)
+                                .allowsHitTesting(!HashtagRules.occurrences(in: description).isEmpty)
+                                .accessibilityIdentifier("video.description")
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

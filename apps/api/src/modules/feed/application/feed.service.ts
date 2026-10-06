@@ -33,6 +33,7 @@ export interface FeedPage {
 
 // Feed principal (ADR-016) : toutes les vidéos publiées, dans un ordre aléatoire propre à chaque session.
 // Feed des abonnements (ADR-048) : vidéos des comptes suivis, de la plus récente à la plus ancienne.
+// Page d'un hashtag (ADR-049) : ses vidéos, de la plus récemment publiée à la plus ancienne.
 // Le module sert aussi les grilles du profil (vidéos, republications, favoris d'un compte), avec le même
 // élément que le feed : l'app les ouvre dans le même lecteur.
 // - Nouvelle session (sans curseur) : photo courante du catalogue (cache Redis, ADR-014) + graine aléatoire.
@@ -121,6 +122,27 @@ export class FeedService {
     return {
       items: await this.toItems(page, viewerId, new Set()),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
+    };
+  }
+
+  // Page d'un hashtag (ADR-049) : ses vidéos publiées, de la plus récente à la plus ancienne (date de publication).
+  // Publique. Vidéos des comptes masqués retirées (page plus courte, curseur inchangé). Lève InvalidHashtagError
+  // (module videos) pour un nom invalide, InvalidFeedCursorError pour un curseur invalide.
+  async listHashtagVideos(name: string, cursor: string | undefined, limit: number, viewerId: string | null): Promise<FeedPage> {
+    const after = cursor ? decodeListCursor(cursor) : null;
+    const [rows, hidden] = await Promise.all([
+      this.videos.listHashtagVideos(name, after && { videoId: after.videoId, taggedAt: after.at }, limit + 1),
+      this.hiddenAccounts(viewerId),
+    ]);
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: await this.loadItems(
+        page.map((row) => row.videoId),
+        viewerId,
+        hidden,
+      ),
+      nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.taggedAt, videoId: last.videoId }) : null,
     };
   }
 

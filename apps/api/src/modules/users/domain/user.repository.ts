@@ -15,6 +15,10 @@ export abstract class UserRepository {
   // ou dont l'identifiant vaut `query` ; tous si `query` est nul. Du plus récent au plus ancien (identifiants
   // UUID v7, ordonnés dans le temps), strictement avant `beforeId` s'il est donné.
   abstract search(query: string | null, beforeId: string | null, limit: number): Promise<User[]>;
+  // Recherche publique (ADR-049) : comptes dont le pseudo ou le nom contient `query` (sans tenir compte de la casse),
+  // hors `excludedIds`. Classement : pseudo identique, pseudo qui commence par `query`, puis abonnés décroissants,
+  // puis identifiant décroissant. `offset` premiers résultats sautés.
+  abstract searchPublic(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]>;
   // Nombre de comptes, créés depuis `createdSince` s'il est donné.
   abstract count(createdSince: Date | null): Promise<number>;
 }

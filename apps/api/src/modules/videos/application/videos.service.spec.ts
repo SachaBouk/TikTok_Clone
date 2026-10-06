@@ -4,6 +4,7 @@ import { CLEANUP_DELAY_MS } from '../domain/cleanup-queue';
 import { TranscodingQueue, type TranscodingJob } from '../domain/transcoding-queue';
 import { MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
 import {
+  InvalidHashtagError,
   TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
@@ -241,6 +242,84 @@ describe('VideosService', () => {
       await expect(service.applyTranscodeResult(video.id, { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b' })).resolves.toBe(false);
       expect(cleanup.scheduled).toEqual([{ cleanup: { videoId: video.id, rawKey: null, uploadId: null }, delayMs: 0 }]);
       expect(events.processed).toHaveLength(0);
+    });
+  });
+
+  describe('hashtags (ADR-049)', () => {
+    // Vidéo envoyée avec `description`, puis transcodée avec `outcome`.
+    async function transcoded(description: string, outcome: 'ready' | 'failed' = 'ready', userId = ALICE) {
+      const { video } = await service.createUpload(userId, { contentType: 'video/mp4', fileSize: 1000, description });
+      await service.completeUpload(userId, video.id, uploadAllParts(video.uploadId!, 1000, 1));
+      await service.applyTranscodeResult(video.id, outcome === 'ready' ? { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b' } : { status: 'failed' });
+      return video.id;
+    }
+
+    it('extrait les hashtags d’une vidéo publiée, pas d’une vidéo en échec ni en traitement', async () => {
+      await transcoded('Coucher de soleil #Été #plage');
+      await transcoded('#été encore');
+      await transcoded('#raté', 'failed');
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, description: '#attente' });
+      await service.completeUpload(ALICE, video.id, uploadAllParts(video.uploadId!, 1000, 1));
+
+      await expect(service.getHashtag('#ÉTÉ')).resolves.toEqual({ name: 'été', videosCount: 2 });
+      await expect(service.getHashtag('plage')).resolves.toEqual({ name: 'plage', videosCount: 1 });
+      await expect(service.getHashtag('raté')).resolves.toEqual({ name: 'raté', videosCount: 0 });
+      await expect(service.getHashtag('attente')).resolves.toEqual({ name: 'attente', videosCount: 0 });
+      await expect(service.getHashtag('pas valide')).rejects.toBeInstanceOf(InvalidHashtagError);
+    });
+
+    it('cherche par début de nom, du plus utilisé au moins utilisé ; une vidéo supprimée ne compte plus', async () => {
+      await transcoded('#plage #plongée');
+      const removed = await transcoded('#plongée #pl_');
+      await transcoded('#plongée');
+      await transcoded('#pluie');
+
+      await expect(service.searchHashtags('#PL', 10)).resolves.toEqual([
+        { name: 'plongée', videosCount: 3 },
+        { name: 'pl_', videosCount: 1 },
+        { name: 'plage', videosCount: 1 },
+        { name: 'pluie', videosCount: 1 },
+      ]);
+      await expect(service.searchHashtags('pl', 2)).resolves.toHaveLength(2);
+      await expect(service.searchHashtags('#', 10)).resolves.toEqual([]);
+      await expect(service.searchHashtags('a b', 10)).resolves.toEqual([]);
+
+      await service.deleteVideo(ALICE, removed);
+      await expect(service.searchHashtags('pl', 10)).resolves.toEqual([
+        { name: 'plongée', videosCount: 2 },
+        { name: 'plage', videosCount: 1 },
+        { name: 'pluie', videosCount: 1 },
+      ]);
+    });
+
+    it('liste les vidéos d’un hashtag de la plus récemment publiée à la plus ancienne, par pages', async () => {
+      // Dates de publication strictement croissantes (les identifiants en mémoire ne sont pas ordonnés).
+      let tick = 0;
+      videos = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
+      service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter());
+      const ids = [await transcoded('#chat'), await transcoded('#chien'), await transcoded('#chat'), await transcoded('#Chat')];
+      const first = await service.listHashtagVideos('#chat', null, 2);
+      expect(first.map((p) => p.videoId)).toEqual([ids[3], ids[2]]);
+      const rest = await service.listHashtagVideos('chat', first[1], 2);
+      expect(rest.map((p) => p.videoId)).toEqual([ids[0]]);
+      await expect(service.listHashtagVideos('a b', null, 2)).rejects.toBeInstanceOf(InvalidHashtagError);
+    });
+
+    it('tendances : vidéos publiées ces 7 derniers jours, puis nombre total', async () => {
+      let clock = new Date('2026-01-01T00:00:00Z');
+      videos = new InMemoryVideoRepository(() => clock);
+      service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(), () => clock);
+      await transcoded('#ancien #ancien2');
+      await transcoded('#ancien');
+      await transcoded('#ancien2');
+      clock = new Date('2026-01-20T00:00:00Z');
+      await transcoded('#nouveau');
+
+      await expect(service.trendingHashtags()).resolves.toEqual([
+        { name: 'nouveau', videosCount: 1 },
+        { name: 'ancien', videosCount: 2 },
+        { name: 'ancien2', videosCount: 2 },
+      ]);
     });
   });
 
