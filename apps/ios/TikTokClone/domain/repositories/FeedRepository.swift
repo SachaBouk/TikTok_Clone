@@ -2,6 +2,9 @@
 protocol FeedRepository: Sendable {
     // Sans curseur : nouvelle session, nouvel ordre.
     func page(cursor: String?) async throws -> FeedPage
+    // Feed des abonnements (ADR-048), compte connecté : du plus récent au plus ancien, `nextCursor` nil à la fin.
+    // Lève AppError.sessionExpired si la session n'est plus valide.
+    func followingPage(cursor: String?) async throws -> FeedPage
     // Une vidéo publiée seule (lien d'app, notification…). Lève AppError.notFound si elle n'est plus publiée.
     func video(id: String) async throws -> FeedVideo
 }

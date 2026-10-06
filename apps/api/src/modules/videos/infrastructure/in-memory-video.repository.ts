@@ -90,9 +90,10 @@ export class InMemoryVideoRepository extends VideoRepository {
     });
   }
 
-  async findPublishedByAuthor(userId: string, after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+  async findPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+    const authors = new Set(userIds);
     return [...this.videos.values()]
-      .filter((v) => v.userId === userId)
+      .filter((v) => authors.has(v.userId))
       .sort(newestFirst)
       .filter((v) => !after || newestFirst(after, v) < 0)
       .flatMap((v) => toPublished(v) ?? [])

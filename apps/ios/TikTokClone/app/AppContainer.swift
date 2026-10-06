@@ -231,6 +231,18 @@ final class AppContainer {
         )
     }
 
+    // Feed des abonnements (ADR-048) : du plus récent au plus ancien, il s'arrête à sa fin.
+    func makeFollowingFeedViewModel() -> FeedViewModel {
+        FeedViewModel(
+            loadPage: LoadFollowingFeedPageUseCase(feed: feed),
+            recordView: RecordViewUseCase(history: viewHistory),
+            playback: playerPool,
+            session: session,
+            analytics: analytics,
+            mode: .followingFeed
+        )
+    }
+
     // Signalement d'une vidéo, d'un commentaire ou d'un compte (ADR-038).
     func makeReportViewModel(target: ReportTarget) -> ReportViewModel {
         ReportViewModel(target: target, sendReport: SendReportUseCase(reports: reports), session: session, analytics: analytics)

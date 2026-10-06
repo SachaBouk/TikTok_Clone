@@ -3,15 +3,18 @@ import Synchronization
 
 @testable import TikTokClone
 
-// Feed en mémoire : renvoie les pages prévues, dans l'ordre, et garde les curseurs demandés.
+// Feed en mémoire : renvoie les pages prévues, dans l'ordre (feed principal et feed des abonnements confondus),
+// et garde les curseurs demandés et le feed lu.
 final class FakeFeedRepository: FeedRepository {
-    private let state: Mutex<(pages: [Result<FeedPage, AppError>], cursors: [String?])>
+    private let state: Mutex<(pages: [Result<FeedPage, AppError>], cursors: [String?], feeds: [String])>
 
     init(_ pages: [Result<FeedPage, AppError>]) {
-        state = Mutex((pages, []))
+        state = Mutex((pages, [], []))
     }
 
     var requestedCursors: [String?] { state.withLock { $0.cursors } }
+    // « feed » ou « following », dans l'ordre des requêtes.
+    var requestedFeeds: [String] { state.withLock { $0.feeds } }
     // Vidéos seules disponibles (`video(id:)`).
     nonisolated(unsafe) var videos: [String: FeedVideo] = [:]
 
@@ -21,8 +24,17 @@ final class FakeFeedRepository: FeedRepository {
     }
 
     func page(cursor: String?) async throws -> FeedPage {
+        try next(cursor: cursor, feed: "feed")
+    }
+
+    func followingPage(cursor: String?) async throws -> FeedPage {
+        try next(cursor: cursor, feed: "following")
+    }
+
+    private func next(cursor: String?, feed: String) throws -> FeedPage {
         try state.withLock { state in
             state.cursors.append(cursor)
+            state.feeds.append(feed)
             guard !state.pages.isEmpty else { return FeedPage(videos: [], nextCursor: nil) }
             return try state.pages.removeFirst().get()
         }

@@ -36,6 +36,9 @@ final class VideoInteractionsModel {
     // Comptes bloqués depuis le chargement des écrans : ceux-ci retirent leurs vidéos, commentaires et lignes,
     // que l'API ne renvoie plus (blocage dans les deux sens). Débloquer retire le compte de l'ensemble.
     private(set) var blockedUserIDs: Set<String> = []
+    // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
+    // (ADR-048) se recharge quand on y revient.
+    private(set) var followsVersion = 0
 
     private let setReaction: SetReactionUseCase
     private let setFollow: SetFollowUseCase
@@ -128,6 +131,7 @@ final class VideoInteractionsModel {
         do {
             let state = try await setFollow(username: user.username, active: active)
             followOverrides[user.id] = state.active
+            if state.active != wasFollowing { followsVersion += 1 }
             analytics.track(.followChanged(userID: user.id, active: state.active))
             return .done(followers: state.count)
         } catch {
@@ -140,6 +144,7 @@ final class VideoInteractionsModel {
     func blocked(_ userID: String) {
         followOverrides[userID] = false
         blockedUserIDs.insert(userID)
+        followsVersion += 1
     }
 
     // Compte débloqué (profil ou réglages) : ses contenus reviendront au prochain chargement.

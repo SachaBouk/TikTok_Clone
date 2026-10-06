@@ -37,6 +37,8 @@ export abstract class InteractionRepository {
   // Abonnés (`followers`) ou abonnements (`following`) de `userId`, du follow le plus récent au plus ancien
   // (à date égale, par identifiant décroissant), strictement après `after` s'il est donné.
   abstract listFollows(direction: FollowDirection, userId: string, after: FollowPosition | null, limit: number): Promise<FollowPosition[]>;
+  // Tous les comptes que `userId` suit, dans un ordre quelconque (feed des abonnements).
+  abstract listFollowingIds(userId: string): Promise<string[]>;
   // Parmi `otherIds`, ceux que `userId` suit et ceux qui le suivent.
   abstract findFollowRelations(userId: string, otherIds: string[]): Promise<FollowRelations>;
 

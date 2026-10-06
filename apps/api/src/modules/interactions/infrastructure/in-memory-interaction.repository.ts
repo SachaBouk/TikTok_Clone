@@ -118,6 +118,13 @@ export class InMemoryInteractionRepository extends InteractionRepository {
       .slice(0, limit);
   }
 
+  async listFollowingIds(userId: string): Promise<string[]> {
+    return [...this.follows.keys()].flatMap((key) => {
+      const [followerId, followingId] = key.split(':') as [string, string];
+      return followerId === userId ? [followingId] : [];
+    });
+  }
+
   async findFollowRelations(userId: string, otherIds: string[]): Promise<FollowRelations> {
     return {
       following: new Set(otherIds.filter((id) => this.follows.has(`${userId}:${id}`))),

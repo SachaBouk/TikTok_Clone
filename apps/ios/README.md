@@ -93,6 +93,8 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Vue envoyée (`recordView`) après 1 s de lecture continue, une fois par vidéo et par session, pour un compte connecté seulement.
 - Fin de session du feed : l'app repart sans curseur, sur un nouvel ordre ; le feed est sans fin.
 - Connexion ou déconnexion : le feed est rechargé (l'état des boutons change).
+- **« Abonnements | Pour toi »** (ADR-048, `HomeFeedView`) : sélecteur en haut de l'accueil, ouverture toujours sur « Pour toi ». Les deux feeds restent en place (chacun garde sa position). Le feed des abonnements (`getFollowingFeed`, compte connecté, `.unauthorized` sinon) va de la plus récente à la plus ancienne vidéo des comptes suivis et **s'arrête à la fin** (`nextCursor` nil). Chargé à sa première ouverture, rechargé en tirant pour actualiser et après un abonnement ou un désabonnement fait dans l'app (`VideoInteractionsModel.followsVersion`). Invité : invitation à se connecter. Vide : « Tu ne suis personne pour l'instant » ou « Aucune vidéo de tes abonnements », bouton « Découvrir « Pour toi » ». Mesure d'audience : source `following`.
+- Deux lecteurs verticaux partagent le pool : un feed devient actif **après** la mise en pause de l'autre (`FeedView.updateActivity`, tâche différée), l'ordre des `onChange` de deux vues sœurs n'étant pas garanti.
 - En simulateur, les vidéos viennent de MinIO en HTTP (`localhost:9000`) : ATS l'autorise par `NSAllowsLocalNetworking`.
 
 ## Interactions
@@ -258,6 +260,7 @@ case .data: break
 - Sur son propre profil, `listMyPendingVideos` donne en tête de grille les vidéos `.processing` (« en cours de publication ») et `.failed` ; l'événement `videoProcessed` les fait passer dans `listAccountVideos`.
 - Supprimer une de ses vidéos : `deleteVideo` (`.noContent`), quel que soit son statut, y compris pendant l'envoi. Retirer la vidéo de la grille et du lecteur ; les autres la voient disparaître du feed, et un message qui la partageait la montre indisponible.
 - Vues : connecté, `recordView` après ~1 s de lecture de chaque vidéo (feed, grilles, message partagé) ; ne pas l'appeler en mode invité (`.unauthorized`). `viewsCount` compte les comptes distincts.
+- Feed des abonnements (ADR-048) : `getFollowingFeed(query: .init(cursor:limit:))`, même élément que le feed, du plus récent au plus ancien ; `nextCursor` nil = fin ; `.unauthorized` en invité.
 - Ouvrir une vidéo seule dans le lecteur (notification, historique des commentaires, message partagé, lien) : `getFeedItem`, même élément que le feed ; `.notFound` si elle a été supprimée.
 - Historique des commentaires (centre d'activités) : `listMyComments`, chaque élément avec la vidéo commentée (miniature, auteur) ; supprimer avec `deleteComment`.
 - Historique de visionnage : `listMyHistory` (grille privée, même lecteur), `removeFromHistory` et `clearHistory`.

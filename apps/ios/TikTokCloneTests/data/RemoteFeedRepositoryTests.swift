@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import TikTokAPI
 
@@ -32,6 +33,26 @@ struct RemoteFeedRepositoryTests {
         #expect(page.videos[0].author.username == "bob")
         #expect(page.videos[0].hlsURL.absoluteString.hasSuffix("/v1/master.m3u8"))
         #expect(log.operations == ["getFeed"])
+    }
+
+    @Test("feed des abonnements (ADR-048) : page, curseur transmis ; 401 → session expirée")
+    func following() async throws {
+        let log = RequestLog()
+        let path = Mutex<String?>(nil)
+        let client = makeClient(
+            transport: MockTransport { request, operationID in
+                log.record(request, operationID)
+                path.withLock { $0 = request.path }
+                return json(.ok, #"{"items":[\#(Self.item)}],"nextCursor":null}"#)
+            })
+        let page = try await RemoteFeedRepository(client: client).followingPage(cursor: "c1")
+        #expect(page.videos.map(\.id) == ["v1"])
+        #expect(page.nextCursor == nil)
+        #expect(log.operations == ["getFollowingFeed"])
+        #expect(path.withLock { $0 }?.contains("cursor=c1") == true)
+
+        let expired = makeClient(transport: MockTransport { _, _ in json(.unauthorized, errorJSON(401, "x")) })
+        await #expect(throws: AppError.sessionExpired) { try await RemoteFeedRepository(client: expired).followingPage(cursor: nil) }
     }
 
     @Test("vue : 204 accepté, vidéo supprimée ignorée, 401 → session expirée")

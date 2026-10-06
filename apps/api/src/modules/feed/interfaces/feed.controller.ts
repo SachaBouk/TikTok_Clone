@@ -1,5 +1,5 @@
 import { BadRequestException, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import type { FeedItemDto, FeedPageDto } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
@@ -29,6 +29,26 @@ export class FeedController {
   async getFeed(@CurrentUser() user: AuthenticatedUser | undefined, @Query() query: FeedQuery): Promise<FeedPageDto> {
     try {
       const page = await this.feed.getPage(query.cursor, query.limit, user?.userId ?? null);
+      return { items: page.items.map(toFeedItemDto), nextCursor: page.nextCursor };
+    } catch (error) {
+      if (error instanceof InvalidFeedCursorError) throw new BadRequestException(error.message);
+      throw error;
+    }
+  }
+
+  // Feed des abonnements (ADR-048) : compte connecté seulement (l'app invite l'invité à se connecter).
+  @Get('following')
+  @ApiOkResponse({
+    type: FeedPageResponse,
+    description:
+      'Vidéos publiées des comptes suivis, de la plus récente à la plus ancienne (ni ses propres vidéos, ni les republications). ' +
+      'Avec le `nextCursor` reçu : page suivante. `nextCursor` nul : fin de la liste. Sans `cursor` : depuis la plus récente.',
+  })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
+  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
+  async getFollowingFeed(@CurrentUser() user: AuthenticatedUser, @Query() query: FeedQuery): Promise<FeedPageDto> {
+    try {
+      const page = await this.feed.listFollowing(user.userId, query.cursor, query.limit);
       return { items: page.items.map(toFeedItemDto), nextCursor: page.nextCursor };
     } catch (error) {
       if (error instanceof InvalidFeedCursorError) throw new BadRequestException(error.message);

@@ -193,6 +193,26 @@ struct AnalyticsInstrumentationTests {
         #expect(second.properties["watch_ms"] == .int(4000))
     }
 
+    @Test("source du visionnage : feed principal, feed des abonnements (ADR-048), liste")
+    func watchSource() async throws {
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
+        await session.restore()
+        for (mode, source) in [
+            (FeedViewModel.Mode.endlessFeed, "feed"), (.followingFeed, "following"), (.list(page(["a"], next: nil), startIndex: 0), "list"),
+        ] {
+            let viewModel = FeedViewModel(
+                loadPage: LoadFeedPageUseCase(feed: FakeFeedRepository([.success(page(["a"], next: nil))])),
+                recordView: RecordViewUseCase(history: FakeViewHistoryRepository()),
+                playback: playback, session: session, analytics: makeAnalytics(service), mode: mode,
+                viewDelay: .milliseconds(10), now: { [clock] in clock.now })
+            await viewModel.start()
+            clock.advance(by: 2)
+            viewModel.setActive(false)
+            let watched = try #require(service.events.last { $0.name == "video_watched" })
+            #expect(watched.properties["source"] == .string(source))
+        }
+    }
+
     @Test("visionnage commencé avant le consentement : pas envoyé ; le suivant l'est")
     func watchBeforeConsent() async {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))

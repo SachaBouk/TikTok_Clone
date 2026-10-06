@@ -106,10 +106,12 @@ export class PrismaVideoRepository extends VideoRepository {
   }
 
   // Pagination par clé (created_at, video_id), sur l'index (user_id, created_at).
-  async findPublishedByAuthor(userId: string, after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+  // Index `videos(user_id, created_at)`.
+  async findPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+    if (userIds.length === 0) return [];
     const rows = await this.prisma.video.findMany({
       where: {
-        userId,
+        userId: { in: userIds },
         status: 'ready',
         ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
       },

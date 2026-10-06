@@ -32,6 +32,7 @@ export interface FeedPage {
 }
 
 // Feed principal (ADR-016) : toutes les vidéos publiées, dans un ordre aléatoire propre à chaque session.
+// Feed des abonnements (ADR-048) : vidéos des comptes suivis, de la plus récente à la plus ancienne.
 // Le module sert aussi les grilles du profil (vidéos, republications, favoris d'un compte), avec le même
 // élément que le feed : l'app les ouvre dans le même lecteur.
 // - Nouvelle session (sans curseur) : photo courante du catalogue (cache Redis, ADR-014) + graine aléatoire.
@@ -102,6 +103,23 @@ export class FeedService {
     const last = page.at(-1);
     return {
       items: await this.toItems(page, viewerId, hidden),
+      nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
+    };
+  }
+
+  // Feed des abonnements (ADR-048) : vidéos publiées des comptes que suit `viewerId`, de la plus récente à la plus
+  // ancienne. Pas d'ordre aléatoire ni de session : une pagination par clé, comme les grilles, et une vraie fin
+  // (`nextCursor` nul). Ni ses propres vidéos ni les republications. Les comptes masqués (suspendus) sont retirés
+  // avant la lecture : pas de page raccourcie par eux. Une vidéo publiée pendant le parcours apparaît au
+  // prochain rechargement (sans curseur).
+  async listFollowing(viewerId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
+    const after = cursor ? decodeListCursor(cursor) : null;
+    const authors = await this.interactions.listVisibleFollowingIds(viewerId);
+    const rows = await this.videos.listPublishedByAuthors(authors, after && { createdAt: after.at, id: after.videoId }, limit + 1);
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: await this.toItems(page, viewerId, new Set()),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
     };
   }

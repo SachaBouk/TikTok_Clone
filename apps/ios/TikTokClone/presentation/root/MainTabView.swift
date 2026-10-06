@@ -19,10 +19,8 @@ struct MainTabView: View {
         TabView(selection: $selection) {
             Tab("Accueil", systemImage: "house", value: .home) {
                 NavigationStack(path: $feedPath) {
-                    FeedView(
-                        viewModel: container.makeFeedViewModel(),
-                        pool: container.playerPool,
-                        interactions: container.videoInteractions,
+                    // « Abonnements | Pour toi » (ADR-048).
+                    HomeFeedView(
                         container: container,
                         // En pause pendant qu'une vidéo seule est ouverte par-dessus.
                         isTabActive: selection == .home && router.presentedVideo == nil

@@ -404,6 +404,13 @@ export class InteractionsService {
     return this.hiddenAccounts(viewerId);
   }
 
+  // Pour le module feed (feed des abonnements) : comptes suivis par `userId` dont les vidéos lui sont visibles,
+  // c'est-à-dire hors comptes masqués (suspendus ; un blocage retire déjà le follow, ADR-029).
+  async listVisibleFollowingIds(userId: string): Promise<string[]> {
+    const [following, hidden] = await Promise.all([this.interactions.listFollowingIds(userId), this.hiddenAccounts(userId)]);
+    return following.filter((id) => !hidden.has(id));
+  }
+
   // Pour le module messaging : parmi `userIds`, les abonnés mutuels de `userId` (seuls autorisés à s'écrire).
   getMutualFollowers(userId: string, userIds: string[]): Promise<Set<string>> {
     return this.interactions.findMutualFollows(userId, [...new Set(userIds)]);

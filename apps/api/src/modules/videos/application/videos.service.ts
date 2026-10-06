@@ -223,7 +223,12 @@ export class VideosService {
 
   // Pour le module feed : vidéos publiées d'un auteur (grille du profil), de la plus récente à la plus ancienne.
   listPublishedByAuthor(userId: string, after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
-    return this.videos.findPublishedByAuthor(userId, after, limit);
+    return this.videos.findPublishedByAuthors([userId], after, limit);
+  }
+
+  // Pour le module feed : vidéos publiées de plusieurs auteurs (feed des abonnements), même ordre.
+  listPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+    return this.videos.findPublishedByAuthors(userIds, after, limit);
   }
 
   // Vidéos de l'auteur pas encore publiées (en traitement) ou en échec, visibles de lui seul, en tête de sa grille.

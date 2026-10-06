@@ -17,7 +17,10 @@ struct AnalyticsEvent: Equatable, Sendable {
 
 // Écran où une vidéo est lue.
 enum VideoSource: String, Sendable {
+    // Feed principal (« Pour toi »).
     case feed
+    // Feed des abonnements (ADR-048).
+    case following
     // Lecteur vertical ouvert depuis une grille (profil, historique).
     case list
     // Vidéo seule (lien, notification, message).

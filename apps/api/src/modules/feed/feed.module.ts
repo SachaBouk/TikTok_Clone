@@ -11,7 +11,7 @@ import { RedisFeedSnapshotStore } from './infrastructure/redis-feed-snapshot.sto
 import { FeedController } from './interfaces/feed.controller';
 import { ProfileVideosController } from './interfaces/profile-videos.controller';
 
-// Feed principal (ADR-016), cache Redis (ADR-014), et grilles du profil (vidéos, republications, favoris). Lit vidéos, auteurs et état du lecteur via les services exportés (ADR-003).
+// Feed principal (ADR-016), cache Redis (ADR-014), feed des abonnements (ADR-048) et grilles du profil (vidéos, republications, favoris). Lit vidéos, auteurs et état du lecteur via les services exportés (ADR-003).
 @Module({
   imports: [VideosModule, UsersModule, InteractionsModule],
   controllers: [FeedController, ProfileVideosController],

@@ -65,6 +65,26 @@ struct FeedViewModelTests {
         #expect(viewModel.reloadCount == 0)
     }
 
+    @Test("feed des abonnements (ADR-048) : pages suivantes, puis arrêt à la fin, sans nouvelle session")
+    func followingFeed() async {
+        let feed = FakeFeedRepository([.success(page(["a", "b"], next: "c1")), .success(page(["c"], next: nil))])
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
+        await session.restore()
+        let viewModel = FeedViewModel(
+            loadPage: LoadFollowingFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
+            playback: playback, session: session, analytics: makeAnalytics(), mode: .followingFeed, viewDelay: .milliseconds(20))
+        await viewModel.start()
+        await viewModel.loadMore()
+        await viewModel.loadMore()
+        #expect(feed.requestedFeeds == ["following", "following"])
+        #expect(feed.requestedCursors == [nil, "c1"])
+        #expect(viewModel.entries.map(\.video.id) == ["a", "b", "c"])
+
+        // Tirer pour actualiser : depuis la plus récente.
+        await viewModel.reload()
+        #expect(feed.requestedCursors == [nil, "c1", nil])
+    }
+
     @Test("vue enregistrée après le délai de lecture, une seule fois par vidéo")
     func recordsView() async throws {
         let (viewModel, _) = await makeViewModel([.success(page(["a", "b"], next: nil))])

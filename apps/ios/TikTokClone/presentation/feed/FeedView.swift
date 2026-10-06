@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 
 // Lecteur plein écran : une vidéo par page, défilement vertical natif (ScrollView en pagination).
-// Le feed principal, ou une liste ouverte depuis une grille (`allowsRefresh` faux).
+// Le feed principal, le feed des abonnements (ADR-048), ou une liste ouverte depuis une grille (`allowsRefresh` faux).
 struct FeedView: View {
     @State private var viewModel: FeedViewModel
     let pool: AVPlayerPool
@@ -10,6 +10,7 @@ struct FeedView: View {
     let container: AppContainer
     let isTabActive: Bool
     let allowsRefresh: Bool
+    let emptyState: FeedEmptyState
     @State private var scrolledID: String?
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
@@ -22,7 +23,7 @@ struct FeedView: View {
 
     init(
         viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool,
-        allowsRefresh: Bool = true
+        allowsRefresh: Bool = true, emptyState: FeedEmptyState = .feed
     ) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
@@ -30,6 +31,7 @@ struct FeedView: View {
         self.container = container
         self.isTabActive = isTabActive
         self.allowsRefresh = allowsRefresh
+        self.emptyState = emptyState
     }
 
     var body: some View {
@@ -80,7 +82,18 @@ struct FeedView: View {
             }
         default:
             if viewModel.entries.isEmpty {
-                ContentUnavailableView("Aucune vidéo pour l’instant", systemImage: "play.rectangle", description: Text("Reviens un peu plus tard."))
+                ContentUnavailableView {
+                    Label(emptyState.title, systemImage: emptyState.systemImage)
+                } description: {
+                    Text(emptyState.description)
+                } actions: {
+                    if let action = emptyState.action {
+                        Button(action.title, action: action.run)
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                // Tirer pour actualiser reste possible sur l'écran vide.
+                .modifier(RefreshIfAllowed(isAllowed: allowsRefresh) { await reload() })
             } else {
                 pages(bottomInset: bottomInset, topInset: topInset)
             }
@@ -129,7 +142,31 @@ struct FeedView: View {
     }
 
     private func updateActivity() {
-        viewModel.setActive(isTabActive && isOnScreen && scenePhase == .active)
+        guard isTabActive && isOnScreen && scenePhase == .active else {
+            viewModel.setActive(false)
+            return
+        }
+        // Activé après les mises en pause du même changement (l'autre feed de l'accueil, une vidéo seule fermée) :
+        // leur `pauseAll` arrêterait sinon la vidéo qui vient de démarrer. L'ordre des `onChange` de deux vues
+        // sœurs n'est pas garanti.
+        Task { @MainActor in viewModel.setActive(isTabActive && isOnScreen && scenePhase == .active) }
+    }
+}
+
+// Écran d'un feed sans vidéo : celui du feed principal par défaut ; le feed des abonnements a le sien (ADR-048).
+struct FeedEmptyState {
+    struct Action {
+        let title: String
+        let run: () -> Void
+    }
+
+    let title: String
+    let systemImage: String
+    let description: String
+    var action: Action?
+
+    static var feed: FeedEmptyState {
+        FeedEmptyState(title: "Aucune vidéo pour l’instant", systemImage: "play.rectangle", description: "Reviens un peu plus tard.")
     }
 }
 

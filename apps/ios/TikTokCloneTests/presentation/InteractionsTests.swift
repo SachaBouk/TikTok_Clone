@@ -117,6 +117,22 @@ struct InteractionsTests {
         #expect(repository.calls == ["follow-bob-true"])
     }
 
+    @Test("feed des abonnements (ADR-048) : abonnements faits comptés, échec et blocage compris")
+    func followsVersion() async {
+        let (model, _) = await makeModel()
+        #expect(model.followsVersion == 0)
+        _ = await model.toggleFollow(authorOf: video)
+        #expect(model.followsVersion == 1)
+        repository.fail(with: .network)
+        _ = await model.toggleFollow(authorOf: video)
+        #expect(model.followsVersion == 1)
+        model.blocked("dave-id")
+        #expect(model.followsVersion == 2)
+        // Données rechargées : la version ne revient pas en arrière.
+        model.reset()
+        #expect(model.followsVersion == 2)
+    }
+
     @Test("partage envoyé : compté avec le total de l'API ; commentaires ajustés ; reset")
     func shareAndComments() async {
         let (model, _) = await makeModel()

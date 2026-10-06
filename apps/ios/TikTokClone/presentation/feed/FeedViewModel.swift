@@ -2,8 +2,9 @@ import Foundation
 import Observation
 
 // Lecteur vertical : pages de l'API, lecture de la vidéo courante, préchargement des voisines, vues comptées
-// après 1 s. Deux usages :
+// après 1 s. Trois usages :
 // - le feed principal (ADR-016) : à la fin d'une session, il repart sur un nouvel ordre, il ne s'arrête jamais ;
+// - le feed des abonnements (ADR-048) : du plus récent au plus ancien, il s'arrête à la fin ;
 // - une liste (grille d'un profil, historique) : ouverte sur la vidéo touchée, elle s'arrête à la fin.
 // Mesure d'audience (ADR-013) : visionnage de chaque vidéo, et expérience « invitation invité » (quelques vidéos
 // regardées sans compte ouvrent la connexion, pour la variante).
@@ -18,6 +19,7 @@ final class FeedViewModel {
 
     enum Mode {
         case endlessFeed
+        case followingFeed
         // Vidéos déjà chargées par la grille, et vidéo touchée.
         case list(FeedPage, startIndex: Int)
     }
@@ -73,11 +75,19 @@ final class FeedViewModel {
         self.session = session
         self.analytics = analytics
         self.viewDelay = viewDelay
-        if case .list = mode {
-            watch = WatchReporter(source: .list, playback: playback, analytics: analytics, now: now)
-        } else {
-            watch = WatchReporter(source: .feed, playback: playback, analytics: analytics, now: now)
-        }
+        let source: VideoSource =
+            switch mode {
+            case .endlessFeed: .feed
+            case .followingFeed: .following
+            case .list: .list
+            }
+        watch = WatchReporter(source: source, playback: playback, analytics: analytics, now: now)
+    }
+
+    // Le feed des abonnements et une liste s'arrêtent à leur fin ; le feed principal repart sur un nouvel ordre.
+    private var stopsAtEnd: Bool {
+        if case .endlessFeed = mode { return false }
+        return true
     }
 
     var currentVideo: FeedVideo? {
@@ -187,8 +197,7 @@ final class FeedViewModel {
 
     func loadMore() async {
         guard !isLoadingMore, loadState == .loaded, !entries.isEmpty else { return }
-        // Une liste s'arrête à sa fin.
-        if case .list = mode, nextCursor == nil { return }
+        if stopsAtEnd, nextCursor == nil { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         // Fin de session : nouvelle session, nouvel ordre (les vidéos peuvent revenir).

@@ -10,6 +10,15 @@ struct LoadFeedPageUseCase: VideoPageSource {
     }
 }
 
+// Feed des abonnements (ADR-048).
+struct LoadFollowingFeedPageUseCase: VideoPageSource {
+    let feed: any FeedRepository
+
+    func page(cursor: String?) async throws -> FeedPage {
+        try await feed.followingPage(cursor: cursor)
+    }
+}
+
 struct RecordViewUseCase: Sendable {
     let history: any ViewHistoryRepository
 

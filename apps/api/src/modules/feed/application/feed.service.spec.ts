@@ -342,6 +342,90 @@ describe('FeedService', () => {
     });
   });
 
+  describe('feed des abonnements (ADR-048)', () => {
+    // Parcourt tout le feed des abonnements de `viewer`, page par page.
+    async function readFollowing(viewer: string, limit: number) {
+      const pages: string[][] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await feed.listFollowing(viewer, cursor, limit);
+        pages.push(page.items.map((i) => i.video.id));
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      return pages;
+    }
+
+    it('donne les vidéos publiées des comptes suivis, de la plus récente à la plus ancienne, jusqu’à une vraie fin', async () => {
+      const bobs = [await publish('bob'), await publish('bob')];
+      const daves = [await publish('dave'), await publish('dave'), await publish('dave')];
+      await publish('dave', 'processing');
+      await publish('alice'); // ses propres vidéos n'y sont pas
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setFollow('alice', 'dave', true);
+
+      const pages = await readFollowing('alice', 2);
+      expect(pages).toEqual([[daves[2], daves[1]], [daves[0], bobs[1]], [bobs[0]]]);
+    });
+
+    it('ne reprend pas les republications des comptes suivis', async () => {
+      const daves = await publish('dave');
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setReaction('bob', daves, 'repost', true);
+      expect(await feed.listFollowing('alice', undefined, 10)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('est vide sans abonnement', async () => {
+      await publish('bob');
+      expect(await feed.listFollowing('alice', undefined, 10)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("donne l'état des boutons, auteur suivi compris", async () => {
+      const video = await publish('bob');
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setReaction('alice', video, 'like', true);
+      const { items } = await feed.listFollowing('alice', undefined, 10);
+      expect(items[0]).toMatchObject({ author: { id: 'bob' }, viewer: { liked: true, followingAuthor: true } });
+    });
+
+    it('suit les abonnements : un compte quitté ou bloqué en disparaît', async () => {
+      await publish('bob');
+      await publish('dave');
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setFollow('alice', 'dave', true);
+      await interactions.setFollow('alice', 'bob', false);
+      await interactions.setBlock('dave', 'alice', true); // le blocage retire le follow, dans les deux sens
+      expect((await readFollowing('alice', 10)).flat()).toEqual([]);
+    });
+
+    it('retire les vidéos d’un compte suivi suspendu, jusqu’à la levée', async () => {
+      const bobs = await publish('bob');
+      const daves = await publish('dave');
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setFollow('alice', 'dave', true);
+      await suspended.add('bob');
+      expect((await readFollowing('alice', 1)).flat()).toEqual([daves]);
+      await suspended.remove('bob');
+      expect((await readFollowing('alice', 1)).flat()).toEqual([daves, bobs]);
+    });
+
+    it('continue sans décalage après une vidéo supprimée, et sans la nouvelle vidéo publiée entre-temps', async () => {
+      const videos = [await publish('bob'), await publish('bob'), await publish('bob'), await publish('bob')];
+      await interactions.setFollow('alice', 'bob', true);
+      const first = await feed.listFollowing('alice', undefined, 2);
+      expect(first.items.map((i) => i.video.id)).toEqual([videos[3], videos[2]]);
+      await videoRepository.delete(videos[1]);
+      const late = await publish('bob');
+
+      const second = await feed.listFollowing('alice', first.nextCursor!, 2);
+      expect(second).toMatchObject({ items: [{ video: { id: videos[0] } }], nextCursor: null });
+      expect((await feed.listFollowing('alice', undefined, 10)).items[0].video.id).toBe(late);
+    });
+
+    it('refuse un curseur qui n’a pas été produit par l’API', async () => {
+      await expect(feed.listFollowing('alice', 'pas-un-curseur', 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    });
+  });
+
   describe('suspension (ADR-037)', () => {
     it('retire du feed, de la vidéo seule et des grilles les vidéos d’un compte suspendu, pour tous', async () => {
       const bobs = await Promise.all(Array.from({ length: 2 }, () => publish('bob')));
