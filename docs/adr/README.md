@@ -49,11 +49,11 @@
 | [ADR-045](ADR-045-compteurs-profil-en-direct.md) | Compteurs de son profil en direct (complète ADR-022 et ADR-011) | Accepté |
 | [ADR-046](ADR-046-dimensions-photo-profil.md) | Dimensions de la photo de profil vérifiées par l'API (complète ADR-016) | Accepté |
 | [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Accepté |
-| [ADR-048](ADR-048-feed-abonnements.md) | Feed des abonnements (complète ADR-016) | Proposé |
-| [ADR-049](ADR-049-recherche-hashtags.md) | Recherche de comptes et hashtags (complète ADR-016 et ADR-003) | Proposé |
+| [ADR-048](ADR-048-feed-abonnements.md) | Feed des abonnements (complète ADR-016) | Accepté |
+| [ADR-049](ADR-049-recherche-hashtags.md) | Recherche de comptes et hashtags (complète ADR-016 et ADR-003) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 047 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+Les ADR 017 à 049 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
 l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
 (« Complété par »).

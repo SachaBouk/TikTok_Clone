@@ -1,7 +1,7 @@
 # ADR-048 — Feed des abonnements
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre), sans le remplacer : le feed des comptes suivis, reporté par l'ADR-016, entre dans le périmètre (décision du développeur).
 

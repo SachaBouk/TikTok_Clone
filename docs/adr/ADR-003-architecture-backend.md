@@ -56,3 +56,4 @@ Règles :
 - ADR-012 — Traitement asynchrone
 - ADR-015 — Hébergement
 - Complété par [ADR-018](ADR-018-modules-messaging-push-admin.md) — Modules messaging, push et admin
+- Complété par [ADR-049](ADR-049-recherche-hashtags.md) — Recherche de comptes et hashtags (module search)

@@ -1,7 +1,7 @@
 # ADR-049 — Recherche de comptes et hashtags
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre) et [ADR-003](ADR-003-architecture-backend.md) (modules), sans les remplacer : la recherche, les hashtags et l'historique des recherches, reportés par l'ADR-016, entrent dans le périmètre (décision du développeur).
 
