@@ -1,7 +1,7 @@
 # ADR-040 — Durée maximale d'une vidéo
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-007](ADR-007-upload-video-direct.md) et [ADR-008](ADR-008-pipeline-video-hls.md), sans les remplacer.
 

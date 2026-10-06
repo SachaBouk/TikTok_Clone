@@ -47,3 +47,6 @@ Session :
 - ADR-004 — Architecture backoffice
 - ADR-010 — Authentification
 - ADR-018 — Modules messaging, push et admin
+- Complété par [ADR-032](ADR-032-backoffice-portefeuille.md) — Backoffice : portefeuille et journal des jetons
+- Complété par [ADR-037](ADR-037-suspension-compte.md) — Suspension de compte
+- Complété par [ADR-038](ADR-038-signalements.md) — Signalements

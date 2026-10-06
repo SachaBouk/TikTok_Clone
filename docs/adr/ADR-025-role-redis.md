@@ -37,3 +37,4 @@ Redis ne sert pas à :
 - ADR-014 — Cache et sessions avec Redis
 - ADR-020 — Modèle de données : compléments
 - ADR-023 — Files asynchrones : compléments
+- Complété par [ADR-030](ADR-030-limites-debit-connexion-partage.md) — Limites de débit : connexion et partages

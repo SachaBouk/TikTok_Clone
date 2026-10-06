@@ -37,3 +37,5 @@ L'API ne doit pas servir les octets vidéo.
 - ADR-011 — Temps réel
 - ADR-012 — Traitement asynchrone
 - ADR-015 — Hébergement
+- Complété par [ADR-040](ADR-040-duree-maximale-video.md) — Durée maximale d'une vidéo : 3 minutes
+- Complété par [ADR-047](ADR-047-tone-mapping-hdr.md) — Tone mapping des vidéos HDR

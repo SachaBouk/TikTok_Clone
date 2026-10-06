@@ -1,7 +1,7 @@
 # ADR-041 — Lint et mise en forme du code
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-001](ADR-001-monorepo-turborepo.md), sans le remplacer.
 

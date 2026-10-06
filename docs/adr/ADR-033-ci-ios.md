@@ -1,7 +1,7 @@
 # ADR-033 — Intégration continue de l'app iOS
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-017](ADR-017-app-ios-choix-implementation.md), sans le remplacer.
 

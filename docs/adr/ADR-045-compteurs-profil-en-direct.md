@@ -1,7 +1,7 @@
 # ADR-045 — Compteurs de son profil en direct
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-022](ADR-022-temps-reel-protocole.md) (événements temps réel) et [ADR-011](ADR-011-temps-reel-websocket.md), sans les remplacer.
 

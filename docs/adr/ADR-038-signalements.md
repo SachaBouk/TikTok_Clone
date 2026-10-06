@@ -1,7 +1,7 @@
 # ADR-038 — Signalements
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-019](ADR-019-backoffice-role-perimetre-session.md), sans le remplacer.
 

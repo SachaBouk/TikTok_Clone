@@ -1,7 +1,7 @@
 # ADR-032 — Backoffice : portefeuille et journal des jetons
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-019](ADR-019-backoffice-role-perimetre-session.md), sans le remplacer.
 

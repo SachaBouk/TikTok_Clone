@@ -30,27 +30,28 @@
 | [ADR-026](ADR-026-envoi-direct-photos-profil.md) | Envoi direct des photos de profil (complète ADR-007) | Accepté |
 | [ADR-027](ADR-027-images-docker.md) | Images Docker des applications (complète ADR-015) | Accepté |
 | [ADR-028](ADR-028-regles-produit-premiere-version.md) | Règles produit de la première version (complète ADR-016) | Accepté |
-| [ADR-029](ADR-029-blocage-filtrage-contenus.md) | Blocage : contenus masqués dans le feed, les profils et les commentaires (complète ADR-028) | Proposé |
-| [ADR-030](ADR-030-limites-debit-connexion-partage.md) | Limites de débit : connexion et partages (complète ADR-028 et ADR-025) | Proposé |
-| [ADR-031](ADR-031-signature-webhook-revenuecat.md) | Signature HMAC du webhook RevenueCat (complète ADR-021) | Proposé |
-| [ADR-032](ADR-032-backoffice-portefeuille.md) | Backoffice : portefeuille et journal des jetons (complète ADR-019) | Proposé |
-| [ADR-033](ADR-033-ci-ios.md) | Intégration continue de l'app iOS (complète ADR-017) | Proposé |
-| [ADR-034](ADR-034-package-resolved-versionne.md) | Versions des paquets Swift : Package.resolved versionné (complète ADR-017) | Proposé |
-| [ADR-035](ADR-035-metadonnees-personnelles-videos.md) | Métadonnées personnelles des vidéos retirées dans l'app (complète ADR-007) | Proposé |
-| [ADR-036](ADR-036-suivre-en-retour-activite.md) | « Suivre en retour » dans le centre d'activité (complète ADR-028) | Proposé |
-| [ADR-037](ADR-037-suspension-compte.md) | Suspension de compte (complète ADR-019) | Proposé |
-| [ADR-038](ADR-038-signalements.md) | Signalements (complète ADR-019) | Proposé |
-| [ADR-039](ADR-039-limites-debit-actions.md) | Limites de débit : inscription, réactions, commentaires, follows, vues et envois (prolonge ADR-030) | Proposé |
-| [ADR-040](ADR-040-duree-maximale-video.md) | Durée maximale d'une vidéo : 3 minutes (complète ADR-007 et ADR-008) | Proposé |
-| [ADR-041](ADR-041-lint-et-mise-en-forme.md) | Lint et mise en forme : ESLint, Prettier, swift-format (complète ADR-001) | Proposé |
-| [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) | Suppression des commentaires par l'auteur de la vidéo (complète ADR-016 et ADR-028) | Proposé |
-| [ADR-043](ADR-043-notifications-supprimees-en-direct.md) | Notifications supprimées annoncées en direct, groupes recalculés (complète ADR-022 et ADR-011) | Proposé |
-| [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) | Renvoi d'un message en échec : identifiant d'envoi (complète ADR-028 et ADR-022) | Proposé |
-| [ADR-045](ADR-045-compteurs-profil-en-direct.md) | Compteurs de son profil en direct (complète ADR-022 et ADR-011) | Proposé |
-| [ADR-046](ADR-046-dimensions-photo-profil.md) | Dimensions de la photo de profil vérifiées par l'API (complète ADR-016) | Proposé |
-| [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Proposé |
+| [ADR-029](ADR-029-blocage-filtrage-contenus.md) | Blocage : contenus masqués dans le feed, les profils et les commentaires (complète ADR-028) | Accepté |
+| [ADR-030](ADR-030-limites-debit-connexion-partage.md) | Limites de débit : connexion et partages (complète ADR-028 et ADR-025) | Accepté |
+| [ADR-031](ADR-031-signature-webhook-revenuecat.md) | Signature HMAC du webhook RevenueCat (complète ADR-021) | Accepté |
+| [ADR-032](ADR-032-backoffice-portefeuille.md) | Backoffice : portefeuille et journal des jetons (complète ADR-019) | Accepté |
+| [ADR-033](ADR-033-ci-ios.md) | Intégration continue de l'app iOS (complète ADR-017) | Accepté |
+| [ADR-034](ADR-034-package-resolved-versionne.md) | Versions des paquets Swift : Package.resolved versionné (complète ADR-017) | Accepté |
+| [ADR-035](ADR-035-metadonnees-personnelles-videos.md) | Métadonnées personnelles des vidéos retirées dans l'app (complète ADR-007) | Accepté |
+| [ADR-036](ADR-036-suivre-en-retour-activite.md) | « Suivre en retour » dans le centre d'activité (complète ADR-028) | Accepté |
+| [ADR-037](ADR-037-suspension-compte.md) | Suspension de compte (complète ADR-019) | Accepté |
+| [ADR-038](ADR-038-signalements.md) | Signalements (complète ADR-019) | Accepté |
+| [ADR-039](ADR-039-limites-debit-actions.md) | Limites de débit : inscription, réactions, commentaires, follows, vues et envois (prolonge ADR-030) | Accepté |
+| [ADR-040](ADR-040-duree-maximale-video.md) | Durée maximale d'une vidéo : 3 minutes (complète ADR-007 et ADR-008) | Accepté |
+| [ADR-041](ADR-041-lint-et-mise-en-forme.md) | Lint et mise en forme : ESLint, Prettier, swift-format (complète ADR-001) | Accepté |
+| [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) | Suppression des commentaires par l'auteur de la vidéo (complète ADR-016 et ADR-028) | Accepté |
+| [ADR-043](ADR-043-notifications-supprimees-en-direct.md) | Notifications supprimées annoncées en direct, groupes recalculés (complète ADR-022 et ADR-011) | Accepté |
+| [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) | Renvoi d'un message en échec : identifiant d'envoi (complète ADR-028 et ADR-022) | Accepté |
+| [ADR-045](ADR-045-compteurs-profil-en-direct.md) | Compteurs de son profil en direct (complète ADR-022 et ADR-011) | Accepté |
+| [ADR-046](ADR-046-dimensions-photo-profil.md) | Dimensions de la photo de profil vérifiées par l'API (complète ADR-016) | Accepté |
+| [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 028 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté sans le
-remplacer : l'ADR d'origine reste valable, et renvoie vers son complément (« Complété par »).
+Les ADR 017 à 047 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
+(« Complété par »).

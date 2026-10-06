@@ -58,3 +58,5 @@ Fonctionnalités reportées après la première version :
 - ADR-011 — Temps réel
 - ADR-012 — Traitement asynchrone
 - Complété par [ADR-028](ADR-028-regles-produit-premiere-version.md) — Règles produit de la première version
+- Complété par [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) — Suppression des commentaires par l'auteur de la vidéo
+- Complété par [ADR-046](ADR-046-dimensions-photo-profil.md) — Dimensions de la photo de profil vérifiées par l'API

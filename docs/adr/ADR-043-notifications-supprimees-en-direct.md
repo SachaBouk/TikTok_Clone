@@ -1,7 +1,7 @@
 # ADR-043 — Notifications supprimées annoncées en direct
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-022](ADR-022-temps-reel-protocole.md) et [ADR-011](ADR-011-temps-reel-websocket.md), sans les remplacer.
 

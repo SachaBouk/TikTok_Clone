@@ -1,7 +1,7 @@
 # ADR-031 — Signature HMAC du webhook RevenueCat
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-021](ADR-021-portefeuille-journal-credit.md), sans le remplacer.
 

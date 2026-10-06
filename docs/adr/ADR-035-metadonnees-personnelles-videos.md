@@ -1,7 +1,7 @@
 # ADR-035 — Métadonnées personnelles des vidéos retirées dans l'app
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-007](ADR-007-upload-video-direct.md), sans le remplacer.
 

@@ -37,3 +37,4 @@ L'ADR-009 fixe le principe : RevenueCat valide l'achat et prévient le backend p
 ## Liens
 - ADR-009 — Paiement et jetons
 - ADR-020 — Modèle de données : compléments
+- Complété par [ADR-031](ADR-031-signature-webhook-revenuecat.md) — Signature HMAC du webhook RevenueCat

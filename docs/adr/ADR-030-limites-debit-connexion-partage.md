@@ -1,7 +1,7 @@
 # ADR-030 — Limites de débit : connexion et partages
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-028](ADR-028-regles-produit-premiere-version.md) et [ADR-025](ADR-025-role-redis.md), sans les remplacer.
 
@@ -52,3 +52,4 @@ Seule la messagerie avait des limites de débit (ADR-028 : messages et demandes)
 - ADR-014 — Cache et sessions avec Redis
 - ADR-025 — Rôle de Redis
 - ADR-028 — Règles produit de la première version
+- Prolongé par [ADR-039](ADR-039-limites-debit-actions.md) — Limites de débit : inscription, réactions, commentaires, follows, vues et envois

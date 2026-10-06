@@ -45,3 +45,5 @@ Parcours :
 - ADR-005 — Contrat d'API OpenAPI
 - ADR-007 — Upload vidéo direct
 - ADR-028 — Règles produit de la première version
+- Complété par [ADR-033](ADR-033-ci-ios.md) — Intégration continue de l'app iOS
+- Complété par [ADR-034](ADR-034-package-resolved-versionne.md) — Versions des paquets Swift : Package.resolved versionné

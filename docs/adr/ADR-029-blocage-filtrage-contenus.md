@@ -1,7 +1,7 @@
 # ADR-029 — Blocage : contenus masqués dans le feed, les profils et les commentaires
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-028](ADR-028-regles-produit-premiere-version.md), sans le remplacer.
 

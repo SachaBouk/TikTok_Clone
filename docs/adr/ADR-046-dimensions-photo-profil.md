@@ -1,7 +1,7 @@
 # ADR-046 — Dimensions de la photo de profil vérifiées par l'API
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (profil : photo) et la décision du développeur « pas de traitement d'image côté serveur », sans les remplacer.
 

@@ -1,7 +1,7 @@
 # ADR-036 — « Suivre en retour » dans le centre d'activité
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-028](ADR-028-regles-produit-premiere-version.md), sans le remplacer.
 

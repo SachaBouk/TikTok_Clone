@@ -35,3 +35,6 @@ L'ADR-011 fixe le WebSocket natif, l'authentification au handshake, la reconnexi
 - ADR-011 — Temps réel : WebSocket natif
 - ADR-005 — Contrat d'API OpenAPI
 - ADR-010 — Authentification
+- Complété par [ADR-043](ADR-043-notifications-supprimees-en-direct.md) — Notifications supprimées annoncées en direct
+- Complété par [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) — Renvoi d'un message en échec : identifiant d'envoi
+- Complété par [ADR-045](ADR-045-compteurs-profil-en-direct.md) — Compteurs de son profil en direct

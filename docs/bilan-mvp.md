@@ -42,11 +42,11 @@ Suppression du compte (exigence Apple) : faite, et vérifiée au parcours 11. El
 ### Au-delà du périmètre
 
 Ajouts décidés pendant la réalisation (ADR 017 à 038) :
-- **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032), suspension de compte (ADR-037, proposé), signalements depuis l'app et file de modération (ADR-038, proposé).
-- **Blocage** : actions interdites dans les deux sens, contenus masqués (ADR-029, proposé).
-- **« Suivre en retour »** dans le centre d'activité (ADR-036, proposé).
+- **Backoffice** (Next.js, ADR-004 et ADR-019) : tableau de bord, comptes, vidéos, commentaires, modération, jetons en lecture seule (ADR-032), suspension de compte (ADR-037), signalements depuis l'app et file de modération (ADR-038).
+- **Blocage** : actions interdites dans les deux sens, contenus masqués (ADR-029).
+- **« Suivre en retour »** dans le centre d'activité (ADR-036).
 - **Sécurité** : limites de débit de la connexion et des partages (ADR-030), signature HMAC du webhook (ADR-031).
-- **Confidentialité** : position GPS et appareil retirés des vidéos avant l'envoi (ADR-035, proposé).
+- **Confidentialité** : position GPS et appareil retirés des vidéos avant l'envoi (ADR-035).
 - **Notifications push** côté API (APNs, testées contre un faux serveur).
 - **Mesure d'audience et test A/B** (PostHog, consentement opt-in, ADR-013 et ADR-024).
 - **Images Docker** et CI iOS (ADR-027 et ADR-033), `Package.resolved` versionné (ADR-034).

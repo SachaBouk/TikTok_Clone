@@ -1,7 +1,7 @@
 # ADR-044 — Renvoi d'un message en échec : identifiant d'envoi
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-028](ADR-028-regles-produit-premiere-version.md) (messagerie : demandes, limites d'envoi) et [ADR-022](ADR-022-temps-reel-protocole.md) (événement `messageCreated`), sans les remplacer.
 

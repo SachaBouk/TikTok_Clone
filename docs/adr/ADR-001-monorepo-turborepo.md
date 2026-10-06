@@ -33,3 +33,4 @@ Un monorepo Turborepo organisé ainsi :
 ## Liens
 - ADR-005 — Contrat d'API OpenAPI
 - ADR-012 — Traitement asynchrone avec BullMQ
+- Complété par [ADR-041](ADR-041-lint-et-mise-en-forme.md) — Lint et mise en forme : ESLint, Prettier, swift-format

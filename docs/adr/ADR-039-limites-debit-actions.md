@@ -1,9 +1,9 @@
 # ADR-039 — Limites de débit : inscription, réactions, commentaires, follows, vues et envois de vidéos
 
 ## Statut
-Proposé
+Accepté
 
-Prolonge [ADR-030](ADR-030-limites-debit-connexion-partage.md) (proposé), sans le remplacer.
+Prolonge [ADR-030](ADR-030-limites-debit-connexion-partage.md), sans le remplacer.
 
 ## Contexte
 L'ADR-030 a limité la connexion et les partages ; la messagerie (ADR-028) et les signalements (ADR-038) ont leurs propres limites. Le reste des actions écrites restait sans limite :

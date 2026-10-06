@@ -1,7 +1,7 @@
 # ADR-042 — Suppression des commentaires par l'auteur de la vidéo
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) et [ADR-028](ADR-028-regles-produit-premiere-version.md), sans les remplacer.
 

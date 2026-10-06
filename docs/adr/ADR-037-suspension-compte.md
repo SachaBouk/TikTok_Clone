@@ -1,7 +1,7 @@
 # ADR-037 — Suspension de compte
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-019](ADR-019-backoffice-role-perimetre-session.md), sans le remplacer.
 

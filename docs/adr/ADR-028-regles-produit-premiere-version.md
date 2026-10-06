@@ -55,3 +55,8 @@ Blocage :
 - ADR-016 — Périmètre de la première version
 - ADR-017 — Application iOS : choix d'implémentation
 - ADR-020 — Modèle de données : compléments
+- Complété par [ADR-029](ADR-029-blocage-filtrage-contenus.md) — Blocage : contenus masqués dans le feed, les profils et les commentaires
+- Complété par [ADR-030](ADR-030-limites-debit-connexion-partage.md) — Limites de débit : connexion et partages
+- Complété par [ADR-036](ADR-036-suivre-en-retour-activite.md) — « Suivre en retour » dans le centre d'activité
+- Complété par [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) — Suppression des commentaires par l'auteur de la vidéo
+- Complété par [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) — Renvoi d'un message en échec : identifiant d'envoi

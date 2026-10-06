@@ -1,7 +1,7 @@
 # ADR-034 — Versions des paquets Swift : Package.resolved versionné
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-017](ADR-017-app-ios-choix-implementation.md), sans le remplacer.
 

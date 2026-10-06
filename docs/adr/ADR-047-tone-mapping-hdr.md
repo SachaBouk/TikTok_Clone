@@ -1,7 +1,7 @@
 # ADR-047 — Tone mapping des vidéos HDR
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-008](ADR-008-pipeline-video-hls.md) (transcodage HLS), sans le remplacer.
 
