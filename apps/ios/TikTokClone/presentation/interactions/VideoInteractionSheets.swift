@@ -11,7 +11,8 @@ extension VideoPageActions {
         share: @escaping () -> Void,
         report: @escaping () -> Void = {},
         alert: @escaping (String) -> Void,
-        openHashtag: @escaping (String) -> Void = { _ in }
+        openHashtag: @escaping (String) -> Void = { _ in },
+        gift: @escaping () -> Void = {}
     ) {
         self.init(
             togglePause: togglePause,
@@ -22,7 +23,8 @@ extension VideoPageActions {
             follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } },
             report: report,
             delete: { Task { if let message = await interactions.delete(video) { alert(message) } } },
-            openHashtag: openHashtag
+            openHashtag: openHashtag,
+            gift: gift
         )
     }
 }
@@ -111,6 +113,29 @@ private struct VideoInteractionSheets: ViewModifier {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alert ?? "")
+            }
+    }
+}
+
+extension View {
+    // Feuille de cadeaux d'une vidéo (ADR-050), et animation à l'envoi au-dessus du lecteur, effacée après 2 s.
+    func giftSheet(video: Binding<FeedVideo?>, burst: Binding<GiftBurst?>, container: AppContainer) -> some View {
+        self
+            .sheet(item: video) { video in
+                GiftSheet(viewModel: container.makeGiftSheetViewModel(video: video), container: container) { sent in
+                    burst.wrappedValue = sent
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .overlay {
+                if let current = burst.wrappedValue {
+                    GiftBurstView(burst: current)
+                        .id(current.id)
+                        .task(id: current.id) {
+                            try? await Task.sleep(for: .seconds(2))
+                            if burst.wrappedValue == current { withAnimation { burst.wrappedValue = nil } }
+                        }
+                }
             }
     }
 }

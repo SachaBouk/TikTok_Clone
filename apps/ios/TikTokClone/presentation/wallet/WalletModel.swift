@@ -24,6 +24,8 @@ final class WalletModel {
 
     // Nil tant qu'il n'a pas été lu.
     private(set) var balance: Int?
+    // Jetons reçus en cadeaux (ADR-050), non dépensables ; nil tant qu'ils n'ont pas été lus.
+    private(set) var earned: Int?
     private(set) var packs: [TokenPack] = []
     private(set) var packsState: PacksState = .idle
     private(set) var purchaseState: PurchaseState = .idle
@@ -63,6 +65,7 @@ final class WalletModel {
 
     func reset() {
         balance = nil
+        earned = nil
         packs = []
         packsState = .idle
         purchaseState = .idle
@@ -74,14 +77,22 @@ final class WalletModel {
     func refresh() async {
         guard session.isSignedIn else { return }
         do {
-            apply(try await loadBalance())
+            let amounts = try await loadBalance()
+            earned = amounts.earned
+            apply(amounts.balance)
         } catch {
             handle(error)
         }
     }
 
-    // Événement temps réel `walletUpdated`.
-    func balanceChanged(_ balance: Int) {
+    // Événement temps réel `walletUpdated` : un achat crédité, un cadeau envoyé ou reçu (ADR-050).
+    func balanceChanged(_ balance: Int, earned: Int) {
+        self.earned = earned
+        apply(balance)
+    }
+
+    // Cadeau envoyé (ADR-050) : solde renvoyé par l'API, sans attendre l'événement temps réel.
+    func giftSent(balance: Int) {
         apply(balance)
     }
 
@@ -137,7 +148,10 @@ final class WalletModel {
             guard purchaseState == .awaitingCredit else { return }
             try? await sleep(delay)
             guard purchaseState == .awaitingCredit else { return }
-            if let balance = try? await loadBalance() { apply(balance) }
+            if let amounts = try? await loadBalance() {
+                earned = amounts.earned
+                apply(amounts.balance)
+            }
         }
         guard purchaseState == .awaitingCredit else { return }
         purchaseState = .idle

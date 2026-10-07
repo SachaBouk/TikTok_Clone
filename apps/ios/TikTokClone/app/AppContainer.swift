@@ -37,6 +37,7 @@ final class AppContainer {
     private let messagingRepository: any MessagingRepository
     private let walletRepository: any WalletRepository
     private let search: any SearchRepository
+    private let gifts: any GiftRepository
     // Compte connecté ou non au dernier changement d'activité : l'historique des recherches est effacé à chaque
     // changement de session.
     private var lastSignedIn: Bool?
@@ -61,6 +62,7 @@ final class AppContainer {
         reports = RemoteReportRepository(client: client)
         videoLists = RemoteVideoListRepository(client: client)
         search = RemoteSearchRepository(client: client)
+        gifts = RemoteGiftRepository(client: client)
         searchHistory = SearchHistoryModel(store: UserDefaultsPreferencesStore())
         let videos = RemoteVideoPublishingRepository(client: client)
         let uploads = FileUploadStore()
@@ -208,6 +210,27 @@ final class AppContainer {
             let page = try await load(cursor: cursor)
             return (page.transactions, page.nextCursor)
         }
+    }
+
+    // Cadeaux reçus (ADR-050).
+    func makeReceivedGiftList() -> PagedList<ReceivedGift> {
+        let load = LoadReceivedGiftsUseCase(wallet: walletRepository)
+        return PagedList(session: session) { cursor in
+            let page = try await load(cursor: cursor)
+            return (page.gifts, page.nextCursor)
+        }
+    }
+
+    // Feuille de cadeaux sur une vidéo (ADR-050).
+    func makeGiftSheetViewModel(video: FeedVideo) -> GiftSheetViewModel {
+        GiftSheetViewModel(
+            video: video,
+            loadCatalog: LoadGiftCatalogUseCase(gifts: gifts),
+            sendGift: SendGiftUseCase(gifts: gifts),
+            wallet: wallet,
+            session: session,
+            analytics: analytics
+        )
     }
 
     // Liste complète d'un groupe du centre d'activité.

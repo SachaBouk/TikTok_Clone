@@ -9,6 +9,8 @@ const KIND_LABELS: Record<WalletTransactionKind, string> = {
   purchase: 'Achat',
   refund: 'Remboursement',
   adjustment: 'Ajustement',
+  // Jamais dans le journal RevenueCat : les cadeaux ont leur propre journal (page « Cadeaux », ADR-050).
+  giftSent: 'Cadeau envoyé',
 };
 
 // Journal des jetons (page « Jetons » et fiche d'un compte). Le montant appliqué n'est affiché à part que s'il

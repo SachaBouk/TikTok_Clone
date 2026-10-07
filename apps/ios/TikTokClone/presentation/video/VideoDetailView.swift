@@ -12,6 +12,10 @@ struct VideoDetailView: View {
     @State private var alertMessage: String?
     // Pile de la vidéo seule : une page de hashtag touché dans la description y est poussée (ADR-049).
     @State private var path = NavigationPath()
+    // Feuille de cadeaux et animation à l'envoi (ADR-050).
+    @State private var giftVideo: FeedVideo?
+    @State private var giftBurst: GiftBurst?
+    @Environment(SessionStore.self) private var session
     @Environment(\.dismiss) private var dismiss
 
     init(viewModel: VideoDetailViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer) {
@@ -41,6 +45,7 @@ struct VideoDetailView: View {
             .appDestinations(container)
         }
         .providesNavigationPath($path)
+        .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in
@@ -83,7 +88,8 @@ struct VideoDetailView: View {
                     share: { shareVideo = interactions.display(video) },
                     report: { report(video) },
                     alert: { alertMessage = $0 },
-                    openHashtag: { path.append(HashtagRoute(name: $0)) }
+                    openHashtag: { path.append(HashtagRoute(name: $0)) },
+                    gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } }
                 )
             )
         }

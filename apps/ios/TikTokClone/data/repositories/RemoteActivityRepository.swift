@@ -66,7 +66,8 @@ extension ActivityNotification {
             comment: dto.comment.map { Comment(id: $0.id, content: $0.content) },
             read: dto.read,
             createdAt: dto.createdAt,
-            moderation: dto.moderation.map(ActivityModeration.init)
+            moderation: dto.moderation.map(ActivityModeration.init),
+            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) }
         )
     }
 }
@@ -83,7 +84,8 @@ extension ActivityGroup {
             read: dto.read,
             latestID: dto.latestId,
             createdAt: dto.createdAt,
-            moderation: dto.moderation.map(ActivityModeration.init)
+            moderation: dto.moderation.map(ActivityModeration.init),
+            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) }
         )
     }
 }
@@ -131,6 +133,7 @@ extension Components.Schemas.NotificationType {
         case .repost: self = .repost
         case .reportResolved: self = .reportResolved
         case .contentRemoved: self = .contentRemoved
+        case .gift: self = .gift
         }
     }
 }
@@ -144,6 +147,7 @@ extension ActivityKind {
         case .repost: self = .repost
         case .reportResolved: self = .reportResolved
         case .contentRemoved: self = .contentRemoved
+        case .gift: self = .gift
         }
     }
 }

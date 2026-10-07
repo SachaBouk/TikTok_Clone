@@ -26,7 +26,7 @@ enum RealtimeUpdate: Equatable, Sendable {
     // Solde de jetons changé (achat crédité, remboursement).
     // Compteurs de son propre profil (ADR-045) : abonnement ou désabonnement, le sien ou celui d'un autre envers lui.
     case profileCountersChanged(followers: Int, following: Int)
-    case walletUpdated(balance: Int)
+    case walletUpdated(balance: Int, earned: Int)
 }
 
 // Port de la connexion temps réel. L'implémentation gère l'authentification, la détection des connexions

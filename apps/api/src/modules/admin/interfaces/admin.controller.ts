@@ -20,6 +20,7 @@ import type {
   AdminVideoDto,
   AdminVideoPageDto,
   AdminWalletTransactionPageDto,
+  AdminGiftPageDto,
   ReportTargetType,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
@@ -36,6 +37,7 @@ import {
   AdminUsersQuery,
   AdminVideosQuery,
   AdminWalletTransactionsQuery,
+  AdminGiftsQuery,
 } from './admin.requests';
 import { REPORT_TARGET_TYPES } from '../../reports/domain/report';
 import {
@@ -49,6 +51,7 @@ import {
   AdminVideoPageResponse,
   AdminVideoResponse,
   AdminWalletTransactionPageResponse,
+  AdminGiftPageResponse,
   toAdminCommentDto,
   toAdminModerationActionDto,
   toAdminReportTargetDetailDto,
@@ -57,6 +60,7 @@ import {
   toAdminUserDto,
   toAdminVideoDto,
   toAdminWalletTransactionDto,
+  toAdminGiftDto,
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
@@ -201,6 +205,15 @@ export class AdminController {
       query.limit,
     );
     return { items: page.items.map(toAdminWalletTransactionDto), nextCursor: page.nextCursor };
+  }
+
+  // Journal des cadeaux (ADR-050) : lecture seule, comptes supprimés et vidéos supprimées compris.
+  @Get('gifts')
+  @ApiOkResponse({ type: AdminGiftPageResponse })
+  @ApiBadRequestResponse(INVALID_QUERY)
+  async listAdminGifts(@Query() query: AdminGiftsQuery): Promise<AdminGiftPageDto> {
+    const page = await this.adminService.listGifts({ userId: query.userId }, query.cursor ?? null, query.limit);
+    return { items: page.items.map(toAdminGiftDto), nextCursor: page.nextCursor };
   }
 
   @Delete('comments/:id')

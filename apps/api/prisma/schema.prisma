@@ -7,6 +7,7 @@
 // pas d'auto-follow, solde de portefeuille ≥ 0, montant de cadeau > 0 (migration initiale) ;
 // notification cohérente avec son type et jamais adressée à son auteur (migration notifications).
 // Hashtag de 1 à 50 caractères, nombre de vidéos ≥ 0 ; extension pg_trgm (migration search_hashtags, ADR-049).
+// Gains ≥ 0, cadeau cohérent, notification de cadeau avec son code et son prix (migration gifts, ADR-050).
 
 generator client {
   provider            = "prisma-client"
@@ -160,6 +161,7 @@ model Video {
   viewHistory   ViewHistory[]
   notifications Notification[]
   hashtags      VideoHashtag[]
+  gifts         GiftSent[]
 
   @@index([userId, createdAt])
   // Le feed ne sert que les vidéos `ready`.
@@ -364,6 +366,8 @@ enum NotificationType {
   // Modération (ADR-038), sans auteur : décision sur un signalement, contenu retiré par un administrateur.
   reportResolved @map("report_resolved")
   contentRemoved @map("content_removed")
+  // Cadeau reçu sur une vidéo (ADR-050).
+  gift
 
   @@map("notification_type")
 }
@@ -387,6 +391,9 @@ model Notification {
   moderationReason     ReportReason?     @map("moderation_reason")
   moderationOutcome    ReportResolution? @map("moderation_outcome")
   moderationExcerpt    String?           @map("moderation_excerpt")
+  // Cadeau (ADR-050) : code du catalogue et prix, copiés (ce module ne lit pas les tables du portefeuille).
+  giftCode    String?          @map("gift_code")
+  giftAmount  Int?             @map("gift_amount")
   readAt      DateTime?        @map("read_at")
   createdAt   DateTime         @default(now()) @map("created_at")
 
@@ -415,7 +422,10 @@ model Notification {
 model Wallet {
   // Un portefeuille par utilisateur.
   userId    String   @id @map("user_id") @db.Uuid
+  // Jetons achetés, seuls dépensables (ADR-009).
   balance   Int      @default(0)
+  // Jetons reçus en cadeaux (ADR-050) : gains à part, jamais dépensés ni retirés (CHECK ≥ 0 écrit à la main).
+  earned    Int      @default(0)
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -466,18 +476,32 @@ model WalletTransaction {
   @@map("wallet_transactions")
 }
 
+// Cadeau envoyé (ADR-009, ADR-050) : débité du solde de l'expéditeur, crédité aux gains du destinataire, dans une
+// transaction. Gardé à la suppression d'un compte ou de la vidéo (colonnes mises à nul).
 model GiftSent {
-  id          String   @id @default(uuid(7)) @map("gift_id") @db.Uuid
-  senderId    String?  @map("sender_id") @db.Uuid
-  recipientId String?  @map("recipient_id") @db.Uuid
-  amount      Int
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid(7)) @map("gift_id") @db.Uuid
+  senderId           String?  @map("sender_id") @db.Uuid
+  recipientId        String?  @map("recipient_id") @db.Uuid
+  // Prix payé, en jetons (> 0, CHECK de la migration initiale).
+  amount             Int
+  // Code du catalogue au moment de l'envoi (`wallet/domain/gift-catalog.ts`).
+  giftCode           String   @map("gift_code")
+  // Vidéo sur laquelle le cadeau a été envoyé ; nulle si elle a été supprimée depuis.
+  videoId            String?  @map("video_id") @db.Uuid
+  // Identifiant d'envoi choisi par l'app : un renvoi ne débite pas deux fois (index unique avec l'expéditeur).
+  clientGiftId       String   @map("client_gift_id") @db.Uuid
+  // Solde de l'expéditeur après le débit (historique de son portefeuille).
+  senderBalanceAfter Int      @map("sender_balance_after")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  sender    User? @relation("GiftSender", fields: [senderId], references: [id], onDelete: SetNull)
-  recipient User? @relation("GiftRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  sender    User?  @relation("GiftSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient User?  @relation("GiftRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  video     Video? @relation(fields: [videoId], references: [id], onDelete: SetNull)
 
-  @@index([senderId, createdAt])
-  @@index([recipientId, createdAt])
+  @@unique([senderId, clientGiftId])
+  // Historiques du portefeuille (envoyés, reçus), du plus récent au plus ancien (identifiants UUID v7).
+  @@index([senderId, id])
+  @@index([recipientId, id])
   @@map("gifts_sent")
 }
 

@@ -15,7 +15,7 @@ import { UserNotFoundError } from '../../users/domain/user.errors';
 import type { VideosService } from '../../videos/application/videos.service';
 import type { VideoFilter } from '../../videos/domain/video';
 import { VideoNotFoundError } from '../../videos/domain/video.errors';
-import type { WalletService } from '../../wallet/application/wallet.service';
+import type { GiftPage, WalletService } from '../../wallet/application/wallet.service';
 import type { LedgerFilter } from '../../wallet/domain/wallet';
 import {
   type AdminAccount,
@@ -199,6 +199,11 @@ export class AdminService {
     };
   }
 
+  // Journal des cadeaux (ADR-050) : tous, ou envoyés et reçus par `userId`, du plus récent au plus ancien.
+  listGifts(filter: { userId?: string }, cursor: string | null, limit: number): Promise<GiftPage> {
+    return this.wallet.listGifts(filter, cursor, limit);
+  }
+
   async listComments(filter: CommentFilter, cursor: string | null, limit: number): Promise<Page<ModeratedComment>> {
     const rows = await this.interactions.listAllComments(filter, cursor, limit + 1);
     const page = rows.slice(0, limit);
@@ -320,10 +325,11 @@ export class AdminService {
 
   private async describeAccounts(users: User[]): Promise<AdminAccount[]> {
     const ids = users.map((user) => user.id);
-    const [adminIds, videoCounts, balances, suspensions] = await Promise.all([
+    const [adminIds, videoCounts, balances, earnings, suspensions] = await Promise.all([
       this.auth.findAdminIds(ids),
       this.videos.countVideosByAuthors(ids),
       this.wallet.getBalances(ids),
+      this.wallet.getEarnings(ids),
       this.auth.getSuspensions(ids),
     ]);
     const moderators = await this.usersById([...suspensions.values()].flatMap((s) => (s.suspendedBy ? [s.suspendedBy] : [])));
@@ -334,6 +340,7 @@ export class AdminService {
         isAdmin: adminIds.has(user.id),
         videosCount: videoCounts.get(user.id) ?? 0,
         tokenBalance: balances.get(user.id) ?? 0,
+        tokenEarned: earnings.get(user.id) ?? 0,
         suspension: suspension
           ? { suspendedAt: suspension.suspendedAt, reason: suspension.reason, suspendedBy: moderators.get(suspension.suspendedBy ?? '') ?? null }
           : null,

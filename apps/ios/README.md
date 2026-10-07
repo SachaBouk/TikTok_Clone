@@ -173,7 +173,14 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 
 ## Jetons et paywall (ADR-009)
 
-- Bouton « Jetons » (avec le solde) sur son profil, et ligne « Portefeuille » dans Paramètres : solde, packs en vente, historique.
+- Bouton « Jetons » (avec le solde) sur son profil, et ligne « Portefeuille » dans Paramètres : solde, gains (« jetons reçus en cadeaux »,
+  ADR-050), packs en vente, historique en deux listes (« Mouvements », cadeaux envoyés compris ; « Cadeaux reçus »).
+- **Cadeaux** (ADR-050) : bouton 🎁 du lecteur (pas sur ses propres vidéos) → feuille de cadeaux (solde, « Recharger », catalogue,
+  « Envoyer »), animation chez l'expéditeur. Routes : `getGiftCatalog`, `sendGift(path:body:)` avec un `clientGiftId` (UUID, le même
+  à chaque essai : un renvoi ne débite pas deux fois ; `.code402` = solde insuffisant, `.tooManyRequests` avec `retryAfter`),
+  `listReceivedGifts`. Les jetons reçus ne se dépensent pas : seuls les jetons achetés servent à offrir.
+- Tester sans RevenueCat : créditer un compte jetable en local (`INSERT INTO wallets (user_id, balance, updated_at) VALUES ('<UUID>', 1000, now())`),
+  ou simuler le webhook (ci-dessous).
 - Achats par le SDK RevenueCat. Clé publique dans `Config/Local.xcconfig`, non versionné :
   ```
   REVENUECAT_API_KEY = test_…

@@ -66,6 +66,9 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
   journal complet filtrable par compte ou « à rapprocher » (client RevenueCat inconnu de l'API : rien n'a été crédité).
   Montant annoncé et appliqué, solde après, identifiants RevenueCat et store. Un crédit manuel passe par un ajustement
   dans RevenueCat (il revient par le webhook).
+- **Cadeaux** (ADR-050, lecture seule) : jetons dépensés (total, 7 jours), gains des créateurs (non dépensables), journal de
+  chaque cadeau (expéditeur, créateur, vidéo, prix, solde après), filtrable par compte (bouton « Ses cadeaux » de la fiche,
+  qui affiche aussi les gains). Carte « Jetons offerts » sur le tableau de bord.
 
 Suppressions confirmées dans une alerte, avec un **motif** de la liste des signalements (le plus signalé est proposé depuis
 un signalement) : l'auteur reçoit « Contenu retiré » avec ce motif, dans son activité et en notification push. Une vidéo est

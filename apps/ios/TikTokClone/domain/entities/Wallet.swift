@@ -10,12 +10,15 @@ enum WalletTransactionKind: Equatable, Sendable {
     case refund
     // Ajustement manuel (tableau de bord RevenueCat).
     case adjustment
+    // Cadeau envoyé (ADR-050).
+    case giftSent
 
     var title: String {
         switch self {
         case .purchase: "Achat de jetons"
         case .refund: "Remboursement"
         case .adjustment: "Ajustement"
+        case .giftSent: "Cadeau envoyé"
         }
     }
 }
@@ -28,6 +31,15 @@ struct WalletTransaction: Identifiable, Equatable, Sendable {
     let balanceAfter: Int
     let productID: String?
     let createdAt: Date
+    // Cadeau envoyé seulement (ADR-050) : le cadeau et son destinataire (nil : compte supprimé depuis).
+    var gift: GiftInfo? = nil
+    var recipient: UserSummary? = nil
+}
+
+// Solde (jetons achetés, seuls dépensables) et gains (jetons reçus en cadeaux, ADR-050 : ni dépensables ni retirables).
+struct WalletAmounts: Equatable, Sendable {
+    let balance: Int
+    let earned: Int
 }
 
 struct WalletTransactionPage: Equatable, Sendable {

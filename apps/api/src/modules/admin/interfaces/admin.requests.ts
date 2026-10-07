@@ -79,6 +79,14 @@ export class AdminWalletTransactionsQuery extends AdminPageQuery {
   unmatched?: boolean;
 }
 
+// Journal des cadeaux (ADR-050) : un compte (envoyés et reçus), ou tous.
+export class AdminGiftsQuery extends AdminPageQuery {
+  @ApiPropertyOptional({ format: 'uuid', description: 'Cadeaux envoyés ou reçus par ce compte seulement.' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+}
+
 // Suspension d'un compte (ADR-037) : motif interne obligatoire, nettoyé par le service.
 export class AdminSuspendRequest implements AdminSuspendUserDto {
   @ApiProperty({ minLength: 1, maxLength: MAX_SUSPENSION_REASON_LENGTH, example: 'Spam répété dans les commentaires' })

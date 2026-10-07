@@ -4,6 +4,10 @@
 
 export type WalletTransactionKind = 'purchase' | 'refund' | 'adjustment';
 
+// Sortes de l'historique d'un compte, pour la spec (enum nommé partagé par l'app et le backoffice) : celles du journal
+// RevenueCat, et les cadeaux envoyés (ADR-050).
+export const WALLET_HISTORY_KINDS = ['purchase', 'refund', 'adjustment', 'giftSent'] as const;
+
 // Un mouvement du journal, tel qu'il a été appliqué au solde du compte.
 export interface WalletTransaction {
   id: string;
@@ -49,7 +53,8 @@ export interface NewWalletEntry {
 }
 
 export type ApplyResult =
-  | { status: 'applied'; appliedAmount: number; balance: number | null }
+  // `balance` et `earned` nuls : client inconnu (aucun portefeuille touché).
+  | { status: 'applied'; appliedAmount: number; balance: number | null; earned: number | null }
   // Événement déjà appliqué (webhook rejoué).
   | { status: 'duplicate' };
 
@@ -107,6 +112,14 @@ export interface WalletStats {
   inCirculation: number;
   // Mouvements de clients inconnus, à rapprocher.
   unmatched: number;
+  // Cadeaux (ADR-050) : jetons dépensés (total, et depuis `since`) et gains des comptes existants.
+  gifts: GiftTotals;
+}
+
+export interface GiftTotals {
+  spent: number;
+  spentSince: number;
+  earned: number;
 }
 
 export const PRODUCTION_ENVIRONMENT = 'PRODUCTION';

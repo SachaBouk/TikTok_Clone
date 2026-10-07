@@ -31,6 +31,8 @@ export default async function DashboardPage() {
     { title: 'Commentaires', count: stats.comments, href: '/comments' },
     // Jetons vendus en production (ADR-009) ; achats de test à part, sur la page « Jetons ».
     { title: 'Jetons vendus', count: { total: stats.tokens.production.purchased, last7Days: stats.tokens.purchasedLast7Days }, href: '/tokens' },
+    // Cadeaux (ADR-050) : jetons dépensés.
+    { title: 'Jetons offerts', count: { total: stats.tokens.giftsSpent, last7Days: stats.tokens.giftsSpentLast7Days }, href: '/gifts' },
   ];
 
   return (
@@ -49,7 +51,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map(({ title, count, href, note }) => (
           <Link key={title} href={href}>
             <Card className="transition-colors hover:bg-muted/50">

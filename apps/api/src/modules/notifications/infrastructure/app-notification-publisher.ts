@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PUSH_BODY_MAX_LENGTH } from '../../push/domain/push';
 import { PushService } from '../../push/application/push.service';
 import { RealtimeService } from '../../realtime/application/realtime.service';
+// Constantes du catalogue des cadeaux (nom, emoji), pas un accès aux données du portefeuille (ADR-003).
+import { giftDisplay } from '../../wallet/domain/gift-catalog';
 import type {
   ModerationOutcome,
   ModerationReason,
@@ -76,6 +78,10 @@ function pushBody({ notification }: NotificationWithContext): string {
       return outcomeText(notification.moderation?.outcome ?? 'dismissed');
     case 'contentRemoved':
       return `${REMOVED[notification.moderation?.targetType ?? 'video']} Motif : ${REASON_LABELS[notification.moderation?.reason ?? 'other']}.`;
+    case 'gift': {
+      const gift = giftDisplay(notification.gift?.code ?? '');
+      return `t'a envoyé ${gift.emoji} ${gift.name}`;
+    }
   }
 }
 

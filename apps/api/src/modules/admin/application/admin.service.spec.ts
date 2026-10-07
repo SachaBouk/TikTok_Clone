@@ -182,7 +182,13 @@ describe('AdminService', () => {
       suspended,
       () => NOW,
     );
-    wallet = new WalletService(new InMemoryWalletRepository(), users, new InMemoryWalletEventPublisher(), { rejectSandbox: false });
+    wallet = new WalletService(
+      new InMemoryWalletRepository(),
+      users,
+      new InMemoryWalletEventPublisher(),
+      { rejectSandbox: false },
+      { videos, interactions, notifications, rateLimiter: new InMemoryRateLimiter() },
+    );
     const realtime = new RealtimeService(
       bus,
       new (class extends AccessTokenVerifier {
@@ -452,6 +458,7 @@ describe('AdminService', () => {
         purchasedSince: 0,
         inCirculation: 0,
         unmatched: 0,
+        gifts: { spent: 0, spentSince: 0, earned: 0 },
       },
     });
   });

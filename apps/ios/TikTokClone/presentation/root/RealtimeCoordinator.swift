@@ -72,8 +72,8 @@ final class RealtimeCoordinator {
             messaging.handle(update)
         case .profileCountersChanged(let followers, let following):
             ownProfile.countersChanged(followers: followers, following: following)
-        case .walletUpdated(let balance):
-            wallet.balanceChanged(balance)
+        case .walletUpdated(let balance, let earned):
+            wallet.balanceChanged(balance, earned: earned)
         }
     }
 }

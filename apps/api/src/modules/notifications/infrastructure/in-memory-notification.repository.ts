@@ -18,7 +18,8 @@ export class InMemoryNotificationRepository extends NotificationRepository {
   private sequence = 0;
 
   async add(event: ActivityEvent): Promise<Notification | null> {
-    if (event.type !== 'comment' && this.find(event)) return null;
+    // Commentaires et cadeaux : une notification par action.
+    if (event.type !== 'comment' && event.type !== 'gift' && this.find(event)) return null;
     // Identifiants croissants, comme les UUID v7 de la base.
     const id = `${String(++this.sequence).padStart(8, '0')}-${randomUUID()}`;
     const created: Notification = {
@@ -30,6 +31,7 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       commentId: event.type === 'comment' ? event.commentId : null,
       commentText: event.type === 'comment' ? event.commentText : null,
       moderation: null,
+      gift: event.type === 'gift' ? { code: event.giftCode, amount: event.giftAmount } : null,
       readAt: null,
       createdAt: new Date(),
     };
@@ -53,6 +55,7 @@ export class InMemoryNotificationRepository extends NotificationRepository {
         outcome: event.type === 'reportResolved' ? event.outcome : null,
         excerpt: event.excerpt,
       },
+      gift: null,
       readAt: null,
       createdAt: new Date(),
     };
@@ -126,7 +129,10 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       }
       group.count += 1;
       group.unread ||= !n.readAt;
-      if (n.actorId && group.recentActorIds.length < GROUP_ACTORS_SHOWN) group.recentActorIds.push(n.actorId);
+      // Auteurs distincts : un compte peut envoyer plusieurs cadeaux sur la même vidéo (ADR-050).
+      if (n.actorId && group.recentActorIds.length < GROUP_ACTORS_SHOWN && !group.recentActorIds.includes(n.actorId)) {
+        group.recentActorIds.push(n.actorId);
+      }
     }
     return [...groups.values()];
   }

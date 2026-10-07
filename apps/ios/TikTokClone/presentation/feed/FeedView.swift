@@ -19,6 +19,9 @@ struct FeedView: View {
     // Page d'un hashtag touché dans une description (ADR-049) : poussée par valeur dans la pile (`navigationPath`) ; à
     // défaut, par `navigationDestination(item:)`.
     @State private var hashtagRoute: HashtagRoute?
+    // Feuille de cadeaux et animation à l'envoi (ADR-050).
+    @State private var giftVideo: FeedVideo?
+    @State private var giftBurst: GiftBurst?
     @Environment(\.navigationPath) private var navigationPath
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
@@ -66,6 +69,12 @@ struct FeedView: View {
         .navigationDestination(item: $hashtagRoute) { route in
             HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
         }
+        .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
+    }
+
+    // Cadeau (ADR-050) ; en invité, la connexion s'ouvre.
+    private func openGifts(_ video: FeedVideo) {
+        if session.isSignedIn { giftVideo = video } else { session.requestSignIn() }
     }
 
     private func reload() async {
@@ -132,7 +141,8 @@ struct FeedView: View {
                                 } else {
                                     hashtagRoute = HashtagRoute(name: name)
                                 }
-                            }
+                            },
+                            gift: { openGifts(entry.video) }
                         )
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
@@ -212,6 +222,8 @@ struct VideoPageActions {
     var delete: () -> Void
     // Hashtag touché dans la description (ADR-049) : sa page.
     var openHashtag: (String) -> Void = { _ in }
+    // Bouton 🎁 (ADR-050) : feuille de cadeaux, sur la vidéo d'un autre.
+    var gift: () -> Void = {}
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
@@ -378,6 +390,20 @@ struct FeedActionColumn: View {
             .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
+            // Cadeau (ADR-050) : sur la vidéo d'un autre seulement. Aucun compteur : les cadeaux ne sont pas publics.
+            if showsFollowButton {
+                Button(action: actions.gift) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 4)
+                        .frame(width: 56, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Offrir un cadeau")
+                .accessibilityIdentifier("video.gift")
+            }
             Menu {
                 if showsFollowButton {
                     Button("Signaler", systemImage: "flag", role: .destructive, action: actions.report)

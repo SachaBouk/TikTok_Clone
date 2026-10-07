@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RealtimeService } from '../../realtime/application/realtime.service';
+import type { WalletAmounts } from '../domain/gift';
 import { WalletEventPublisher } from '../domain/wallet-events';
 
 // Solde à jour envoyé par WebSocket (module realtime, ADR-011) à tous les appareils du compte.
@@ -9,7 +10,7 @@ export class AppWalletEventPublisher extends WalletEventPublisher {
     super();
   }
 
-  async balanceChanged(userId: string, balance: number): Promise<void> {
-    await this.realtime.sendToUser(userId, { event: 'walletUpdated', data: { balance } });
+  async balanceChanged(userId: string, amounts: WalletAmounts): Promise<void> {
+    await this.realtime.sendToUser(userId, { event: 'walletUpdated', data: { balance: amounts.balance, earned: amounts.earned } });
   }
 }

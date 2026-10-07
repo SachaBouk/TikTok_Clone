@@ -18,6 +18,8 @@ export interface AdminAccount {
   isAdmin: boolean;
   videosCount: number;
   tokenBalance: number;
+  // Jetons reçus en cadeaux (ADR-050).
+  tokenEarned: number;
   suspension: AccountModeration | null;
 }
 

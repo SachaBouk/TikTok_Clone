@@ -1,6 +1,6 @@
 import type { UserSummaryDto } from './users.js';
 import type { VideoStatus } from './videos.js';
-import type { WalletTransactionKind } from './wallet.js';
+import type { GiftDto, GiftVideoDto, WalletTransactionKind } from './wallet.js';
 
 // Backoffice (ADR-004) : routes `/admin`, réservées aux comptes au rôle `admin`.
 
@@ -21,6 +21,8 @@ export interface AdminUserDto {
   videosCount: number;
   // Solde de jetons (ADR-009).
   tokenBalance: number;
+  // Jetons reçus en cadeaux (ADR-050), non dépensables.
+  tokenEarned: number;
   createdAt: string;
   // Suspension en cours (ADR-037) ; absente si le compte n'est pas suspendu.
   suspension?: AdminSuspensionDto;
@@ -121,6 +123,10 @@ export interface AdminTokenStatsDto {
   inCirculation: number;
   // Mouvements d'un client inconnu de l'API, à rapprocher à la main.
   unmatched: number;
+  // Cadeaux (ADR-050) : jetons dépensés (total et 7 derniers jours), gains des comptes existants.
+  giftsSpent: number;
+  giftsSpentLast7Days: number;
+  earned: number;
 }
 
 export interface AdminUserCountsDto extends AdminCountDto {
@@ -169,5 +175,27 @@ export interface AdminWalletTransactionDto {
 export interface AdminWalletTransactionPageDto {
   // Du mouvement le plus récent au plus ancien.
   items: AdminWalletTransactionDto[];
+  nextCursor: string | null;
+}
+
+// Journal des cadeaux (ADR-050) : un cadeau envoyé, avec ses deux comptes (absents : supprimés depuis) et sa vidéo.
+export interface AdminGiftDto {
+  id: string;
+  gift: GiftDto;
+  // Prix payé, en jetons.
+  amount: number;
+  // Solde de l'expéditeur après le débit.
+  senderBalanceAfter: number;
+  sender?: UserSummaryDto;
+  recipient?: UserSummaryDto;
+  // Absente si elle n'est plus publiée ; `videoId` nul si elle a été supprimée.
+  video?: GiftVideoDto;
+  videoId: string | null;
+  createdAt: string;
+}
+
+export interface AdminGiftPageDto {
+  // Du plus récent au plus ancien.
+  items: AdminGiftDto[];
   nextCursor: string | null;
 }

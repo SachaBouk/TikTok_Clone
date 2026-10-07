@@ -4,8 +4,8 @@ import type { PublishedVideo } from '../../videos/domain/video';
 // Centre d'activité (ADR-016) : une notification par action d'un compte sur les vidéos ou le compte d'un autre.
 // Créées par le module interactions via NotificationsService (ADR-003).
 
-// `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur.
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved';
+// `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
+export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift';
 
 // Modération (ADR-038). Mêmes valeurs que le module reports, recopiées : ce module n'en dépend pas (c'est reports
 // qui le prévient).
@@ -31,7 +31,7 @@ export type ModerationEvent =
 
 export const MODERATION_TYPES: NotificationType[] = ['reportResolved', 'contentRemoved'];
 // Listes complètes, pour la spec OpenAPI (mêmes enums nommés que le module reports).
-export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved'];
+export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved', 'gift'];
 export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message'];
 export const MODERATION_REASONS: ModerationReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
 export const MODERATION_OUTCOMES: ModerationOutcome[] = ['contentRemoved', 'accountSuspended', 'dismissed'];
@@ -44,7 +44,10 @@ export function isModeration(type: NotificationType): boolean {
 export type ActivityEvent =
   | { type: 'like' | 'repost'; actorId: string; recipientId: string; videoId: string }
   | { type: 'comment'; actorId: string; recipientId: string; videoId: string; commentId: string; commentText: string }
-  | { type: 'follow'; actorId: string; recipientId: string };
+  | { type: 'follow'; actorId: string; recipientId: string }
+  // Cadeau (ADR-050, module wallet) : code du catalogue et prix copiés (ce module ne lit pas les tables du portefeuille).
+  // Une notification par cadeau, jamais retirée (le cadeau est définitif).
+  | { type: 'gift'; actorId: string; recipientId: string; videoId: string; giftCode: string; giftAmount: number };
 
 // Actions réversibles : leur notification disparaît quand elles sont annulées (unlike, unfollow…).
 // Un commentaire, une vidéo ou un compte supprimés emportent aussi les leurs (retirées juste avant, pour être annoncées).
@@ -63,8 +66,15 @@ export interface Notification {
   commentText: string | null;
   // Notifications de modération seulement.
   moderation: ModerationDetails | null;
+  // Notifications de cadeau seulement (ADR-050).
+  gift: GiftDetails | null;
   readAt: Date | null;
   createdAt: Date;
+}
+
+export interface GiftDetails {
+  code: string;
+  amount: number;
 }
 
 // Notification prête à afficher : auteur de l'action et vidéo, lus via les modules users et videos.
@@ -76,7 +86,7 @@ export interface NotificationWithContext {
   video: PublishedVideo | null;
 }
 
-// Regroupement à la lecture (choix du développeur, comme TikTok) : like et republication par vidéo,
+// Regroupement à la lecture (choix du développeur, comme TikTok) : like, republication et cadeau par vidéo,
 // tous les follows ensemble, chaque commentaire seul (son texte compte). Le stockage ne change pas.
 export interface NotificationGroup {
   // Notification la plus récente du groupe : type, vidéo, commentaire ; son identifiant sert de curseur.
@@ -106,6 +116,7 @@ export function groupKey(notification: Notification): string {
   switch (notification.type) {
     case 'like':
     case 'repost':
+    case 'gift':
       return `${notification.type}:${notification.videoId}`;
     case 'follow':
       return 'follow';
@@ -124,6 +135,7 @@ export function groupFilter(notification: Notification): NotificationFilter | nu
   switch (notification.type) {
     case 'like':
     case 'repost':
+    case 'gift':
       return { type: notification.type, videoId: notification.videoId ?? undefined };
     case 'follow':
       return { type: 'follow' };

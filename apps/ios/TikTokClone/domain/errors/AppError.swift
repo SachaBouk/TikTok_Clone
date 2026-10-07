@@ -18,6 +18,8 @@ enum AppError: Error, Equatable, Sendable {
     case tooManyActions(LimitedAction, retryAfter: Int)
     // Son propre compte, suspendu par un administrateur (ADR-037) : connexion refusée (403), sans motif.
     case accountSuspended
+    // Solde de jetons insuffisant pour ce cadeau (402, ADR-050).
+    case insufficientBalance
     // Le profil d'un compte suspendu n'est plus lisible (410).
     case profileSuspended
     // API injoignable (réseau, serveur arrêté).
@@ -37,6 +39,7 @@ enum AppError: Error, Equatable, Sendable {
         case .tooManyLoginAttempts(let seconds): "Trop de tentatives de connexion. Réessaie dans \(Self.delay(seconds))."
         case .tooManyActions(let action, let seconds): "\(action.tooMany) Réessaie dans \(Self.delay(seconds))."
         case .accountSuspended: "Ton compte est suspendu."
+        case .insufficientBalance: "Solde insuffisant : recharge des jetons pour offrir ce cadeau."
         case .profileSuspended: "Ce compte a été suspendu."
         case .network: "Impossible de joindre le serveur. Vérifie ta connexion."
         case .unexpected: "Une erreur inattendue s’est produite."
@@ -53,7 +56,7 @@ enum AppError: Error, Equatable, Sendable {
 
 // Actions limitées par l'API (ADR-039).
 enum LimitedAction: Sendable {
-    case signup, reactions, comments, follows, uploads
+    case signup, reactions, comments, follows, uploads, gifts
 
     var tooMany: String {
         switch self {
@@ -62,6 +65,7 @@ enum LimitedAction: Sendable {
         case .comments: "Trop de commentaires en peu de temps."
         case .follows: "Trop d’abonnements en peu de temps."
         case .uploads: "Trop de vidéos envoyées récemment."
+        case .gifts: "Trop de cadeaux envoyés en peu de temps."
         }
     }
 }

@@ -31,9 +31,14 @@ import type {
   UserRole,
   VideoStatus,
   WalletTransactionKind,
+  AdminGiftDto,
+  AdminGiftPageDto,
 } from '@repo/shared';
 import type { User } from '../../users/domain/user';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
+import type { GiftWithContext } from '../../wallet/application/wallet.service';
+import { WALLET_HISTORY_KINDS } from '../../wallet/domain/wallet';
+import { GiftResponse, GiftVideoResponse, toGiftDto } from '../../wallet/interfaces/wallet.responses';
 import type {
   AdminAccount,
   LedgerLine,
@@ -93,6 +98,9 @@ export class AdminUserResponse implements AdminUserDto {
 
   @ApiProperty({ type: 'integer', minimum: 0, description: 'Solde de jetons.' })
   tokenBalance!: number;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Jetons reçus en cadeaux (ADR-050), non dépensables.' })
+  tokenEarned!: number;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -245,6 +253,15 @@ export class AdminTokenStatsResponse implements AdminTokenStatsDto {
 
   @ApiProperty({ type: 'integer', description: 'Mouvements d’un client inconnu de l’API, à rapprocher.' })
   unmatched!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Jetons dépensés en cadeaux.' })
+  giftsSpent!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Jetons dépensés en cadeaux sur les 7 derniers jours.' })
+  giftsSpentLast7Days!: number;
+
+  @ApiProperty({ type: 'integer', description: 'Gains (jetons reçus en cadeaux) des comptes existants.' })
+  earned!: number;
 }
 
 export class AdminUserCountsResponse extends AdminCountResponse implements AdminUserCountsDto {
@@ -282,7 +299,8 @@ export class AdminWalletTransactionResponse implements AdminWalletTransactionDto
   @ApiPropertyOptional({ type: UserSummaryResponse })
   user?: UserSummaryResponse;
 
-  @ApiProperty({ enum: ['purchase', 'refund', 'adjustment'], enumName: 'WalletTransactionKind' })
+  // Enum nommé partagé avec l'historique de l'app (le journal RevenueCat n'a jamais `giftSent`).
+  @ApiProperty({ enum: WALLET_HISTORY_KINDS, enumName: 'WalletTransactionKind' })
   kind!: WalletTransactionKind;
 
   @ApiProperty({ type: 'integer', description: 'Mouvement annoncé par RevenueCat.' })
@@ -327,9 +345,49 @@ export class AdminWalletTransactionPageResponse implements AdminWalletTransactio
   nextCursor!: string | null;
 }
 
+// Journal des cadeaux (ADR-050).
+export class AdminGiftResponse implements AdminGiftDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ type: GiftResponse })
+  gift!: GiftResponse;
+
+  @ApiProperty({ type: 'integer', minimum: 1, description: 'Prix payé, en jetons.' })
+  amount!: number;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Solde de l’expéditeur après le débit.' })
+  senderBalanceAfter!: number;
+
+  // Absent : compte supprimé depuis.
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  sender?: UserSummaryResponse;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  recipient?: UserSummaryResponse;
+
+  // Absente si elle n'est plus publiée.
+  @ApiPropertyOptional({ type: GiftVideoResponse })
+  video?: GiftVideoResponse;
+
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'Nul si la vidéo a été supprimée.' })
+  videoId!: string | null;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+}
+
+export class AdminGiftPageResponse implements AdminGiftPageDto {
+  @ApiProperty({ type: [AdminGiftResponse], description: 'Du plus récent au plus ancien.' })
+  items!: AdminGiftResponse[];
+
+  @ApiProperty({ type: String, nullable: true })
+  nextCursor!: string | null;
+}
+
 // Mappings explicites, champ par champ : rien n'est exposé par accident (clés de stockage, etc.).
 
-export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance, suspension }: AdminAccount): AdminUserDto {
+export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance, tokenEarned, suspension }: AdminAccount): AdminUserDto {
   return {
     id: user.id,
     username: user.username,
@@ -341,6 +399,7 @@ export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance, suspe
     followingCount: user.followingCount,
     videosCount,
     tokenBalance,
+    tokenEarned,
     createdAt: user.createdAt.toISOString(),
     ...(suspension
       ? {
@@ -422,6 +481,9 @@ export function toAdminStatsDto(stats: PlatformStats): AdminStatsDto {
       purchasedLast7Days: tokens.purchasedSince,
       inCirculation: tokens.inCirculation,
       unmatched: tokens.unmatched,
+      giftsSpent: tokens.gifts.spent,
+      giftsSpentLast7Days: tokens.gifts.spentSince,
+      earned: tokens.gifts.earned,
     },
   };
 }
@@ -625,4 +687,19 @@ export function toAdminModerationActionDto(action: ModerationAction, users: Map<
     reportsClosed: action.reportsClosed,
     createdAt: action.createdAt.toISOString(),
   };
+}
+
+export function toAdminGiftDto({ gift, sender, recipient, video }: GiftWithContext): AdminGiftDto {
+  const dto: AdminGiftDto = {
+    id: gift.id,
+    gift: toGiftDto(gift.giftCode),
+    amount: gift.amount,
+    senderBalanceAfter: gift.senderBalanceAfter,
+    videoId: gift.videoId,
+    createdAt: gift.createdAt.toISOString(),
+  };
+  if (sender) dto.sender = toUserSummary(sender);
+  if (recipient) dto.recipient = toUserSummary(recipient);
+  if (video) dto.video = { id: video.id, thumbnailUrl: video.thumbnailUrl };
+  return dto;
 }

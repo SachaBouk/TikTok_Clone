@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type {
   NotificationCommentDto,
   NotificationDto,
+  NotificationGiftDto,
   NotificationGroupDto,
   ModerationOutcome,
   NotificationGroupPageDto,
@@ -14,6 +15,7 @@ import type {
   UnreadNotificationsDto,
 } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
+import { giftDisplay } from '../../wallet/domain/gift-catalog';
 import {
   groupKey,
   MODERATION_OUTCOMES,
@@ -60,6 +62,21 @@ export class NotificationModerationResponse implements NotificationModerationDto
   excerpt?: string;
 }
 
+// Cadeau reçu (ADR-050).
+export class NotificationGiftResponse implements NotificationGiftDto {
+  @ApiProperty({ description: 'Code du catalogue.' })
+  code!: string;
+
+  @ApiProperty({ description: 'Nom du cadeau (« Cadeau » pour un code retiré du catalogue).' })
+  name!: string;
+
+  @ApiProperty()
+  emoji!: string;
+
+  @ApiProperty({ type: 'integer', minimum: 1, description: 'Prix payé, en jetons.' })
+  amount!: number;
+}
+
 export class NotificationResponse implements NotificationDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -84,6 +101,10 @@ export class NotificationResponse implements NotificationDto {
   // Présent pour une notification de modération seulement.
   @ApiPropertyOptional({ type: NotificationModerationResponse })
   moderation?: NotificationModerationResponse;
+
+  // Présent pour un cadeau seulement.
+  @ApiPropertyOptional({ type: NotificationGiftResponse })
+  gift?: NotificationGiftResponse;
 
   @ApiProperty()
   read!: boolean;
@@ -128,6 +149,10 @@ export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiPropertyOptional({ type: NotificationModerationResponse })
   moderation?: NotificationModerationResponse;
 
+  // Cadeau de la notification la plus récente du groupe.
+  @ApiPropertyOptional({ type: NotificationGiftResponse })
+  gift?: NotificationGiftResponse;
+
   @ApiProperty({ description: 'Faux si au moins une notification du groupe n’est pas lue.' })
   read!: boolean;
 
@@ -163,6 +188,8 @@ export function toNotificationDto({ notification, actor, video }: NotificationWi
   if (actor) dto.actor = toUserSummary(actor);
   const moderation = toModerationDto(notification);
   if (moderation) dto.moderation = moderation;
+  const gift = toGiftDto(notification);
+  if (gift) dto.gift = gift;
   if (video) dto.video = { id: video.id, thumbnailUrl: video.thumbnailUrl };
   if (notification.commentId && notification.commentText !== null) {
     dto.comment = { id: notification.commentId, content: notification.commentText };
@@ -187,7 +214,15 @@ export function toNotificationGroupDto({ group, actors, video }: NotificationGro
   }
   const moderation = toModerationDto(latest);
   if (moderation) dto.moderation = moderation;
+  const gift = toGiftDto(latest);
+  if (gift) dto.gift = gift;
   return dto;
+}
+
+function toGiftDto({ gift }: Notification): NotificationGiftDto | null {
+  if (!gift) return null;
+  const display = giftDisplay(gift.code);
+  return { code: gift.code, name: display.name, emoji: display.emoji, amount: gift.amount };
 }
 
 function toModerationDto({ moderation }: Notification): NotificationModerationDto | null {

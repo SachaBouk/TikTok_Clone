@@ -25,6 +25,8 @@ const notificationSelect = {
   moderationReason: true,
   moderationOutcome: true,
   moderationExcerpt: true,
+  giftCode: true,
+  giftAmount: true,
   readAt: true,
   createdAt: true,
 } as const;
@@ -51,6 +53,8 @@ export class PrismaNotificationRepository extends NotificationRepository {
           videoId: event.type === 'follow' ? null : event.videoId,
           commentId: event.type === 'comment' ? event.commentId : null,
           commentText: event.type === 'comment' ? event.commentText : null,
+          giftCode: event.type === 'gift' ? event.giftCode : null,
+          giftAmount: event.type === 'gift' ? event.giftAmount : null,
         },
       ],
       skipDuplicates: true,
@@ -162,19 +166,25 @@ export class PrismaNotificationRepository extends NotificationRepository {
   ): Promise<NotificationGroup[]> {
     // Sans auteur (modération) : jamais exclue (`actor_id <> ALL(…)` vaudrait NULL).
     const excluded = excludedActorIds.length ? Prisma.sql`AND (actor_id IS NULL OR actor_id <> ALL(${excludedActorIds}::uuid[]))` : Prisma.empty;
+    // Clé de groupe : like, republication et cadeau par vidéo, tous les follows, le reste seul. Auteurs **distincts**, du
+    // plus récent au plus ancien (un compte peut envoyer plusieurs cadeaux sur la même vidéo, ADR-050).
     const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] | null }[]>`
-      WITH grouped AS (
-        SELECT max(notification_id::text)::uuid AS latest_id,
-               count(*)::int AS count,
-               bool_or(read_at IS NULL) AS unread,
-               (array_agg(actor_id::text ORDER BY notification_id DESC) FILTER (WHERE actor_id IS NOT NULL))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
+      WITH base AS (
+        SELECT notification_id, actor_id, read_at,
+               type::text || ':' || CASE WHEN type IN ('like', 'repost', 'gift') THEN video_id::text
+                                         WHEN type = 'follow' THEN ''
+                                         ELSE notification_id::text END AS group_key
         FROM notifications
         WHERE user_id = ${recipientId}::uuid ${excluded} ${only}
-        GROUP BY type,
-                 CASE WHEN type IN ('like', 'repost') THEN video_id END,
-                 CASE WHEN type NOT IN ('like', 'repost', 'follow') THEN notification_id END
+      ), grouped AS (
+        SELECT group_key, max(notification_id::text)::uuid AS latest_id, count(*)::int AS count, bool_or(read_at IS NULL) AS unread
+        FROM base GROUP BY group_key
+      ), actors AS (
+        SELECT group_key, (array_agg(actor_id ORDER BY last_id DESC))[1:${GROUP_ACTORS_SHOWN}] AS actor_ids
+        FROM (SELECT group_key, actor_id::text AS actor_id, max(notification_id::text) AS last_id FROM base WHERE actor_id IS NOT NULL GROUP BY group_key, actor_id) per_actor
+        GROUP BY group_key
       )
-      SELECT latest_id::text AS latest_id, count, unread, actor_ids FROM grouped
+      SELECT latest_id::text AS latest_id, count, unread, actor_ids FROM grouped LEFT JOIN actors USING (group_key)
       ${before}
       ORDER BY latest_id DESC
       LIMIT ${limit}`;
@@ -227,6 +237,7 @@ function toNotification(row: NotificationRow): Notification {
           excerpt: row.moderationExcerpt,
         }
       : null,
+    gift: row.giftCode && row.giftAmount !== null ? { code: row.giftCode, amount: row.giftAmount } : null,
     readAt: row.readAt,
     createdAt: row.createdAt,
   };

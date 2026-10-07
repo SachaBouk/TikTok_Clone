@@ -51,6 +51,7 @@
 | [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Accepté |
 | [ADR-048](ADR-048-feed-abonnements.md) | Feed des abonnements (complète ADR-016) | Accepté |
 | [ADR-049](ADR-049-recherche-hashtags.md) | Recherche de comptes et hashtags (complète ADR-016 et ADR-003) | Accepté |
+| [ADR-050](ADR-050-cadeaux-jetons.md) | Cadeaux en jetons (complète ADR-016 et ADR-009) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

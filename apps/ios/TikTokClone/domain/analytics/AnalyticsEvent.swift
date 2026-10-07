@@ -31,6 +31,8 @@ enum VideoSource: String, Sendable {
 enum PaywallSource: String, Hashable, Sendable {
     case profile
     case settings
+    // « Recharger » de la feuille de cadeaux (ADR-050).
+    case gift
 }
 
 // Comment la vidéo a cessé d'être regardée.
@@ -119,6 +121,13 @@ extension AnalyticsEvent {
     static let guestPromptShown = AnalyticsEvent(name: "guest_prompt_shown", properties: [:])
 
     // Paywall (ADR-009) : affiché (depuis le profil ou les paramètres), achat commencé, validé par le store ou annulé.
+    // Cadeau envoyé (ADR-050) : code et prix, vidéo et son auteur ; jamais le solde.
+    static func giftSent(code: String, amount: Int, videoID: String, authorID: String) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "gift_sent",
+            properties: ["gift_code": .string(code), "amount": .int(amount), "video_id": .string(videoID), "author_id": .string(authorID)])
+    }
+
     static func paywallViewed(source: PaywallSource) -> AnalyticsEvent {
         AnalyticsEvent(name: "paywall_viewed", properties: ["source": .string(source.rawValue)])
     }

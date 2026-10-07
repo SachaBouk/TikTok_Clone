@@ -38,6 +38,8 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
     ['Abonnés', user.followersCount],
     ['Abonnements', user.followingCount],
     ['Jetons', user.tokenBalance],
+    // Jetons reçus en cadeaux (ADR-050), non dépensables.
+    ['Gains', user.tokenEarned],
   ] as const;
 
   return (
@@ -57,6 +59,9 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         </Button>
         <Button variant="outline" asChild>
           <Link href={`/moderation?userId=${user.id}`}>Journal de modération</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href={`/gifts?userId=${user.id}`}>Ses cadeaux</Link>
         </Button>
         {/* Un administrateur ne peut pas être suspendu : retirer d'abord son rôle (pnpm admin:revoke). */}
         {!user.suspension && user.role !== 'admin' && <SuspendAccount userId={user.id} username={user.username} />}

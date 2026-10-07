@@ -4191,6 +4191,210 @@
         ]
       }
     },
+    "/wallet/gifts/received": {
+      "get": {
+        "operationId": "listReceivedGifts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivedGiftPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou limite invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/gifts/catalog": {
+      "get": {
+        "operationId": "getGiftCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GiftCatalogResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "gifts"
+        ],
+        "security": []
+      }
+    },
+    "/videos/{id}/gifts": {
+      "post": {
+        "operationId": "sendGift",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendGiftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cadeau envoyé, et solde après le débit. Renvoi avec le même `clientGiftId` : le même cadeau, sans nouveau débit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentGiftResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cadeau inconnu, sa propre vidéo, ou corps invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Solde insuffisant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Blocage avec l’auteur, dans un sens ou dans l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo non publiée, supprimée, ou d’un compte suspendu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre vidéo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de cadeaux envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "gifts"
+        ]
+      }
+    },
     "/reports": {
       "post": {
         "operationId": "createReport",
@@ -5205,6 +5409,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminWalletTransactionPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Paramètre invalide (curseur, limite, filtre).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/gifts": {
+      "get": {
+        "operationId": "listAdminGifts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Cadeaux envoyés ou reçus par ce compte seulement.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminGiftPageResponse"
                 }
               }
             }
@@ -6392,7 +6679,8 @@
           "follow",
           "repost",
           "reportResolved",
-          "contentRemoved"
+          "contentRemoved",
+          "gift"
         ]
       },
       "NotificationVideoResponse": {
@@ -6478,6 +6766,33 @@
           "targetType"
         ]
       },
+      "NotificationGiftResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code du catalogue."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom du cadeau (« Cadeau » pour un code retiré du catalogue)."
+          },
+          "emoji": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prix payé, en jetons."
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "emoji",
+          "amount"
+        ]
+      },
       "NotificationResponse": {
         "type": "object",
         "properties": {
@@ -6499,6 +6814,9 @@
           },
           "moderation": {
             "$ref": "#/components/schemas/NotificationModerationResponse"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/NotificationGiftResponse"
           },
           "read": {
             "type": "boolean"
@@ -6567,6 +6885,9 @@
           },
           "moderation": {
             "$ref": "#/components/schemas/NotificationModerationResponse"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/NotificationGiftResponse"
           },
           "read": {
             "type": "boolean",
@@ -7097,11 +7418,17 @@
           "balance": {
             "type": "integer",
             "minimum": 0,
-            "description": "Jetons disponibles."
+            "description": "Jetons disponibles (achetés), seuls dépensables."
+          },
+          "earned": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Jetons reçus en cadeaux : gains à part, ni dépensables ni retirables."
           }
         },
         "required": [
-          "balance"
+          "balance",
+          "earned"
         ]
       },
       "WalletTransactionKind": {
@@ -7109,7 +7436,32 @@
         "enum": [
           "purchase",
           "refund",
-          "adjustment"
+          "adjustment",
+          "giftSent"
+        ]
+      },
+      "WalletTransactionGiftResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code du catalogue."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom (« Cadeau » pour un code retiré du catalogue)."
+          },
+          "emoji": {
+            "type": "string"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "emoji"
         ]
       },
       "WalletTransactionResponse": {
@@ -7135,6 +7487,9 @@
             "type": "string",
             "nullable": true,
             "description": "Produit acheté (pack de jetons)."
+          },
+          "gift": {
+            "$ref": "#/components/schemas/WalletTransactionGiftResponse"
           },
           "createdAt": {
             "type": "string",
@@ -7169,6 +7524,191 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "GiftResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code du catalogue."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom (« Cadeau » pour un code retiré du catalogue)."
+          },
+          "emoji": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "emoji"
+        ]
+      },
+      "GiftVideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "thumbnailUrl"
+        ]
+      },
+      "ReceivedGiftResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/GiftResponse"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "video": {
+            "$ref": "#/components/schemas/GiftVideoResponse"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "gift",
+          "amount",
+          "createdAt"
+        ]
+      },
+      "ReceivedGiftPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivedGiftResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "GiftCatalogItemResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code du catalogue."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom (« Cadeau » pour un code retiré du catalogue)."
+          },
+          "emoji": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prix en jetons."
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "emoji",
+          "price"
+        ]
+      },
+      "GiftCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du moins cher au plus cher.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GiftCatalogItemResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "SendGiftRequest": {
+        "type": "object",
+        "properties": {
+          "gift": {
+            "type": "string",
+            "description": "Code du cadeau dans le catalogue (`GET /gifts/catalog`).",
+            "maxLength": 50
+          },
+          "clientGiftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifiant d’envoi choisi par l’app, le même à chaque essai : un renvoi ne débite pas deux fois."
+          }
+        },
+        "required": [
+          "gift",
+          "clientGiftId"
+        ]
+      },
+      "SentGiftResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/GiftResponse"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prix payé, en jetons."
+          },
+          "balance": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Solde après le débit."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "gift",
+          "amount",
+          "balance",
+          "createdAt"
         ]
       },
       "CreateReportRequest": {
@@ -7264,6 +7804,11 @@
             "minimum": 0,
             "description": "Solde de jetons."
           },
+          "tokenEarned": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Jetons reçus en cadeaux (ADR-050), non dépensables."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -7283,6 +7828,7 @@
           "followingCount",
           "videosCount",
           "tokenBalance",
+          "tokenEarned",
           "createdAt"
         ]
       },
@@ -7409,6 +7955,18 @@
           "unmatched": {
             "type": "integer",
             "description": "Mouvements d’un client inconnu de l’API, à rapprocher."
+          },
+          "giftsSpent": {
+            "type": "integer",
+            "description": "Jetons dépensés en cadeaux."
+          },
+          "giftsSpentLast7Days": {
+            "type": "integer",
+            "description": "Jetons dépensés en cadeaux sur les 7 derniers jours."
+          },
+          "earned": {
+            "type": "integer",
+            "description": "Gains (jetons reçus en cadeaux) des comptes existants."
           }
         },
         "required": [
@@ -7416,7 +7974,10 @@
           "sandbox",
           "purchasedLast7Days",
           "inCirculation",
-          "unmatched"
+          "unmatched",
+          "giftsSpent",
+          "giftsSpentLast7Days",
+          "earned"
         ]
       },
       "AdminStatsResponse": {
@@ -7828,6 +8389,75 @@
             "type": "string",
             "nullable": true,
             "description": "À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "AdminGiftResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/GiftResponse"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prix payé, en jetons."
+          },
+          "senderBalanceAfter": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Solde de l’expéditeur après le débit."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "video": {
+            "$ref": "#/components/schemas/GiftVideoResponse"
+          },
+          "videoId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Nul si la vidéo a été supprimée."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "gift",
+          "amount",
+          "senderBalanceAfter",
+          "videoId",
+          "createdAt"
+        ]
+      },
+      "AdminGiftPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminGiftResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [

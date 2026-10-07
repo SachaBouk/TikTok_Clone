@@ -34,6 +34,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <NavLink href="/reports">Signalements</NavLink>
             <NavLink href="/moderation">Journal</NavLink>
             <NavLink href="/tokens">Jetons</NavLink>
+            <NavLink href="/gifts">Cadeaux</NavLink>
           </nav>
           <div className="flex items-center gap-2 text-sm">
             <UserAvatar user={admin} size="sm" />

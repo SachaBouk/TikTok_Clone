@@ -264,6 +264,25 @@ describe('NotificationsService', () => {
       expect(items[1].group.latest.commentText).toBe('Bravo c2');
     });
 
+    it('cadeaux (ADR-050) : une notification par cadeau, regroupées par vidéo, retirées avec la vidéo', async () => {
+      const gift = (actorId: string, giftCode: string, giftAmount: number) =>
+        ({ type: 'gift', actorId, recipientId: 'bob', videoId: video, giftCode, giftAmount }) as const;
+      await service.notify(gift('carol', 'crown', 50));
+      await service.notify(gift('alice', 'rose', 1));
+      await service.notify(gift('alice', 'rose', 1));
+      await service.notify(like('alice'));
+
+      const { items } = await service.listGroups('bob', null, 20);
+      expect(items.map((i) => `${i.group.latest.type}:${i.group.count}`)).toEqual(['like:1', 'gift:3']);
+      expect(items[1].group.latest.gift).toEqual({ code: 'rose', amount: 1 });
+      // Auteurs distincts, du plus récent au plus ancien : un compte peut envoyer plusieurs cadeaux.
+      expect(items[1].actors.map((a) => a.id)).toEqual(['alice', 'carol']);
+      expect((await service.list('bob', null, 20, { type: 'gift', videoId: video })).items).toHaveLength(3);
+
+      await service.retractVideo(video);
+      expect((await service.listGroups('bob', null, 20)).items).toEqual([]);
+    });
+
     it('un groupe remonte en tête avec sa notification la plus récente ; non lu si l’une ne l’est pas', async () => {
       await service.notify(like('alice'));
       await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });

@@ -15,9 +15,9 @@ struct WalletDataTests {
         let repository = RemoteWalletRepository(
             client: makeClient(
                 transport: MockTransport { _, operation in
-                    operation == "getWallet" ? json(.ok, #"{"balance":50}"#) : json(.ok, history)
+                    operation == "getWallet" ? json(.ok, #"{"balance":50,"earned":7}"#) : json(.ok, history)
                 }))
-        #expect(try await repository.balance() == 50)
+        #expect(try await repository.amounts() == WalletAmounts(balance: 50, earned: 7))
         let page = try await repository.transactions(cursor: nil)
         #expect(page.transactions.map(\.kind) == [.refund, .purchase])
         #expect(page.transactions.map(\.amount) == [-50, 100])
@@ -32,13 +32,13 @@ struct WalletDataTests {
                 transport: MockTransport { _, _ in
                     json(.unauthorized, #"{"statusCode":401,"message":"Unauthorized"}"#)
                 }))
-        await #expect(throws: AppError.sessionExpired) { try await repository.balance() }
+        await #expect(throws: AppError.sessionExpired) { try await repository.amounts() }
     }
 
     @Test("événement walletUpdated")
     func realtimeEvent() {
-        let update = RealtimeEventDecoder().decode(#"{"event":"walletUpdated","data":{"balance":1200}}"#)
-        #expect(update == .walletUpdated(balance: 1200))
+        let update = RealtimeEventDecoder().decode(#"{"event":"walletUpdated","data":{"balance":1200,"earned":30}}"#)
+        #expect(update == .walletUpdated(balance: 1200, earned: 30))
     }
 }
 
@@ -70,7 +70,7 @@ struct WalletModelTests {
         repository.setBalance(100)
         await model.refresh()
         let model = model
-        sleeper.onSleep { await MainActor.run { model.balanceChanged(600) } }
+        sleeper.onSleep { await MainActor.run { model.balanceChanged(600, earned: 0) } }
 
         await model.buy(FakePurchaseService.packs[1])
 
@@ -81,7 +81,7 @@ struct WalletModelTests {
         #expect(analytics.eventNames == ["token_purchase_started", "token_purchase_completed"])
 
         // Remboursement reçu ensuite : le « +500 » disparaît.
-        model.balanceChanged(100)
+        model.balanceChanged(100, earned: 0)
         #expect(model.lastCredit == nil)
     }
 
@@ -90,7 +90,7 @@ struct WalletModelTests {
         repository.setBalance(100)
         await model.refresh()
         let model = model
-        purchases.duringPurchase = { model.balanceChanged(200) }
+        purchases.duringPurchase = { model.balanceChanged(200, earned: 0) }
 
         await model.buy(FakePurchaseService.packs[0])
 

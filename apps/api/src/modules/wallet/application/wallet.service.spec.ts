@@ -1,4 +1,26 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
+import { InteractionsService } from '../../interactions/application/interactions.service';
+import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
+import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
+import { NotificationsService } from '../../notifications/application/notifications.service';
+import { InMemoryNotificationPublisher } from '../../notifications/infrastructure/in-memory-notification-publisher';
+import { InMemoryNotificationRepository } from '../../notifications/infrastructure/in-memory-notification.repository';
+import { VideosService } from '../../videos/application/videos.service';
+import { TranscodingQueue } from '../../videos/domain/transcoding-queue';
+import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory-video-cleanup-queue';
+import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
+import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
+import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
+import {
+  CannotGiftYourselfError,
+  GiftBlockedError,
+  GiftIdConflictError,
+  GiftVideoUnavailableError,
+  InsufficientBalanceError,
+  TooManyGiftsError,
+  UnknownGiftError,
+} from '../domain/wallet.errors';
 import { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
@@ -7,20 +29,34 @@ import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-use
 import type { CurrencyEvent } from '../domain/wallet';
 import { InMemoryWalletEventPublisher } from '../infrastructure/in-memory-wallet-event-publisher';
 import { InMemoryWalletRepository } from '../infrastructure/in-memory-wallet.repository';
-import { WalletService } from './wallet.service';
+import { WalletService, type WalletHistoryItem } from './wallet.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 
 const ALICE = '0192f3a0-0000-7000-8000-00000000000a';
-const alice: User = {
-  id: ALICE,
-  username: 'alice',
-  displayName: 'Alice',
+const BOB = '0192f3a0-0000-7000-8000-00000000000b';
+const CAROL = '0192f3a0-0000-7000-8000-00000000000c';
+const account = (id: string, username: string): User => ({
+  id,
+  username,
+  displayName: username.charAt(0).toUpperCase() + username.slice(1),
   avatarUrl: null,
   bio: null,
   followersCount: 0,
   followingCount: 0,
   createdAt: new Date('2026-01-01T00:00:00Z'),
-};
+});
+const alice = account(ALICE, 'alice');
+
+class NoopTranscodingQueue extends TranscodingQueue {
+  async enqueue() {}
+  async cancel() {}
+}
+
+// Mouvement de l'historique, à plat : sorte, montant, solde après.
+const line = (item: WalletHistoryItem) =>
+  item.kind === 'currency'
+    ? [item.transaction.kind, item.transaction.amount, item.transaction.balanceAfter]
+    : ['giftSent', -item.gift.amount, item.gift.senderBalanceAfter];
 
 let sequence = 0;
 const event = (overrides: Partial<CurrencyEvent> = {}): CurrencyEvent => ({
@@ -40,18 +76,52 @@ describe('WalletService', () => {
   let wallets: InMemoryWalletRepository;
   let events: InMemoryWalletEventPublisher;
   let service: WalletService;
+  let videoRepository: InMemoryVideoRepository;
+  let interactions: InteractionsService;
+  let notificationRepository: InMemoryNotificationRepository;
+  let suspended: InMemorySuspendedAccounts;
+  let rateLimiter: InMemoryRateLimiter;
 
   function build(rejectSandbox = false) {
     wallets = new InMemoryWalletRepository();
     events = new InMemoryWalletEventPublisher();
-    const users = new UsersService(
-      new InMemoryUserRepository([alice]),
-      new InMemoryAvatarStorage(),
-      new InMemoryAccountContentCleanup(),
-      new InMemorySuspendedAccounts(),
+    suspended = new InMemorySuspendedAccounts();
+    const userRepository = new InMemoryUserRepository([alice, account(BOB, 'bob'), account(CAROL, 'carol')]);
+    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
+    let tick = 0;
+    videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));
+    const videos = new VideosService(
+      videoRepository,
+      new InMemoryVideoStorage(),
+      new NoopTranscodingQueue(),
+      new InMemoryVideoEventPublisher(),
+      new InMemoryVideoCleanupQueue(),
+      new InMemoryRateLimiter(),
     );
-    service = new WalletService(wallets, users, events, { rejectSandbox });
+    notificationRepository = new InMemoryNotificationRepository();
+    const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
+    interactions = new InteractionsService(
+      new InMemoryInteractionRepository(videoRepository, userRepository),
+      videos,
+      users,
+      notifications,
+      new InMemoryRateLimiter(),
+      suspended,
+      new InMemoryProfileCountersPublisher(),
+    );
+    rateLimiter = new InMemoryRateLimiter();
+    service = new WalletService(wallets, users, events, { rejectSandbox }, { videos, interactions, notifications, rateLimiter });
   }
+
+  // Vidéo publiée de `userId`.
+  async function publish(userId = BOB, status: 'ready' | 'processing' = 'ready') {
+    const video = await videoRepository.create({ userId, description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
+    Object.assign(videoRepository.videos.get(video.id)!, { status, hlsUrl: `https://cdn/${video.id}/master.m3u8`, thumbnailUrl: 't' });
+    return video.id;
+  }
+
+  let clientIds = 0;
+  const clientId = () => `0192f3a0-0000-7000-9000-${String(++clientIds).padStart(12, '0')}`;
 
   beforeEach(() => build());
 
@@ -60,7 +130,7 @@ describe('WalletService', () => {
     await expect(service.recordCurrencyEvent(purchase)).resolves.toBe('applied');
     await expect(service.recordCurrencyEvent(purchase)).resolves.toBe('duplicate');
     await expect(service.getBalance(ALICE)).resolves.toBe(100);
-    expect(events.published).toEqual([{ userId: ALICE, balance: 100 }]);
+    expect(events.published).toEqual([{ userId: ALICE, balance: 100, earned: 0 }]);
   });
 
   it('retire un remboursement sans passer sous 0', async () => {
@@ -72,7 +142,7 @@ describe('WalletService', () => {
     await expect(service.getBalance(ALICE)).resolves.toBe(0);
 
     const { items } = await service.listTransactions(ALICE, null, 10);
-    expect(items.map((t) => [t.kind, t.amount, t.balanceAfter])).toEqual([
+    expect(items.map(line)).toEqual([
       ['refund', -50, 0],
       ['refund', -100, 50],
       ['purchase', 50, 150],
@@ -83,7 +153,7 @@ describe('WalletService', () => {
 
   it('classe un ajustement du tableau de bord RevenueCat', async () => {
     await service.recordCurrencyEvent(event({ source: 'admin_api', amount: 25, productId: null }));
-    await expect(service.listTransactions(ALICE, null, 10)).resolves.toMatchObject({ items: [{ kind: 'adjustment', amount: 25 }] });
+    await expect(service.listTransactions(ALICE, null, 10)).resolves.toMatchObject({ items: [{ transaction: { kind: 'adjustment', amount: 25 } }] });
   });
 
   it('retrouve le compte parmi les alias (achat commencé en anonyme), sans tenir compte de la casse', async () => {
@@ -110,10 +180,143 @@ describe('WalletService', () => {
   it("pagine l'historique du plus récent au plus ancien", async () => {
     for (let i = 1; i <= 3; i++) await service.recordCurrencyEvent(event({ amount: i }));
     const first = await service.listTransactions(ALICE, null, 2);
-    expect(first.items.map((t) => t.amount)).toEqual([3, 2]);
+    expect(first.items.map((t) => line(t)[1])).toEqual([3, 2]);
     const second = await service.listTransactions(ALICE, first.nextCursor, 2);
-    expect(second.items.map((t) => t.amount)).toEqual([1]);
+    expect(second.items.map((t) => line(t)[1])).toEqual([1]);
     expect(second.nextCursor).toBeNull();
+  });
+
+  describe('cadeaux (ADR-050)', () => {
+    beforeEach(async () => {
+      await service.recordCurrencyEvent(event({ amount: 100 }));
+      events.published.length = 0;
+    });
+
+    it('débite l’expéditeur, crédite les gains du créateur, notifie et pousse les deux portefeuilles', async () => {
+      const video = await publish(BOB);
+      const sent = await service.sendGift(ALICE, video, 'heart', clientId());
+      expect(sent).toMatchObject({
+        balance: 95,
+        gift: { senderId: ALICE, recipientId: BOB, videoId: video, giftCode: 'heart', amount: 5, senderBalanceAfter: 95 },
+      });
+      await expect(service.getAmounts(ALICE)).resolves.toEqual({ balance: 95, earned: 0 });
+      await expect(service.getAmounts(BOB)).resolves.toEqual({ balance: 0, earned: 5 });
+      expect(events.published).toEqual([
+        { userId: ALICE, balance: 95, earned: 0 },
+        { userId: BOB, balance: 0, earned: 5 },
+      ]);
+      expect([...notificationRepository.notifications.values()]).toMatchObject([
+        { type: 'gift', actorId: ALICE, recipientId: BOB, videoId: video, gift: { code: 'heart', amount: 5 } },
+      ]);
+    });
+
+    it('un renvoi avec le même identifiant rend le même cadeau, sans nouveau débit ; autre vidéo : conflit', async () => {
+      const video = await publish(BOB);
+      const other = await publish(BOB);
+      const id = clientId();
+      const first = await service.sendGift(ALICE, video, 'star', id);
+      const again = await service.sendGift(ALICE, video, 'star', id);
+      expect(again.gift.id).toBe(first.gift.id);
+      expect(again.balance).toBe(90);
+      expect(wallets.gifts).toHaveLength(1);
+      await expect(service.sendGift(ALICE, other, 'star', id)).rejects.toBeInstanceOf(GiftIdConflictError);
+      await expect(service.sendGift(ALICE, video, 'rose', id)).rejects.toBeInstanceOf(GiftIdConflictError);
+    });
+
+    it('refuse un solde insuffisant sans rien débiter ni compter dans la limite', async () => {
+      const video = await publish(BOB);
+      const refused = await service.sendGift(ALICE, video, 'diamond', clientId()).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(InsufficientBalanceError);
+      expect((refused as InsufficientBalanceError).message).toBe('Solde insuffisant : 100 jetons, il en faut 500');
+      await expect(service.getAmounts(ALICE)).resolves.toEqual({ balance: 100, earned: 0 });
+      await expect(service.getAmounts(BOB)).resolves.toEqual({ balance: 0, earned: 0 });
+      expect(wallets.gifts).toHaveLength(0);
+      expect(notificationRepository.notifications.size).toBe(0);
+      // Rien n'a été compté : 30 cadeaux passent encore dans la minute.
+      for (let i = 0; i < 30; i++) await service.sendGift(ALICE, video, 'rose', clientId());
+    });
+
+    it('refuse un cadeau inconnu, sa propre vidéo, une vidéo non publiée, d’un compte suspendu ou bloqué', async () => {
+      const video = await publish(BOB);
+      await expect(service.sendGift(ALICE, video, 'licorne', clientId())).rejects.toBeInstanceOf(UnknownGiftError);
+      await expect(service.sendGift(BOB, video, 'rose', clientId())).rejects.toBeInstanceOf(CannotGiftYourselfError);
+      await expect(service.sendGift(ALICE, await publish(BOB, 'processing'), 'rose', clientId())).rejects.toBeInstanceOf(GiftVideoUnavailableError);
+      await expect(service.sendGift(ALICE, '0192f3a0-0000-7000-8000-0000000000ee', 'rose', clientId())).rejects.toBeInstanceOf(
+        GiftVideoUnavailableError,
+      );
+      await suspended.add(BOB);
+      await expect(service.sendGift(ALICE, video, 'rose', clientId())).rejects.toBeInstanceOf(GiftVideoUnavailableError);
+      await suspended.remove(BOB);
+      await interactions.setBlock(BOB, 'alice', true);
+      await expect(service.sendGift(ALICE, video, 'rose', clientId())).rejects.toBeInstanceOf(GiftBlockedError);
+      await interactions.setBlock(BOB, 'alice', false);
+      await interactions.setBlock(ALICE, 'bob', true);
+      await expect(service.sendGift(ALICE, video, 'rose', clientId())).rejects.toBeInstanceOf(GiftBlockedError);
+      expect(wallets.gifts).toHaveLength(0);
+    });
+
+    it('limite à 30 cadeaux par minute', async () => {
+      const video = await publish(BOB);
+      for (let i = 0; i < 30; i++) await service.sendGift(ALICE, video, 'rose', clientId());
+      const refused = await service.sendGift(ALICE, video, 'rose', clientId()).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(TooManyGiftsError);
+      expect((refused as TooManyGiftsError).retryAfterSeconds).toBeGreaterThan(0);
+      await expect(service.getBalance(ALICE)).resolves.toBe(70);
+    });
+
+    it('historique : achats et cadeaux envoyés fusionnés du plus récent au plus ancien, avec le destinataire', async () => {
+      const video = await publish(BOB);
+      await service.sendGift(ALICE, video, 'heart', clientId());
+      await service.recordCurrencyEvent(event({ amount: 10 }));
+      await service.sendGift(ALICE, video, 'rose', clientId());
+      const first = await service.listTransactions(ALICE, null, 2);
+      expect(first.items.map(line)).toEqual([
+        ['giftSent', -1, 104],
+        ['purchase', 10, 105],
+      ]);
+      expect(first.items[0]).toMatchObject({ kind: 'giftSent', recipient: { username: 'bob' } });
+      const second = await service.listTransactions(ALICE, first.nextCursor, 2);
+      expect(second.items.map(line)).toEqual([
+        ['giftSent', -5, 95],
+        ['purchase', 100, 100],
+      ]);
+      expect(second.nextCursor).toBeNull();
+    });
+
+    it('cadeaux reçus et journal du backoffice, avec expéditeur et vidéo ; comptes et vidéos supprimés anonymisés', async () => {
+      const video = await publish(BOB);
+      await service.sendGift(ALICE, video, 'crown', clientId());
+      await service.recordCurrencyEvent(event({ amount: 10, appUserIds: [CAROL] }));
+      await service.sendGift(CAROL, video, 'star', clientId());
+      const received = await service.listReceivedGifts(BOB, null, 10);
+      expect(received.items.map((r) => [r.sender?.username, r.gift.giftCode, r.video?.id])).toEqual([
+        ['carol', 'star', video],
+        ['alice', 'crown', video],
+      ]);
+      await expect(service.listGifts({ userId: CAROL }, null, 10)).resolves.toMatchObject({ items: [{ gift: { giftCode: 'star' } }] });
+      await expect(service.listGifts({}, null, 1)).resolves.toMatchObject({
+        items: [{ gift: { giftCode: 'star' } }],
+        nextCursor: expect.any(String),
+      });
+
+      wallets.forget(ALICE);
+      wallets.forget(video);
+      const after = await service.listReceivedGifts(BOB, null, 10);
+      expect(after.items[1]).toMatchObject({ sender: null, video: null, gift: { giftCode: 'crown', amount: 50 } });
+
+      const stats = await service.getStats(new Date('2000-01-01'));
+      expect(stats.gifts).toEqual({ spent: 60, spentSince: 60, earned: 60 });
+      expect([...(await service.getEarnings([BOB, ALICE]))]).toEqual([
+        [BOB, 60],
+        [ALICE, 0],
+      ]);
+    });
+
+    it('catalogue du moins cher au plus cher', () => {
+      const prices = service.giftCatalog().map((gift) => gift.price);
+      expect(prices).toEqual([...prices].sort((a, b) => a - b));
+      expect(service.giftCatalog()[0]).toEqual({ code: 'rose', name: 'Rose', emoji: '🌹', price: 1 });
+    });
   });
 
   describe('backoffice', () => {
@@ -162,6 +365,7 @@ describe('WalletService', () => {
         purchasedSince: 300,
         inCirculation: 1530,
         unmatched: 1,
+        gifts: { spent: 0, spentSince: 0, earned: 0 },
       });
     });
   });
