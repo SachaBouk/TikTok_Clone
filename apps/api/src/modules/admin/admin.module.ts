@@ -1,3 +1,5 @@
+import { StoriesService } from '../stories/application/stories.service';
+import { StoriesModule } from '../stories/stories.module';
 import { Module } from '@nestjs/common';
 import { AuthService } from '../auth/application/auth.service';
 import { AuthModule } from '../auth/auth.module';
@@ -22,7 +24,7 @@ import { AdminController } from './interfaces/admin.controller';
 // vidéos, commentaires et jetons sont lus et modérés via les services exportés des autres modules (ADR-003).
 // Aucun module ne dépend de celui-ci.
 @Module({
-  imports: [AuthModule, UsersModule, VideosModule, InteractionsModule, WalletModule, RealtimeModule, ReportsModule, MessagingModule],
+  imports: [AuthModule, UsersModule, VideosModule, InteractionsModule, WalletModule, RealtimeModule, ReportsModule, MessagingModule, StoriesModule],
   controllers: [AdminController],
   providers: [
     {
@@ -36,8 +38,19 @@ import { AdminController } from './interfaces/admin.controller';
         realtime: RealtimeService,
         reports: ReportsService,
         messaging: MessagingService,
-      ) => new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging),
-      inject: [UsersService, VideosService, InteractionsService, AuthService, WalletService, RealtimeService, ReportsService, MessagingService],
+        stories: StoriesService,
+      ) => new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging, stories),
+      inject: [
+        UsersService,
+        VideosService,
+        InteractionsService,
+        AuthService,
+        WalletService,
+        RealtimeService,
+        ReportsService,
+        MessagingService,
+        StoriesService,
+      ],
     },
   ],
 })

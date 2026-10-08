@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReportTargetType } from '@repo/shared';
 import { ConfirmAction } from '@/components/confirm-action';
+import { HlsPlayer } from '@/components/hls-player';
 import { RemoveContent } from '@/components/remove-content';
 import { ReportTargetAccount, ReportTargetPreview } from '@/components/report-target-preview';
 import { SuspendAccount } from '@/components/suspend-account';
@@ -10,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { dismissReports, removeComment, removeMessage, removeVideo } from '@/controllers/moderation.actions';
+import { dismissReports, removeComment, removeMessage, removeStory, removeVideo } from '@/controllers/moderation.actions';
 import { formatDateTime } from '@/lib/format';
 import { REPORT_REASON_LABELS, REPORT_RESOLUTION_LABELS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import { getReportTarget } from '@/models/reports.model';
@@ -55,6 +56,19 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
         )}
       </div>
 
+      {/* Story (ADR-051) : à examiner avant son expiration, 24 h après sa publication. */}
+      {target.targetType === 'story' && target.available && target.storyMediaUrl && (
+        <div className="w-full max-w-xs overflow-hidden rounded-lg bg-black">
+          {target.storyMediaType === 'video' ? (
+            <HlsPlayer src={target.storyMediaUrl} poster={target.thumbnailUrl ?? null} />
+          ) : (
+            // Photo servie par le stockage public (le CDN), sans passer par l'optimisation d'images de Next.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={target.storyMediaUrl} alt="Story signalée" className="aspect-[9/16] w-full object-contain" />
+          )}
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>{isOpen ? `${target.openCount} signalement(s) en attente` : 'Aucun signalement en attente'}</CardTitle>
@@ -89,6 +103,16 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
                 size="default"
                 defaultReason={defaultReason}
                 action={removeMessage.bind(null, target.targetId)}
+              />
+            )}
+            {target.available && target.targetType === 'story' && (
+              <RemoveContent
+                label="Supprimer la story"
+                title="Supprimer cette story ?"
+                description={`Suppression définitive, comme par son auteur, avec ses vues. ${notice}`}
+                size="default"
+                defaultReason={defaultReason}
+                action={removeStory.bind(null, target.targetId)}
               />
             )}
             {target.targetUser && <SuspendAccount userId={target.targetUser.id} username={target.targetUser.username} />}

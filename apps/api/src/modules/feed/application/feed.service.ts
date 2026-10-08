@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { VideoReaction } from '../../interactions/domain/interaction';
+import type { StoriesService } from '../../stories/application/stories.service';
 import type { User } from '../../users/domain/user';
 import type { UsersService } from '../../users/application/users.service';
 import type { PublishedVideo } from '../../videos/domain/video';
@@ -24,6 +25,8 @@ export interface FeedItem {
   author: User;
   // Null en mode invité.
   viewer: FeedViewerState | null;
+  // Anneau autour de l'avatar (ADR-051) : null si l'auteur n'a pas de story visible.
+  authorStory: { hasUnseen: boolean } | null;
 }
 
 export interface FeedPage {
@@ -49,6 +52,7 @@ export class FeedService {
     private readonly videos: VideosService,
     private readonly users: UsersService,
     private readonly interactions: InteractionsService,
+    private readonly stories: StoriesService,
   ) {}
 
   // Lève InvalidFeedCursorError si le curseur n'a pas été produit par l'API.
@@ -238,12 +242,17 @@ export class FeedService {
     );
   }
 
-  // Ajoute auteur et état du lecteur, dans l'ordre donné. Une vidéo dont l'auteur a disparu, ou d'un compte
-  // masqué (`hidden`), est sautée.
+  // Ajoute auteur, état du lecteur et anneau de story de l'auteur, dans l'ordre donné. Une vidéo dont l'auteur a disparu,
+  // ou d'un compte masqué (`hidden`), est sautée.
   private async toItems(all: PublishedVideo[], viewerId: string | null, hidden: Set<string>): Promise<FeedItem[]> {
     const videos = all.filter((video) => !hidden.has(video.userId));
-    const authors = new Map((await this.users.getByIds(videos.map((v) => v.userId))).map((u) => [u.id, u]));
-    const seen = viewerId ? await this.interactions.getViewerInteractions(viewerId, videos) : null;
+    const authorIds = videos.map((v) => v.userId);
+    const [authorList, seen, rings] = await Promise.all([
+      this.users.getByIds(authorIds),
+      viewerId ? this.interactions.getViewerInteractions(viewerId, videos) : null,
+      this.stories.getStoryRings(authorIds, viewerId),
+    ]);
+    const authors = new Map(authorList.map((u) => [u.id, u]));
     return videos.flatMap((video) => {
       const author = authors.get(video.userId);
       if (!author) return [];
@@ -253,7 +262,7 @@ export class FeedService {
         reposted: seen.repostedVideoIds.has(video.id),
         followingAuthor: seen.followedUserIds.has(author.id),
       };
-      return [{ video, author, viewer }];
+      return [{ video, author, viewer, authorStory: rings.get(author.id) ?? null }];
     });
   }
 }

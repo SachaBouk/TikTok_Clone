@@ -51,10 +51,11 @@
 | [ADR-047](ADR-047-tone-mapping-hdr.md) | Tone mapping des vidéos HDR (complète ADR-008) | Accepté |
 | [ADR-048](ADR-048-feed-abonnements.md) | Feed des abonnements (complète ADR-016) | Accepté |
 | [ADR-049](ADR-049-recherche-hashtags.md) | Recherche de comptes et hashtags (complète ADR-016 et ADR-003) | Accepté |
-| [ADR-050](ADR-050-cadeaux-jetons.md) | Cadeaux en jetons (complète ADR-016 et ADR-009) | Proposé |
+| [ADR-050](ADR-050-cadeaux-jetons.md) | Cadeaux en jetons (complète ADR-016 et ADR-009) | Accepté |
+| [ADR-051](ADR-051-stories.md) | Stories (complète ADR-016, ADR-007, ADR-008 et ADR-012) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 049 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+Les ADR 017 à 050 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
 l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
 (« Complété par »).

@@ -27,6 +27,11 @@ export const UPLOAD_RATE_LIMITS: RateLimitRule[] = [
   { limit: 30, windowSeconds: 24 * 3600 },
 ];
 
+// Clé du compteur des envois : partagée avec les stories vidéo (ADR-051), qui comptent dans la même limite.
+export function uploadRateLimitKey(userId: string): string {
+  return `upload:${userId}`;
+}
+
 export function isSupportedVideoType(contentType: string): contentType is SupportedVideoType {
   return Object.hasOwn(SUPPORTED_VIDEO_TYPES, contentType);
 }

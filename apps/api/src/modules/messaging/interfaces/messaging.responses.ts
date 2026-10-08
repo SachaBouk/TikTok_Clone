@@ -8,6 +8,7 @@ import type {
   SharedVideoDto,
   UnreadConversationsDto,
 } from '@repo/shared';
+import { MessageStoryResponse, toMessageStoryDto } from '../../stories/interfaces/stories.responses';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { ConversationWithParticipant } from '../application/messaging.service';
 import type { MessageItem, MessagingBadges, SharedVideo } from '../domain/messaging';
@@ -52,6 +53,9 @@ export class MessageResponse implements MessageDto {
   // Absent si le message ne partage pas de vidéo.
   @ApiPropertyOptional({ type: SharedVideoResponse })
   sharedVideo?: SharedVideoResponse;
+
+  @ApiPropertyOptional({ type: MessageStoryResponse })
+  story?: MessageStoryResponse;
 
   @ApiPropertyOptional({
     format: 'uuid',
@@ -140,7 +144,7 @@ export class UnreadConversationsResponse implements UnreadConversationsDto {
 
 // Mappings explicites : rien n'est exposé par accident (ADR-003). Partagés par le controller et
 // les événements WebSocket (AppMessagingEventPublisher).
-export function toMessageDto({ message, sharedVideo, clientMessageId }: MessageItem): MessageDto {
+export function toMessageDto({ message, sharedVideo, repliedStory, clientMessageId }: MessageItem): MessageDto {
   const dto: MessageDto = {
     id: message.id,
     conversationId: message.conversationId,
@@ -149,6 +153,7 @@ export function toMessageDto({ message, sharedVideo, clientMessageId }: MessageI
     createdAt: message.createdAt.toISOString(),
   };
   if (sharedVideo) dto.sharedVideo = toSharedVideoDto(sharedVideo);
+  if (repliedStory) dto.story = toMessageStoryDto(repliedStory.id, repliedStory.story ?? undefined);
   if (clientMessageId) dto.clientMessageId = clientMessageId;
   return dto;
 }

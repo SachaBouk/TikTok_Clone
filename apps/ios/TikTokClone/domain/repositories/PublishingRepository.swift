@@ -3,7 +3,7 @@ import Foundation
 // Port des vidéos du compte connecté, côté API (module videos).
 protocol VideoPublishingRepository: Sendable {
     // Crée la vidéo en `uploading` et renvoie une URL signée par partie. `.rejected` : format ou taille refusés.
-    func createUpload(contentType: VideoContentType, fileSize: Int, description: String?) async throws -> UploadTicket
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket
     // Assemble les parties et lance le transcodage : la vidéo passe en `processing`.
     // Lève UploadFailure.alreadyConfirmed si l'API l'a déjà fait (réponse perdue), .restartNeeded si l'envoi
     // est perdu (parties refusées, vidéo supprimée entre-temps).

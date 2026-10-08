@@ -1,6 +1,8 @@
 import type { AuthService } from '../../auth/application/auth.service';
 import { CannotSuspendAdminError } from '../../auth/domain/auth.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { StoriesService } from '../../stories/application/stories.service';
+import { StoryNotFoundError } from '../../stories/domain/story.errors';
 import type { MessagingService } from '../../messaging/application/messaging.service';
 import { MessageNotFoundError } from '../../messaging/domain/messaging.errors';
 import type { RealtimeService } from '../../realtime/application/realtime.service';
@@ -43,6 +45,7 @@ export class AdminService {
     private readonly realtime: RealtimeService,
     private readonly reports: ReportsService,
     private readonly messaging: MessagingService,
+    private readonly stories: StoriesService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -184,6 +187,20 @@ export class AdminService {
     );
   }
 
+  // Retrait d'une story signalée (ADR-051), quel que soit son statut ; l'auteur est prévenu avec le motif.
+  async removeStory(adminId: string, storyId: string, reason: ReportReason): Promise<void> {
+    const [story] = await this.stories.getStoriesByIds([storyId]);
+    if (!story) throw new AdminTargetNotFoundError('Story', storyId);
+    await this.reports.removeContent({ adminId, target: { type: 'story', id: storyId }, authorId: story.userId, excerpt: null, reason }, async () => {
+      try {
+        await this.stories.removeStory(storyId);
+      } catch (error) {
+        if (error instanceof StoryNotFoundError) throw new AdminTargetNotFoundError('Story', storyId);
+        throw error;
+      }
+    });
+  }
+
   // Journal de modération (ADR-038), du plus récent au plus ancien ; `targetUserId` : actions sur ce compte.
   listModerationActions(filter: { targetUserId?: string }, cursor: string | null, limit: number): Promise<Page<ModerationAction>> {
     return this.reports.listActions(filter, cursor, limit);
@@ -286,12 +303,15 @@ export class AdminService {
     }[],
   ): Promise<ModeratedReportTarget[]> {
     const idsOf = (type: ReportTarget['type']) => rows.filter((r) => r.target.type === type).map((r) => r.target.id);
-    const [users, videos, comments, messages] = await Promise.all([
+    const [users, videos, comments, messages, stories] = await Promise.all([
       this.usersById(rows.flatMap((r) => (r.targetUserId ? [r.targetUserId] : []))),
       this.videos.getPublishedVideos(idsOf('video')),
       this.interactions.getComments(idsOf('comment')),
       this.messaging.getMessages(idsOf('message')),
+      this.stories.getStoriesByIds(idsOf('story')),
     ]);
+    // Une story expirée mais pas encore supprimée n'est plus disponible.
+    const storiesById = new Map(stories.filter((s) => s.status === 'ready' && s.expiresAt && s.expiresAt > this.now()).map((s) => [s.id, s]));
     const videosById = new Map(videos.map((v) => [v.id, v]));
     const commentsById = new Map(comments.map((c) => [c.id, c]));
     const messageIds = new Set(messages.map((m) => m.id));
@@ -299,14 +319,17 @@ export class AdminService {
       const targetUser = (targetUserId && users.get(targetUserId)) || null;
       const video = target.type === 'video' ? videosById.get(target.id) : undefined;
       const comment = target.type === 'comment' ? commentsById.get(target.id) : undefined;
-      const available = target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment;
+      const story = target.type === 'story' ? storiesById.get(target.id) : undefined;
+      const available =
+        target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment || !!story;
       return {
         target,
         targetUser,
         targetUsername,
         available,
-        thumbnailUrl: video?.thumbnailUrl ?? null,
+        thumbnailUrl: video?.thumbnailUrl ?? story?.thumbnailUrl ?? null,
         videoId: comment?.videoId ?? null,
+        story: story?.mediaUrl ? { mediaType: story.mediaType, mediaUrl: story.mediaUrl } : null,
         open,
         excerpt: open?.excerpt ?? latest?.excerpt ?? null,
         latestAt: open?.latestAt ?? latest?.createdAt ?? this.now(),

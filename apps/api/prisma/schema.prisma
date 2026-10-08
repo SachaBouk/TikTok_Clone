@@ -8,6 +8,7 @@
 // notification cohérente avec son type et jamais adressée à son auteur (migration notifications).
 // Hashtag de 1 à 50 caractères, nombre de vidéos ≥ 0 ; extension pg_trgm (migration search_hashtags, ADR-049).
 // Gains ≥ 0, cadeau cohérent, notification de cadeau avec son code et son prix (migration gifts, ADR-050).
+// Story cohérente avec son statut, like jamais avant la vue, réponse à une story avec un texte (migration stories, ADR-051).
 
 generator client {
   provider            = "prisma-client"
@@ -89,6 +90,8 @@ model User {
   moderationActionsMade    ModerationAction[]        @relation("ModerationAdmin")
   moderationActionsAbout   ModerationAction[]        @relation("ModerationTargetUser")
   walletTransactions       WalletTransaction[]
+  stories                  Story[]
+  storyViews               StoryView[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
   @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
@@ -295,6 +298,72 @@ model ViewHistory {
   @@map("view_history")
 }
 
+// ─── Stories (ADR-051) ───────────────────────────────────────────────────────
+
+enum StoryMediaType {
+  video
+  photo
+
+  @@map("story_media_type")
+}
+
+// Une photo passe directement de `uploading` à `ready` ; une vidéo passe par le transcodage (ADR-008).
+enum StoryStatus {
+  uploading
+  processing
+  ready
+  failed
+
+  @@map("story_status")
+}
+
+// Story : visible 24 h après sa publication (`expires_at`), puis supprimée avec ses vues et ses fichiers.
+model Story {
+  id           String         @id @default(uuid(7)) @map("story_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  mediaType    StoryMediaType @map("media_type")
+  status       StoryStatus    @default(uploading)
+  // Vidéo : brut dans le bucket des uploads. Photo : la photo elle-même, dans le bucket public des médias.
+  rawKey       String         @map("raw_key")
+  // Upload multipart en cours ; nul une fois l'upload terminé.
+  uploadId     String?        @map("upload_id")
+  rawSize      Int            @map("raw_size")
+  // Manifeste HLS (vidéo) ou photo, quand la story est `ready`.
+  mediaUrl     String?        @map("media_url")
+  thumbnailUrl String?        @map("thumbnail_url")
+  publishedAt  DateTime?      @map("published_at")
+  expiresAt    DateTime?      @map("expires_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  views StoryView[]
+
+  // Stories actives d'un compte (rangée, profil, anneau du feed), et maintenance (stories expirées).
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  // Maintenance : stories pas encore publiées.
+  @@index([status, createdAt])
+  @@map("stories")
+}
+
+// Une ligne par story et par compte qui l'a vue ; `liked_at` pour un like.
+model StoryView {
+  storyId  String    @map("story_id") @db.Uuid
+  userId   String    @map("user_id") @db.Uuid
+  viewedAt DateTime  @default(now()) @map("viewed_at")
+  likedAt  DateTime? @map("liked_at")
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, userId])
+  // Liste des personnes qui ont vu une story, de la plus récente à la plus ancienne.
+  @@index([storyId, viewedAt])
+  @@index([userId])
+  @@map("story_views")
+}
+
 // ─── Messagerie directe (ADR-006, ADR-011) ───────────────────────────────────
 
 model Conversation {
@@ -341,6 +410,8 @@ model Message {
   content         String
   // Vidéo partagée. Sans clé étrangère : une vidéo supprimée reste signalée « indisponible » dans le message.
   sharedVideoId   String?  @map("shared_video_id") @db.Uuid
+  // Story à laquelle répond le message (ADR-051). Sans clé étrangère : une story expirée reste signalée « expirée ».
+  storyId         String?  @map("story_id") @db.Uuid
   // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
   // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
   clientMessageId String?  @map("client_message_id") @db.Uuid
@@ -552,6 +623,7 @@ enum ReportTargetType {
   comment
   account
   message
+  story
 
   @@map("report_target_type")
 }
@@ -620,6 +692,7 @@ enum ModerationActionType {
   videoRemoved     @map("video_removed")
   commentRemoved   @map("comment_removed")
   messageRemoved   @map("message_removed")
+  storyRemoved     @map("story_removed")
   accountSuspended @map("account_suspended")
   suspensionLifted @map("suspension_lifted")
   reportsDismissed @map("reports_dismissed")

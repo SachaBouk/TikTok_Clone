@@ -64,7 +64,7 @@ import {
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
-const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account', message: 'message' });
+const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account', message: 'message', story: 'story' });
 const TARGET_TYPE_PARAM = { name: 'targetType', enum: REPORT_TARGET_TYPES, enumName: 'ReportTargetType' };
 const REMOVAL_REFUSED = { type: ErrorResponse, description: 'Identifiant ou motif invalide.' };
 
@@ -174,6 +174,20 @@ export class AdminController {
     @Query() query: AdminRemovalQuery,
   ): Promise<void> {
     await this.adminService.removeMessage(admin.userId, id, query.reason);
+  }
+
+  // Retrait d'une story signalée (ADR-051), quel que soit son statut ; l'auteur est prévenu avec le motif.
+  @Delete('stories/:id')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Story supprimée, avec ses vues ; auteur prévenu avec le motif.' })
+  @ApiBadRequestResponse(REMOVAL_REFUSED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Story introuvable, déjà supprimée ou expirée.' })
+  async deleteAdminStory(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AdminRemovalQuery,
+  ): Promise<void> {
+    await this.adminService.removeStory(admin.userId, id, query.reason);
   }
 
   // Journal de modération (ADR-038) : toutes les actions des administrateurs, ou celles sur un compte.

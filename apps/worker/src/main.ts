@@ -1,12 +1,21 @@
 // Worker de transcodage vidéo (Node + FFmpeg), isolé de l'API (ADR-001).
-// Consomme la queue BullMQ `video-transcode`, produit le HLS (ADR-008) et publie chaque résultat dans
-// `video-transcode-results`, que l'API applique en base (ADR-012) : le worker n'accède jamais à PostgreSQL.
+// Consomme les queues BullMQ `video-transcode` et `story-transcode` (ADR-051), produit le HLS (ADR-008) et publie chaque
+// résultat dans `video-transcode-results` ou `story-transcode-results`, que l'API applique en base (ADR-012) : le worker
+// n'accède jamais à PostgreSQL.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, type TranscodeJobData, type TranscodeResult } from '@repo/shared';
+import {
+  STORY_TRANSCODE_QUEUE,
+  STORY_TRANSCODE_RESULTS_QUEUE,
+  TRANSCODE_QUEUE,
+  TRANSCODE_RESULTS_QUEUE,
+  type TranscodeJobData,
+  type TranscodeResult,
+} from '@repo/shared';
 import { Job, Queue, UnrecoverableError, Worker, type ConnectionOptions } from 'bullmq';
 import { loadConfig, type WorkerConfig } from './config';
 import { InvalidMediaError, supportsToneMapping } from './media/ffmpeg';
+import { MAX_STORY_DURATION_SECONDS, MAX_VIDEO_DURATION_SECONDS } from './media/rules';
 import { RawVideoNotFoundError, VideoStorage } from './storage';
 import { transcode } from './transcode';
 
@@ -38,27 +47,61 @@ async function main() {
   const connection: ConnectionOptions = { url: config.redisUrl };
   const storage = new VideoStorage(config.s3);
 
-  const results = new Queue<TranscodeResult>(TRANSCODE_RESULTS_QUEUE, { connection });
+  // Vidéos (3 min au plus, ADR-040) et stories vidéo (60 s au plus, ADR-051) : même traitement, files séparées, pour que
+  // chaque résultat revienne au module de l'API concerné. Chaque file a sa propre concurrence (`TRANSCODE_CONCURRENCY`).
+  const consumers = [
+    startConsumer(TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, MAX_VIDEO_DURATION_SECONDS, { connection, config, storage, toneMapping }),
+    startConsumer(STORY_TRANSCODE_QUEUE, STORY_TRANSCODE_RESULTS_QUEUE, MAX_STORY_DURATION_SECONDS, { connection, config, storage, toneMapping }),
+  ];
+  await Promise.all(consumers.map(({ worker }) => worker.waitUntilReady()));
+  console.log(`[worker] prêt : queues ${TRANSCODE_QUEUE} et ${STORY_TRANSCODE_QUEUE}, ${config.concurrency} job(s) à la fois par queue`);
+
+  // Arrêt propre : le job en cours se termine avant la fermeture (sinon BullMQ le reprendra).
+  const shutdown = async () => {
+    console.log('[worker] arrêt…');
+    await Promise.all(consumers.map(({ worker }) => worker.close()));
+    await Promise.all(consumers.map(({ results }) => results.close()));
+    process.exit(0);
+  };
+  process.once('SIGTERM', () => void shutdown());
+  process.once('SIGINT', () => void shutdown());
+}
+
+interface ConsumerContext {
+  connection: ConnectionOptions;
+  config: WorkerConfig;
+  storage: VideoStorage;
+  toneMapping: boolean;
+}
+
+// Consomme une file de transcodage et publie chaque résultat dans sa file de résultats.
+function startConsumer(
+  queue: string,
+  resultsQueue: string,
+  maxDurationSeconds: number,
+  { connection, config, storage, toneMapping }: ConsumerContext,
+) {
+  const results = new Queue<TranscodeResult>(resultsQueue, { connection });
   // jobId dérivé de la vidéo : un résultat publié deux fois (tentative rejouée) n'est pris qu'une fois.
   const publish = (result: TranscodeResult) =>
     results.add('result', result, { jobId: `${result.videoId}-${result.status}`, removeOnComplete: true, removeOnFail: { age: 7 * 24 * 3600 } });
 
   const worker = new Worker<TranscodeJobData>(
-    TRANSCODE_QUEUE,
+    queue,
     async (job) => {
       const started = Date.now();
       let output;
       try {
-        output = await transcode(job.data, config, storage, { toneMapping });
+        output = await transcode(job.data, config, storage, { toneMapping, maxDurationSeconds });
       } catch (error) {
-        // Fichier illisible ou disparu : les nouvelles tentatives échoueraient de la même façon.
+        // Fichier illisible, trop long ou disparu : les nouvelles tentatives échoueraient de la même façon.
         if (error instanceof InvalidMediaError || error instanceof RawVideoNotFoundError) {
           throw new UnrecoverableError(error.message);
         }
         throw error;
       }
       await publish({ videoId: job.data.videoId, status: 'ready', ...output });
-      console.log(`[worker] ${job.data.videoId} transcodée en ${((Date.now() - started) / 1000).toFixed(1)} s`);
+      console.log(`[worker] ${queue} : ${job.data.videoId} transcodée en ${((Date.now() - started) / 1000).toFixed(1)} s`);
     },
     // Verrou long : un transcodage peut durer plusieurs minutes, BullMQ le renouvelle tant que le worker vit.
     { connection, concurrency: config.concurrency, lockDuration: 5 * 60_000 },
@@ -69,19 +112,7 @@ async function main() {
     void onFailed(job, error, publish);
   });
   worker.on('error', (error) => console.error(`[worker] ${error.message}`));
-
-  await worker.waitUntilReady();
-  console.log(`[worker] prêt : queue ${TRANSCODE_QUEUE}, ${config.concurrency} job(s) à la fois`);
-
-  // Arrêt propre : le job en cours se termine avant la fermeture (sinon BullMQ le reprendra).
-  const shutdown = async () => {
-    console.log('[worker] arrêt…');
-    await worker.close();
-    await results.close();
-    process.exit(0);
-  };
-  process.once('SIGTERM', () => void shutdown());
-  process.once('SIGINT', () => void shutdown());
+  return { worker, results };
 }
 
 // BullMQ relance le job avec un backoff exponentiel (options fixées par l'API). L'échec est définitif

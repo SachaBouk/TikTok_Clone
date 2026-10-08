@@ -19,6 +19,7 @@ final class FakeMessagingRepository: MessagingRepository {
         var losesResponse = false
         // Identifiants « n101 »… : après les « mNN » des tests (ordre des UUID v7).
         var nextID = 100
+        var repliedStoryIDs: [String] = []
     }
 
     let state = Mutex(State())
@@ -121,6 +122,13 @@ final class FakeMessagingRepository: MessagingRepository {
             if state.losesResponse { throw AppError.network }
             return message
         }
+    }
+
+    func replyToStory(conversationID: String, storyID: String, content: String, clientMessageID: String) async throws -> DirectMessage {
+        var message = try await send(conversationID: conversationID, content: content, videoID: nil, clientMessageID: clientMessageID)
+        message.story = RepliedStory(id: storyID, available: true, mediaType: .photo, thumbnailURL: nil)
+        state.withLock { $0.repliedStoryIDs.append(storyID) }
+        return message
     }
 
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges {

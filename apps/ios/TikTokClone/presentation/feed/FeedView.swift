@@ -142,7 +142,9 @@ struct FeedView: View {
                                     hashtagRoute = HashtagRoute(name: name)
                                 }
                             },
-                            gift: { openGifts(entry.video) }
+                            gift: { openGifts(entry.video) },
+                            // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
+                            openStories: { container.router.openStories([entry.video.author], source: .feed) }
                         )
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
@@ -224,6 +226,8 @@ struct VideoPageActions {
     var openHashtag: (String) -> Void = { _ in }
     // Bouton 🎁 (ADR-050) : feuille de cadeaux, sur la vidéo d'un autre.
     var gift: () -> Void = {}
+    // Avatar entouré de l'anneau des stories (ADR-051) : ses stories. Nil : l'avatar ouvre toujours le profil.
+    var openStories: (() -> Void)? = nil
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
@@ -346,16 +350,33 @@ struct FeedActionColumn: View {
     let actions: VideoPageActions
     // Confirmation attachée au menu : elle s'affiche à côté du bouton « … », pas dans un coin de l'écran.
     @State private var isConfirmingDelete = false
+    @Environment(StoriesModel.self) private var stories: StoriesModel?
 
     var body: some View {
         let viewer = video.viewer ?? .empty
+        // Anneau des stories de l'auteur (ADR-051) : ce que la visionneuse a vu ici l'emporte sur celui du feed.
+        let ring = stories.map { $0.ring(for: video.author.id, fallback: video.authorStory) } ?? video.authorStory
         VStack(spacing: 18) {
-            NavigationLink(value: ProfileRoute(username: video.author.username)) {
-                AvatarView(url: video.author.avatarURL, name: video.author.displayName, size: 48)
-                    .overlay(Circle().stroke(.white, lineWidth: 2))
+            Group {
+                if let ring, let openStories = actions.openStories {
+                    Button(action: openStories) {
+                        StoryAvatar(url: video.author.avatarURL, name: video.author.displayName, size: 44, ring: ring)
+                    }
+                    .accessibilityLabel("Stories de @\(video.author.username)")
+                    .accessibilityIdentifier("video.authorStories")
+                } else {
+                    NavigationLink(value: ProfileRoute(username: video.author.username)) {
+                        if let ring {
+                            StoryAvatar(url: video.author.avatarURL, name: video.author.displayName, size: 44, ring: ring)
+                        } else {
+                            AvatarView(url: video.author.avatarURL, name: video.author.displayName, size: 48)
+                                .overlay(Circle().stroke(.white, lineWidth: 2))
+                        }
+                    }
+                    .accessibilityLabel("Profil de @\(video.author.username)")
+                }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Profil de @\(video.author.username)")
             .overlay(alignment: .bottom) {
                 if showsFollowButton && !viewer.followingAuthor {
                     Button(action: actions.follow) {

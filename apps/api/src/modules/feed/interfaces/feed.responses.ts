@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AuthorStoryResponse } from '../../stories/interfaces/stories.responses';
 import type { FeedItemDto, FeedPageDto, FeedViewerStateDto, VideoPageDto } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { FeedItem } from '../application/feed.service';
@@ -60,6 +61,9 @@ export class FeedItemResponse implements FeedItemDto {
   // elle forcerait un `allOf` autour de la référence, que le client Swift enveloppe dans une structure.
   @ApiPropertyOptional({ type: FeedViewerStateResponse })
   viewer?: FeedViewerStateResponse;
+
+  @ApiPropertyOptional({ type: AuthorStoryResponse })
+  authorStory?: AuthorStoryResponse;
 }
 
 export class FeedPageResponse implements FeedPageDto {
@@ -83,7 +87,7 @@ export class VideoPageResponse implements VideoPageDto {
 }
 
 // Mapping explicite, partagé par le feed et les grilles du profil : rien n'est exposé par accident (ADR-003).
-export function toFeedItemDto({ video, author, viewer }: FeedItem): FeedItemDto {
+export function toFeedItemDto({ video, author, viewer, authorStory }: FeedItem): FeedItemDto {
   return {
     id: video.id,
     description: video.description,
@@ -106,5 +110,6 @@ export function toFeedItemDto({ video, author, viewer }: FeedItem): FeedItemDto 
         followingAuthor: viewer.followingAuthor,
       },
     }),
+    ...(authorStory && { authorStory: { hasUnseen: authorStory.hasUnseen } }),
   };
 }

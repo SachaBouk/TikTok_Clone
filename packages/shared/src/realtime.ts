@@ -1,5 +1,6 @@
 import type { MessageDto } from './messaging.js';
 import type { NotificationDto, NotificationGroupDto } from './notifications.js';
+import type { StoryDto } from './stories.js';
 import type { VideoDto } from './videos.js';
 import type { WalletDto } from './wallet.js';
 
@@ -11,6 +12,12 @@ import type { WalletDto } from './wallet.js';
 export interface VideoProcessedEventDto {
   event: 'videoProcessed';
   data: VideoDto;
+}
+
+// Fin du traitement d'une story vidéo, envoyé à son auteur (ADR-051) : `status` vaut `ready` ou `failed`.
+export interface StoryProcessedEventDto {
+  event: 'storyProcessed';
+  data: StoryDto;
 }
 
 // Nouvelle notification dans le centre d'activité, avec le badge à jour.
@@ -99,6 +106,7 @@ export interface WalletUpdatedEventDto {
 
 export type RealtimeEventDto =
   | VideoProcessedEventDto
+  | StoryProcessedEventDto
   | NotificationCreatedEventDto
   | UnreadNotificationsChangedEventDto
   | NotificationsRemovedEventDto

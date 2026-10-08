@@ -36,6 +36,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     let author: UserSummary
     // Nil en mode invité.
     let viewer: ViewerState?
+    // Anneau autour de l'avatar de l'auteur (ADR-051) : nil s'il n'a pas de story visible.
+    var authorStory: StoryRing? = nil
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

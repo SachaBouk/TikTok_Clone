@@ -57,7 +57,13 @@ struct VideoDetailView: View {
         }
         .videoInteractionSheets(
             comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
-            container: container)
+            container: container
+        )
+        // Stories de l'auteur (ADR-051), présentées par-dessus la vidéo seule, mise en pause pendant ce temps.
+        .storiesPresenter(container) { true }
+        .onChange(of: container.router.presentedStories == nil) { _, closed in
+            if closed { viewModel.resume() } else { viewModel.stop() }
+        }
     }
 
     // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
@@ -89,7 +95,8 @@ struct VideoDetailView: View {
                     report: { report(video) },
                     alert: { alertMessage = $0 },
                     openHashtag: { path.append(HashtagRoute(name: $0)) },
-                    gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } }
+                    gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
+                    openStories: { container.router.openStories([video.author], source: .feed) }
                 )
             )
         }

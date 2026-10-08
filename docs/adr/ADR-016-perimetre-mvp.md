@@ -62,3 +62,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-046](ADR-046-dimensions-photo-profil.md) — Dimensions de la photo de profil vérifiées par l'API
 - Complété par [ADR-048](ADR-048-feed-abonnements.md) — Feed des abonnements
 - Complété par [ADR-049](ADR-049-recherche-hashtags.md) — Recherche de comptes et hashtags
+- Complété par [ADR-050](ADR-050-cadeaux-jetons.md) — Cadeaux en jetons

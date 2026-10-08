@@ -10,6 +10,7 @@ import type {
   AdminReportDto,
   AdminReportReasonCountDto,
   AdminReportTargetDetailDto,
+  StoryMediaType,
   AdminReportTargetDto,
   AdminReportTargetPageDto,
   AdminStatsDto,
@@ -525,6 +526,12 @@ export class AdminReportTargetResponse implements AdminReportTargetDto {
   @ApiPropertyOptional({ format: 'uuid', description: 'Commentaire : vidéo commentée.' })
   videoId?: string;
 
+  @ApiPropertyOptional({ format: 'uri', description: 'Story (ADR-051) : photo ou manifeste HLS, tant qu’elle est visible.' })
+  storyMediaUrl?: string;
+
+  @ApiPropertyOptional({ enum: ['video', 'photo'], enumName: 'StoryMediaType' })
+  storyMediaType?: StoryMediaType;
+
   @ApiPropertyOptional({ description: 'Texte signalé, copié au moment du signalement le plus récent.' })
   excerpt?: string;
 
@@ -592,6 +599,7 @@ export function toAdminReportTargetDto(item: ModeratedReportTarget): AdminReport
     available: item.available,
     ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
     ...(item.videoId ? { videoId: item.videoId } : {}),
+    ...(item.story ? { storyMediaUrl: item.story.mediaUrl, storyMediaType: item.story.mediaType } : {}),
     ...(item.excerpt ? { excerpt: item.excerpt } : {}),
     openCount: item.open?.openCount ?? 0,
     reasons: (item.open?.reasons ?? []).map(({ reason, count }) => ({ reason, count })),

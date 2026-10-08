@@ -7,12 +7,13 @@ import Testing
 @Suite("Publication : règles et envoi par parties")
 struct PublishingUseCasesTests {
     let videos = FakeVideoPublishingRepository()
+    let stories = FakeStoryRepository()
     let transport = FakePartTransport()
     let store = InMemoryUploadStore()
     let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     var upload: UploadVideoUseCase {
-        UploadVideoUseCase(videos: videos, transport: transport, store: store, now: { [now] in now }, retryDelays: [.zero, .zero])
+        UploadVideoUseCase(videos: videos, stories: stories, transport: transport, store: store, now: { [now] in now }, retryDelays: [.zero, .zero])
     }
 
     // Fichier de 10 octets enregistré pour l'envoi : 3 parties de 4, 4 et 2 octets.
@@ -26,9 +27,9 @@ struct PublishingUseCasesTests {
     func rules() {
         #expect(UploadRules.range(ofPart: 1, partSize: 4, fileSize: 10) == 0..<4)
         #expect(UploadRules.range(ofPart: 3, partSize: 4, fileSize: 10) == 8..<10)
-        #expect(VideoContentType(fileExtension: "MOV") == .quickTime)
-        #expect(VideoContentType(fileExtension: "m4v") == .mp4)
-        #expect(VideoContentType(fileExtension: "avi") == nil)
+        #expect(MediaContentType(fileExtension: "MOV") == .quickTime)
+        #expect(MediaContentType(fileExtension: "m4v") == .mp4)
+        #expect(MediaContentType(fileExtension: "avi") == nil)
         #expect(UploadRules.sanitizedDescription("  \n ") == nil)
         #expect(UploadRules.sanitizedDescription(" Salut ") == "Salut")
     }
@@ -81,7 +82,8 @@ struct PublishingUseCasesTests {
         let pending = try stored()
         // Partie 1 reçue, puis 3 échecs réseau sur la partie 2 (essai + 2 relances).
         transport.state.withLock { $0.errors = [] }
-        let failing = UploadVideoUseCase(videos: videos, transport: FailingAfter(transport, successes: 1), store: store, retryDelays: [.zero, .zero])
+        let failing = UploadVideoUseCase(
+            videos: videos, stories: stories, transport: FailingAfter(transport, successes: 1), store: store, retryDelays: [.zero, .zero])
         await #expect(throws: AppError.network) { try await failing(pending) { _ in } }
 
         let saved = try #require(store.uploads.first)
@@ -153,7 +155,7 @@ struct PublishingUseCasesTests {
     func cancel() async throws {
         var pending = try stored()
         pending.ticket = try await videos.createUpload(contentType: .quickTime, fileSize: 10, description: nil)
-        await CancelUploadUseCase(videos: videos, store: store)(pending)
+        await CancelUploadUseCase(videos: videos, stories: stories, store: store)(pending)
         #expect(videos.deleted == ["vid-1"])
         #expect(store.uploads.isEmpty)
         #expect(store.fileNames.isEmpty)

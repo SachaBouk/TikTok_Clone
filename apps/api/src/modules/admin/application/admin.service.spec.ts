@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { AuthService } from '../../auth/application/auth.service';
 import { AccessTokenIssuer } from '../../auth/domain/access-token-issuer';
@@ -101,6 +102,7 @@ describe('AdminService', () => {
   let refreshTokens: InMemoryRefreshTokenRepository;
   let reports: ReportsService;
   let messaging: MessagingService;
+  let stories: ReturnType<typeof inMemoryStories>;
   let notificationRepository: InMemoryNotificationRepository;
   let reportRepository: InMemoryReportRepository;
 
@@ -198,11 +200,13 @@ describe('AdminService', () => {
       })(),
     );
     reportRepository = new InMemoryReportRepository(() => NOW);
+    stories = inMemoryStories(users, interactions, () => NOW);
     messaging = new MessagingService(
       new InMemoryConversationRepository(),
       users,
       interactions,
       videos,
+      stories.service,
       new InMemoryMessagingEventPublisher(),
       new InMemoryRateLimiter(),
     );
@@ -214,11 +218,12 @@ describe('AdminService', () => {
       interactions,
       messaging,
       notifications,
+      stories.service,
       new InMemoryRateLimiter(),
       suspended,
       () => NOW,
     );
-    service = new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging, () => NOW);
+    service = new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging, stories.service, () => NOW);
   });
 
   describe('signalements (ADR-038)', () => {
@@ -262,6 +267,35 @@ describe('AdminService', () => {
       await service.suspendAccount(CAROL, ALICE, 'Spam');
       expect((await service.listReportTargets(null, 10)).items).toEqual([]);
       await expect(service.getReportTarget({ type: 'video', id: 'jamais' })).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+    });
+  });
+
+  describe('stories (ADR-051)', () => {
+    it('story signalée : aperçu dans la file, retrait annoncé à l’auteur et journalisé', async () => {
+      const story = await publishTestStory(stories, BOB);
+      await reports.report(ALICE, { target: { type: 'story', id: story.id }, reason: 'sexual' });
+      const [queued] = (await service.listReportTargets(null, 10)).items;
+      expect([queued.target.type, queued.targetUser?.id, queued.available, queued.thumbnailUrl, queued.story]).toEqual([
+        'story',
+        BOB,
+        true,
+        story.thumbnailUrl,
+        { mediaType: 'photo', mediaUrl: story.mediaUrl },
+      ]);
+
+      await service.removeStory(CAROL, story.id, 'sexual');
+      await expect(stories.repository.findById(story.id)).resolves.toBeNull();
+      await expect(service.removeStory(CAROL, story.id, 'sexual')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      expect(
+        [...notificationRepository.notifications.values()]
+          .filter((n) => n.moderation)
+          .map((n) => [n.recipientId, n.type, n.moderation!.targetType, n.moderation!.reason ?? n.moderation!.outcome]),
+      ).toEqual([
+        [BOB, 'contentRemoved', 'story', 'sexual'],
+        [ALICE, 'reportResolved', 'story', 'contentRemoved'],
+      ]);
+      const journal = await service.listModerationActions({ targetUserId: BOB }, null, 10);
+      expect(journal.items.map((a) => [a.action, a.target.type, a.reason, a.reportsClosed])).toEqual([['storyRemoved', 'story', 'sexual', 1]]);
     });
   });
 

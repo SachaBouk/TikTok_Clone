@@ -12,7 +12,8 @@ enum VideoStatus: String, Codable, Equatable, Sendable {
     case failed
 }
 
-// Vidéo du compte connecté, suivie de l'envoi à la publication. La miniature n'existe qu'une fois `ready`.
+// Vidéo (ou story, ADR-051) du compte connecté, suivie de l'envoi à la publication. La miniature n'existe qu'une fois
+// `ready` ; une story n'a pas de description.
 struct OwnVideo: Identifiable, Equatable, Sendable {
     let id: String
     let description: String?
@@ -21,19 +22,30 @@ struct OwnVideo: Identifiable, Equatable, Sendable {
     let createdAt: Date
 }
 
-// Formats acceptés par l'API (`upload-rules.ts`) : ceux que produit la galerie iOS.
-enum VideoContentType: String, Codable, Equatable, Sendable, CaseIterable {
+// Formats acceptés par l'API (`upload-rules.ts`, `stories/domain/story.ts`) : vidéos de la galerie iOS, et photo JPEG
+// préparée par l'app pour une story (ADR-051).
+enum MediaContentType: String, Codable, Equatable, Sendable, CaseIterable {
     case mp4 = "video/mp4"
     case quickTime = "video/quicktime"
+    case jpeg = "image/jpeg"
 
-    // D'après l'extension du fichier exporté par la galerie ; nil si le format n'est pas accepté.
+    // D'après l'extension du fichier ; nil si le format n'est pas accepté.
     init?(fileExtension: String) {
         switch fileExtension.lowercased() {
         case "mp4", "m4v": self = .mp4
         case "mov", "qt": self = .quickTime
+        case "jpg", "jpeg": self = .jpeg
         default: return nil
         }
     }
+
+    var isVideo: Bool { self != .jpeg }
+}
+
+// Ce qu'on publie : une vidéo du feed, ou une story (ADR-051). Même envoi multipart, routes différentes.
+enum PublicationKind: String, Codable, Equatable, Sendable {
+    case video
+    case story
 }
 
 // Réponse à la demande d'upload : une URL signée par partie, valable jusqu'à `expiresAt` (2 h).
@@ -43,6 +55,7 @@ struct UploadTicket: Codable, Equatable, Sendable {
         let url: URL
     }
 
+    // Vidéo, ou story pour une publication de story (ADR-051).
     let videoID: String
     let partSize: Int
     let parts: [Part]
@@ -62,7 +75,7 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     // Compte qui publie : un envoi ne reprend que pour lui.
     let userID: String
     let fileName: String
-    let contentType: VideoContentType
+    let contentType: MediaContentType
     let fileSize: Int
     let description: String?
     let createdAt: Date
@@ -70,6 +83,7 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var ticket: UploadTicket?
     // Parties déjà reçues par le stockage, par numéro : jamais renvoyées.
     var sentParts: [Int: String] = [:]
+    var kind: PublicationKind = .video
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -81,6 +95,29 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 
     var progress: Double {
         fileSize > 0 ? Double(sentBytes) / Double(fileSize) : 0
+    }
+}
+
+extension PendingUpload {
+    private enum CodingKeys: String, CodingKey {
+        case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind
+    }
+
+    // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            userID: try container.decode(String.self, forKey: .userID),
+            fileName: try container.decode(String.self, forKey: .fileName),
+            contentType: try container.decode(MediaContentType.self, forKey: .contentType),
+            fileSize: try container.decode(Int.self, forKey: .fileSize),
+            description: try container.decodeIfPresent(String.self, forKey: .description),
+            createdAt: try container.decode(Date.self, forKey: .createdAt),
+            ticket: try container.decodeIfPresent(UploadTicket.self, forKey: .ticket),
+            sentParts: try container.decodeIfPresent([Int: String].self, forKey: .sentParts) ?? [:],
+            kind: try container.decodeIfPresent(PublicationKind.self, forKey: .kind) ?? .video
+        )
     }
 }
 

@@ -33,6 +33,8 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     let createdAt: Date
     // Identifiant d'envoi (ADR-044), seulement sur la réponse à son propre envoi et son écho temps réel.
     var clientMessageID: String? = nil
+    // Story à laquelle répond le message (ADR-051).
+    var story: RepliedStory? = nil
 
     // Aperçu d'une ligne de la boîte de réception.
     func preview(ownID: String?) -> String {

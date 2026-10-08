@@ -90,6 +90,7 @@ const REMOVED: Record<ModerationTargetType, string> = {
   video: 'Ta vidéo a été retirée.',
   comment: 'Ton commentaire a été retiré.',
   message: 'Ton message a été retiré.',
+  story: 'Ta story a été retirée.',
   // Un compte n'est pas « retiré » (suspension, annoncée à la connexion) : jamais envoyé.
   account: 'Ton compte a été suspendu.',
 };

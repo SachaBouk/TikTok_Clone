@@ -18,24 +18,26 @@ struct PrepareVideoUseCase: Sendable {
     }
 }
 
-// Vérifie la vidéo choisie (format, taille) et sa description, puis l'enregistre pour l'envoi.
+// Vérifie la vidéo choisie (format, taille) et sa description, puis l'enregistre pour l'envoi. Une story (ADR-051) est une
+// vidéo ou une photo JPEG préparée, sans description.
 // Le fichier est déplacé dans le stockage des envois : il survit à une relance de l'app.
 struct CreatePublicationUseCase: Sendable {
     let store: any UploadStore
     var now: @Sendable () -> Date = { Date() }
     var makeID: @Sendable () -> String = { UUID().uuidString }
 
-    func callAsFunction(file: URL, description: String, userID: String) throws -> PendingUpload {
-        guard let contentType = VideoContentType(fileExtension: file.pathExtension) else {
+    func callAsFunction(file: URL, description: String, userID: String, kind: PublicationKind = .video) throws -> PendingUpload {
+        guard let contentType = MediaContentType(fileExtension: file.pathExtension), contentType.isVideo || kind == .story else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
         }
-        let description = UploadRules.sanitizedDescription(description)
+        let description = kind == .story ? nil : UploadRules.sanitizedDescription(description)
         if let description, description.count > UploadRules.maxDescriptionLength {
             throw AppError.rejected("La description fait au plus \(UploadRules.maxDescriptionLength) caractères.")
         }
         let fileSize = try store.size(ofFileAt: file)
-        guard fileSize > 0 else { throw AppError.rejected("Cette vidéo est vide.") }
+        guard fileSize > 0 else { throw AppError.rejected(contentType.isVideo ? "Cette vidéo est vide." : "Cette photo est vide.") }
         guard fileSize <= UploadRules.maxFileSize else { throw AppError.rejected("La vidéo dépasse 1 Go.") }
+        if !contentType.isVideo && fileSize > StoryRules.maxPhotoFileSize { throw AppError.rejected("La photo dépasse 5 Mo.") }
 
         let id = makeID()
         let upload = PendingUpload(
@@ -45,14 +47,16 @@ struct CreatePublicationUseCase: Sendable {
             contentType: contentType,
             fileSize: fileSize,
             description: description,
-            createdAt: now()
+            createdAt: now(),
+            kind: kind
         )
         try store.save(upload)
         return upload
     }
 }
 
-// Envoie ce qui reste d'un envoi, puis le confirme : renvoie la vidéo, en `processing` le plus souvent.
+// Envoie ce qui reste d'un envoi, puis le confirme : renvoie la vidéo, en `processing` le plus souvent (une story photo
+// est aussitôt publiée). Vidéos et stories suivent le même chemin, vers les routes de leur module (`kind`).
 // - L'état est enregistré après chaque partie : après une erreur (réseau, app tuée), un nouvel appel reprend
 //   à la première partie non reçue. Une partie reçue n'est jamais renvoyée.
 // - Coupure réseau : chaque étape est réessayée (`retryDelays`), puis l'erreur remonte.
@@ -61,6 +65,7 @@ struct CreatePublicationUseCase: Sendable {
 // - Succès : l'envoi et son fichier local sont oubliés.
 struct UploadVideoUseCase: Sendable {
     let videos: any VideoPublishingRepository
+    let stories: any StoryPublishingRepository
     let transport: any UploadPartTransport
     let store: any UploadStore
     var now: @Sendable () -> Date = { Date() }
@@ -105,10 +110,21 @@ struct UploadVideoUseCase: Sendable {
         }
 
         let parts = upload.sentParts.map { UploadedPart(number: $0.key, etag: $0.value) }.sorted { $0.number < $1.number }
+        let kind = upload.kind
         do {
-            return try await withRetries { try await videos.completeUpload(videoID: ticket.videoID, parts: parts) }
+            return try await withRetries {
+                switch kind {
+                case .video: try await videos.completeUpload(videoID: ticket.videoID, parts: parts)
+                case .story: try await stories.completeUpload(storyID: ticket.videoID, parts: parts)
+                }
+            }
         } catch UploadFailure.alreadyConfirmed {
-            return try await withRetries { try await videos.video(id: ticket.videoID) }
+            return try await withRetries {
+                switch kind {
+                case .video: try await videos.video(id: ticket.videoID)
+                case .story: try await stories.story(id: ticket.videoID)
+                }
+            }
         }
     }
 
@@ -120,11 +136,18 @@ struct UploadVideoUseCase: Sendable {
             upload.ticket = nil
             upload.sentParts = [:]
             try store.save(upload)
-            try? await videos.deleteVideo(id: old.videoID)
+            switch upload.kind {
+            case .video: try? await videos.deleteVideo(id: old.videoID)
+            case .story: try? await stories.deleteStory(id: old.videoID)
+            }
         }
         let request = upload
         upload.ticket = try await withRetries {
-            try await videos.createUpload(contentType: request.contentType, fileSize: request.fileSize, description: request.description)
+            switch request.kind {
+            case .video:
+                try await videos.createUpload(contentType: request.contentType, fileSize: request.fileSize, description: request.description)
+            case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
+            }
         }
         try store.save(upload)
         return upload
@@ -165,13 +188,25 @@ struct PendingUploadsUseCase: Sendable {
 // puis l'envoi et son fichier sont oubliés.
 struct CancelUploadUseCase: Sendable {
     let videos: any VideoPublishingRepository
+    let stories: any StoryPublishingRepository
     let store: any UploadStore
 
     func callAsFunction(_ upload: PendingUpload) async {
         store.remove(upload)
-        if let ticket = upload.ticket {
-            try? await videos.deleteVideo(id: ticket.videoID)
+        guard let ticket = upload.ticket else { return }
+        switch upload.kind {
+        case .video: try? await videos.deleteVideo(id: ticket.videoID)
+        case .story: try? await stories.deleteStory(id: ticket.videoID)
         }
+    }
+}
+
+// Story du compte suivie dans la liste des publications (ADR-051).
+struct LoadOwnStoryUseCase: Sendable {
+    let stories: any StoryPublishingRepository
+
+    func callAsFunction(id: String) async throws -> OwnVideo {
+        try await stories.story(id: id)
     }
 }
 

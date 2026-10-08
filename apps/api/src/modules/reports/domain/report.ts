@@ -1,9 +1,9 @@
 import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 
-// Signalements (ADR-038) : une personne signale une vidéo, un commentaire, un compte ou un message reçu, avec un motif
+// Signalements (ADR-038) : une personne signale une vidéo, un commentaire, un compte, un message reçu ou une story (ADR-051), avec un motif
 // de la liste et une précision facultative. Rien n'est masqué avant la décision d'un administrateur.
 
-export type ReportTargetType = 'video' | 'comment' | 'account' | 'message';
+export type ReportTargetType = 'video' | 'comment' | 'account' | 'message' | 'story';
 export type ReportReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 // Décision d'un administrateur, qui clôt les signalements ouverts d'une cible ; ou clôture automatique par la base
 // (triggers) quand la cible disparaît sans décision : contenu supprimé par son auteur, compte supprimé.
@@ -11,7 +11,7 @@ export type ReportResolution = 'contentRemoved' | 'accountSuspended' | 'dismisse
 // Décision annoncée à la personne qui a signalé.
 export type ModerationOutcome = 'contentRemoved' | 'accountSuspended' | 'dismissed';
 
-export const REPORT_TARGET_TYPES: ReportTargetType[] = ['video', 'comment', 'account', 'message'];
+export const REPORT_TARGET_TYPES: ReportTargetType[] = ['video', 'comment', 'account', 'message', 'story'];
 export const REPORT_RESOLUTIONS: ReportResolution[] = ['contentRemoved', 'accountSuspended', 'dismissed', 'contentDeleted', 'accountDeleted'];
 export const REPORT_REASONS: ReportReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
 
@@ -87,11 +87,12 @@ export interface ResolvedReport {
 // ─── Journal de modération ───────────────────────────────────────────────────
 
 export type ModerationActionType =
-  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'storyRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
 export const MODERATION_ACTION_TYPES: ModerationActionType[] = [
   'videoRemoved',
   'commentRemoved',
   'messageRemoved',
+  'storyRemoved',
   'accountSuspended',
   'suspensionLifted',
   'reportsDismissed',

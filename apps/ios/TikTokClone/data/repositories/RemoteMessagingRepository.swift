@@ -88,6 +88,25 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
+    func replyToStory(conversationID: String, storyID: String, content: String, clientMessageID: String) async throws -> DirectMessage {
+        let output = try await mappingErrors {
+            try await client.sendMessage(
+                path: .init(id: conversationID),
+                body: .json(.init(content: content, storyId: storyID, clientMessageId: clientMessageID)))
+        }
+        switch output {
+        case .created(let created): return DirectMessage(try created.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        // Story expirée, supprimée ou masquée entre-temps.
+        case .notFound: throw AppError.rejected("Cette story n’est plus disponible.")
+        case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .conflict: throw AppError.unexpected
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges {
         let output = try await mappingErrors {
             try await client.markConversationRead(path: .init(id: conversationID), body: .json(.init(upToId: upToID)))
@@ -156,7 +175,19 @@ extension DirectMessage {
             content: dto.content,
             sharedVideo: dto.sharedVideo.map(SharedVideo.init),
             createdAt: dto.createdAt,
-            clientMessageID: dto.clientMessageId
+            clientMessageID: dto.clientMessageId,
+            story: dto.story.map(RepliedStory.init)
+        )
+    }
+}
+
+extension RepliedStory {
+    init(_ dto: Components.Schemas.MessageStoryResponse) {
+        self.init(
+            id: dto.id,
+            available: dto.available,
+            mediaType: dto.mediaType.map(StoryMediaType.init),
+            thumbnailURL: dto.thumbnailUrl.flatMap(URL.init(string:))
         )
     }
 }

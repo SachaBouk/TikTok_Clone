@@ -8,6 +8,7 @@ import UIKit
 @Suite("Publication : modèle partagé et brouillon")
 struct PublishingModelTests {
     let videos = FakeVideoPublishingRepository()
+    let stories = FakeStoryRepository()
     let transport = FakePartTransport()
     let store = InMemoryUploadStore()
 
@@ -16,12 +17,14 @@ struct PublishingModelTests {
         await session.restore()
         let model = PublishingModel(
             createPublication: CreatePublicationUseCase(store: store),
-            uploadVideo: UploadVideoUseCase(videos: videos, transport: transport, store: store, retryDelays: []),
+            uploadVideo: UploadVideoUseCase(videos: videos, stories: stories, transport: transport, store: store, retryDelays: []),
             pendingUploads: PendingUploadsUseCase(store: store),
-            cancelUpload: CancelUploadUseCase(videos: videos, store: store),
+            cancelUpload: CancelUploadUseCase(videos: videos, stories: stories, store: store),
             loadPendingVideos: LoadPendingVideosUseCase(videos: videos),
             loadVideo: LoadOwnVideoUseCase(videos: videos),
             deleteVideo: DeleteVideoUseCase(videos: videos),
+            loadStory: LoadOwnStoryUseCase(stories: stories),
+            deleteStory: DeleteStoryUseCase(stories: stories),
             session: session,
             analytics: makeAnalytics(),
             makePreview: { _ in nil },

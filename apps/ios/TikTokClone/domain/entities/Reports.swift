@@ -1,6 +1,6 @@
 import Foundation
 
-// Signalements (ADR-038) : une vidéo, un commentaire, un compte ou un message reçu, avec un motif de la liste et une
+// Signalements (ADR-038) : une vidéo, un commentaire, un compte, un message reçu ou une story (ADR-051), avec un motif de la liste et une
 // précision facultative. Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité.
 
 enum ReportReason: String, CaseIterable, Identifiable, Sendable {
@@ -26,6 +26,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
     case comment(id: String)
     case account(id: String, username: String)
     case message(id: String)
+    case story(id: String)
 
     var id: String {
         switch self {
@@ -33,6 +34,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .comment(let id): "comment:\(id)"
         case .account(let id, _): "account:\(id)"
         case .message(let id): "message:\(id)"
+        case .story(let id): "story:\(id)"
         }
     }
 
@@ -43,6 +45,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .comment: "Pourquoi signaler ce commentaire ?"
         case .account(_, let username): "Pourquoi signaler @\(username) ?"
         case .message: "Pourquoi signaler ce message ?"
+        case .story: "Pourquoi signaler cette story ?"
         }
     }
 
@@ -59,6 +62,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .comment: "comment"
         case .account: "account"
         case .message: "message"
+        case .story: "story"
         }
     }
 }

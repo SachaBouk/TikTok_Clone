@@ -23,7 +23,7 @@ struct ActivityGift: Equatable, Sendable {
 // (`reason`, motif choisi par l'administrateur). `excerpt` : texte du contenu concerné, copié.
 struct ActivityModeration: Equatable, Sendable {
     enum Target: String, Sendable {
-        case video, comment, account, message
+        case video, comment, account, message, story
     }
 
     enum Outcome: String, Sendable {
@@ -48,6 +48,7 @@ struct ActivityModeration: Equatable, Sendable {
                 case .video: "Ta vidéo a été retirée."
                 case .comment: "Ton commentaire a été retiré."
                 case .message: "Ton message a été retiré."
+                case .story: "Ta story a été retirée."
                 case .account: "Ton compte a été suspendu."
                 }
             // « Autre » : libellé de la liste, peu parlant seul ; même texte que la notification push.

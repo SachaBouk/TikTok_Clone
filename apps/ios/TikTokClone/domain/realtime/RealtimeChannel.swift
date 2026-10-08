@@ -4,6 +4,8 @@ enum RealtimeUpdate: Equatable, Sendable {
     case connected
     // Fin du transcodage d'une vidéo du compte : `ready` ou `failed`.
     case videoProcessed(OwnVideo)
+    // Fin du traitement d'une story vidéo du compte (ADR-051) : `ready` ou `failed`.
+    case storyProcessed(OwnVideo)
     // Nouvelle notification d'activité, avec le badge à jour.
     case notificationCreated(ActivityNotification, unreadCount: Int)
     // Badge seul (notifications lues sur un autre appareil).

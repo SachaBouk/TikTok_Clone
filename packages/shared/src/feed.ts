@@ -1,3 +1,4 @@
+import type { AuthorStoryDto } from './stories.js';
 import type { UserSummaryDto } from './users.js';
 
 // Feed principal (ADR-016) : vidéos publiées, dans un ordre aléatoire propre à chaque session de scroll.
@@ -28,6 +29,8 @@ export interface FeedItemDto {
   // Absent en mode invité (plutôt que null : OpenAPI 3.0 ne sait pas décrire une référence nullable,
   // et le client Swift en ferait une structure enveloppe).
   viewer?: FeedViewerStateDto;
+  // Anneau autour de l'avatar (ADR-051) : absent si l'auteur n'a pas de story visible.
+  authorStory?: AuthorStoryDto;
 }
 
 export interface FeedPageDto {

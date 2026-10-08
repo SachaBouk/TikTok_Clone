@@ -5,8 +5,12 @@ import TikTokAPI
 struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     let client: Client
 
-    func createUpload(contentType: VideoContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
-        let body = Components.Schemas.CreateUploadRequest(contentType: .init(contentType), fileSize: fileSize, description: description)
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
+        // Une photo n'est publiée qu'en story (ADR-051).
+        guard let type = Components.Schemas.CreateUploadRequest.ContentTypePayload(contentType) else {
+            throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
+        }
+        let body = Components.Schemas.CreateUploadRequest(contentType: type, fileSize: fileSize, description: description)
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
         case .tooManyRequests(let error): throw AppError.tooManyActions(.uploads, retryAfter: max(1, error.headers.retryAfter ?? 60))
@@ -56,10 +60,11 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
 }
 
 extension Components.Schemas.CreateUploadRequest.ContentTypePayload {
-    init(_ contentType: VideoContentType) {
+    init?(_ contentType: MediaContentType) {
         switch contentType {
         case .mp4: self = .videoMp4
         case .quickTime: self = .videoQuicktime
+        case .jpeg: return nil
         }
     }
 }

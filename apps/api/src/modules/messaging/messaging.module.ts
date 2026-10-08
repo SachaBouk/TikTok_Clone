@@ -6,6 +6,8 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { UsersService } from '../users/application/users.service';
 import { UsersModule } from '../users/users.module';
+import { StoriesService } from '../stories/application/stories.service';
+import { StoriesModule } from '../stories/stories.module';
 import { VideosService } from '../videos/application/videos.service';
 import { VideosModule } from '../videos/videos.module';
 import { MessagingService } from './application/messaging.service';
@@ -20,7 +22,7 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
 // mutuels et blocages via InteractionsService, vidéos partagées via VideosService ; événements par le module
 // realtime (ADR-011) et notifications push par le module push ; limites d'envoi par le limiteur partagé (src/rate-limit).
 @Module({
-  imports: [UsersModule, InteractionsModule, VideosModule, RealtimeModule, PushModule],
+  imports: [UsersModule, InteractionsModule, VideosModule, StoriesModule, RealtimeModule, PushModule],
   controllers: [MessagingController],
   providers: [
     { provide: ConversationRepository, useClass: PrismaConversationRepository },
@@ -32,10 +34,11 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
         users: UsersService,
         interactions: InteractionsService,
         videos: VideosService,
+        stories: StoriesService,
         events: MessagingEventPublisher,
         rateLimiter: RateLimiter,
-      ) => new MessagingService(conversations, users, interactions, videos, events, rateLimiter),
-      inject: [ConversationRepository, UsersService, InteractionsService, VideosService, MessagingEventPublisher, RateLimiter],
+      ) => new MessagingService(conversations, users, interactions, videos, stories, events, rateLimiter),
+      inject: [ConversationRepository, UsersService, InteractionsService, VideosService, StoriesService, MessagingEventPublisher, RateLimiter],
     },
     MessagingRealtimeHandlers,
   ],

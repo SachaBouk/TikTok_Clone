@@ -12,7 +12,8 @@ extension VideoPageActions {
         report: @escaping () -> Void = {},
         alert: @escaping (String) -> Void,
         openHashtag: @escaping (String) -> Void = { _ in },
-        gift: @escaping () -> Void = {}
+        gift: @escaping () -> Void = {},
+        openStories: (() -> Void)? = nil
     ) {
         self.init(
             togglePause: togglePause,
@@ -24,7 +25,8 @@ extension VideoPageActions {
             report: report,
             delete: { Task { if let message = await interactions.delete(video) { alert(message) } } },
             openHashtag: openHashtag,
-            gift: gift
+            gift: gift,
+            openStories: openStories
         )
     }
 }

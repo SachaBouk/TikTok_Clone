@@ -1,7 +1,7 @@
 # ADR-050 — Cadeaux en jetons
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre) et [ADR-009](ADR-009-paiement-jetons.md) (jetons), sans les remplacer : la dépense des jetons, reportée par l'ADR-016, entre dans le périmètre (décision du développeur). L'ADR-016 la prévoyait « en live » ; elle arrive d'abord **sur les vidéos**. Le Live (plus tard) réutilisera la même dépense.
 

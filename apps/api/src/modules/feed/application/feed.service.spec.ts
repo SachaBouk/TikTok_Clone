@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
@@ -52,6 +53,7 @@ describe('FeedService', () => {
   let snapshots: InMemoryFeedSnapshotStore;
   let interactions: InteractionsService;
   let feed: FeedService;
+  let stories: ReturnType<typeof inMemoryStories>;
 
   // Crée une vidéo publiée (`ready`) directement dans le dépôt en mémoire.
   async function publish(userId = 'alice', status: 'ready' | 'processing' = 'ready') {
@@ -103,7 +105,8 @@ describe('FeedService', () => {
       suspended,
       new InMemoryProfileCountersPublisher(),
     );
-    feed = new FeedService(snapshots, videos, usersService, interactions);
+    stories = inMemoryStories(usersService, interactions);
+    feed = new FeedService(snapshots, videos, usersService, interactions, stories.service);
   });
 
   it('parcourt toutes les vidéos publiées, sans doublon ni oubli, page par page', async () => {
@@ -331,6 +334,16 @@ describe('FeedService', () => {
       expect(item.author).toMatchObject({ id: 'bob' });
       expect(item.viewer).toEqual({ liked: true, favorited: false, reposted: false, followingAuthor: true });
       await expect(feed.getItem(video, null)).resolves.toMatchObject({ viewer: null });
+    });
+
+    it("anneau de l'auteur (ADR-051) : présent s'il a une story visible, vu ou non par le lecteur", async () => {
+      const video = await publish('bob');
+      expect((await feed.getItem(video, 'alice')).authorStory).toBeNull();
+      const story = await publishTestStory(stories, 'bob');
+      expect((await feed.getItem(video, 'alice')).authorStory).toEqual({ hasUnseen: true });
+      await stories.service.recordView('alice', story.id);
+      expect((await feed.getItem(video, 'alice')).authorStory).toEqual({ hasUnseen: false });
+      expect((await feed.getItem(video, null)).authorStory).toEqual({ hasUnseen: true });
     });
 
     it('refuse une vidéo non publiée, supprimée ou inconnue', async () => {

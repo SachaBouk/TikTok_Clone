@@ -2,7 +2,8 @@ import PhotosUI
 import SwiftUI
 
 // Onglet « Publier » (ADR-016 : upload simple depuis la galerie, sans édition) : choix de la vidéo,
-// description, puis suivi des publications (envoi, traitement, mise en ligne).
+// description, puis suivi des publications (envoi, traitement, mise en ligne). Sélecteur « Vidéo | Story » (ADR-051) :
+// une story est une vidéo de 60 s au plus ou une photo, sans description, visible 24 h.
 struct PublishView: View {
     @State private var draft: PublishDraftViewModel
     let publishing: PublishingModel
@@ -22,12 +23,26 @@ struct PublishView: View {
         NavigationStack {
             Form {
                 Section {
+                    Picker("Publier", selection: $draft.mode) {
+                        ForEach(PublishDraftViewModel.Mode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .accessibilityIdentifier("publish.mode")
+                }
+                Section {
                     draftContent
                 } header: {
-                    Text("Nouvelle vidéo")
+                    Text(draft.mode == .story ? "Nouvelle story" : "Nouvelle vidéo")
                 } footer: {
                     if case .empty = draft.state {
-                        Text("MP4 ou MOV, 3 minutes et 1 Go au plus. La vidéo est publiée telle quelle, sans sa position.")
+                        Text(
+                            draft.mode == .story
+                                ? "Une vidéo de 60 secondes au plus, ou une photo (recadrée en 9:16). Visible 24 heures, sans sa position."
+                                : "MP4 ou MOV, 3 minutes et 1 Go au plus. La vidéo est publiée telle quelle, sans sa position.")
                     }
                 }
 
@@ -38,7 +53,7 @@ struct PublishView: View {
                                 publication: publication,
                                 preview: publishing.previews[publication.id],
                                 retry: { publishing.retry(publication.id) },
-                                open: { publication.videoID.map { router.presentedVideo = AppRouter.VideoRoute(id: $0) } },
+                                open: { open(publication) },
                                 delete: { delete(publication) }
                             )
                             .swipeActions { swipeActions(for: publication) }
@@ -61,7 +76,19 @@ struct PublishView: View {
                 guard let item else { return }
                 // Pour pouvoir choisir à nouveau la même vidéo.
                 pickerItem = nil
-                Task { await draft.load { try await item.loadTransferable(type: PickedVideo.self)?.url } }
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+                Task {
+                    await draft.loadMedia {
+                        if isVideo { return try await item.loadTransferable(type: PickedVideo.self).map { .video($0.url) } }
+                        return try await item.loadTransferable(type: PickedPhoto.self).map { .photo($0.data) }
+                    }
+                }
+            }
+            // « + » de « Ta story » (boîte de réception) : mode Story.
+            .onChange(of: router.requestedPublishMode, initial: true) { _, mode in
+                guard let mode else { return }
+                draft.mode = mode
+                router.requestedPublishMode = nil
             }
             .alert(
                 "Publication",
@@ -87,15 +114,34 @@ struct PublishView: View {
         @Bindable var draft = draft
         switch draft.state {
         case .empty:
-            picker(title: "Choisir une vidéo")
+            picker(title: draft.mode == .story ? "Choisir une vidéo ou une photo" : "Choisir une vidéo")
         case .loading:
             HStack(spacing: 12) {
                 ProgressView()
-                Text("Préparation de la vidéo…").foregroundStyle(.secondary)
+                Text(draft.mode == .story ? "Préparation…" : "Préparation de la vidéo…").foregroundStyle(.secondary)
             }
         case .failed(let message):
             Text(message).foregroundStyle(.red)
-            picker(title: "Choisir une autre vidéo")
+            picker(title: draft.mode == .story ? "Choisir un autre média" : "Choisir une autre vidéo")
+        case .ready(let video) where draft.mode == .story:
+            HStack(alignment: .top, spacing: 12) {
+                VideoThumbnail(image: video.preview, url: nil, duration: video.duration)
+                    .frame(width: 90, height: 160)
+                Text(video.isPhoto ? "Photo affichée 5 secondes, visible 24 heures." : "Vidéo visible 24 heures.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+            Button {
+                draft.publish()
+            } label: {
+                Label("Publier la story", systemImage: "circle.dashed.inset.filled")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!draft.canPublish)
+            .accessibilityIdentifier("publish.submit")
+            picker(title: "Changer de média")
+            Button("Annuler", role: .destructive) { draft.discard() }
         case .ready(let video):
             HStack(alignment: .top, spacing: 12) {
                 VideoThumbnail(image: video.preview, url: nil, duration: video.duration)
@@ -153,8 +199,10 @@ struct PublishView: View {
 
     private func picker(title: String) -> some View {
         // `.current` : la vidéo telle qu'enregistrée (HEVC compris), sans conversion préalable par la galerie ;
-        // le transcodage est fait par le serveur (ADR-008).
-        PhotosPicker(selection: $pickerItem, matching: .videos, preferredItemEncoding: .current) {
+        // le transcodage est fait par le serveur (ADR-008). Une story peut aussi être une photo (ADR-051).
+        PhotosPicker(
+            selection: $pickerItem, matching: draft.mode == .story ? .any(of: [.videos, .images]) : .videos, preferredItemEncoding: .current
+        ) {
             Label(title, systemImage: "photo.on.rectangle")
         }
         .accessibilityIdentifier("publish.pick")
@@ -169,6 +217,17 @@ struct PublishView: View {
             Button("Supprimer", systemImage: "trash", role: .destructive) { delete(publication) }
         case .ready:
             Button("Masquer", systemImage: "eye.slash") { publishing.dismiss(publication.id) }
+        }
+    }
+
+    // « Voir » : la vidéo seule, ou sa story dans la visionneuse.
+    private func open(_ publication: PublishingModel.Publication) {
+        guard let videoID = publication.videoID else { return }
+        if publication.kind == .story {
+            guard let me = publishing.ownSummary else { return }
+            router.openStories([me], source: .profile)
+        } else {
+            router.presentedVideo = AppRouter.VideoRoute(id: videoID)
         }
     }
 
@@ -189,9 +248,9 @@ private struct PublicationRow: View {
             VideoThumbnail(image: preview, url: publication.thumbnailURL, duration: nil)
                 .frame(width: 54, height: 96)
             VStack(alignment: .leading, spacing: 6) {
-                Text(publication.description ?? "Sans description")
+                Text(publication.kind == .story ? "Story" : publication.description ?? "Sans description")
                     .lineLimit(2)
-                    .foregroundStyle(publication.description == nil ? .secondary : .primary)
+                    .foregroundStyle(publication.description == nil && publication.kind == .video ? .secondary : .primary)
                 status
                     .font(.subheadline)
                     .accessibilityIdentifier("publication.status")

@@ -20,6 +20,7 @@ import {
   UPLOAD_PART_SIZE_BYTES,
   UPLOAD_RATE_LIMITS,
   UPLOAD_URL_TTL_SECONDS,
+  uploadRateLimitKey,
 } from '../domain/upload-rules';
 import {
   MAX_UNPUBLISHED_VIDEOS,
@@ -78,7 +79,7 @@ export class VideosService {
     if (!isSupportedVideoType(input.contentType)) throw new UnsupportedVideoTypeError(input.contentType);
     if (input.fileSize > MAX_VIDEO_SIZE_BYTES) throw new VideoTooLargeError();
     // Limite de débit (ADR-039), après les contrôles de la requête : une requête invalide ne compte pas.
-    const retryAfter = await this.rateLimiter.consume(`upload:${userId}`, UPLOAD_RATE_LIMITS);
+    const retryAfter = await this.rateLimiter.consume(uploadRateLimitKey(userId), UPLOAD_RATE_LIMITS);
     if (retryAfter !== null) throw new TooManyUploadsError(retryAfter);
 
     // Clé préfixée par l'auteur : permet de retrouver ses objets (suppression de compte, nettoyage).

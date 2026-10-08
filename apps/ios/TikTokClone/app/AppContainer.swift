@@ -24,6 +24,8 @@ final class AppContainer {
     let wallet: WalletModel
     // Historique des recherches (ADR-049), sur l'appareil.
     let searchHistory: SearchHistoryModel
+    // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
+    let stories: StoriesModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -38,6 +40,7 @@ final class AppContainer {
     private let walletRepository: any WalletRepository
     private let search: any SearchRepository
     private let gifts: any GiftRepository
+    private let storyRepository: RemoteStoryRepository
     // Compte connecté ou non au dernier changement d'activité : l'historique des recherches est effacé à chaque
     // changement de session.
     private var lastSignedIn: Bool?
@@ -65,6 +68,8 @@ final class AppContainer {
         gifts = RemoteGiftRepository(client: client)
         searchHistory = SearchHistoryModel(store: UserDefaultsPreferencesStore())
         let videos = RemoteVideoPublishingRepository(client: client)
+        let storyRepository = RemoteStoryRepository(client: client)
+        self.storyRepository = storyRepository
         let uploads = FileUploadStore()
         self.uploads = uploads
         session = SessionStore(
@@ -86,15 +91,21 @@ final class AppContainer {
         )
         publishing = PublishingModel(
             createPublication: CreatePublicationUseCase(store: uploads),
-            uploadVideo: UploadVideoUseCase(videos: videos, transport: URLSessionPartUploader(), store: uploads),
+            uploadVideo: UploadVideoUseCase(videos: videos, stories: storyRepository, transport: URLSessionPartUploader(), store: uploads),
             pendingUploads: PendingUploadsUseCase(store: uploads),
-            cancelUpload: CancelUploadUseCase(videos: videos, store: uploads),
+            cancelUpload: CancelUploadUseCase(videos: videos, stories: storyRepository, store: uploads),
             loadPendingVideos: LoadPendingVideosUseCase(videos: videos),
             loadVideo: LoadOwnVideoUseCase(videos: videos),
             deleteVideo: DeleteVideoUseCase(videos: videos),
+            loadStory: LoadOwnStoryUseCase(stories: storyRepository),
+            deleteStory: DeleteStoryUseCase(stories: storyRepository),
             session: session,
             analytics: analytics
         )
+        stories = StoriesModel(
+            loadTray: LoadStoryTrayUseCase(stories: storyRepository), loadStories: LoadUserStoriesUseCase(stories: storyRepository),
+            session: session)
+        publishing.onStoryPublished = { [stories] in Task { await stories.refresh() } }
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
         activity = ActivityModel(
@@ -132,7 +143,7 @@ final class AppContainer {
             analytics: analytics
         )
         realtime = RealtimeCoordinator(
-            channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet,
+            channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet, stories: stories,
             ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)))
     }
 
@@ -156,6 +167,7 @@ final class AppContainer {
             activity.reset()
             messaging.reset()
             wallet.reset()
+            stories.reset()
         }
     }
 
@@ -246,7 +258,34 @@ final class AppContainer {
     func makePublishDraftViewModel() -> PublishDraftViewModel {
         PublishDraftViewModel(
             publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()),
+            preparePhoto: PrepareStoryPhotoUseCase(renderer: UIKitStoryPhotoRenderer()),
             searchHashtags: SearchHashtagsUseCase(search: search))
+    }
+
+    // Visionneuse de stories (ADR-051).
+    func makeStoryViewerModel(_ route: AppRouter.StoriesRoute) -> StoryViewerModel {
+        StoryViewerModel(
+            authors: route.authors,
+            startAuthor: route.startAuthor,
+            source: route.source,
+            loadStories: LoadUserStoriesUseCase(stories: storyRepository),
+            recordView: RecordStoryViewUseCase(stories: storyRepository),
+            setLiked: SetStoryLikedUseCase(stories: storyRepository),
+            deleteStory: DeleteStoryUseCase(stories: storyRepository),
+            reply: ReplyToStoryUseCase(messaging: messagingRepository),
+            model: stories,
+            session: session,
+            analytics: analytics
+        )
+    }
+
+    // Personnes qui ont vu sa story.
+    func makeStoryViewersList(storyID: String) -> PagedList<StoryViewer> {
+        let load = LoadStoryViewersUseCase(stories: storyRepository)
+        return PagedList(session: session) { cursor in
+            let page = try await load(storyID: storyID, cursor: cursor)
+            return (page.viewers, page.nextCursor)
+        }
     }
 
     func makeLoginViewModel() -> LoginViewModel {

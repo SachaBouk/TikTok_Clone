@@ -1,5 +1,5 @@
 // Configuration du stockage objet compatible S3 (ADR-015), lue depuis l'environnement (voir .env.example).
-// Partagée par les modules qui stockent des fichiers (`videos`, `users`) ; seuls leurs adaptateurs
+// Partagée par les modules qui stockent des fichiers (`videos`, `users`, `stories`) ; seuls leurs adaptateurs
 // `infrastructure/` l'utilisent (ADR-003).
 export class StorageConfig {
   constructor(
@@ -13,8 +13,10 @@ export class StorageConfig {
     readonly secretAccessKey: string,
     readonly forcePathStyle: boolean,
     readonly rawBucket: string,
-    // Fichiers HLS et miniatures, écrits par le worker ; l'API n'y fait que supprimer (vidéo supprimée).
+    // Fichiers HLS et miniatures, écrits par le worker ; l'API y supprime (vidéo ou story supprimée) et y reçoit les
+    // photos des stories (ADR-051), servies sous `hlsPublicBaseUrl` (le CDN en production).
     readonly hlsBucket: string,
+    readonly hlsPublicBaseUrl: string,
     // Photos de profil : bucket en lecture anonyme (le CDN en production), servi sous `avatarsPublicBaseUrl`.
     readonly avatarsBucket: string,
     readonly avatarsPublicBaseUrl: string,
@@ -36,6 +38,7 @@ export class StorageConfig {
       env.S3_FORCE_PATH_STYLE === 'true',
       required('S3_BUCKET_RAW'),
       required('S3_BUCKET_HLS'),
+      required('HLS_PUBLIC_BASE_URL').replace(/\/+$/, ''),
       required('S3_BUCKET_AVATARS'),
       required('AVATARS_PUBLIC_BASE_URL').replace(/\/+$/, ''),
     );

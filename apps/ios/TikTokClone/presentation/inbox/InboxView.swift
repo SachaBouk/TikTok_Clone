@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Onglet « Boîte de réception » (choix du développeur, comme TikTok) : deux lignes en tête, « Activité » (centre
-// d'activité, avec son badge) et « Demandes de message » (s'il y en a), puis les conversations, de la plus
+// Onglet « Boîte de réception » (choix du développeur, comme TikTok) : la rangée de stories (ADR-051), puis deux lignes,
+// « Activité » (centre d'activité, avec son badge) et « Demandes de message » (s'il y en a), puis les conversations, de la plus
 // récemment active à la plus ancienne. Le bouton ✎ écrit à l'un de ses abonnements.
 struct InboxView: View {
     enum Route: Hashable {
@@ -22,6 +22,12 @@ struct InboxView: View {
 
     var body: some View {
         List {
+            // Rangée de stories (ADR-051).
+            Section {
+                StoryTrayView(container: container)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
             Section {
                 NavigationLink(value: Route.activity) {
                     InboxShortcutRow(title: "Activité", systemImage: "bell.fill", count: activity.unreadCount)
@@ -117,9 +123,12 @@ struct InboxView: View {
             await messaging.inbox.loadFirstIfNeeded()
             await messaging.requests.loadFirstIfNeeded()
         }
+        // Rangée relue à chaque affichage de l'onglet : les stories expirent d'elles-mêmes.
+        .task { await container.stories.refresh() }
         .refreshable {
             await messaging.refresh()
             await activity.refresh()
+            await container.stories.refresh()
         }
     }
 }

@@ -9,7 +9,7 @@ export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'repor
 
 // Modération (ADR-038). Mêmes valeurs que le module reports, recopiées : ce module n'en dépend pas (c'est reports
 // qui le prévient).
-export type ModerationTargetType = 'video' | 'comment' | 'account' | 'message';
+export type ModerationTargetType = 'video' | 'comment' | 'account' | 'message' | 'story';
 export type ModerationReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 // Décision sur un signalement, annoncée à la personne qui l'a envoyé.
 export type ModerationOutcome = 'contentRemoved' | 'accountSuspended' | 'dismissed';
@@ -32,7 +32,7 @@ export type ModerationEvent =
 export const MODERATION_TYPES: NotificationType[] = ['reportResolved', 'contentRemoved'];
 // Listes complètes, pour la spec OpenAPI (mêmes enums nommés que le module reports).
 export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved', 'gift'];
-export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message'];
+export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message', 'story'];
 export const MODERATION_REASONS: ModerationReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
 export const MODERATION_OUTCOMES: ModerationOutcome[] = ['contentRemoved', 'accountSuspended', 'dismissed'];
 

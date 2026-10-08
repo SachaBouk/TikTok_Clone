@@ -3,6 +3,8 @@ import { CommentNotFoundError } from '../../interactions/domain/interaction.erro
 import type { MessagingService } from '../../messaging/application/messaging.service';
 import { MessageNotFoundError } from '../../messaging/domain/messaging.errors';
 import type { NotificationsService } from '../../notifications/application/notifications.service';
+import type { StoriesService } from '../../stories/application/stories.service';
+import { StoryNotFoundError } from '../../stories/domain/story.errors';
 import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
@@ -67,12 +69,13 @@ const REMOVAL_ACTIONS: Record<ReportTargetType, ModerationActionType> = {
   video: 'videoRemoved',
   comment: 'commentRemoved',
   message: 'messageRemoved',
+  story: 'storyRemoved',
   // Un compte ne se « retire » pas : il se suspend (voir `accountSuspended`).
   account: 'accountSuspended',
 };
 
 // Service applicatif des signalements et de la modération (ADR-038, ADR-003).
-// - Une personne signale ce qu'elle voit : une vidéo publiée, un commentaire, un compte, un message reçu. Rien n'est
+// - Une personne signale ce qu'elle voit : une vidéo publiée, un commentaire, un compte, un message reçu, une story active. Rien n'est
 //   masqué ensuite : seul un administrateur décide.
 // - Un seul signalement ouvert par personne et par cible ; un doublon ne change rien et ne compte pas dans la limite.
 // - Une décision d'administrateur clôt les signalements ouverts concernés, prévient les personnes qui les ont envoyés
@@ -88,6 +91,7 @@ export class ReportsService {
     private readonly interactions: InteractionsService,
     private readonly messaging: MessagingService,
     private readonly notifications: NotificationsService,
+    private readonly stories: StoriesService,
     private readonly rateLimiter: RateLimiter,
     private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
@@ -253,6 +257,14 @@ export class ReportsService {
         await this.assertNotSuspended(message.senderId);
         // Seul le message signalé est copié, jamais le reste de la conversation.
         return { userId: message.senderId, excerpt: message.content || (message.sharedVideoId ? 'Vidéo partagée' : null) };
+      }
+      case 'story': {
+        // Story active, visible de la personne (pas d'un compte masqué) : rien à copier (ni texte ni légende).
+        const story = await this.stories.getVisibleStory(reporterId, target.id).catch((error: unknown) => {
+          if (error instanceof StoryNotFoundError) throw new ReportTargetNotFoundError();
+          throw error;
+        });
+        return { userId: story.userId, excerpt: null };
       }
       case 'account': {
         const user = await this.users.getById(target.id).catch((error: unknown) => {

@@ -16,6 +16,8 @@ struct RealtimeEventDecoder: Sendable {
         switch event {
         case .videoProcessed(let event):
             return .videoProcessed(OwnVideo(event.data))
+        case .storyProcessed(let event):
+            return .storyProcessed(OwnVideo(event.data))
         case .notificationCreated(let event):
             return .notificationCreated(ActivityNotification(event.data.notification), unreadCount: event.data.unreadCount)
         case .unreadNotificationsChanged(let event):

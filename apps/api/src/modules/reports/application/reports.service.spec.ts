@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
@@ -51,6 +52,7 @@ describe('ReportsService', () => {
   let suspended: InMemorySuspendedAccounts;
   let interactions: InteractionsService;
   let messaging: MessagingService;
+  let stories: ReturnType<typeof inMemoryStories>;
   let notificationRepository: InMemoryNotificationRepository;
   let actions: InMemoryModerationActionRepository;
   let service: ReportsService;
@@ -101,11 +103,13 @@ describe('ReportsService', () => {
       suspended,
       new InMemoryProfileCountersPublisher(),
     );
+    stories = inMemoryStories(users, interactions, () => NOW);
     messaging = new MessagingService(
       new InMemoryConversationRepository(),
       users,
       interactions,
       videos,
+      stories.service,
       new InMemoryMessagingEventPublisher(),
       new InMemoryRateLimiter(),
     );
@@ -119,6 +123,7 @@ describe('ReportsService', () => {
       interactions,
       messaging,
       notifications,
+      stories.service,
       new InMemoryRateLimiter(),
       suspended,
       () => NOW,
@@ -187,6 +192,20 @@ describe('ReportsService', () => {
       const error = await service.report('alice', { target: videoTarget(videos[10]), reason: 'spam' }).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(TooManyReportsError);
       expect((error as TooManyReportsError).retryAfterSeconds).toBeGreaterThan(0);
+    });
+  });
+
+  describe('stories (ADR-051)', () => {
+    it('une story active : auteur visé, rien de copié ; ni la sienne, ni une story inconnue ou expirée', async () => {
+      const story = await publishTestStory(stories, 'bob');
+      await service.report('alice', { target: { type: 'story', id: story.id }, reason: 'violence' });
+      expect(repository.reports.map((r) => [r.target.type, r.targetUserId, r.targetUsername, r.excerpt])).toEqual([['story', 'bob', 'bob', null]]);
+      await expect(service.report('bob', { target: { type: 'story', id: story.id }, reason: 'spam' })).rejects.toBeInstanceOf(
+        CannotReportYourselfError,
+      );
+      await expect(
+        service.report('alice', { target: { type: 'story', id: '00000000-0000-7000-8000-000000000999' }, reason: 'spam' }),
+      ).rejects.toBeInstanceOf(ReportTargetNotFoundError);
     });
   });
 

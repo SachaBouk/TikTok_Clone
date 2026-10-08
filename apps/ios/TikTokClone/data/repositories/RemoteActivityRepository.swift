@@ -98,6 +98,7 @@ extension ActivityModeration {
             case .comment: .comment
             case .account: .account
             case .message: .message
+            case .story: .story
             }
         let outcome: Outcome? = dto.outcome.map {
             switch $0 {

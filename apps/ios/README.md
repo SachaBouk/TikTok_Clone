@@ -125,6 +125,17 @@ Onglet « Publier » : vidéo choisie dans la galerie (`PhotosPicker`, fichier d
 - Suivi : « Envoi… 42 % », « Traitement en cours… », puis « Publiée » (bouton « Voir ») ou « Échec du traitement », par l'événement `videoProcessed` ; l'état est relu par l'API à chaque reconnexion et au retour au premier plan.
 - Glisser une publication vers la gauche : annuler l'envoi, ou supprimer la vidéo (`deleteVideo`).
 - Pour tester en simulateur : `xcrun simctl addmedia booted video.mp4` ajoute une vidéo à la galerie.
+- Sélecteur « Vidéo | Story » en haut de l'onglet : une story suit le même envoi (voir « Stories »).
+
+## Stories (ADR-051)
+
+- **Publier** : onglet « Publier » en mode Story (ou le « + » de « Ta story » dans la boîte de réception) : une vidéo de 60 s au plus (refusée dès le choix, le worker revérifie) ou une photo, sans description. Photo **recadrée au centre en 9:16, redessinée en 1080×1920 et réencodée en JPEG** (`UIKitStoryPhotoRenderer`) : le réencodage n'écrit ni position, ni appareil, ni date. Même file d'envoi que les vidéos (`PendingUpload.kind`, reprise après relance), vers `createStoryUpload` / `completeStoryUpload` ; une photo est publiée dès la confirmation, une vidéo après son transcodage (`storyProcessed`).
+- **Rangée** en tête de la boîte de réception (`StoriesModel`, `getStoryTray`) : « Ta story », puis les comptes suivis qui ont une story, ceux à voir d'abord. Anneau coloré (story à voir) ou gris (vue), aussi sur la photo d'un profil et l'avatar de l'auteur d'une vidéo (`authorStory` du feed). Relue à chaque reconnexion du temps réel, à l'ouverture de l'onglet et après une publication.
+- **Visionneuse** (`StoryViewerView`, `StoryViewerModel`) : barre de progression par story (photo 5 s, vidéo sa durée), toucher à droite ou à gauche, appui long pour mettre en pause, glisser vers le bas pour fermer ; après la dernière story d'un compte, le compte suivant de la rangée. Commence à la première story pas encore vue. Vue envoyée à l'affichage (`viewStory`).
+  - story d'un autre : « Envoyer un message… » (réponse dans la conversation avec l'auteur, `sendMessage` avec `storyId` ; la story est mise en pause pendant la saisie), cœur (`likeStory` / `unlikeStory`), « Signaler » ;
+  - sa story : « N vues » (liste des personnes, cœur pour un like, `listStoryViewers`), « Supprimer la story ».
+- **Conversation** : une réponse montre la miniature de la story (« A répondu à ta story »), puis « Story expirée ».
+- Pour tester en simulateur : `xcrun simctl addmedia booted photo.jpg` ; une story dure 24 h, ce qui se teste côté API (voir CLAUDE.md, « Stories »).
 
 ## Écran de profil
 

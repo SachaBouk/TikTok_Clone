@@ -70,6 +70,8 @@ export interface ModeratedReportTarget {
   thumbnailUrl: string | null;
   // Commentaire : vidéo commentée.
   videoId: string | null;
+  // Story (ADR-051) : photo ou manifeste HLS, tant qu'elle existe.
+  story: { mediaType: 'video' | 'photo'; mediaUrl: string } | null;
   // Nul si aucun signalement n'est plus ouvert (page d'une cible déjà traitée).
   open: OpenReportTarget | null;
   // Extrait du signalement le plus récent.

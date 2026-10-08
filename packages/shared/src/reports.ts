@@ -1,8 +1,9 @@
+import type { StoryMediaType } from './stories.js';
 import type { UserSummaryDto } from './users.js';
 
-// Signalements (ADR-038) : une vidéo, un commentaire ou un compte, avec un motif de la liste et une précision.
+// Signalements (ADR-038) : une vidéo, un commentaire, un compte, un message ou une story (ADR-051), avec un motif de la liste et une précision.
 
-export type ReportTargetType = 'video' | 'comment' | 'account' | 'message';
+export type ReportTargetType = 'video' | 'comment' | 'account' | 'message' | 'story';
 
 export type ReportReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 
@@ -35,8 +36,11 @@ export interface AdminReportTargetDto {
   targetUsername: string;
   // Faux si le contenu a disparu depuis (supprimé par son auteur, vidéo dépubliée).
   available: boolean;
-  // Vidéo : miniature (absente si elle n'est plus disponible).
+  // Vidéo ou story : miniature (absente si elle n'est plus disponible).
   thumbnailUrl?: string;
+  // Story (ADR-051) : photo ou manifeste HLS, et sa sorte (absents si elle n'est plus disponible).
+  storyMediaUrl?: string;
+  storyMediaType?: StoryMediaType;
   // Commentaire : vidéo commentée.
   videoId?: string;
   // Texte signalé, copié au moment du signalement le plus récent (commentaire, description de la vidéo).
@@ -75,7 +79,7 @@ export interface AdminReportTargetDetailDto {
 // ─── Journal de modération ───────────────────────────────────────────────────
 
 export type ModerationActionType =
-  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'storyRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
 
 // Une action d'un administrateur ; pseudos et texte copiés (le journal survit aux suppressions).
 export interface AdminModerationActionDto {

@@ -29,3 +29,4 @@ Un cadeau transfère des jetons d'un utilisateur à un autre.
 ## Liens
 - ADR-006 — Persistance
 - Complété par [ADR-021](ADR-021-portefeuille-journal-credit.md) — Portefeuille : journal et règles de crédit
+- Complété par [ADR-050](ADR-050-cadeaux-jetons.md) — Cadeaux en jetons

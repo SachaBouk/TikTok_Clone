@@ -1,5 +1,6 @@
 import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { User } from '../../users/domain/user';
+import type { ActiveStory } from '../../stories/domain/story';
 import type { PublishedVideo } from '../../videos/domain/video';
 
 // Messagerie directe (ADR-016) : conversations à deux (le modèle ADR-006 permet plus, pas l'API),
@@ -16,6 +17,8 @@ export interface Message {
   // Vide si le message ne fait que partager une vidéo.
   content: string;
   sharedVideoId: string | null;
+  // Story à laquelle répond le message (ADR-051) : un texte l'accompagne toujours.
+  storyId: string | null;
   createdAt: Date;
 }
 
@@ -26,9 +29,17 @@ export interface SharedVideo {
   author: User | null;
 }
 
+// Story à laquelle répond un message, résolue à la lecture : null si elle a expiré, a été supprimée, ou si son auteur est
+// masqué au lecteur (« Story expirée »).
+export interface RepliedStory {
+  id: string;
+  story: ActiveStory | null;
+}
+
 export interface MessageItem {
   message: Message;
   sharedVideo: SharedVideo | null;
+  repliedStory: RepliedStory | null;
   // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
   // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
   clientMessageId?: string;

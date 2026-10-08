@@ -11,6 +11,7 @@ export * from './notifications.js';
 export * from './realtime.js';
 export * from './reports.js';
 export * from './search.js';
+export * from './stories.js';
 export * from './transcoding.js';
 export * from './users.js';
 export * from './videos.js';

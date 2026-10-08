@@ -136,7 +136,11 @@ export class MessagingController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Ni texte ni vidéo, texte trop long, ou identifiant invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiForbiddenResponse({ type: ErrorResponse, description: 'Blocage entre les deux comptes, ou demande en attente ayant atteint sa limite.' })
-  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Conversation inconnue (ou non participant), ou vidéo introuvable.' })
+  @ApiNotFoundResponse({
+    type: ErrorResponse,
+    description:
+      'Conversation inconnue (ou non participant), vidéo introuvable, ou story introuvable (expirée, ou pas celle de l’autre participant).',
+  })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Identifiant d’envoi déjà utilisé pour un message d’une autre conversation.' })
   @ApiTooManyRequestsResponse({
     type: ErrorResponse,
@@ -146,7 +150,12 @@ export class MessagingController {
   })
   async sendMessage(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string, @Body() body: SendMessageRequest): Promise<MessageDto> {
     return toMessageDto(
-      await this.messaging.sendMessage(user.userId, id, { content: body.content, videoId: body.videoId, clientMessageId: body.clientMessageId }),
+      await this.messaging.sendMessage(user.userId, id, {
+        content: body.content,
+        videoId: body.videoId,
+        storyId: body.storyId,
+        clientMessageId: body.clientMessageId,
+      }),
     );
   }
 

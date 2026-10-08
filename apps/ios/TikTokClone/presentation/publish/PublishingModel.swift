@@ -26,6 +26,8 @@ final class PublishingModel {
         // Identifiant de l'envoi local, ou de la vidéo pour une vidéo connue seulement de l'API.
         let id: String
         var videoID: String?
+        // Vidéo du feed ou story (ADR-051).
+        var kind: PublicationKind = .video
         let description: String?
         var thumbnailURL: URL?
         var phase: Phase
@@ -58,6 +60,8 @@ final class PublishingModel {
     private let loadPendingVideos: LoadPendingVideosUseCase
     private let loadVideo: LoadOwnVideoUseCase
     private let deleteVideo: DeleteVideoUseCase
+    private let loadStory: LoadOwnStoryUseCase
+    private let deleteStory: DeleteStoryUseCase
     private let session: SessionStore
     private let analytics: AnalyticsModel
     private let makePreview: @Sendable (URL) async -> UIImage?
@@ -78,6 +82,8 @@ final class PublishingModel {
         loadPendingVideos: LoadPendingVideosUseCase,
         loadVideo: LoadOwnVideoUseCase,
         deleteVideo: DeleteVideoUseCase,
+        loadStory: LoadOwnStoryUseCase,
+        deleteStory: DeleteStoryUseCase,
         session: SessionStore,
         analytics: AnalyticsModel,
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
@@ -90,10 +96,20 @@ final class PublishingModel {
         self.loadPendingVideos = loadPendingVideos
         self.loadVideo = loadVideo
         self.deleteVideo = deleteVideo
+        self.loadStory = loadStory
+        self.deleteStory = deleteStory
         self.session = session
         self.analytics = analytics
         self.makePreview = makePreview
         self.beginBackgroundWork = beginBackgroundWork
+    }
+
+    // Story publiée (photo confirmée, ou vidéo traitée) : la rangée de stories se relit.
+    var onStoryPublished: (() -> Void)?
+
+    // Le compte connecté, pour ouvrir ses stories (« Voir » d'une story publiée).
+    var ownSummary: UserSummary? {
+        session.profile.map { UserSummary(id: $0.id, username: $0.username, displayName: $0.displayName, avatarURL: $0.avatarURL) }
     }
 
     // Publications en cours (badge de l'onglet).
@@ -103,19 +119,20 @@ final class PublishingModel {
 
     // Nouvelle publication : la vidéo choisie (fichier temporaire, déplacé dans le stockage des envois) part
     // dans la file. Renvoie un message d'erreur à afficher, nil si tout va bien.
-    func publish(file: URL, description: String, preview: UIImage?) -> String? {
+    func publish(file: URL, description: String, preview: UIImage?, kind: PublicationKind = .video) -> String? {
         guard let userID = session.profile?.id else {
             session.requestSignIn()
             return nil
         }
         do {
-            let upload = try createPublication(file: file, description: description, userID: userID)
+            let upload = try createPublication(file: file, description: description, userID: userID, kind: kind)
             if let preview { previews[upload.id] = preview }
             insert(
                 Publication(
-                    id: upload.id, videoID: nil, description: upload.description, thumbnailURL: nil, phase: .waiting, createdAt: upload.createdAt))
+                    id: upload.id, videoID: nil, kind: kind, description: upload.description, thumbnailURL: nil, phase: .waiting,
+                    createdAt: upload.createdAt))
             startRunner()
-            analytics.track(.uploadStarted)
+            analytics.track(kind == .story ? .storyUploadStarted(photo: !upload.contentType.isVideo) : .uploadStarted)
             return nil
         } catch {
             return AppError.from(error).message
@@ -145,8 +162,8 @@ final class PublishingModel {
         for upload in pendingUploads(userID: userID) where !publications.contains(where: { $0.id == upload.id }) {
             insert(
                 Publication(
-                    id: upload.id, videoID: upload.ticket?.videoID, description: upload.description, thumbnailURL: nil, phase: .waiting,
-                    createdAt: upload.createdAt))
+                    id: upload.id, videoID: upload.ticket?.videoID, kind: upload.kind, description: upload.description, thumbnailURL: nil,
+                    phase: .waiting, createdAt: upload.createdAt))
             let file = pendingFileURL(upload)
             Task {
                 if let image = await makePreview(file) { previews[upload.id] = image }
@@ -159,12 +176,15 @@ final class PublishingModel {
             for video in pending {
                 apply(video)
             }
-            // Suivies en traitement mais absentes de la liste : publiées (ou supprimées) pendant la coupure.
+            // Suivies en traitement mais absentes de la liste : publiées (ou supprimées) pendant la coupure. Les stories ne
+            // sont pas dans cette liste (ADR-051) : chacune est relue.
             let pendingIDs = Set(pending.map(\.id))
             for publication in publications where publication.phase == .processing {
-                guard let videoID = publication.videoID, !pendingIDs.contains(videoID) else { continue }
+                guard let videoID = publication.videoID, publication.kind == .story || !pendingIDs.contains(videoID) else { continue }
                 do {
-                    apply(try await loadVideo(id: videoID))
+                    let video = publication.kind == .story ? try await loadStory(id: videoID) : try await loadVideo(id: videoID)
+                    if publication.kind == .story && video.status == .ready { onStoryPublished?() }
+                    apply(video)
                 } catch AppError.notFound {
                     remove(publication.id)
                 } catch {}
@@ -180,6 +200,17 @@ final class PublishingModel {
             analytics.track(.uploadFinished(ready: video.status == .ready))
         }
         apply(video)
+    }
+
+    // Événement `storyProcessed` (WebSocket, ADR-051).
+    // Une story inconnue de la liste (publiée depuis un autre appareil, ou avant une relance) relit seulement la rangée.
+    func storyProcessed(_ story: OwnVideo) {
+        if story.status == .ready { onStoryPublished?() }
+        guard publications.contains(where: { $0.videoID == story.id && $0.kind == .story && $0.phase == .processing }) else { return }
+        if story.status == .ready || story.status == .failed {
+            analytics.track(.storyPublished(ready: story.status == .ready))
+        }
+        apply(story)
     }
 
     // Envoi interrompu : reprendre là où il s'était arrêté.
@@ -209,7 +240,10 @@ final class PublishingModel {
             return nil
         }
         do {
-            try await deleteVideo(id: videoID)
+            switch publication.kind {
+            case .video: try await deleteVideo(id: videoID)
+            case .story: try await deleteStory(id: videoID)
+            }
             remove(id)
             return nil
         } catch {
@@ -273,6 +307,11 @@ final class PublishingModel {
                     $0.videoID = video.id
                     $0.phase = Publication.Phase(video.status)
                     $0.thumbnailURL = video.thumbnailURL
+                }
+                // Story photo : publiée dès la confirmation.
+                if upload.kind == .story && video.status == .ready {
+                    analytics.track(.storyPublished(ready: true))
+                    onStoryPublished?()
                 }
             case .failure(let error) where error is CancellationError:
                 // Annulé (abandon, déconnexion) : l'état enregistré est gardé pour une reprise.

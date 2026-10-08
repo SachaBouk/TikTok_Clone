@@ -4,12 +4,17 @@
 
 export const TRANSCODE_QUEUE = 'video-transcode';
 export const TRANSCODE_RESULTS_QUEUE = 'video-transcode-results';
+// Stories vidéo (ADR-051) : mêmes messages et même traitement, dans leurs propres files (60 s au plus au lieu de 3 min).
+// `videoId` y désigne la story : son préfixe dans le bucket HLS.
+export const STORY_TRANSCODE_QUEUE = 'story-transcode';
+export const STORY_TRANSCODE_RESULTS_QUEUE = 'story-transcode-results';
 
 // Politique de relance, fixée par l'API à la publication : 3 tentatives, espacées de 10 s puis 20 s.
 export const TRANSCODE_ATTEMPTS = 3;
 export const TRANSCODE_BACKOFF_DELAY_MS = 10_000;
 
 export interface TranscodeJobData {
+  // Vidéo, ou story dans les files des stories.
   videoId: string;
   // Clé de l'objet brut dans le bucket des uploads.
   rawKey: string;

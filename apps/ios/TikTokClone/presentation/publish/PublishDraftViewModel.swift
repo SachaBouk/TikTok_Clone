@@ -2,15 +2,31 @@ import Foundation
 import Observation
 import UIKit
 
-// Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie, avec sa description.
+// Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie, avec sa description. En mode Story
+// (ADR-051) : une vidéo de 60 s au plus ou une photo, sans description.
 // À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran).
 @MainActor
 @Observable
 final class PublishDraftViewModel {
+    enum Mode: String, CaseIterable, Identifiable {
+        case video
+        case story
+
+        var id: String { rawValue }
+        var title: String { self == .video ? "Vidéo" : "Story" }
+    }
+
+    // Média choisi dans la galerie : fichier vidéo temporaire, ou données d'une photo (mode Story).
+    enum PickedMedia {
+        case video(URL)
+        case photo(Data)
+    }
+
     struct Draft: Equatable {
         let file: URL
         let preview: UIImage?
         let duration: Duration?
+        var isPhoto = false
     }
 
     enum State: Equatable {
@@ -24,12 +40,17 @@ final class PublishDraftViewModel {
         didSet { if description != oldValue { suggestHashtags() } }
     }
     private(set) var state: State = .empty
+    // Changer de mode abandonne le média choisi.
+    var mode: Mode = .video {
+        didSet { if mode != oldValue { discard() } }
+    }
     // Hashtags existants qui commencent comme celui tapé à la fin de la description (ADR-049).
     private(set) var hashtagSuggestions: [Hashtag] = []
     var errorMessage: String?
 
     private let publishing: PublishingModel
     private let prepareVideo: PrepareVideoUseCase
+    private let preparePhoto: PrepareStoryPhotoUseCase?
     private let makePreview: @Sendable (URL) async -> UIImage?
     private let loadDuration: @Sendable (URL) async -> Duration?
     private let searchHashtags: SearchHashtagsUseCase?
@@ -39,6 +60,7 @@ final class PublishDraftViewModel {
     init(
         publishing: PublishingModel,
         prepareVideo: PrepareVideoUseCase,
+        preparePhoto: PrepareStoryPhotoUseCase? = nil,
         searchHashtags: SearchHashtagsUseCase? = nil,
         suggestionDelay: Duration = .milliseconds(250),
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
@@ -46,6 +68,7 @@ final class PublishDraftViewModel {
     ) {
         self.publishing = publishing
         self.prepareVideo = prepareVideo
+        self.preparePhoto = preparePhoto
         self.makePreview = makePreview
         self.loadDuration = loadDuration
         self.searchHashtags = searchHashtags
@@ -89,13 +112,18 @@ final class PublishDraftViewModel {
 
     var canPublish: Bool {
         guard case .ready = state else { return false }
-        return remainingCharacters >= 0
+        return mode == .story || remainingCharacters >= 0
     }
 
     // `loader` exporte la vidéo choisie vers un fichier temporaire (nil si la sélection est vide), puis la vidéo
     // est préparée (métadonnées personnelles retirées) : c'est ce fichier-là qui sera envoyé. Une vidéo de plus de
     // 3 minutes (ADR-040) est refusée ici, avant tout envoi ; une durée illisible est laissée au worker.
     func load(_ loader: () async throws -> URL?) async {
+        await loadMedia { try await loader().map(PickedMedia.video) }
+    }
+
+    // Mode Story : vidéo (60 s au plus, ADR-051) ou photo, préparée (recadrée en 9:16, réencodée sans métadonnées).
+    func loadMedia(_ loader: () async throws -> PickedMedia?) async {
         discardFile()
         state = .loading
         do {
@@ -103,11 +131,19 @@ final class PublishDraftViewModel {
                 state = .empty
                 return
             }
-            let file = try await prepareVideo(picked)
+            if case .photo(let data) = picked {
+                guard mode == .story, let preparePhoto else { throw AppError.rejected("Choisis une vidéo.") }
+                let file = try await preparePhoto(data)
+                state = .ready(Draft(file: file, preview: UIImage(contentsOfFile: file.path(percentEncoded: false)), duration: nil, isPhoto: true))
+                return
+            }
+            guard case .video(let video) = picked else { return }
+            let file = try await prepareVideo(video)
             let duration = await loadDuration(file)
-            if let duration, UploadRules.isTooLong(duration) {
+            let tooLong = duration.map { mode == .story ? StoryRules.isTooLong($0) : UploadRules.isTooLong($0) } ?? false
+            if tooLong {
                 try? FileManager.default.removeItem(at: file)
-                state = .failed(UploadRules.tooLongMessage)
+                state = .failed(mode == .story ? StoryRules.tooLongMessage : UploadRules.tooLongMessage)
                 return
             }
             state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration))
@@ -122,7 +158,8 @@ final class PublishDraftViewModel {
     @discardableResult
     func publish() -> Bool {
         guard canPublish, case .ready(let draft) = state else { return false }
-        if let message = publishing.publish(file: draft.file, description: description, preview: draft.preview) {
+        let kind: PublicationKind = mode == .story ? .story : .video
+        if let message = publishing.publish(file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind) {
             errorMessage = message
             return false
         }

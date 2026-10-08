@@ -53,13 +53,14 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 - **Vidéos** : tous statuts, filtre par statut et par auteur ; page avec lecture HLS (native dans Safari, hls.js ailleurs),
   compteurs, commentaires récents et suppression.
 - **Commentaires** : tous, du plus récent au plus ancien, filtrables par vidéo ou par auteur ; suppression.
-- **Signalements** (ADR-038) : file des vidéos, commentaires, messages et comptes signalés, groupés par cible (aperçu,
+- **Signalements** (ADR-038) : file des vidéos, commentaires, messages, stories (ADR-051) et comptes signalés, groupés par cible (aperçu,
   compte visé, nombre, motifs), de la plus récemment signalée à la plus ancienne ; alerte sur le tableau de bord. Page d'une
-  cible : « Supprimer la vidéo / le commentaire / le message », « Suspendre », « Classer sans suite », et l'historique des
+  cible : « Supprimer la vidéo / le commentaire / le message / la story », « Suspendre », « Classer sans suite », et l'historique des
   signalements avec la décision (date, administrateur). Toute décision clôt les signalements ouverts de la cible (une
   suspension, ceux de tout le compte) et est annoncée aux personnes qui les ont envoyés. Un contenu supprimé par son
   auteur, ou un compte supprimé, quitte la file de lui-même. Rien n'est masqué avant décision. D'un message, seul son
-  texte est visible : jamais la conversation.
+  texte est visible : jamais la conversation. Une story s'affiche (photo, ou vidéo en HLS) tant qu'elle est en ligne : à
+  examiner avant son expiration (24 h), après laquelle elle quitte la file d'elle-même (« Supprimé hors modération »).
 - **Journal** (ADR-038) : chaque suppression, suspension, levée et classement sans suite, avec l'administrateur, le compte
   visé, le contenu, le motif et le nombre de signalements clos ; filtrable par compte (lien depuis sa fiche).
 - **Jetons** (ADR-032, lecture seule) : vendus, remboursés, ajustés et en circulation (production ; achats de test à part),
@@ -73,7 +74,7 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 Suppressions confirmées dans une alerte, avec un **motif** de la liste des signalements (le plus signalé est proposé depuis
 un signalement) : l'auteur reçoit « Contenu retiré » avec ce motif, dans son activité et en notification push. Une vidéo est
 supprimée comme par son auteur (cascade, fichiers nettoyés par l'API) ; un commentaire emporte sa notification ; un message
-disparaît pour les deux participants.
+disparaît pour les deux participants ; une story est supprimée comme par son auteur (vues comprises, fichiers nettoyés).
 
 ## Limites
 

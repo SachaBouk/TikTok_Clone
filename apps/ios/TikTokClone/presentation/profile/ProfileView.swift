@@ -110,7 +110,7 @@ struct ProfileView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     if let profile = viewModel.profile {
-                        ProfileHeader(profile: profile)
+                        ProfileHeader(profile: profile, container: container)
                         actionButtons
                         if let bio = profile.bio, !bio.isEmpty {
                             Text(bio)
@@ -275,13 +275,28 @@ struct ProfileView: View {
     }
 }
 
-// Photo, nom, pseudo, abonnements et abonnés (vers leurs listes).
+// Photo (entourée de l'anneau des stories, ADR-051 : la toucher les ouvre), nom, pseudo, abonnements et abonnés.
 private struct ProfileHeader: View {
     let profile: UserProfile
+    let container: AppContainer
+
+    private var summary: UserSummary {
+        UserSummary(id: profile.id, username: profile.username, displayName: profile.displayName, avatarURL: profile.avatarURL)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
-            AvatarView(url: profile.avatarURL, name: profile.displayName, size: 96)
+            let ring = container.stories.ring(for: profile.id)
+            Button {
+                container.router.openStories([summary], source: .profile)
+            } label: {
+                StoryAvatar(url: profile.avatarURL, name: profile.displayName, size: 96, ring: ring)
+            }
+            .buttonStyle(.plain)
+            .disabled(ring == nil)
+            .accessibilityLabel(ring == nil ? "Photo de profil" : "Stories de @\(profile.username)")
+            .accessibilityIdentifier("profile.avatar")
+            .task(id: profile.id) { await container.stories.loadRing(for: summary) }
             Text(profile.displayName).font(.title3.bold())
             Text("@\(profile.username)").foregroundStyle(.secondary)
             HStack(spacing: 32) {

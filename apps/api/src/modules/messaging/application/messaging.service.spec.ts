@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
 import { InMemoryInteractionRepository } from '../../interactions/infrastructure/in-memory-interaction.repository';
@@ -23,6 +24,7 @@ import {
   ClientMessageIdConflictError,
   ConversationNotFoundError,
   EmptyMessageError,
+  RepliedStoryNotFoundError,
   MessageNotFoundError,
   NotAPendingRequestError,
   NotMessageSenderError,
@@ -64,6 +66,7 @@ describe('MessagingService', () => {
   let events: InMemoryMessagingEventPublisher;
   let interactions: InteractionsService;
   let service: MessagingService;
+  let stories: ReturnType<typeof inMemoryStories>;
 
   const befriend = async (a: string, b: string) => {
     await interactions.setFollow(a, b, true);
@@ -105,7 +108,17 @@ describe('MessagingService', () => {
     );
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();
-    service = new MessagingService(conversations, users, interactions, videos, events, new InMemoryRateLimiter(() => clock), () => clock);
+    stories = inMemoryStories(users, interactions, () => new Date(clock));
+    service = new MessagingService(
+      conversations,
+      users,
+      interactions,
+      videos,
+      stories.service,
+      events,
+      new InMemoryRateLimiter(() => clock),
+      () => clock,
+    );
     await befriend('alice', 'bob');
   });
 
@@ -410,6 +423,35 @@ describe('MessagingService', () => {
       ]);
       await expect(service.getMessages([message.id])).resolves.toEqual([]);
       await expect(service.removeMessage(message.id)).rejects.toBeInstanceOf(MessageNotFoundError);
+    });
+  });
+
+  describe('réponse à une story (ADR-051)', () => {
+    it('répond à la story active de l’autre participant, avec un texte ; elle devient « expirée » ensuite', async () => {
+      const story = await publishTestStory(stories, 'bob');
+      const id = await open('alice', 'bob');
+      const reply = await service.sendMessage('alice', id, { content: 'Trop bien !', storyId: story.id });
+      expect(reply.message).toMatchObject({ content: 'Trop bien !', storyId: story.id });
+      expect(reply.repliedStory).toEqual({ id: story.id, story: expect.objectContaining({ id: story.id, mediaType: 'photo' }) });
+      expect(events.pushes.at(-1)).toMatchObject({ recipientId: 'bob', content: 'Trop bien !' });
+
+      clock += 24 * 3600 * 1000;
+      const [item] = (await service.listMessages('bob', id, null, 10)).items;
+      expect(item.repliedStory).toEqual({ id: story.id, story: null });
+    });
+
+    it('refuse une réponse sans texte, à une story inconnue, ou à celle d’un autre compte', async () => {
+      const story = await publishTestStory(stories, 'bob');
+      const carolStory = await publishTestStory(stories, 'carol');
+      const id = await open('alice', 'bob');
+      await expect(service.sendMessage('alice', id, { content: '  ', storyId: story.id })).rejects.toBeInstanceOf(EmptyMessageError);
+      await expect(service.sendMessage('alice', id, { content: 'Salut', storyId: carolStory.id })).rejects.toBeInstanceOf(RepliedStoryNotFoundError);
+      await expect(service.sendMessage('alice', id, { content: 'Salut', storyId: '00000000-0000-7000-8000-000000000999' })).rejects.toBeInstanceOf(
+        RepliedStoryNotFoundError,
+      );
+      // Sa propre story : l'autre participant n'en est pas l'auteur.
+      const own = await publishTestStory(stories, 'alice');
+      await expect(service.sendMessage('alice', id, { content: 'Moi', storyId: own.id })).rejects.toBeInstanceOf(RepliedStoryNotFoundError);
     });
   });
 

@@ -16,6 +16,7 @@ import {
   UnreadNotificationsChangedEvent,
 } from '../modules/notifications/interfaces/notifications.events';
 import { ProfileCountersChangedEvent } from '../modules/interactions/interfaces/interactions.events';
+import { StoryProcessedEvent } from '../modules/stories/interfaces/stories.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
 import { WalletUpdatedEvent } from '../modules/wallet/interfaces/wallet.events';
 
@@ -26,6 +27,7 @@ const BEARER = 'bearer';
 // des types Codable à décoder.
 const REALTIME_EVENTS = {
   videoProcessed: VideoProcessedEvent,
+  storyProcessed: StoryProcessedEvent,
   notificationCreated: NotificationCreatedEvent,
   unreadNotificationsChanged: UnreadNotificationsChangedEvent,
   notificationsRemoved: NotificationsRemovedEvent,

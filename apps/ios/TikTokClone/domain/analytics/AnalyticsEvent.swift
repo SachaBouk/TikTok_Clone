@@ -149,6 +149,32 @@ extension AnalyticsEvent {
     static func uploadFinished(ready: Bool) -> AnalyticsEvent {
         AnalyticsEvent(name: ready ? "video_published" : "video_processing_failed", properties: [:])
     }
+
+    // Stories (ADR-051) : publication, visionnage (source : rangée, profil, feed), like et réponse par message.
+    static func storyUploadStarted(photo: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "story_upload_started", properties: ["media_type": .string(photo ? "photo" : "video")])
+    }
+
+    static func storyPublished(ready: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: ready ? "story_published" : "story_processing_failed", properties: [:])
+    }
+
+    static func storyViewed(_ story: Story, source: StorySource) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "story_viewed",
+            properties: [
+                "story_id": .string(story.id), "author_id": .string(story.author.id), "media_type": .string(story.mediaType.rawValue),
+                "source": .string(source.rawValue),
+            ])
+    }
+
+    static func storyLiked(_ story: Story) -> AnalyticsEvent {
+        AnalyticsEvent(name: "story_liked", properties: ["story_id": .string(story.id), "author_id": .string(story.author.id)])
+    }
+
+    static func storyReplySent(_ story: Story) -> AnalyticsEvent {
+        AnalyticsEvent(name: "story_reply_sent", properties: ["story_id": .string(story.id), "author_id": .string(story.author.id)])
+    }
 }
 
 extension ReactionKind {

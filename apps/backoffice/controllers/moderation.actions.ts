@@ -10,6 +10,7 @@ import { REPORT_REASONS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import * as comments from '@/models/comments.model';
 import * as messages from '@/models/messages.model';
 import * as reports from '@/models/reports.model';
+import * as stories from '@/models/stories.model';
 import * as users from '@/models/users.model';
 import * as videos from '@/models/videos.model';
 
@@ -49,6 +50,15 @@ export async function removeMessage(messageId: string, reason: ReportReason): Pr
   if (!UUID.test(messageId)) return { error: 'Identifiant de message invalide.' };
   if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
   const failure = await attempt(() => messages.deleteMessage(messageId, reason), 'Ce message a déjà été supprimé.');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
+export async function removeStory(storyId: string, reason: ReportReason): Promise<ActionResult> {
+  if (!UUID.test(storyId)) return { error: 'Identifiant de story invalide.' };
+  if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
+  const failure = await attempt(() => stories.deleteStory(storyId, reason), 'Cette story a déjà été supprimée ou a expiré.');
   if (failure) return failure;
   revalidatePath('/', 'layout');
   return { error: null };

@@ -27,6 +27,14 @@ export class SendMessageRequest {
 
   @ApiPropertyOptional({
     format: 'uuid',
+    description: 'Story active de l’autre participant à laquelle répond le message (ADR-051) ; `content` est alors obligatoire.',
+  })
+  @IsOptional()
+  @IsUUID()
+  storyId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
     description:
       'Identifiant d’envoi choisi par l’app (ADR-044). Le renvoyer pour le même message rend celui déjà créé (même réponse), sans en créer un second ni le compter dans les limites.',
   })

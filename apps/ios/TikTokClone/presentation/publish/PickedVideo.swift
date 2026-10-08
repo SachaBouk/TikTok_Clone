@@ -20,6 +20,15 @@ struct PickedVideo: Transferable {
     }
 }
 
+// Photo choisie pour une story (ADR-051) : ses données, préparées ensuite (recadrage, réencodage sans métadonnées).
+struct PickedPhoto: Transferable {
+    let data: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(importedContentType: .image) { PickedPhoto(data: $0) }
+    }
+}
+
 // Aperçu d'une vidéo locale : première image (rotation appliquée) et durée.
 enum VideoPreview {
     static func image(for url: URL) async -> UIImage? {

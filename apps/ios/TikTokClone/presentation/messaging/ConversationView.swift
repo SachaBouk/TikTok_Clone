@@ -322,6 +322,9 @@ private struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: isOwn ? .trailing : .leading, spacing: 4) {
+            if let story = message.story {
+                RepliedStoryCard(story: story, isOwn: isOwn)
+            }
             if let video = message.sharedVideo {
                 SharedVideoCard(video: video, open: openVideo)
             }
@@ -425,6 +428,39 @@ private struct SharedVideoCard: View {
                 .padding(12)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+}
+
+// Réponse à une story (ADR-051) : sa miniature tant qu'elle est en ligne, puis « Story expirée ».
+private struct RepliedStoryCard: View {
+    let story: RepliedStory
+    let isOwn: Bool
+
+    var body: some View {
+        VStack(alignment: isOwn ? .trailing : .leading, spacing: 4) {
+            Text(isOwn ? "Tu as répondu à sa story" : "A répondu à ta story")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if story.available, let thumbnailURL = story.thumbnailURL {
+                VideoGridCell(thumbnailURL: thumbnailURL, image: nil, views: nil)
+                    .frame(width: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(alignment: .topTrailing) {
+                        if story.mediaType == .video {
+                            Image(systemName: "play.fill").font(.caption).foregroundStyle(.white).shadow(radius: 2).padding(6)
+                        }
+                    }
+                    .accessibilityLabel("Story")
+            } else {
+                Label("Story expirée", systemImage: "clock.badge.xmark")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(10)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("conversation.repliedStory")
     }
 }
 

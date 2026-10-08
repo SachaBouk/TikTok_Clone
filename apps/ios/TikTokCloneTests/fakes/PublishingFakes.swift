@@ -24,7 +24,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
     var deleted: [String] { state.withLock { $0.deleted } }
     func completed(_ id: String) -> [UploadedPart]? { state.withLock { $0.completed[id] } }
 
-    func createUpload(contentType: VideoContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
         try state.withLock { state in
             if let error = state.createError { throw error }
             let id = "vid-\(state.created.count + 1)"

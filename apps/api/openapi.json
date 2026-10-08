@@ -2641,6 +2641,566 @@
         ]
       }
     },
+    "/stories/upload-url": {
+      "post": {
+        "operationId": "createStoryUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStoryUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Story créée en `uploading`. Envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, garder les en-têtes `ETag`, puis appeler `completeStoryUpload`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Format non pris en charge ou fichier trop volumineux.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "30 stories actives au plus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de stories publiées récemment (une story vidéo compte dans la limite des vidéos) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/{id}/uploaded": {
+      "patch": {
+        "operationId": "completeStoryUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Photo publiée (`ready`), ou vidéo en `processing` (transcodage lancé).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parties manquantes ou ETags incorrects (renvoyer les parties), ou photo refusée (JPEG 9:16 attendu, story en échec).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue ou appartenant à un autre compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Envoi déjà confirmé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/feed": {
+      "get": {
+        "operationId": "getStoryTray",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryTrayResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/{id}": {
+      "get": {
+        "operationId": "getStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, expirée, ou d’un compte masqué (suspendu, blocage).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ],
+        "security": []
+      },
+      "delete": {
+        "operationId": "deleteStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Story supprimée."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, déjà supprimée ou expirée, ou appartenant à un autre compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/{id}/view": {
+      "post": {
+        "operationId": "viewStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Vue enregistrée (ou ignorée)."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, expirée, ou d’un compte masqué (suspendu, blocage).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/{id}/like": {
+      "put": {
+        "operationId": "likeStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Story aimée (vaut vue). Idempotent."
+          },
+          "400": {
+            "description": "Sa propre story.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, expirée, ou d’un compte masqué (suspendu, blocage).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de likes récemment (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      },
+      "delete": {
+        "operationId": "unlikeStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Like retiré. Idempotent."
+          },
+          "400": {
+            "description": "Sa propre story.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, expirée, ou d’un compte masqué (suspendu, blocage).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/stories/{id}/viewers": {
+      "get": {
+        "operationId": "listStoryViewers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comptes qui l’ont vue, du plus récent au plus ancien, avec les chiffres.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryViewersPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story inconnue, expirée, ou d’un autre compte (réservé à l’auteur).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/users/{username}/stories": {
+      "get": {
+        "operationId": "listUserStories",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserStoriesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "stories"
+        ],
+        "security": []
+      }
+    },
     "/feed": {
       "get": {
         "operationId": "getFeed",
@@ -3920,7 +4480,7 @@
             }
           },
           "404": {
-            "description": "Conversation inconnue (ou non participant), ou vidéo introuvable.",
+            "description": "Conversation inconnue (ou non participant), vidéo introuvable, ou story introuvable (expirée, ou pas celle de l’autre participant).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5167,6 +5727,77 @@
           },
           "404": {
             "description": "Message introuvable ou déjà retiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/stories/{id}": {
+      "delete": {
+        "operationId": "deleteAdminStory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReportReason"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Story supprimée, avec ses vues ; auteur prévenu avec le motif."
+          },
+          "400": {
+            "description": "Identifiant ou motif invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Story introuvable, déjà supprimée ou expirée.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6722,7 +7353,8 @@
           "video",
           "comment",
           "account",
-          "message"
+          "message",
+          "story"
         ]
       },
       "ReportReason": {
@@ -6958,6 +7590,340 @@
           }
         }
       },
+      "CreateStoryUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "video/mp4",
+              "video/quicktime",
+              "image/jpeg"
+            ],
+            "example": "image/jpeg",
+            "description": "Vidéo MP4 ou MOV (60 s au plus), ou photo JPEG 9:16."
+          },
+          "fileSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1073741824,
+            "description": "Taille du fichier en octets (photo : 5 Mio au plus)."
+          }
+        },
+        "required": [
+          "contentType",
+          "fileSize"
+        ]
+      },
+      "StoryMediaType": {
+        "type": "string",
+        "enum": [
+          "video",
+          "photo"
+        ]
+      },
+      "StoryStatus": {
+        "type": "string",
+        "enum": [
+          "uploading",
+          "processing",
+          "ready",
+          "failed"
+        ]
+      },
+      "StoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Auteur de la story."
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/StoryMediaType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StoryStatus"
+          },
+          "mediaUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Manifeste HLS (vidéo) ou photo JPEG, quand la story est `ready`."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Publication (`ready`)."
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Fin de visibilité, 24 h après la publication."
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "mediaType",
+          "status",
+          "mediaUrl",
+          "thumbnailUrl",
+          "createdAt",
+          "publishedAt",
+          "expiresAt"
+        ]
+      },
+      "StoryUploadResponse": {
+        "type": "object",
+        "properties": {
+          "story": {
+            "$ref": "#/components/schemas/StoryResponse"
+          },
+          "partSize": {
+            "type": "integer",
+            "description": "Taille de chaque partie en octets ; la dernière peut être plus petite."
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadPartUrlResponse"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiration des URLs signées."
+          }
+        },
+        "required": [
+          "story",
+          "partSize",
+          "parts",
+          "expiresAt"
+        ]
+      },
+      "StoryTrayItemResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "storiesCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "latestAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Publication de sa story la plus récente."
+          },
+          "hasUnseen": {
+            "type": "boolean",
+            "description": "Au moins une story pas encore vue (toujours faux pour soi)."
+          }
+        },
+        "required": [
+          "user",
+          "storiesCount",
+          "latestAt",
+          "hasUnseen"
+        ]
+      },
+      "StoryTrayResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Soi d’abord, puis les comptes suivis (100 au plus).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryTrayItemResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "StoryViewerResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "viewedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "liked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "user",
+          "viewedAt",
+          "liked"
+        ]
+      },
+      "StoryViewersPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryViewerResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "viewersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "likesCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "viewersCount",
+          "likesCount"
+        ]
+      },
+      "StoryViewerStateResponse": {
+        "type": "object",
+        "properties": {
+          "viewed": {
+            "type": "boolean"
+          },
+          "liked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "viewed",
+          "liked"
+        ]
+      },
+      "StoryStatsResponse": {
+        "type": "object",
+        "properties": {
+          "viewersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "likesCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "viewersCount",
+          "likesCount"
+        ]
+      },
+      "StoryItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Auteur de la story."
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/StoryMediaType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StoryStatus"
+          },
+          "mediaUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Manifeste HLS (vidéo) ou photo JPEG, quand la story est `ready`."
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Publication (`ready`)."
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Fin de visibilité, 24 h après la publication."
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/StoryViewerStateResponse"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/StoryStatsResponse"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "mediaType",
+          "status",
+          "mediaUrl",
+          "thumbnailUrl",
+          "createdAt",
+          "publishedAt",
+          "expiresAt"
+        ]
+      },
+      "UserStoriesResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "items": {
+            "description": "Stories actives, de la plus ancienne à la plus récente (ordre de lecture).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryItemResponse"
+            }
+          }
+        },
+        "required": [
+          "user",
+          "items"
+        ]
+      },
       "FeedViewerStateResponse": {
         "type": "object",
         "properties": {
@@ -6979,6 +7945,18 @@
           "favorited",
           "reposted",
           "followingAuthor"
+        ]
+      },
+      "AuthorStoryResponse": {
+        "type": "object",
+        "properties": {
+          "hasUnseen": {
+            "type": "boolean",
+            "description": "Au moins une story pas encore vue par le compte connecté (vrai pour un invité)."
+          }
+        },
+        "required": [
+          "hasUnseen"
         ]
       },
       "FeedItemResponse": {
@@ -7035,6 +8013,9 @@
           },
           "viewer": {
             "$ref": "#/components/schemas/FeedViewerStateResponse"
+          },
+          "authorStory": {
+            "$ref": "#/components/schemas/AuthorStoryResponse"
           }
         },
         "required": [
@@ -7209,6 +8190,32 @@
           "description"
         ]
       },
+      "MessageStoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Faux si la story a expiré ou a été supprimée."
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/StoryMediaType"
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "available",
+          "thumbnailUrl"
+        ]
+      },
       "MessageResponse": {
         "type": "object",
         "properties": {
@@ -7230,6 +8237,9 @@
           },
           "sharedVideo": {
             "$ref": "#/components/schemas/SharedVideoResponse"
+          },
+          "story": {
+            "$ref": "#/components/schemas/MessageStoryResponse"
           },
           "clientMessageId": {
             "type": "string",
@@ -7394,6 +8404,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Vidéo publiée à partager (comptée comme un partage)."
+          },
+          "storyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Story active de l’autre participant à laquelle répond le message (ADR-051) ; `content` est alors obligatoire."
           },
           "clientMessageId": {
             "type": "string",
@@ -8136,6 +9151,7 @@
           "videoRemoved",
           "commentRemoved",
           "messageRemoved",
+          "storyRemoved",
           "accountSuspended",
           "suspensionLifted",
           "reportsDismissed"
@@ -8511,6 +9527,14 @@
             "format": "uuid",
             "description": "Commentaire : vidéo commentée."
           },
+          "storyMediaUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Story (ADR-051) : photo ou manifeste HLS, tant qu’elle est visible."
+          },
+          "storyMediaType": {
+            "$ref": "#/components/schemas/StoryMediaType"
+          },
           "excerpt": {
             "type": "string",
             "description": "Texte signalé, copié au moment du signalement le plus récent."
@@ -8647,6 +9671,24 @@
           },
           "data": {
             "$ref": "#/components/schemas/VideoResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "StoryProcessedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "storyProcessed"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/StoryResponse"
           }
         },
         "required": [
@@ -9123,6 +10165,9 @@
             "$ref": "#/components/schemas/VideoProcessedEvent"
           },
           {
+            "$ref": "#/components/schemas/StoryProcessedEvent"
+          },
+          {
             "$ref": "#/components/schemas/NotificationCreatedEvent"
           },
           {
@@ -9160,6 +10205,7 @@
           "propertyName": "event",
           "mapping": {
             "videoProcessed": "#/components/schemas/VideoProcessedEvent",
+            "storyProcessed": "#/components/schemas/StoryProcessedEvent",
             "notificationCreated": "#/components/schemas/NotificationCreatedEvent",
             "unreadNotificationsChanged": "#/components/schemas/UnreadNotificationsChangedEvent",
             "notificationsRemoved": "#/components/schemas/NotificationsRemovedEvent",

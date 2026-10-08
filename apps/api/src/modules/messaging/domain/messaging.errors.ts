@@ -31,6 +31,14 @@ export class SharedVideoNotFoundError extends MessagingError {
   }
 }
 
+// Story inconnue, expirée, masquée, ou qui n'est pas celle de l'autre participant (ADR-051) : 404.
+export class RepliedStoryNotFoundError extends MessagingError {
+  constructor(id: string) {
+    super(`Story introuvable : ${id}`);
+    this.name = 'RepliedStoryNotFoundError';
+  }
+}
+
 export class CannotMessageYourselfError extends MessagingError {
   constructor() {
     super('Impossible de s’écrire à soi-même');

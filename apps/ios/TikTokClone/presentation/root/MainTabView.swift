@@ -26,13 +26,13 @@ struct MainTabView: View {
                     HomeFeedView(
                         container: container,
                         // En pause pendant qu'une vidéo seule est ouverte par-dessus.
-                        isTabActive: selection == .home && router.presentedVideo == nil
+                        isTabActive: selection == .home && router.presentedVideo == nil && router.presentedStories == nil
                     )
                     .toolbar(.hidden, for: .navigationBar)
                     .appDestinations(container)
                 }
                 .providesNavigationPath($feedPath)
-                .environment(\.isTabActive, selection == .home && router.presentedVideo == nil)
+                .environment(\.isTabActive, selection == .home && router.presentedVideo == nil && router.presentedStories == nil)
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
@@ -48,7 +48,7 @@ struct MainTabView: View {
                             .appDestinations(container)
                     }
                     .providesNavigationPath($inboxPath)
-                    .environment(\.isTabActive, selection == .inbox && router.presentedVideo == nil)
+                    .environment(\.isTabActive, selection == .inbox && router.presentedVideo == nil && router.presentedStories == nil)
                 }
             }
             // Notifications non lues, conversations non lues et demandes reçues.
@@ -63,7 +63,7 @@ struct MainTabView: View {
                             .appDestinations(container)
                     }
                     .providesNavigationPath($profilePath)
-                    .environment(\.isTabActive, selection == .profile && router.presentedVideo == nil)
+                    .environment(\.isTabActive, selection == .profile && router.presentedVideo == nil && router.presentedStories == nil)
                 }
             }
         }
@@ -82,6 +82,13 @@ struct MainTabView: View {
                 AuthFlowView(container: container)
             }
         }
+        // Visionneuse de stories (ADR-051), sauf quand la vidéo seule est ouverte : elle la présente elle-même.
+        .storiesPresenter(container) { container.router.presentedVideo == nil }
+        // « + » de « Ta story » : onglet Publier, en mode Story.
+        .onChange(of: router.requestedPublishMode) { _, mode in
+            if mode != nil { selection = .publish }
+        }
+        .environment(container.stories)
         .alert(
             "Session expirée",
             isPresented: Binding(

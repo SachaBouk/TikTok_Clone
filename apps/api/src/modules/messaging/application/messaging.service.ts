@@ -1,4 +1,7 @@
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { StoriesService } from '../../stories/application/stories.service';
+import type { ActiveStory } from '../../stories/domain/story';
+import { StoryNotFoundError } from '../../stories/domain/story.errors';
 import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
@@ -28,6 +31,7 @@ import {
   NotMessageSenderError,
   RateLimitedError,
   RecipientNotFoundError,
+  RepliedStoryNotFoundError,
   RequestLimitReachedError,
   SharedVideoNotFoundError,
 } from '../domain/messaging.errors';
@@ -59,6 +63,8 @@ export interface MessagePage {
 export interface SendMessageInput {
   content?: string;
   videoId?: string;
+  // Story de l'autre participant à laquelle répond le message (ADR-051) ; un texte est alors obligatoire.
+  storyId?: string;
   // Identifiant d'envoi choisi par l'app (ADR-044) : renvoyer le même rend le message déjà créé.
   clientMessageId?: string;
 }
@@ -69,7 +75,7 @@ export interface SendMessageInput {
 //   avant acceptation), sans « Vu » ni « en train d'écrire ». Répondre à une demande l'accepte.
 // - Blocage (interactions) : plus aucun envoi, dans les deux sens ; les demandes des comptes bloqués sont masquées.
 // - Retrait d'un message par son expéditeur (pour les deux) ; suppression d'une conversation pour soi seulement.
-// - Partage de vidéo (compté comme un partage) ; limites d'envoi (anti-spam).
+// - Partage de vidéo (compté comme un partage), réponse à une story (ADR-051) ; limites d'envoi (anti-spam).
 // - Chaque changement est poussé aux appareils des participants (WebSocket, ADR-011), et un nouveau message
 //   ou une nouvelle demande en notification push. Les messages n'alimentent pas le centre d'activité.
 export class MessagingService {
@@ -80,6 +86,7 @@ export class MessagingService {
     private readonly users: UsersService,
     private readonly interactions: InteractionsService,
     private readonly videos: VideosService,
+    private readonly stories: StoriesService,
     private readonly events: MessagingEventPublisher,
     private readonly rateLimiter: RateLimiter,
     private readonly now: () => number = () => Date.now(),
@@ -127,7 +134,8 @@ export class MessagingService {
   async sendMessage(userId: string, conversationId: string, input: SendMessageInput): Promise<MessageItem> {
     const content = input.content?.trim() ?? '';
     const sharedVideoId = input.videoId ?? null;
-    if (!content && !sharedVideoId) throw new EmptyMessageError();
+    const storyId = input.storyId ?? null;
+    if (!content && (!sharedVideoId || storyId)) throw new EmptyMessageError();
 
     const view = await this.conversations.findView(conversationId, userId);
     if (!view) throw new ConversationNotFoundError(conversationId);
@@ -151,6 +159,14 @@ export class MessagingService {
       const [video] = await this.videos.getPublishedVideos([sharedVideoId]);
       if (!video || (await this.interactions.getHiddenAccountIds(userId)).has(video.userId)) throw new SharedVideoNotFoundError(sharedVideoId);
     }
+    // Réponse à une story : visible de l'expéditeur (active, pas d'un compte masqué) et publiée par l'autre participant.
+    if (storyId) {
+      const story = await this.stories.getVisibleStory(userId, storyId).catch((error: unknown) => {
+        if (error instanceof StoryNotFoundError) throw new RepliedStoryNotFoundError(storyId);
+        throw error;
+      });
+      if (story.userId !== otherId) throw new RepliedStoryNotFoundError(storyId);
+    }
 
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
@@ -160,6 +176,7 @@ export class MessagingService {
       senderId: userId,
       content,
       sharedVideoId,
+      storyId,
       clientMessageId,
       accept,
       openRequest,
@@ -387,9 +404,12 @@ export class MessagingService {
     });
   }
 
-  // Vidéos partagées, telles que `viewerId` les voit : celle d'un compte bloqué dans un sens ou dans l'autre, ou suspendu,
-  // est indisponible, comme dans le feed (blocages lus seulement s'il y a des vidéos).
+  // Vidéos partagées et stories auxquelles répondent les messages, telles que `viewerId` les voit : celles d'un compte
+  // bloqué dans un sens ou dans l'autre, ou suspendu, sont indisponibles, comme dans le feed (blocages lus seulement s'il y
+  // en a) ; une story expirée aussi.
   private async withVideos(viewerId: string, messages: Message[]): Promise<MessageItem[]> {
+    const storyIds = messages.flatMap((m) => (m.storyId ? [m.storyId] : []));
+    const stories = storyIds.length > 0 ? await this.stories.getStoryPreviews(storyIds, viewerId) : new Map<string, ActiveStory>();
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
     const [published, hidden] = videoIds.length
       ? await Promise.all([this.videos.getPublishedVideos(videoIds), this.interactions.getHiddenAccountIds(viewerId)])
@@ -397,11 +417,12 @@ export class MessagingService {
     const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));
     return messages.map((message) => {
-      if (!message.sharedVideoId) return { message, sharedVideo: null };
+      const repliedStory = message.storyId ? { id: message.storyId, story: stories.get(message.storyId) ?? null } : null;
+      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory };
       const video = videos.get(message.sharedVideoId) ?? null;
       const author = video ? (authors.get(video.userId) ?? null) : null;
       // Vidéo supprimée, son auteur, ou compte bloqué : « indisponible ».
-      return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author } };
+      return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author }, repliedStory };
     });
   }
 }
