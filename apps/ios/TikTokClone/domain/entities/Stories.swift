@@ -84,7 +84,6 @@ enum StorySource: String, Equatable, Sendable {
 enum StoryRules {
     // Vidéo : 60 secondes au plus, à une seconde près (arrondis du conteneur).
     static let maxVideoDuration: Duration = .seconds(60)
-    static let tooLongMessage = "Une story vidéo dure 60 secondes au plus. Choisis une vidéo plus courte."
     // Photo : JPEG 9:16 de 1080×1920 px, 5 Mio au plus ; affichée 5 secondes.
     static let photoSize = CGSize(width: 1080, height: 1920)
     static let maxPhotoFileSize = 5 * 1024 * 1024

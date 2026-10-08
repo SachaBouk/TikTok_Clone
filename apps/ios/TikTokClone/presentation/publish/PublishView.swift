@@ -1,21 +1,26 @@
 import PhotosUI
 import SwiftUI
 
-// Onglet « Publier » (ADR-016 : upload simple depuis la galerie, sans édition) : choix de la vidéo,
-// description, puis suivi des publications (envoi, traitement, mise en ligne). Sélecteur « Vidéo | Story » (ADR-051) :
-// une story est une vidéo de 60 s au plus ou une photo, sans description, visible 24 h.
+// Onglet « Publier » : vidéo filmée par la caméra ou choisie dans la galerie, modifiée au besoin dans l'éditeur
+// (ADR-052), description, puis suivi des publications (envoi, traitement, mise en ligne). Sélecteur « Vidéo | Story »
+// (ADR-051) : une story est une vidéo de 60 s au plus ou une photo, sans description, visible 24 h.
 struct PublishView: View {
     @State private var draft: PublishDraftViewModel
     let publishing: PublishingModel
     let router: AppRouter
+    let container: AppContainer
     @State private var pickerItem: PhotosPickerItem?
     @State private var alertMessage: String?
+    @State private var camera: CameraSetup?
+    // Rendu de la caméra, traité à sa fermeture (l'éditeur ne peut s'ouvrir qu'une fois la caméra fermée).
+    @State private var cameraOutcome: CameraOutcome?
     @FocusState private var isEditingDescription: Bool
 
-    init(draft: PublishDraftViewModel, publishing: PublishingModel, router: AppRouter) {
+    init(draft: PublishDraftViewModel, publishing: PublishingModel, router: AppRouter, container: AppContainer) {
         _draft = State(initialValue: draft)
         self.publishing = publishing
         self.router = router
+        self.container = container
     }
 
     var body: some View {
@@ -42,7 +47,7 @@ struct PublishView: View {
                         Text(
                             draft.mode == .story
                                 ? "Une vidéo de 60 secondes au plus, ou une photo (recadrée en 9:16). Visible 24 heures, sans sa position."
-                                : "MP4 ou MOV, 3 minutes et 1 Go au plus. La vidéo est publiée telle quelle, sans sa position.")
+                                : "3 minutes et 1 Go au plus, sans sa position. Découpe, vitesse, filtres et textes dans l’éditeur.")
                     }
                 }
 
@@ -90,6 +95,14 @@ struct PublishView: View {
                 draft.mode = mode
                 router.requestedPublishMode = nil
             }
+            .fullScreenCover(item: $camera, onDismiss: cameraClosed) { setup in
+                CameraView(model: setup.model, preview: CameraPreview(session: setup.session)) { outcome in
+                    cameraOutcome = outcome
+                    camera = nil
+                } onCancel: {
+                    camera = nil
+                }
+            }
             .alert(
                 "Publication",
                 isPresented: Binding(
@@ -107,6 +120,46 @@ struct PublishView: View {
                 Text(alertMessage ?? draft.errorMessage ?? "")
             }
         }
+        .fullScreenCover(item: Binding(get: { draft.editorRequest }, set: { if $0 == nil { draft.editorClosed() } })) { request in
+            EditorScreen(request: request, container: container) { result in
+                Task { await draft.edited(result, request: request) }
+            } onCancel: {
+                draft.editorClosed()
+            }
+        }
+    }
+
+    private func cameraClosed() {
+        guard let outcome = cameraOutcome else { return }
+        cameraOutcome = nil
+        switch outcome {
+        case .segments(let segments):
+            draft.recorded(segments)
+        case .photo(let data):
+            Task { await draft.loadMedia(source: .camera) { .photo(data) } }
+        }
+    }
+
+    // « Filmer » et « Choisir dans la galerie ».
+    @ViewBuilder
+    private func sources(galleryTitle: String) -> some View {
+        Button {
+            camera = container.makeCamera(kind: draft.kind)
+        } label: {
+            Label(draft.mode == .story ? "Filmer ou photographier" : "Filmer", systemImage: "camera")
+        }
+        .accessibilityIdentifier("publish.camera")
+        picker(title: galleryTitle)
+    }
+
+    private var editButton: some View {
+        Button {
+            draft.editCurrent()
+        } label: {
+            Label("Modifier la vidéo", systemImage: "wand.and.stars")
+        }
+        .disabled(!draft.canEdit)
+        .accessibilityIdentifier("publish.edit")
     }
 
     @ViewBuilder
@@ -114,7 +167,7 @@ struct PublishView: View {
         @Bindable var draft = draft
         switch draft.state {
         case .empty:
-            picker(title: draft.mode == .story ? "Choisir une vidéo ou une photo" : "Choisir une vidéo")
+            sources(galleryTitle: draft.mode == .story ? "Choisir une vidéo ou une photo" : "Choisir dans la galerie")
         case .loading:
             HStack(spacing: 12) {
                 ProgressView()
@@ -122,7 +175,7 @@ struct PublishView: View {
             }
         case .failed(let message):
             Text(message).foregroundStyle(.red)
-            picker(title: draft.mode == .story ? "Choisir un autre média" : "Choisir une autre vidéo")
+            sources(galleryTitle: draft.mode == .story ? "Choisir un autre média" : "Choisir une autre vidéo")
         case .ready(let video) where draft.mode == .story:
             HStack(alignment: .top, spacing: 12) {
                 VideoThumbnail(image: video.preview, url: nil, duration: video.duration)
@@ -140,6 +193,7 @@ struct PublishView: View {
             .buttonStyle(.borderedProminent)
             .disabled(!draft.canPublish)
             .accessibilityIdentifier("publish.submit")
+            if draft.canEdit { editButton }
             picker(title: "Changer de média")
             Button("Annuler", role: .destructive) { draft.discard() }
         case .ready(let video):
@@ -169,6 +223,7 @@ struct PublishView: View {
             .buttonStyle(.borderedProminent)
             .disabled(!draft.canPublish)
             .accessibilityIdentifier("publish.submit")
+            if draft.canEdit { editButton }
             picker(title: "Changer de vidéo")
             Button("Annuler", role: .destructive) { draft.discard() }
         }
@@ -342,5 +397,27 @@ private struct VideoThumbnail: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .accessibilityHidden(true)
+    }
+}
+
+// Éditeur plein écran : son modèle et son aperçu sont créés une seule fois, à l'apparition (le contenu d'un plein écran
+// est réévalué à chaque mise à jour de l'écran qui le présente).
+private struct EditorScreen: View {
+    let request: EditorRequest
+    let container: AppContainer
+    let onFinish: (EditResult) -> Void
+    let onCancel: () -> Void
+    @State private var editor: (model: VideoEditorViewModel, preview: EditorPreviewPlayer)?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let editor {
+                VideoEditorView(model: editor.model, preview: editor.preview, onFinish: onFinish, onCancel: onCancel)
+            }
+        }
+        .onAppear {
+            if editor == nil { editor = (container.makeVideoEditor(request), EditorPreviewPlayer()) }
+        }
     }
 }

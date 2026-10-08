@@ -1,7 +1,7 @@
 # ADR-051 — Stories
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre) sans le remplacer : les Stories, reportées par l'ADR-016 (« Formats de contenu »), entrent dans le périmètre (décision du développeur). Elles réutilisent le pipeline vidéo de l'[ADR-007](ADR-007-upload-video-direct.md), de l'[ADR-008](ADR-008-pipeline-video-hls.md) et de l'[ADR-012](ADR-012-traitement-asynchrone.md), qu'elles complètent aussi.
 

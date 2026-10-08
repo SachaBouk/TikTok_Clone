@@ -36,7 +36,9 @@ struct MainTabView: View {
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
-                    PublishView(draft: container.makePublishDraftViewModel(), publishing: container.publishing, router: container.router)
+                    PublishView(
+                        draft: container.makePublishDraftViewModel(), publishing: container.publishing, router: container.router, container: container
+                    )
                 }
             }
             // Publications en cours d'envoi ou de traitement.

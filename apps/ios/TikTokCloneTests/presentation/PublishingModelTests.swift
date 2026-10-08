@@ -156,7 +156,9 @@ struct PublishingModelTests {
         let cleaned = file.deletingPathExtension().appendingPathExtension("clean.mov")
         #expect(cleaner.cleaned == [file])
         #expect(store.state.withLock { $0.picked[file] } == nil)
-        #expect(draft.state == .ready(.init(file: cleaned, preview: nil, duration: .seconds(12))))
+        #expect(
+            draft.state
+                == .ready(.init(file: cleaned, preview: nil, duration: .seconds(12), sources: [SourceClip(file: cleaned, duration: .seconds(12))])))
         draft.description = String(repeating: "a", count: 2201)
         #expect(draft.remainingCharacters == -1)
         #expect(!draft.canPublish)
@@ -170,7 +172,7 @@ struct PublishingModelTests {
         #expect(draft.state == .failed("Impossible d’importer cette vidéo."))
     }
 
-    @Test("brouillon : plus de 3 minutes (ADR-040) refusée avant l'envoi, à une seconde près")
+    @Test("brouillon : plus de 3 minutes (ADR-040) jamais envoyée telle quelle (éditeur, ADR-052), à une seconde près")
     func draftTooLong() async {
         let (model, _) = await makeModel()
         let cleaner = FakeVideoMetadataCleaner(store: store)
@@ -180,7 +182,8 @@ struct PublishingModelTests {
             loadDuration: { [duration] _ in duration }
         )
         await draft.load { picked() }
-        #expect(draft.state == .failed("Cette vidéo dure plus de 3 minutes. Choisis-en une plus courte."))
+        #expect(draft.state == .empty)
+        #expect(draft.editorRequest?.plan.trimEnd == .seconds(180))
         #expect(!draft.canPublish)
         #expect(model.publications.isEmpty)
 

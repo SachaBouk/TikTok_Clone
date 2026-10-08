@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import TikTokAPI
 
@@ -260,6 +261,19 @@ final class AppContainer {
             publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()),
             preparePhoto: PrepareStoryPhotoUseCase(renderer: UIKitStoryPhotoRenderer()),
             searchHashtags: SearchHashtagsUseCase(search: search))
+    }
+
+    // Caméra (ADR-052) : son modèle et la session de capture pour l'aperçu. Une caméra par ouverture de l'écran.
+    func makeCamera(kind: PublicationKind) -> CameraSetup {
+        let camera = AVFoundationVideoCamera()
+        return CameraSetup(model: CameraViewModel(kind: kind, camera: camera), session: camera.session)
+    }
+
+    // Éditeur (ADR-052) : export sur l'iPhone, miniatures de la frise.
+    func makeVideoEditor(_ request: EditorRequest) -> VideoEditorViewModel {
+        VideoEditorViewModel(
+            request: request, exportVideo: ExportEditedVideoUseCase(editor: AVFoundationVideoEditor()),
+            makeThumbnails: { plan, count in await EditThumbnails.images(for: plan, count: count) })
     }
 
     // Visionneuse de stories (ADR-051).

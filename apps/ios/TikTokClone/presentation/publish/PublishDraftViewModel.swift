@@ -2,9 +2,9 @@ import Foundation
 import Observation
 import UIKit
 
-// Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie, avec sa description. En mode Story
-// (ADR-051) : une vidéo de 60 s au plus ou une photo, sans description.
-// À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran).
+// Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie ou filmée par la caméra, modifiée au besoin
+// dans l'éditeur (ADR-052), avec sa description. En mode Story (ADR-051) : une vidéo de 60 s au plus ou une photo, sans
+// description. À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran).
 @MainActor
 @Observable
 final class PublishDraftViewModel {
@@ -22,11 +22,21 @@ final class PublishDraftViewModel {
         case photo(Data)
     }
 
+    // `file` : ce qui sera envoyé (vidéo de la galerie nettoyée, ou vidéo exportée par l'éditeur). `sources` : fichiers
+    // d'origine, d'où repart l'éditeur (`plan`, nil tant que la vidéo n'a pas été modifiée).
     struct Draft: Equatable {
         let file: URL
         let preview: UIImage?
         let duration: Duration?
         var isPhoto = false
+        var source: MediaSource = .gallery
+        var sources: [SourceClip] = []
+        var plan: EditPlan?
+
+        static func == (lhs: Draft, rhs: Draft) -> Bool {
+            lhs.file == rhs.file && lhs.duration == rhs.duration && lhs.isPhoto == rhs.isPhoto && lhs.source == rhs.source
+                && lhs.sources == rhs.sources && lhs.plan == rhs.plan
+        }
     }
 
     enum State: Equatable {
@@ -47,6 +57,8 @@ final class PublishDraftViewModel {
     // Hashtags existants qui commencent comme celui tapé à la fin de la description (ADR-049).
     private(set) var hashtagSuggestions: [Hashtag] = []
     var errorMessage: String?
+    // Éditeur à ouvrir (ADR-052) : après un enregistrement, une vidéo de la galerie trop longue, ou « Modifier la vidéo ».
+    var editorRequest: EditorRequest?
 
     private let publishing: PublishingModel
     private let prepareVideo: PrepareVideoUseCase
@@ -115,6 +127,14 @@ final class PublishDraftViewModel {
         return mode == .story || remainingCharacters >= 0
     }
 
+    var kind: PublicationKind { mode == .story ? .story : .video }
+
+    // « Modifier la vidéo » : une vidéo dont la durée est connue (les photos ne sont pas modifiées).
+    var canEdit: Bool {
+        guard case .ready(let draft) = state else { return false }
+        return !draft.isPhoto && !draft.sources.isEmpty
+    }
+
     // `loader` exporte la vidéo choisie vers un fichier temporaire (nil si la sélection est vide), puis la vidéo
     // est préparée (métadonnées personnelles retirées) : c'est ce fichier-là qui sera envoyé. Une vidéo de plus de
     // 3 minutes (ADR-040) est refusée ici, avant tout envoi ; une durée illisible est laissée au worker.
@@ -123,7 +143,8 @@ final class PublishDraftViewModel {
     }
 
     // Mode Story : vidéo (60 s au plus, ADR-051) ou photo, préparée (recadrée en 9:16, réencodée sans métadonnées).
-    func loadMedia(_ loader: () async throws -> PickedMedia?) async {
+    // `source` : galerie ou caméra (photo de story prise par la caméra), pour la mesure d'audience.
+    func loadMedia(source: MediaSource = .gallery, _ loader: () async throws -> PickedMedia?) async {
         discardFile()
         state = .loading
         do {
@@ -134,19 +155,24 @@ final class PublishDraftViewModel {
             if case .photo(let data) = picked {
                 guard mode == .story, let preparePhoto else { throw AppError.rejected("Choisis une vidéo.") }
                 let file = try await preparePhoto(data)
-                state = .ready(Draft(file: file, preview: UIImage(contentsOfFile: file.path(percentEncoded: false)), duration: nil, isPhoto: true))
+                state = .ready(
+                    Draft(
+                        file: file, preview: UIImage(contentsOfFile: file.path(percentEncoded: false)), duration: nil, isPhoto: true, source: source))
                 return
             }
             guard case .video(let video) = picked else { return }
             let file = try await prepareVideo(video)
             let duration = await loadDuration(file)
-            let tooLong = duration.map { mode == .story ? StoryRules.isTooLong($0) : UploadRules.isTooLong($0) } ?? false
-            if tooLong {
-                try? FileManager.default.removeItem(at: file)
-                state = .failed(mode == .story ? StoryRules.tooLongMessage : UploadRules.tooLongMessage)
+            let sources = duration.map { [SourceClip(file: file, duration: $0)] } ?? []
+            // Trop longue (ADR-040, ADR-051) : l'éditeur s'ouvre pour choisir le passage à garder (ADR-052). Une durée
+            // illisible est laissée au worker.
+            if let duration, kind.isTooLong(duration) {
+                state = .empty
+                editorRequest = EditorRequest(
+                    plan: EditPlan(clips: sources, kind: kind), source: .gallery, notice: kind.tooLongSourceMessage)
                 return
             }
-            state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration))
+            state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration, sources: sources))
         } catch let error as AppError {
             state = .failed(error.message)
         } catch {
@@ -158,11 +184,15 @@ final class PublishDraftViewModel {
     @discardableResult
     func publish() -> Bool {
         guard canPublish, case .ready(let draft) = state else { return false }
-        let kind: PublicationKind = mode == .story ? .story : .video
-        if let message = publishing.publish(file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind) {
+        let details = PublicationDetails(source: draft.source, plan: draft.isPhoto ? nil : draft.plan)
+        if let message = publishing.publish(
+            file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind, details: details)
+        {
             errorMessage = message
             return false
         }
+        // Le fichier envoyé est gardé par la file d'envoi ; les fichiers d'origine d'une vidéo modifiée ne servent plus.
+        removeSources(of: draft)
         state = .empty
         description = ""
         return true
@@ -174,9 +204,46 @@ final class PublishDraftViewModel {
         description = ""
     }
 
+    // Segments filmés : l'éditeur s'ouvre (ADR-052).
+    func recorded(_ segments: [SourceClip]) {
+        guard !segments.isEmpty else { return }
+        discard()
+        editorRequest = EditorRequest(plan: EditPlan(clips: segments, kind: kind), source: .camera)
+    }
+
+    // « Modifier la vidéo » : l'éditeur repart des fichiers d'origine et du plan précédent (pas de double réencodage).
+    func editCurrent() {
+        guard canEdit, case .ready(let draft) = state else { return }
+        editorRequest = EditorRequest(plan: draft.plan ?? EditPlan(clips: draft.sources, kind: kind), source: draft.source, isNew: false)
+    }
+
+    // Vidéo exportée par l'éditeur : elle devient le brouillon (la précédente exportée est supprimée, pas ses sources).
+    func edited(_ result: EditResult, request: EditorRequest) async {
+        editorRequest = nil
+        if case .ready(let draft) = state, !draft.sources.contains(where: { $0.file == draft.file }), draft.file != result.file {
+            try? FileManager.default.removeItem(at: draft.file)
+        }
+        state = .ready(
+            Draft(
+                file: result.file, preview: await makePreview(result.file), duration: result.plan.outputDuration, source: request.source,
+                sources: result.plan.clips, plan: result.plan))
+    }
+
+    // Éditeur fermé sans exporter : le brouillon ne change pas (l'éditeur a supprimé les fichiers d'une demande neuve).
+    func editorClosed() {
+        editorRequest = nil
+    }
+
     private func discardFile() {
         if case .ready(let draft) = state {
             try? FileManager.default.removeItem(at: draft.file)
+            removeSources(of: draft)
+        }
+    }
+
+    private func removeSources(of draft: Draft) {
+        for clip in draft.sources where clip.file != draft.file {
+            try? FileManager.default.removeItem(at: clip.file)
         }
     }
 }

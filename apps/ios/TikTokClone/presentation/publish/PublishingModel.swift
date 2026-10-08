@@ -119,7 +119,10 @@ final class PublishingModel {
 
     // Nouvelle publication : la vidéo choisie (fichier temporaire, déplacé dans le stockage des envois) part
     // dans la file. Renvoie un message d'erreur à afficher, nil si tout va bien.
-    func publish(file: URL, description: String, preview: UIImage?, kind: PublicationKind = .video) -> String? {
+    // `details` : source et modifications (mesure d'audience, ADR-052).
+    func publish(
+        file: URL, description: String, preview: UIImage?, kind: PublicationKind = .video, details: PublicationDetails = PublicationDetails()
+    ) -> String? {
         guard let userID = session.profile?.id else {
             session.requestSignIn()
             return nil
@@ -132,7 +135,7 @@ final class PublishingModel {
                     id: upload.id, videoID: nil, kind: kind, description: upload.description, thumbnailURL: nil, phase: .waiting,
                     createdAt: upload.createdAt))
             startRunner()
-            analytics.track(kind == .story ? .storyUploadStarted(photo: !upload.contentType.isVideo) : .uploadStarted)
+            analytics.track(kind == .story ? .storyUploadStarted(photo: !upload.contentType.isVideo, details: details) : .uploadStarted(details))
             return nil
         } catch {
             return AppError.from(error).message

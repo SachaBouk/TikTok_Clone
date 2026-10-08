@@ -40,3 +40,4 @@ Vérifié avec le vrai code du worker (FFmpeg 8) : aucun fichier publié (segmen
 - ADR-007 — Upload vidéo direct
 - ADR-008 — Pipeline vidéo HLS
 - ADR-016 — Périmètre de la première version (publication sans édition)
+- Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app

@@ -63,3 +63,5 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-048](ADR-048-feed-abonnements.md) — Feed des abonnements
 - Complété par [ADR-049](ADR-049-recherche-hashtags.md) — Recherche de comptes et hashtags
 - Complété par [ADR-050](ADR-050-cadeaux-jetons.md) — Cadeaux en jetons
+- Complété par [ADR-051](ADR-051-stories.md) — Stories
+- Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app

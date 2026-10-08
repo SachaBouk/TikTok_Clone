@@ -33,3 +33,4 @@ Retour de l'intervenant : alléger l'API principale pour l'upload, en s'inspiran
 - Complété par [ADR-026](ADR-026-envoi-direct-photos-profil.md) — Envoi direct des photos de profil
 - Complété par [ADR-035](ADR-035-metadonnees-personnelles-videos.md) — Métadonnées personnelles des vidéos retirées dans l'app
 - Complété par [ADR-040](ADR-040-duree-maximale-video.md) — Durée maximale d'une vidéo : 3 minutes
+- Complété par [ADR-051](ADR-051-stories.md) — Stories

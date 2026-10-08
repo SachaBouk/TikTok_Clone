@@ -128,7 +128,6 @@ enum UploadRules {
     // Durée maximale (ADR-040), comme le worker : 3 minutes, à une seconde près (arrondis du conteneur).
     static let maxDuration: Duration = .seconds(180)
     static let durationTolerance: Duration = .seconds(1)
-    static let tooLongMessage = "Cette vidéo dure plus de 3 minutes. Choisis-en une plus courte."
     // Un envoi jamais terminé est oublié au bout de ce délai : l'API supprime alors la vidéo (maintenance).
     static let abandonedAfter: TimeInterval = 24 * 60 * 60
     // Marge avant l'expiration des URLs signées : au-delà, un envoi neuf est demandé.

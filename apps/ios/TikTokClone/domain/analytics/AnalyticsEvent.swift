@@ -144,15 +144,20 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "token_purchase_cancelled", properties: ["product_id": .string(productID)])
     }
 
-    // Publication : envoi commencé, vidéo publiée ou en échec.
-    static let uploadStarted = AnalyticsEvent(name: "video_upload_started", properties: [:])
+    // Publication : envoi commencé (source et modifications, ADR-052), vidéo publiée ou en échec.
+    static func uploadStarted(_ details: PublicationDetails) -> AnalyticsEvent {
+        AnalyticsEvent(name: "video_upload_started", properties: details.properties(photo: false))
+    }
+
     static func uploadFinished(ready: Bool) -> AnalyticsEvent {
         AnalyticsEvent(name: ready ? "video_published" : "video_processing_failed", properties: [:])
     }
 
     // Stories (ADR-051) : publication, visionnage (source : rangée, profil, feed), like et réponse par message.
-    static func storyUploadStarted(photo: Bool) -> AnalyticsEvent {
-        AnalyticsEvent(name: "story_upload_started", properties: ["media_type": .string(photo ? "photo" : "video")])
+    static func storyUploadStarted(photo: Bool, details: PublicationDetails = PublicationDetails()) -> AnalyticsEvent {
+        var properties = details.properties(photo: photo)
+        properties["media_type"] = .string(photo ? "photo" : "video")
+        return AnalyticsEvent(name: "story_upload_started", properties: properties)
     }
 
     static func storyPublished(ready: Bool) -> AnalyticsEvent {
@@ -194,6 +199,20 @@ extension ConversationStatus {
         case .requestSent: "request_sent"
         case .requestReceived: "request_received"
         }
+    }
+}
+
+extension PublicationDetails {
+    // Source, et pour une vidéo ses modifications ; jamais le texte saisi.
+    func properties(photo: Bool) -> [String: AnalyticsValue] {
+        var properties: [String: AnalyticsValue] = ["source": .string(source.rawValue)]
+        guard !photo else { return properties }
+        properties["segments"] = .int(segments)
+        properties["trimmed"] = .bool(trimmed)
+        properties["filter"] = .string(filter.rawValue)
+        properties["text_count"] = .int(textCount)
+        properties["speed"] = .double(speed.rawValue)
+        return properties
     }
 }
 
