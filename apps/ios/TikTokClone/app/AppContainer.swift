@@ -27,6 +27,8 @@ final class AppContainer {
     let searchHistory: SearchHistoryModel
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
     let stories: StoriesModel
+    // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
+    let lives: LiveModel
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository
@@ -42,6 +44,7 @@ final class AppContainer {
     private let search: any SearchRepository
     private let gifts: any GiftRepository
     private let storyRepository: RemoteStoryRepository
+    private let liveRepository: RemoteLiveRepository
     // Compte connecté ou non au dernier changement d'activité : l'historique des recherches est effacé à chaque
     // changement de session.
     private var lastSignedIn: Bool?
@@ -107,6 +110,11 @@ final class AppContainer {
             loadTray: LoadStoryTrayUseCase(stories: storyRepository), loadStories: LoadUserStoriesUseCase(stories: storyRepository),
             session: session)
         publishing.onStoryPublished = { [stories] in Task { await stories.refresh() } }
+        let liveRepository = RemoteLiveRepository(client: client)
+        self.liveRepository = liveRepository
+        lives = LiveModel(
+            loadFollowing: LoadFollowingLivesUseCase(lives: liveRepository), loadUserLive: LoadUserLiveUseCase(lives: liveRepository),
+            session: session)
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
         activity = ActivityModel(
@@ -169,6 +177,7 @@ final class AppContainer {
             messaging.reset()
             wallet.reset()
             stories.reset()
+            lives.reset()
         }
     }
 
@@ -216,6 +225,40 @@ final class AppContainer {
         )
     }
 
+    // « Envoyer à » d'un live (ADR-053).
+    func makeSendLiveViewModel(live: LiveStream) -> SendVideoViewModel {
+        SendVideoViewModel(
+            item: .live(live),
+            messaging: messaging,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            share: ShareVideoByMessageUseCase(messaging: messagingRepository),
+            shareLive: ShareLiveByMessageUseCase(messaging: messagingRepository),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    // Écran d'un live (ADR-053) : sa salle LiveKit (une par ouverture) et son modèle.
+    func makeLiveRoom(_ route: AppRouter.LiveRoute) -> LiveRoomSetup {
+        let room = LiveKitRoom()
+        let model = LiveRoomModel(
+            mode: route.mode,
+            room: room,
+            startLive: StartLiveUseCase(lives: liveRepository),
+            joinLive: JoinLiveUseCase(lives: liveRepository),
+            loadLive: LoadLiveUseCase(lives: liveRepository),
+            endLive: EndLiveUseCase(lives: liveRepository),
+            sendMessage: SendLiveMessageUseCase(lives: liveRepository),
+            deleteMessage: DeleteLiveMessageUseCase(lives: liveRepository),
+            sendHearts: SendLiveHeartsUseCase(lives: liveRepository),
+            lives: lives,
+            session: session,
+            analytics: analytics,
+            hiddenUserIDs: { [videoInteractions] in videoInteractions.blockedUserIDs }
+        )
+        return LiveRoomSetup(model: model, room: room)
+    }
+
     // Historique des mouvements de jetons (paywall).
     func makeWalletTransactionList() -> PagedList<WalletTransaction> {
         let load = LoadWalletTransactionsUseCase(wallet: walletRepository)
@@ -236,8 +279,13 @@ final class AppContainer {
 
     // Feuille de cadeaux sur une vidéo (ADR-050).
     func makeGiftSheetViewModel(video: FeedVideo) -> GiftSheetViewModel {
+        makeGiftSheetViewModel(target: .video(id: video.id, author: video.author))
+    }
+
+    // Feuille de cadeaux d'une vidéo ou d'un live (ADR-053).
+    func makeGiftSheetViewModel(target: GiftTarget) -> GiftSheetViewModel {
         GiftSheetViewModel(
-            video: video,
+            target: target,
             loadCatalog: LoadGiftCatalogUseCase(gifts: gifts),
             sendGift: SendGiftUseCase(gifts: gifts),
             wallet: wallet,

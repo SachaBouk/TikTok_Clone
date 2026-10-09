@@ -8,6 +8,7 @@ import { safeReturnPath } from '@/lib/session-cookies';
 import type { ReportReason, ReportTargetType } from '@repo/shared';
 import { REPORT_REASONS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import * as comments from '@/models/comments.model';
+import * as lives from '@/models/lives.model';
 import * as messages from '@/models/messages.model';
 import * as reports from '@/models/reports.model';
 import * as stories from '@/models/stories.model';
@@ -59,6 +60,16 @@ export async function removeStory(storyId: string, reason: ReportReason): Promis
   if (!UUID.test(storyId)) return { error: 'Identifiant de story invalide.' };
   if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
   const failure = await attempt(() => stories.deleteStory(storyId, reason), 'Cette story a déjà été supprimée ou a expiré.');
+  if (failure) return failure;
+  revalidatePath('/', 'layout');
+  return { error: null };
+}
+
+// Arrêt d'un live signalé (ADR-053) : son auteur est prévenu avec le motif.
+export async function removeLive(liveId: string, reason: ReportReason): Promise<ActionResult> {
+  if (!UUID.test(liveId)) return { error: 'Identifiant de live invalide.' };
+  if (!REPORT_REASONS.includes(reason)) return { error: 'Choisis un motif.' };
+  const failure = await attempt(() => lives.deleteLive(liveId, reason), 'Ce live est déjà terminé.');
   if (failure) return failure;
   revalidatePath('/', 'layout');
   return { error: null };

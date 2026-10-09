@@ -25,7 +25,7 @@ struct GiftSheet: View {
                 sendButton
             }
             .padding()
-            .navigationTitle("Offrir un cadeau à @\(viewModel.video.author.username)")
+            .navigationTitle("Offrir un cadeau à @\(viewModel.target.recipient.username)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

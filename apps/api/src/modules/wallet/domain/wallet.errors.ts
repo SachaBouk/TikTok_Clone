@@ -12,6 +12,14 @@ export class UnknownGiftError extends WalletError {
 }
 
 // Vidéo non publiée, supprimée, ou d'un compte suspendu : 404.
+// Live inconnu, masqué ou terminé (ADR-053) : 404 ; sur son propre live, voir CannotGiftYourselfError.
+export class GiftLiveUnavailableError extends WalletError {
+  constructor(liveId: string) {
+    super(`Live indisponible : ${liveId}`);
+    this.name = 'GiftLiveUnavailableError';
+  }
+}
+
 export class GiftVideoUnavailableError extends WalletError {
   constructor(videoId: string) {
     super(`Vidéo indisponible : ${videoId}`);

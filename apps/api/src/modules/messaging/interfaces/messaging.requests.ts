@@ -33,6 +33,11 @@ export class SendMessageRequest {
   @IsUUID()
   storyId?: string;
 
+  @ApiPropertyOptional({ format: 'uuid', description: 'Live en cours partagé (ADR-053) ; `content` facultatif.' })
+  @IsOptional()
+  @IsUUID()
+  liveId?: string;
+
   @ApiPropertyOptional({
     format: 'uuid',
     description:

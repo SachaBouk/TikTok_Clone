@@ -41,6 +41,7 @@ import { AdminActionRefusedError, AdminTargetNotFoundError } from '../domain/adm
 import { AdminService } from './admin.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -103,6 +104,7 @@ describe('AdminService', () => {
   let reports: ReportsService;
   let messaging: MessagingService;
   let stories: ReturnType<typeof inMemoryStories>;
+  let lives: ReturnType<typeof inMemoryLive>;
   let notificationRepository: InMemoryNotificationRepository;
   let reportRepository: InMemoryReportRepository;
 
@@ -184,12 +186,13 @@ describe('AdminService', () => {
       suspended,
       () => NOW,
     );
+    lives = inMemoryLive(users, interactions, notifications, () => NOW);
     wallet = new WalletService(
       new InMemoryWalletRepository(),
       users,
       new InMemoryWalletEventPublisher(),
       { rejectSandbox: false },
-      { videos, interactions, notifications, rateLimiter: new InMemoryRateLimiter() },
+      { videos, lives: lives.service, interactions, notifications, rateLimiter: new InMemoryRateLimiter() },
     );
     const realtime = new RealtimeService(
       bus,
@@ -207,6 +210,7 @@ describe('AdminService', () => {
       interactions,
       videos,
       stories.service,
+      lives.service,
       new InMemoryMessagingEventPublisher(),
       new InMemoryRateLimiter(),
     );
@@ -219,11 +223,12 @@ describe('AdminService', () => {
       messaging,
       notifications,
       stories.service,
+      lives.service,
       new InMemoryRateLimiter(),
       suspended,
       () => NOW,
     );
-    service = new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging, stories.service, () => NOW);
+    service = new AdminService(users, videos, interactions, auth, wallet, realtime, reports, messaging, stories.service, lives.service, () => NOW);
   });
 
   describe('signalements (ADR-038)', () => {
@@ -296,6 +301,33 @@ describe('AdminService', () => {
       ]);
       const journal = await service.listModerationActions({ targetUserId: BOB }, null, 10);
       expect(journal.items.map((a) => [a.action, a.target.type, a.reason, a.reportsClosed])).toEqual([['storyRemoved', 'story', 'sexual', 1]]);
+    });
+  });
+
+  describe('lives (ADR-053)', () => {
+    it('live signalé : disponible tant qu’il est en cours ; arrêté par un administrateur, annoncé et journalisé', async () => {
+      const { item } = await lives.service.start(BOB, { title: 'Direct' });
+      await reports.report(ALICE, { target: { type: 'live', id: item.live.id }, reason: 'violence' });
+      const [queued] = (await service.listReportTargets(null, 10)).items;
+      expect([queued.target.type, queued.targetUser?.id, queued.available, queued.excerpt]).toEqual(['live', BOB, true, 'Direct']);
+
+      await service.removeLive(CAROL, item.live.id, 'violence');
+      await expect(lives.repository.findById(item.live.id)).resolves.toMatchObject({ status: 'ended', endReason: 'moderation' });
+      await expect(service.removeLive(CAROL, item.live.id, 'violence')).rejects.toBeInstanceOf(AdminTargetNotFoundError);
+      expect(
+        [...notificationRepository.notifications.values()].filter((n) => n.moderation).map((n) => [n.recipientId, n.type, n.moderation!.targetType]),
+      ).toEqual([
+        [BOB, 'contentRemoved', 'live'],
+        [ALICE, 'reportResolved', 'live'],
+      ]);
+      const journal = await service.listModerationActions({ targetUserId: BOB }, null, 10);
+      expect(journal.items.map((a) => [a.action, a.target.type, a.excerpt])).toEqual([['liveEnded', 'live', 'Direct']]);
+    });
+
+    it('la suspension du compte arrête son live', async () => {
+      const { item } = await lives.service.start(BOB, {});
+      await service.suspendAccount(CAROL, BOB, 'Spam');
+      await expect(lives.repository.findById(item.live.id)).resolves.toMatchObject({ status: 'ended', endReason: 'suspension' });
     });
   });
 

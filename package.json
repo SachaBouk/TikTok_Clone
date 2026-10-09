@@ -17,7 +17,7 @@
     "openapi:export": "pnpm --filter api openapi:export",
     "openapi:check": "pnpm --filter api openapi:check",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
-    "infra:up": "docker compose up -d --wait postgres redis minio && docker compose run --rm minio-init",
+    "infra:up": "docker compose up -d --wait postgres redis minio && docker compose run --rm minio-init && docker compose up -d livekit",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f",
     "infra:reset": "docker compose down -v && pnpm infra:up",

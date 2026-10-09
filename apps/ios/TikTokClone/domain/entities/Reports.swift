@@ -27,6 +27,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
     case account(id: String, username: String)
     case message(id: String)
     case story(id: String)
+    case live(id: String)
 
     var id: String {
         switch self {
@@ -35,6 +36,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .account(let id, _): "account:\(id)"
         case .message(let id): "message:\(id)"
         case .story(let id): "story:\(id)"
+        case .live(let id): "live:\(id)"
         }
     }
 
@@ -46,6 +48,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .account(_, let username): "Pourquoi signaler @\(username) ?"
         case .message: "Pourquoi signaler ce message ?"
         case .story: "Pourquoi signaler cette story ?"
+        case .live: "Pourquoi signaler ce live ?"
         }
     }
 
@@ -63,6 +66,7 @@ enum ReportTarget: Hashable, Identifiable, Sendable {
         case .account: "account"
         case .message: "message"
         case .story: "story"
+        case .live: "live"
         }
     }
 }

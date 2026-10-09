@@ -1,4 +1,6 @@
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { LiveItem, LiveService } from '../../live/application/live.service';
+import { LiveNotFoundError } from '../../live/domain/live.errors';
 import type { StoriesService } from '../../stories/application/stories.service';
 import type { ActiveStory } from '../../stories/domain/story';
 import { StoryNotFoundError } from '../../stories/domain/story.errors';
@@ -32,6 +34,7 @@ import {
   RateLimitedError,
   RecipientNotFoundError,
   RepliedStoryNotFoundError,
+  SharedLiveNotFoundError,
   RequestLimitReachedError,
   SharedVideoNotFoundError,
 } from '../domain/messaging.errors';
@@ -65,6 +68,8 @@ export interface SendMessageInput {
   videoId?: string;
   // Story de l'autre participant à laquelle répond le message (ADR-051) ; un texte est alors obligatoire.
   storyId?: string;
+  // Live en cours partagé (ADR-053).
+  liveId?: string;
   // Identifiant d'envoi choisi par l'app (ADR-044) : renvoyer le même rend le message déjà créé.
   clientMessageId?: string;
 }
@@ -87,6 +92,7 @@ export class MessagingService {
     private readonly interactions: InteractionsService,
     private readonly videos: VideosService,
     private readonly stories: StoriesService,
+    private readonly lives: LiveService,
     private readonly events: MessagingEventPublisher,
     private readonly rateLimiter: RateLimiter,
     private readonly now: () => number = () => Date.now(),
@@ -135,7 +141,9 @@ export class MessagingService {
     const content = input.content?.trim() ?? '';
     const sharedVideoId = input.videoId ?? null;
     const storyId = input.storyId ?? null;
-    if (!content && (!sharedVideoId || storyId)) throw new EmptyMessageError();
+    const liveId = input.liveId ?? null;
+    // Réponse à une story : texte obligatoire. Sinon : texte, vidéo ou live partagé.
+    if (storyId ? !content : !content && !sharedVideoId && !liveId) throw new EmptyMessageError();
 
     const view = await this.conversations.findView(conversationId, userId);
     if (!view) throw new ConversationNotFoundError(conversationId);
@@ -168,6 +176,14 @@ export class MessagingService {
       if (story.userId !== otherId) throw new RepliedStoryNotFoundError(storyId);
     }
 
+    // Live partagé : en cours, visible de l'expéditeur.
+    if (liveId) {
+      await this.lives.getVisibleLive(userId, liveId).catch((error: unknown) => {
+        if (error instanceof LiveNotFoundError) throw new SharedLiveNotFoundError(liveId);
+        throw error;
+      });
+    }
+
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
 
@@ -177,6 +193,7 @@ export class MessagingService {
       content,
       sharedVideoId,
       storyId,
+      liveId,
       clientMessageId,
       accept,
       openRequest,
@@ -408,6 +425,8 @@ export class MessagingService {
   // bloqué dans un sens ou dans l'autre, ou suspendu, sont indisponibles, comme dans le feed (blocages lus seulement s'il y
   // en a) ; une story expirée aussi.
   private async withVideos(viewerId: string, messages: Message[]): Promise<MessageItem[]> {
+    const liveIds = messages.flatMap((m) => (m.liveId ? [m.liveId] : []));
+    const lives = liveIds.length > 0 ? await this.lives.getLivePreviews(liveIds, viewerId) : new Map<string, LiveItem>();
     const storyIds = messages.flatMap((m) => (m.storyId ? [m.storyId] : []));
     const stories = storyIds.length > 0 ? await this.stories.getStoryPreviews(storyIds, viewerId) : new Map<string, ActiveStory>();
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
@@ -418,11 +437,12 @@ export class MessagingService {
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));
     return messages.map((message) => {
       const repliedStory = message.storyId ? { id: message.storyId, story: stories.get(message.storyId) ?? null } : null;
-      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory };
+      const sharedLive = message.liveId ? { id: message.liveId, item: lives.get(message.liveId) ?? null } : null;
+      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory, sharedLive };
       const video = videos.get(message.sharedVideoId) ?? null;
       const author = video ? (authors.get(video.userId) ?? null) : null;
       // Vidéo supprimée, son auteur, ou compte bloqué : « indisponible ».
-      return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author }, repliedStory };
+      return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author }, repliedStory, sharedLive };
     });
   }
 }

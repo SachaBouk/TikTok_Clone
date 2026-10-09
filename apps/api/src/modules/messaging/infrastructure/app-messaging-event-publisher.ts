@@ -48,7 +48,9 @@ export class AppMessagingEventPublisher extends MessagingEventPublisher {
   }
 
   pushNewMessage(recipientId: string, sender: User, { message }: MessageItem, asRequest: boolean): Promise<void> {
-    const text = message.storyId ? `Réponse à ta story : ${message.content}` : message.content || 'a partagé une vidéo';
+    const text = message.storyId
+      ? `Réponse à ta story : ${message.content}`
+      : message.content || (message.liveId ? 'a partagé un live' : 'a partagé une vidéo');
     return this.push.notify(recipientId, {
       title: asRequest ? 'Demande de message' : sender.displayName,
       body: (asRequest ? `${sender.displayName} : ${text}` : text).slice(0, PUSH_BODY_MAX_LENGTH),

@@ -60,6 +60,12 @@ struct VideoShareContent: Equatable {
         link = VideoLink.url(for: video.id)
     }
 
+    // Autre contenu partagé de la même façon (live, ADR-053).
+    init(message: String, link: URL) {
+        self.message = message
+        self.link = link
+    }
+
     // Texte copié : message et lien, pour qu'un collage garde le lien.
     var copiedText: String { "\(message) : \(link.absoluteString)" }
 

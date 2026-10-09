@@ -70,6 +70,7 @@ export class InMemoryConversationRepository extends ConversationRepository {
     content: string;
     sharedVideoId: string | null;
     storyId: string | null;
+    liveId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
@@ -82,6 +83,7 @@ export class InMemoryConversationRepository extends ConversationRepository {
       content: input.content,
       sharedVideoId: input.sharedVideoId,
       storyId: input.storyId,
+      liveId: input.liveId,
       createdAt: new Date(),
     };
     this.messages.push(created);

@@ -11,6 +11,7 @@ import { PushModule } from './modules/push/push.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SearchModule } from './modules/search/search.module';
+import { LiveModule } from './modules/live/live.module';
 import { StoriesModule } from './modules/stories/stories.module';
 import { UsersModule } from './modules/users/users.module';
 import { VideosModule } from './modules/videos/videos.module';
@@ -30,6 +31,7 @@ import { RedisModule } from './redis/redis.module';
     VideosModule,
     InteractionsModule,
     StoriesModule,
+    LiveModule,
     NotificationsModule,
     FeedModule,
     SearchModule,

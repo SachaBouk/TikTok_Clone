@@ -17,6 +17,7 @@ export const REPORT_TARGET_LABELS: Record<ReportTargetType, string> = {
   account: 'Compte',
   message: 'Message',
   story: 'Story',
+  live: 'Live',
 };
 
 export const REPORT_RESOLUTION_LABELS: Record<ReportResolution, string> = {
@@ -24,12 +25,12 @@ export const REPORT_RESOLUTION_LABELS: Record<ReportResolution, string> = {
   accountSuspended: 'Compte suspendu',
   dismissed: 'Sans suite',
   // Closes par la base, sans décision : contenu supprimé par son auteur (ou, pour un commentaire, par l'auteur de la
-  // vidéo, ADR-042 ; story expirée, ADR-051), compte supprimé.
+  // vidéo, ADR-042 ; story expirée, ADR-051 ; live terminé, ADR-053), compte supprimé.
   contentDeleted: 'Supprimé hors modération',
   accountDeleted: 'Compte supprimé',
 };
 
-export const REPORT_TARGET_TYPES: ReportTargetType[] = ['video', 'comment', 'account', 'message', 'story'];
+export const REPORT_TARGET_TYPES: ReportTargetType[] = ['video', 'comment', 'account', 'message', 'story', 'live'];
 export const REPORT_REASONS = Object.keys(REPORT_REASON_LABELS) as ReportReason[];
 
 // Journal de modération.
@@ -38,6 +39,7 @@ export const MODERATION_ACTION_LABELS: Record<ModerationActionType, string> = {
   commentRemoved: 'Commentaire supprimé',
   messageRemoved: 'Message supprimé',
   storyRemoved: 'Story supprimée',
+  liveEnded: 'Live arrêté',
   accountSuspended: 'Compte suspendu',
   suspensionLifted: 'Suspension levée',
   reportsDismissed: 'Signalements classés sans suite',

@@ -5,11 +5,12 @@ import type { PublishedVideo } from '../../videos/domain/video';
 // Créées par le module interactions via NotificationsService (ADR-003).
 
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift';
+// `live` : un compte suivi lance un live (ADR-053).
+export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live';
 
 // Modération (ADR-038). Mêmes valeurs que le module reports, recopiées : ce module n'en dépend pas (c'est reports
 // qui le prévient).
-export type ModerationTargetType = 'video' | 'comment' | 'account' | 'message' | 'story';
+export type ModerationTargetType = 'video' | 'comment' | 'account' | 'message' | 'story' | 'live';
 export type ModerationReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 // Décision sur un signalement, annoncée à la personne qui l'a envoyé.
 export type ModerationOutcome = 'contentRemoved' | 'accountSuspended' | 'dismissed';
@@ -31,8 +32,8 @@ export type ModerationEvent =
 
 export const MODERATION_TYPES: NotificationType[] = ['reportResolved', 'contentRemoved'];
 // Listes complètes, pour la spec OpenAPI (mêmes enums nommés que le module reports).
-export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved', 'gift'];
-export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message', 'story'];
+export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved', 'gift', 'live'];
+export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message', 'story', 'live'];
 export const MODERATION_REASONS: ModerationReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
 export const MODERATION_OUTCOMES: ModerationOutcome[] = ['contentRemoved', 'accountSuspended', 'dismissed'];
 
@@ -47,7 +48,10 @@ export type ActivityEvent =
   | { type: 'follow'; actorId: string; recipientId: string }
   // Cadeau (ADR-050, module wallet) : code du catalogue et prix copiés (ce module ne lit pas les tables du portefeuille).
   // Une notification par cadeau, jamais retirée (le cadeau est définitif).
-  | { type: 'gift'; actorId: string; recipientId: string; videoId: string; giftCode: string; giftAmount: number };
+  | { type: 'gift'; actorId: string; recipientId: string; videoId: string; giftCode: string; giftAmount: number }
+  // Live lancé (ADR-053, module live) : une notification par abonné et par live, jamais retirée (le live terminé reste
+  // affiché comme tel) ; emportée avec le compte de son auteur.
+  | { type: 'live'; actorId: string; recipientId: string; liveId: string };
 
 // Actions réversibles : leur notification disparaît quand elles sont annulées (unlike, unfollow…).
 // Un commentaire, une vidéo ou un compte supprimés emportent aussi les leurs (retirées juste avant, pour être annoncées).
@@ -68,6 +72,8 @@ export interface Notification {
   moderation: ModerationDetails | null;
   // Notifications de cadeau seulement (ADR-050).
   gift: GiftDetails | null;
+  // Notifications de live seulement (ADR-053).
+  liveId: string | null;
   readAt: Date | null;
   createdAt: Date;
 }
@@ -122,6 +128,9 @@ export function groupKey(notification: Notification): string {
       return 'follow';
     case 'comment':
       return `comment:${notification.id}`;
+    // Chaque live seul.
+    case 'live':
+      return `live:${notification.liveId}`;
     // Modération : chaque notification seule.
     case 'reportResolved':
     case 'contentRemoved':

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { dismissReports, removeComment, removeMessage, removeStory, removeVideo } from '@/controllers/moderation.actions';
+import { dismissReports, removeComment, removeLive, removeMessage, removeStory, removeVideo } from '@/controllers/moderation.actions';
 import { formatDateTime } from '@/lib/format';
 import { REPORT_REASON_LABELS, REPORT_RESOLUTION_LABELS, REPORT_TARGET_TYPES } from '@/lib/report-labels';
 import { getReportTarget } from '@/models/reports.model';
@@ -113,6 +113,19 @@ export default async function ReportTargetPage({ params }: { params: Promise<{ t
                 size="default"
                 defaultReason={defaultReason}
                 action={removeStory.bind(null, target.targetId)}
+              />
+            )}
+            {/* Live (ADR-053) : sans replay, il ne s'examine que pendant qu'il est en cours. */}
+            {target.available && target.targetType === 'live' && (
+              <RemoveContent
+                label="Arrêter le live"
+                title="Arrêter ce live ?"
+                description={`La salle est fermée pour l’auteur et les spectateurs. Ses signalements ouverts sont clos. ${notice}`}
+                size="default"
+                defaultReason={defaultReason}
+                confirmLabel="Arrêter"
+                pendingLabel="Arrêt…"
+                action={removeLive.bind(null, target.targetId)}
               />
             )}
             {target.targetUser && <SuspendAccount userId={target.targetUser.id} username={target.targetUser.username} />}

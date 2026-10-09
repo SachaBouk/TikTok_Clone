@@ -237,6 +237,7 @@ const giftSelect = {
   senderId: true,
   recipientId: true,
   videoId: true,
+  liveId: true,
   giftCode: true,
   amount: true,
   senderBalanceAfter: true,

@@ -26,6 +26,7 @@ export abstract class ConversationRepository {
     content: string;
     sharedVideoId: string | null;
     storyId: string | null;
+    liveId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;

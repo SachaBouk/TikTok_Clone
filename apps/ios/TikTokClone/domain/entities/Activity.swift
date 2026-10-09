@@ -4,8 +4,8 @@ import Foundation
 // republication ou follow reçu (pas de favori). La boîte de réception les affiche regroupées (`ActivityGroup`).
 // S'y ajoutent les décisions de modération (ADR-038), sans auteur : signalement examiné, contenu retiré.
 enum ActivityKind: String, Equatable, Sendable {
-    // `gift` : cadeau reçu sur une vidéo (ADR-050).
-    case like, comment, follow, repost, reportResolved, contentRemoved, gift
+    // `gift` : cadeau reçu sur une vidéo (ADR-050). `live` : un compte suivi lance un live (ADR-053).
+    case like, comment, follow, repost, reportResolved, contentRemoved, gift, live
 
     var isModeration: Bool { self == .reportResolved || self == .contentRemoved }
 }
@@ -23,7 +23,7 @@ struct ActivityGift: Equatable, Sendable {
 // (`reason`, motif choisi par l'administrateur). `excerpt` : texte du contenu concerné, copié.
 struct ActivityModeration: Equatable, Sendable {
     enum Target: String, Sendable {
-        case video, comment, account, message, story
+        case video, comment, account, message, story, live
     }
 
     enum Outcome: String, Sendable {
@@ -49,6 +49,7 @@ struct ActivityModeration: Equatable, Sendable {
                 case .comment: "Ton commentaire a été retiré."
                 case .message: "Ton message a été retiré."
                 case .story: "Ta story a été retirée."
+                case .live: "Ton live a été arrêté."
                 case .account: "Ton compte a été suspendu."
                 }
             // « Autre » : libellé de la liste, peu parlant seul ; même texte que la notification push.
@@ -90,6 +91,8 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
     var moderation: ActivityModeration? = nil
     // Cadeau reçu (ADR-050).
     var gift: ActivityGift? = nil
+    // Live lancé (ADR-053) : à ouvrir, en cours ou terminé.
+    var liveID: String? = nil
 
     // Texte affiché après le nom de l'auteur de l'action (le texte entier pour une décision de modération).
     var summary: String {
@@ -100,6 +103,7 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
         case .repost: "a republié ta vidéo."
         case .reportResolved, .contentRemoved: moderation?.text(kind) ?? ""
         case .gift: "t’a envoyé \(gift?.label ?? "un cadeau")."
+        case .live: "est en direct."
         }
     }
 }
@@ -140,6 +144,8 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
     var moderation: ActivityModeration? = nil
     // Cadeau de la notification la plus récente (ADR-050, cadeaux regroupés par vidéo).
     var gift: ActivityGift? = nil
+    // Live (ADR-053), toujours seul dans son groupe.
+    var liveID: String? = nil
 
     var id: String { key }
 
@@ -153,7 +159,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         switch kind {
         case .like, .repost, .gift: video.map { ActivityFilter(kind: kind, videoID: $0.id) }
         case .follow: ActivityFilter(kind: .follow, videoID: nil)
-        case .comment, .reportResolved, .contentRemoved: nil
+        case .comment, .reportResolved, .contentRemoved, .live: nil
         }
     }
 
@@ -185,6 +191,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .gift:
             guard plural else { return "t’a envoyé \(gift?.label ?? "un cadeau")." }
             return actors.count > 1 ? "t’ont envoyé \(count) cadeaux." : "t’a envoyé \(count) cadeaux."
+        case .live: return "est en direct."
         }
     }
 
@@ -195,6 +202,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .follow: "follow"
         case .comment: "comment:\(notification.id)"
         case .reportResolved, .contentRemoved: "moderation:\(notification.id)"
+        case .live: "live:\(notification.liveID ?? notification.id)"
         }
     }
 
@@ -206,7 +214,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
                 key: key(for: notification), kind: notification.kind, actors: notification.actor.map { [$0] } ?? [], count: 1,
                 video: notification.video, comment: notification.comment, read: notification.read,
                 latestID: notification.id, createdAt: notification.createdAt, actorRelationship: notification.actorRelationship,
-                moderation: notification.moderation, gift: notification.gift
+                moderation: notification.moderation, gift: notification.gift, liveID: notification.liveID
             )
         }
         let actors = (notification.actor.map { [$0] } ?? []) + existing.actors.filter { $0.id != notification.actor?.id }
@@ -236,6 +244,7 @@ struct ActivityFilter: Hashable, Sendable {
         case .repost: "Republications"
         case .reportResolved, .contentRemoved: "Modération"
         case .gift: "Cadeaux"
+        case .live: "Lives"
         }
     }
 }

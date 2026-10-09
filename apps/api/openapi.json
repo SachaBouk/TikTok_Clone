@@ -3201,6 +3201,559 @@
         "security": []
       }
     },
+    "/lives": {
+      "post": {
+        "operationId": "startLive",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartLiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Live lancé (ou repris s’il est déjà en cours), abonnés prévenus. Se connecter à `url` avec `token` et publier caméra et micro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveConnectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Titre trop long.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de lives lancés récemment (10 par jour) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serveur vidéo indisponible : rien n’est lancé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/following": {
+      "get": {
+        "operationId": "listFollowingLives",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowingLivesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/{id}": {
+      "get": {
+        "operationId": "getLive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, ou masqué (blocage, auteur suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ],
+        "security": []
+      }
+    },
+    "/lives/{id}/join": {
+      "post": {
+        "operationId": "joinLive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jeton d’accès à la salle et derniers messages du chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveConnectionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, ou masqué (blocage, auteur suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Live terminé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ],
+        "security": []
+      }
+    },
+    "/lives/{id}/end": {
+      "post": {
+        "operationId": "endLive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live terminé, avec ses chiffres.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu ou d’un autre compte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/{id}/messages": {
+      "post": {
+        "operationId": "sendLiveMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendLiveMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message envoyé, diffusé dans la salle.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChatMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Message vide ou trop long (150 caractères).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, ou masqué (blocage, auteur suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Live terminé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de messages envoyés récemment : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/{id}/messages/{messageId}": {
+      "delete": {
+        "operationId": "deleteLiveMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Message retiré."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ni l’auteur du message, ni celui du live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live ou message inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/{id}/hearts": {
+      "post": {
+        "operationId": "sendLiveHearts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendLiveHeartsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveHeartsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nombre de cœurs invalide, ou son propre live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, ou masqué (blocage, auteur suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Live terminé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de cœurs envoyés récemment : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/users/{username}/live": {
+      "get": {
+        "operationId": "getUserLive",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`live` absent si le compte n’a pas de live en cours visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserLiveResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ],
+        "security": []
+      }
+    },
     "/feed": {
       "get": {
         "operationId": "getFeed",
@@ -4480,7 +5033,7 @@
             }
           },
           "404": {
-            "description": "Conversation inconnue (ou non participant), vidéo introuvable, ou story introuvable (expirée, ou pas celle de l’autre participant).",
+            "description": "Conversation inconnue (ou non participant), vidéo introuvable, story introuvable (expirée, ou pas celle de l’autre participant), ou live introuvable (terminé ou masqué).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4922,6 +5475,125 @@
           },
           "409": {
             "description": "Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre vidéo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de cadeaux envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "gifts"
+        ]
+      }
+    },
+    "/lives/{id}/gifts": {
+      "post": {
+        "operationId": "sendLiveGift",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendGiftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cadeau envoyé, annoncé dans la salle, et solde après le débit. Renvoi avec le même `clientGiftId` : le même cadeau.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentGiftResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cadeau inconnu, son propre live, ou corps invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Solde insuffisant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Blocage avec l’auteur du live, dans un sens ou dans l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, terminé, ou d’un compte suspendu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre cible.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5798,6 +6470,77 @@
           },
           "404": {
             "description": "Story introuvable, déjà supprimée ou expirée.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/lives/{id}": {
+      "delete": {
+        "operationId": "deleteAdminLive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReportReason"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Live arrêté ; auteur prévenu avec le motif."
+          },
+          "400": {
+            "description": "Identifiant ou motif invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Compte sans rôle administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live introuvable ou déjà terminé.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7311,7 +8054,8 @@
           "repost",
           "reportResolved",
           "contentRemoved",
-          "gift"
+          "gift",
+          "live"
         ]
       },
       "NotificationVideoResponse": {
@@ -7354,7 +8098,8 @@
           "comment",
           "account",
           "message",
-          "story"
+          "story",
+          "live"
         ]
       },
       "ReportReason": {
@@ -7425,6 +8170,18 @@
           "amount"
         ]
       },
+      "NotificationLiveResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
       "NotificationResponse": {
         "type": "object",
         "properties": {
@@ -7449,6 +8206,9 @@
           },
           "gift": {
             "$ref": "#/components/schemas/NotificationGiftResponse"
+          },
+          "live": {
+            "$ref": "#/components/schemas/NotificationLiveResponse"
           },
           "read": {
             "type": "boolean"
@@ -7492,7 +8252,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`."
+            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `live:<liveId>`, `moderation:<notificationId>`."
           },
           "kind": {
             "$ref": "#/components/schemas/NotificationType"
@@ -7520,6 +8280,9 @@
           },
           "gift": {
             "$ref": "#/components/schemas/NotificationGiftResponse"
+          },
+          "live": {
+            "$ref": "#/components/schemas/NotificationLiveResponse"
           },
           "read": {
             "type": "boolean",
@@ -7924,6 +8687,255 @@
           "items"
         ]
       },
+      "StartLiveRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Titre facultatif, nettoyé ; vide = sans titre."
+          }
+        }
+      },
+      "LiveStatus": {
+        "type": "string",
+        "enum": [
+          "live",
+          "ended"
+        ]
+      },
+      "LiveEndReason": {
+        "type": "string",
+        "enum": [
+          "host",
+          "timeLimit",
+          "disconnected",
+          "moderation",
+          "suspension"
+        ]
+      },
+      "LiveStatsResponse": {
+        "type": "object",
+        "properties": {
+          "durationSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Durée écoulée, ou totale une fois le live terminé."
+          },
+          "peakViewers": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Plus grand nombre de spectateurs en même temps."
+          },
+          "viewersCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Spectateurs distincts, invités compris."
+          },
+          "heartsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "giftsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "giftsAmount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Jetons reçus en cadeaux pendant le live."
+          }
+        },
+        "required": [
+          "durationSeconds",
+          "peakViewers",
+          "viewersCount",
+          "heartsCount",
+          "giftsCount",
+          "giftsAmount"
+        ]
+      },
+      "LiveResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/LiveStatus"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endReason": {
+            "$ref": "#/components/schemas/LiveEndReason"
+          },
+          "host": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/LiveStatsResponse"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "status",
+          "startedAt",
+          "endedAt",
+          "host"
+        ]
+      },
+      "LiveRole": {
+        "type": "string",
+        "enum": [
+          "host",
+          "viewer"
+        ]
+      },
+      "LiveChatMessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "liveId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "liveId",
+          "user",
+          "content",
+          "createdAt"
+        ]
+      },
+      "LiveConnectionResponse": {
+        "type": "object",
+        "properties": {
+          "live": {
+            "$ref": "#/components/schemas/LiveResponse"
+          },
+          "role": {
+            "$ref": "#/components/schemas/LiveRole"
+          },
+          "url": {
+            "type": "string",
+            "description": "Serveur LiveKit (WebSocket)."
+          },
+          "token": {
+            "type": "string",
+            "description": "Jeton d’accès à la salle, signé par l’API."
+          },
+          "recentMessages": {
+            "description": "Derniers messages du chat, du plus ancien au plus récent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveChatMessageResponse"
+            }
+          }
+        },
+        "required": [
+          "live",
+          "role",
+          "url",
+          "token",
+          "recentMessages"
+        ]
+      },
+      "FollowingLivesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Lives en cours des comptes suivis, du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "SendLiveMessageRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150,
+            "description": "Texte nettoyé (espaces de bord retirés)."
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "SendLiveHeartsRequest": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "Cœurs de ce lot (touchers regroupés par l’app)."
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "LiveHeartsResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Cœurs reçus par le live depuis son début."
+          }
+        },
+        "required": [
+          "total"
+        ]
+      },
+      "UserLiveResponse": {
+        "type": "object",
+        "properties": {
+          "live": {
+            "$ref": "#/components/schemas/LiveResponse"
+          }
+        }
+      },
       "FeedViewerStateResponse": {
         "type": "object",
         "properties": {
@@ -8216,6 +9228,30 @@
           "thumbnailUrl"
         ]
       },
+      "MessageLiveResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Faux une fois le live terminé, ou s’il est masqué au lecteur."
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "host": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "available"
+        ]
+      },
       "MessageResponse": {
         "type": "object",
         "properties": {
@@ -8240,6 +9276,9 @@
           },
           "story": {
             "$ref": "#/components/schemas/MessageStoryResponse"
+          },
+          "live": {
+            "$ref": "#/components/schemas/MessageLiveResponse"
           },
           "clientMessageId": {
             "type": "string",
@@ -8409,6 +9448,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Story active de l’autre participant à laquelle répond le message (ADR-051) ; `content` est alors obligatoire."
+          },
+          "liveId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Live en cours partagé (ADR-053) ; `content` facultatif."
           },
           "clientMessageId": {
             "type": "string",
@@ -9152,6 +10196,7 @@
           "commentRemoved",
           "messageRemoved",
           "storyRemoved",
+          "liveEnded",
           "accountSuspended",
           "suspensionLifted",
           "reportsDismissed"
@@ -10158,6 +11203,171 @@
           "data"
         ]
       },
+      "LiveChatMessageEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "chatMessage"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveChatMessageResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveChatMessageDeletedResponse": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "messageId"
+        ]
+      },
+      "LiveChatMessageDeletedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "chatMessageDeleted"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveChatMessageDeletedResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveHeartsEventResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Cœurs de ce lot."
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total du live."
+          }
+        },
+        "required": [
+          "count",
+          "total"
+        ]
+      },
+      "LiveHeartsEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "hearts"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveHeartsEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveGiftEventResponse": {
+        "type": "object",
+        "properties": {
+          "sender": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "gift": {
+            "$ref": "#/components/schemas/GiftResponse"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Prix payé, en jetons."
+          },
+          "giftsCount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Cadeaux reçus par le live, celui-ci compris."
+          },
+          "giftsAmount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Jetons reçus par le live, celui-ci compris."
+          }
+        },
+        "required": [
+          "sender",
+          "gift",
+          "amount",
+          "giftsCount",
+          "giftsAmount"
+        ]
+      },
+      "LiveGiftEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "gift"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveGiftEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveEndedEventResponse": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/LiveEndReason"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "LiveEndedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "liveEnded"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveEndedEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "RealtimeEvent": {
         "description": "Message envoyé par le serveur sur le WebSocket `/realtime` (ADR-011).",
         "oneOf": [
@@ -10231,6 +11441,36 @@
           "propertyName": "event",
           "mapping": {
             "typing": "#/components/schemas/TypingClientMessage"
+          }
+        }
+      },
+      "LiveRoomEvent": {
+        "description": "Événement diffusé dans la salle d’un live (message de données LiveKit, sujet `live`, ADR-053).",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LiveChatMessageEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveChatMessageDeletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveHeartsEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveGiftEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveEndedEvent"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "event",
+          "mapping": {
+            "chatMessage": "#/components/schemas/LiveChatMessageEvent",
+            "chatMessageDeleted": "#/components/schemas/LiveChatMessageDeletedEvent",
+            "hearts": "#/components/schemas/LiveHeartsEvent",
+            "gift": "#/components/schemas/LiveGiftEvent",
+            "liveEnded": "#/components/schemas/LiveEndedEvent"
           }
         }
       }

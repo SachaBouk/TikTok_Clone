@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// Feuille de cadeaux d'une vidéo (ADR-050) : catalogue, solde, envoi. Pas d'optimisme (de l'argent est en jeu) : le solde
+// Feuille de cadeaux d'une vidéo (ADR-050) ou d'un live (ADR-053) : catalogue, solde, envoi. Pas d'optimisme (de l'argent est en jeu) : le solde
 // change à la réponse de l'API. Un même choix réessayé après une coupure garde son identifiant d'envoi : l'API ne débite
 // qu'une fois.
 @MainActor
@@ -13,7 +13,7 @@ final class GiftSheetViewModel {
         case failed(String)
     }
 
-    let video: FeedVideo
+    let target: GiftTarget
     private(set) var catalog: [GiftCatalogItem] = []
     private(set) var catalogState: CatalogState = .loading
     var selected: GiftCatalogItem?
@@ -30,11 +30,20 @@ final class GiftSheetViewModel {
     // Identifiant d'envoi du dernier essai, gardé pour le même cadeau : un renvoi après une coupure n'est pas débité deux fois.
     private var pending: (code: String, id: UUID)?
 
-    init(
+    convenience init(
         video: FeedVideo, loadCatalog: LoadGiftCatalogUseCase, sendGift: SendGiftUseCase, wallet: WalletModel, session: SessionStore,
         analytics: AnalyticsModel
     ) {
-        self.video = video
+        self.init(
+            target: .video(id: video.id, author: video.author), loadCatalog: loadCatalog, sendGift: sendGift, wallet: wallet, session: session,
+            analytics: analytics)
+    }
+
+    init(
+        target: GiftTarget, loadCatalog: LoadGiftCatalogUseCase, sendGift: SendGiftUseCase, wallet: WalletModel, session: SessionStore,
+        analytics: AnalyticsModel
+    ) {
+        self.target = target
         self.loadCatalog = loadCatalog
         self.sendGift = sendGift
         self.wallet = wallet
@@ -83,11 +92,11 @@ final class GiftSheetViewModel {
         isSending = true
         defer { isSending = false }
         do {
-            let sent = try await sendGift(videoID: video.id, giftCode: item.info.code, clientGiftID: clientGiftID)
+            let sent = try await sendGift(target: target, giftCode: item.info.code, clientGiftID: clientGiftID)
             pending = nil
             wallet.giftSent(balance: sent.balance)
-            analytics.track(.giftSent(code: sent.gift.code, amount: sent.amount, videoID: video.id, authorID: video.author.id))
-            return GiftBurst(gift: sent.gift, recipientUsername: video.author.username)
+            analytics.track(.giftSent(code: sent.gift.code, amount: sent.amount, target: target))
+            return GiftBurst(gift: sent.gift, recipientUsername: target.recipient.username)
         } catch {
             let appError = AppError.from(error)
             switch appError {

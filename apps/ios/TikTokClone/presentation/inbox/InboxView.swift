@@ -124,11 +124,14 @@ struct InboxView: View {
             await messaging.requests.loadFirstIfNeeded()
         }
         // Rangée relue à chaque affichage de l'onglet : les stories expirent d'elles-mêmes.
+        // Lives des abonnements (ADR-053) aussi : un live terminé disparaît.
         .task { await container.stories.refresh() }
+        .task { await container.lives.refresh() }
         .refreshable {
             await messaging.refresh()
             await activity.refresh()
             await container.stories.refresh()
+            await container.lives.refresh()
         }
     }
 }

@@ -4,6 +4,7 @@ import {
   CannotGiftYourselfError,
   GiftBlockedError,
   GiftIdConflictError,
+  GiftLiveUnavailableError,
   GiftVideoUnavailableError,
   InsufficientBalanceError,
   TooManyGiftsError,
@@ -26,7 +27,7 @@ function statusOf(error: WalletError): HttpStatus {
   if (error instanceof UnknownGiftError || error instanceof CannotGiftYourselfError) return HttpStatus.BAD_REQUEST;
   if (error instanceof InsufficientBalanceError) return HttpStatus.PAYMENT_REQUIRED;
   if (error instanceof GiftBlockedError) return HttpStatus.FORBIDDEN;
-  if (error instanceof GiftVideoUnavailableError) return HttpStatus.NOT_FOUND;
+  if (error instanceof GiftVideoUnavailableError || error instanceof GiftLiveUnavailableError) return HttpStatus.NOT_FOUND;
   if (error instanceof GiftIdConflictError) return HttpStatus.CONFLICT;
   if (error instanceof TooManyGiftsError) return HttpStatus.TOO_MANY_REQUESTS;
   throw new HttpException('Erreur interne', HttpStatus.INTERNAL_SERVER_ERROR);

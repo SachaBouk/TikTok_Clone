@@ -118,6 +118,13 @@ export class InMemoryInteractionRepository extends InteractionRepository {
       .slice(0, limit);
   }
 
+  async listFollowerIds(userId: string): Promise<string[]> {
+    return [...this.follows.keys()].flatMap((key) => {
+      const [followerId, followingId] = key.split(':') as [string, string];
+      return followingId === userId ? [followerId] : [];
+    });
+  }
+
   async listFollowingIds(userId: string): Promise<string[]> {
     return [...this.follows.keys()].flatMap((key) => {
       const [followerId, followingId] = key.split(':') as [string, string];

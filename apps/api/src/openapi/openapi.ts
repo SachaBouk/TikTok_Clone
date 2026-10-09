@@ -16,6 +16,13 @@ import {
   UnreadNotificationsChangedEvent,
 } from '../modules/notifications/interfaces/notifications.events';
 import { ProfileCountersChangedEvent } from '../modules/interactions/interfaces/interactions.events';
+import {
+  LiveChatMessageDeletedEvent,
+  LiveChatMessageEvent,
+  LiveEndedEvent,
+  LiveGiftEvent,
+  LiveHeartsEvent,
+} from '../modules/live/interfaces/live.events';
 import { StoryProcessedEvent } from '../modules/stories/interfaces/stories.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
 import { WalletUpdatedEvent } from '../modules/wallet/interfaces/wallet.events';
@@ -45,6 +52,16 @@ const REALTIME_CLIENT_MESSAGES = {
   typing: TypingClientMessage,
 };
 
+// Événements diffusés dans la salle d'un live (union `LiveRoomEvent`, ADR-053) : messages de données de LiveKit, sujet
+// `live`, envoyés par l'API et reçus par tous les participants (invités compris).
+const LIVE_ROOM_EVENTS = {
+  chatMessage: LiveChatMessageEvent,
+  chatMessageDeleted: LiveChatMessageDeletedEvent,
+  hearts: LiveHeartsEvent,
+  gift: LiveGiftEvent,
+  liveEnded: LiveEndedEvent,
+};
+
 // Contrat d'API (ADR-005) : source unique pour le client iOS (swift-openapi-generator) et la doc.
 // Partagé par main.ts (Swagger UI) et export.ts (fichier openapi.json versionné).
 export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
@@ -69,7 +86,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     // Le nom de la méthode du controller devient l'operationId, donc le nom de la méthode Swift
     // générée (`client.login(…)` plutôt que `client.AuthController_login(…)`).
     operationIdFactory: (_controllerKey, methodKey) => methodKey,
-    extraModels: [...Object.values(REALTIME_EVENTS), ...Object.values(REALTIME_CLIENT_MESSAGES)],
+    extraModels: [...Object.values(REALTIME_EVENTS), ...Object.values(REALTIME_CLIENT_MESSAGES), ...Object.values(LIVE_ROOM_EVENTS)],
   });
 
   markPublicOperations(document);
@@ -80,6 +97,12 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     'RealtimeClientMessage',
     'Message envoyé par l’app sur le WebSocket `/realtime` (les autres sont ignorés).',
     REALTIME_CLIENT_MESSAGES,
+  );
+  addUnion(
+    document,
+    'LiveRoomEvent',
+    'Événement diffusé dans la salle d’un live (message de données LiveKit, sujet `live`, ADR-053).',
+    LIVE_ROOM_EVENTS,
   );
   assertUniqueOperationIds(document);
   return document;

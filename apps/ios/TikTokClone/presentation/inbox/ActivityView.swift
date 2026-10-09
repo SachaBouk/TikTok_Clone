@@ -71,6 +71,9 @@ struct ActivityView: View {
     private func open(_ group: ActivityGroup) {
         if group.kind.isModeration {
             return
+        } else if group.kind == .live, let liveID = group.liveID {
+            // Live (ADR-053) : ouvert, en cours ou terminé (écran de fin).
+            container.router.openLive(liveID, source: .activity)
         } else if group.count > 1, let filter = group.filter {
             openedGroup = filter
         } else if let video = group.video {
@@ -215,7 +218,7 @@ private struct ActivityGroupRow: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if follow == nil, !group.kind.isModeration { ActivityTrailing(video: group.video) }
+                    if follow == nil, !group.kind.isModeration { ActivityTrailing(video: group.video, kind: group.kind) }
                 }
                 .contentShape(Rectangle())
             }
@@ -263,7 +266,7 @@ private struct ActivityRow: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if follow == nil { ActivityTrailing(video: notification.video) }
+                    if follow == nil { ActivityTrailing(video: notification.video, kind: notification.kind) }
                 }
                 .contentShape(Rectangle())
             }
@@ -299,12 +302,18 @@ private struct ModerationIcon: View {
     }
 }
 
-// Miniature de la vidéo concernée, ou icône d'abonnement.
+// Miniature de la vidéo concernée, icône du live (ADR-053) ou d'abonnement.
 private struct ActivityTrailing: View {
     let video: ActivityNotification.Video?
+    let kind: ActivityKind
 
     var body: some View {
-        if let video {
+        if kind == .live {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .foregroundStyle(.red)
+                .frame(width: 44)
+                .accessibilityHidden(true)
+        } else if let video {
             VideoGridCell(thumbnailURL: video.thumbnailURL, image: nil, views: nil)
                 .frame(width: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 4))

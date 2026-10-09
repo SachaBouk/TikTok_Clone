@@ -4,7 +4,13 @@ import type { UserSummaryDto } from './users.js';
 // Centre d'activité (ADR-016) : ce que les autres comptes ont fait sur mes vidéos et mon compte.
 
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift';
+// `live` : un compte suivi lance un live (ADR-053).
+export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live';
+
+// Live lancé (ADR-053) : à ouvrir, en cours ou terminé.
+export interface NotificationLiveDto {
+  id: string;
+}
 
 // Cadeau reçu (ADR-050) : code du catalogue, nom et emoji (« 🎁 Cadeau » pour un code retiré depuis), prix payé.
 export interface NotificationGiftDto {
@@ -50,6 +56,8 @@ export interface NotificationDto {
   moderation?: NotificationModerationDto;
   // Présent pour un cadeau seulement.
   gift?: NotificationGiftDto;
+  // Présent pour un live seulement.
+  live?: NotificationLiveDto;
   read: boolean;
   createdAt: string;
 }
@@ -65,7 +73,7 @@ export interface NotificationPageDto {
 // like, republication et cadeau par vidéo, tous les follows ensemble, chaque commentaire seul.
 export interface NotificationGroupDto {
   // Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`,
-  // `comment:<notificationId>`, `moderation:<notificationId>`.
+  // `comment:<notificationId>`, `live:<liveId>`, `moderation:<notificationId>`.
   key: string;
   kind: NotificationType;
   // Auteurs des notifications les plus récentes du groupe, 2 au plus, du plus récent au plus ancien.
@@ -80,6 +88,8 @@ export interface NotificationGroupDto {
   moderation?: NotificationModerationDto;
   // Cadeau de la notification la plus récente du groupe (cadeaux regroupés par vidéo).
   gift?: NotificationGiftDto;
+  // Live (groupe toujours seul, clé `live:<liveId>`).
+  live?: NotificationLiveDto;
   // Faux si au moins une notification du groupe n'est pas lue.
   read: boolean;
   // Notification la plus récente du groupe : curseur de pagination, marquage lu.

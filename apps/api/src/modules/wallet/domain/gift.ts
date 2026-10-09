@@ -6,8 +6,10 @@ export interface Gift {
   // Nuls : compte supprimé depuis (ligne gardée, anonymisée).
   senderId: string | null;
   recipientId: string | null;
-  // Nulle : vidéo supprimée depuis.
+  // Nulle : vidéo supprimée depuis, ou cadeau envoyé pendant un live.
   videoId: string | null;
+  // Live pendant lequel le cadeau a été envoyé (ADR-053) ; nul sur une vidéo.
+  liveId: string | null;
   giftCode: string;
   // Prix payé, en jetons.
   amount: number;
@@ -18,7 +20,9 @@ export interface Gift {
 export interface NewGift {
   senderId: string;
   recipientId: string;
-  videoId: string;
+  // L'un ou l'autre : une vidéo, ou un live (ADR-053).
+  videoId: string | null;
+  liveId: string | null;
   giftCode: string;
   amount: number;
   clientGiftId: string;

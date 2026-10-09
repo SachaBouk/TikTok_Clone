@@ -25,6 +25,7 @@ import {
   ConversationNotFoundError,
   EmptyMessageError,
   RepliedStoryNotFoundError,
+  SharedLiveNotFoundError,
   MessageNotFoundError,
   NotAPendingRequestError,
   NotMessageSenderError,
@@ -38,6 +39,7 @@ import { InMemoryMessagingEventPublisher } from '../infrastructure/in-memory-mes
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { MessagingService } from './messaging.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -67,6 +69,7 @@ describe('MessagingService', () => {
   let interactions: InteractionsService;
   let service: MessagingService;
   let stories: ReturnType<typeof inMemoryStories>;
+  let lives: ReturnType<typeof inMemoryLive>;
 
   const befriend = async (a: string, b: string) => {
     await interactions.setFollow(a, b, true);
@@ -109,12 +112,14 @@ describe('MessagingService', () => {
     conversations = new InMemoryConversationRepository();
     events = new InMemoryMessagingEventPublisher();
     stories = inMemoryStories(users, interactions, () => new Date(clock));
+    lives = inMemoryLive(users, interactions, notifications, () => new Date(clock));
     service = new MessagingService(
       conversations,
       users,
       interactions,
       videos,
       stories.service,
+      lives.service,
       events,
       new InMemoryRateLimiter(() => clock),
       () => clock,
@@ -452,6 +457,25 @@ describe('MessagingService', () => {
       // Sa propre story : l'autre participant n'en est pas l'auteur.
       const own = await publishTestStory(stories, 'alice');
       await expect(service.sendMessage('alice', id, { content: 'Moi', storyId: own.id })).rejects.toBeInstanceOf(RepliedStoryNotFoundError);
+    });
+  });
+
+  describe('partage d’un live (ADR-053)', () => {
+    it('partage un live en cours, sans texte ; il devient indisponible à sa fin', async () => {
+      const { item } = await lives.service.start('carol', { title: 'Concert' });
+      const id = await open('alice', 'bob');
+      const sent = await service.sendMessage('alice', id, { liveId: item.live.id });
+      expect(sent.message).toMatchObject({ content: '', liveId: item.live.id });
+      expect(sent.sharedLive?.item).toMatchObject({ live: { id: item.live.id, title: 'Concert', status: 'live' }, host: { id: 'carol' } });
+      expect(events.pushes.at(-1)).toMatchObject({ recipientId: 'bob' });
+
+      await lives.service.stop('carol', item.live.id);
+      const [received] = (await service.listMessages('bob', id, null, 10)).items;
+      expect(received.sharedLive?.item?.live.status).toBe('ended');
+      await expect(service.sendMessage('alice', id, { liveId: item.live.id })).rejects.toBeInstanceOf(SharedLiveNotFoundError);
+      await expect(service.sendMessage('alice', id, { liveId: '00000000-0000-7000-8000-000000000999' })).rejects.toBeInstanceOf(
+        SharedLiveNotFoundError,
+      );
     });
   });
 

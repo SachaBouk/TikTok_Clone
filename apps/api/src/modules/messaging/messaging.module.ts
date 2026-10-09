@@ -6,6 +6,8 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { UsersService } from '../users/application/users.service';
 import { UsersModule } from '../users/users.module';
+import { LiveService } from '../live/application/live.service';
+import { LiveModule } from '../live/live.module';
 import { StoriesService } from '../stories/application/stories.service';
 import { StoriesModule } from '../stories/stories.module';
 import { VideosService } from '../videos/application/videos.service';
@@ -22,7 +24,7 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
 // mutuels et blocages via InteractionsService, vidéos partagées via VideosService ; événements par le module
 // realtime (ADR-011) et notifications push par le module push ; limites d'envoi par le limiteur partagé (src/rate-limit).
 @Module({
-  imports: [UsersModule, InteractionsModule, VideosModule, StoriesModule, RealtimeModule, PushModule],
+  imports: [UsersModule, InteractionsModule, VideosModule, StoriesModule, LiveModule, RealtimeModule, PushModule],
   controllers: [MessagingController],
   providers: [
     { provide: ConversationRepository, useClass: PrismaConversationRepository },
@@ -35,10 +37,20 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
         interactions: InteractionsService,
         videos: VideosService,
         stories: StoriesService,
+        lives: LiveService,
         events: MessagingEventPublisher,
         rateLimiter: RateLimiter,
-      ) => new MessagingService(conversations, users, interactions, videos, stories, events, rateLimiter),
-      inject: [ConversationRepository, UsersService, InteractionsService, VideosService, StoriesService, MessagingEventPublisher, RateLimiter],
+      ) => new MessagingService(conversations, users, interactions, videos, stories, lives, events, rateLimiter),
+      inject: [
+        ConversationRepository,
+        UsersService,
+        InteractionsService,
+        VideosService,
+        StoriesService,
+        LiveService,
+        MessagingEventPublisher,
+        RateLimiter,
+      ],
     },
     MessagingRealtimeHandlers,
   ],

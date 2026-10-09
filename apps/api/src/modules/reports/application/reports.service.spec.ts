@@ -27,6 +27,7 @@ import { InMemoryReportRepository } from '../infrastructure/in-memory-report.rep
 import { ReportsService } from './reports.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -53,6 +54,7 @@ describe('ReportsService', () => {
   let interactions: InteractionsService;
   let messaging: MessagingService;
   let stories: ReturnType<typeof inMemoryStories>;
+  let lives: ReturnType<typeof inMemoryLive>;
   let notificationRepository: InMemoryNotificationRepository;
   let actions: InMemoryModerationActionRepository;
   let service: ReportsService;
@@ -104,12 +106,14 @@ describe('ReportsService', () => {
       new InMemoryProfileCountersPublisher(),
     );
     stories = inMemoryStories(users, interactions, () => NOW);
+    lives = inMemoryLive(users, interactions, notifications, () => NOW);
     messaging = new MessagingService(
       new InMemoryConversationRepository(),
       users,
       interactions,
       videos,
       stories.service,
+      lives.service,
       new InMemoryMessagingEventPublisher(),
       new InMemoryRateLimiter(),
     );
@@ -124,6 +128,7 @@ describe('ReportsService', () => {
       messaging,
       notifications,
       stories.service,
+      lives.service,
       new InMemoryRateLimiter(),
       suspended,
       () => NOW,
@@ -206,6 +211,19 @@ describe('ReportsService', () => {
       await expect(
         service.report('alice', { target: { type: 'story', id: '00000000-0000-7000-8000-000000000999' }, reason: 'spam' }),
       ).rejects.toBeInstanceOf(ReportTargetNotFoundError);
+    });
+
+    it('un live en cours (ADR-053) : titre copié ; ni le sien, ni un live terminé', async () => {
+      const { item } = await lives.service.start('bob', { title: 'Mon live' });
+      await expect(service.report('bob', { target: { type: 'live', id: item.live.id }, reason: 'spam' })).rejects.toBeInstanceOf(
+        CannotReportYourselfError,
+      );
+      await service.report('alice', { target: { type: 'live', id: item.live.id }, reason: 'hate' });
+      expect(repository.reports.map((r) => [r.target.type, r.targetUserId, r.excerpt])).toEqual([['live', 'bob', 'Mon live']]);
+      await lives.service.stop('bob', item.live.id);
+      await expect(service.report('carol', { target: { type: 'live', id: item.live.id }, reason: 'hate' })).rejects.toBeInstanceOf(
+        ReportTargetNotFoundError,
+      );
     });
   });
 

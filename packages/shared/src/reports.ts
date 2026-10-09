@@ -3,7 +3,7 @@ import type { UserSummaryDto } from './users.js';
 
 // Signalements (ADR-038) : une vidéo, un commentaire, un compte, un message ou une story (ADR-051), avec un motif de la liste et une précision.
 
-export type ReportTargetType = 'video' | 'comment' | 'account' | 'message' | 'story';
+export type ReportTargetType = 'video' | 'comment' | 'account' | 'message' | 'story' | 'live';
 
 export type ReportReason = 'spam' | 'harassment' | 'hate' | 'violence' | 'sexual' | 'impersonation' | 'other';
 
@@ -43,6 +43,7 @@ export interface AdminReportTargetDto {
   storyMediaType?: StoryMediaType;
   // Commentaire : vidéo commentée.
   videoId?: string;
+  // Live (ADR-053) : `available` vrai tant qu'il est en cours ; titre dans `excerpt`.
   // Texte signalé, copié au moment du signalement le plus récent (commentaire, description de la vidéo).
   excerpt?: string;
   // Signalements ouverts, et leur répartition par motif (du plus fréquent au moins fréquent).
@@ -79,7 +80,7 @@ export interface AdminReportTargetDetailDto {
 // ─── Journal de modération ───────────────────────────────────────────────────
 
 export type ModerationActionType =
-  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'storyRemoved' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
+  'videoRemoved' | 'commentRemoved' | 'messageRemoved' | 'storyRemoved' | 'liveEnded' | 'accountSuspended' | 'suspensionLifted' | 'reportsDismissed';
 
 // Une action d'un administrateur ; pseudos et texte copiés (le journal survit aux suppressions).
 export interface AdminModerationActionDto {

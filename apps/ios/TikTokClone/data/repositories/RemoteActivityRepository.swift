@@ -67,7 +67,8 @@ extension ActivityNotification {
             read: dto.read,
             createdAt: dto.createdAt,
             moderation: dto.moderation.map(ActivityModeration.init),
-            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) }
+            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) },
+            liveID: dto.live?.id
         )
     }
 }
@@ -85,7 +86,8 @@ extension ActivityGroup {
             latestID: dto.latestId,
             createdAt: dto.createdAt,
             moderation: dto.moderation.map(ActivityModeration.init),
-            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) }
+            gift: dto.gift.map { ActivityGift(name: $0.name, emoji: $0.emoji, amount: $0.amount) },
+            liveID: dto.live?.id
         )
     }
 }
@@ -99,6 +101,7 @@ extension ActivityModeration {
             case .account: .account
             case .message: .message
             case .story: .story
+            case .live: .live
             }
         let outcome: Outcome? = dto.outcome.map {
             switch $0 {
@@ -135,6 +138,7 @@ extension Components.Schemas.NotificationType {
         case .reportResolved: self = .reportResolved
         case .contentRemoved: self = .contentRemoved
         case .gift: self = .gift
+        case .live: self = .live
         }
     }
 }
@@ -149,6 +153,7 @@ extension ActivityKind {
         case .reportResolved: self = .reportResolved
         case .contentRemoved: self = .contentRemoved
         case .gift: self = .gift
+        case .live: self = .live
         }
     }
 }

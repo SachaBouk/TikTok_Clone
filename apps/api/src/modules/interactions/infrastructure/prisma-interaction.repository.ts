@@ -118,6 +118,12 @@ export class PrismaInteractionRepository extends InteractionRepository {
     return rows.map((row) => row.followingId);
   }
 
+  // Index (following_id, created_at).
+  async listFollowerIds(userId: string): Promise<string[]> {
+    const rows = await this.prisma.follow.findMany({ where: { followingId: userId }, select: { followerId: true } });
+    return rows.map((row) => row.followerId);
+  }
+
   async findFollowRelations(userId: string, otherIds: string[]): Promise<FollowRelations> {
     if (otherIds.length === 0) return { following: new Set(), followedBy: new Set() };
     const rows = await this.prisma.follow.findMany({

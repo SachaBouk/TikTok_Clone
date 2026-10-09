@@ -27,6 +27,7 @@ const notificationSelect = {
   moderationExcerpt: true,
   giftCode: true,
   giftAmount: true,
+  liveId: true,
   readAt: true,
   createdAt: true,
 } as const;
@@ -50,11 +51,12 @@ export class PrismaNotificationRepository extends NotificationRepository {
           userId: event.recipientId,
           actorId: event.actorId,
           type: event.type,
-          videoId: event.type === 'follow' ? null : event.videoId,
+          videoId: event.type === 'follow' || event.type === 'live' ? null : event.videoId,
           commentId: event.type === 'comment' ? event.commentId : null,
           commentText: event.type === 'comment' ? event.commentText : null,
           giftCode: event.type === 'gift' ? event.giftCode : null,
           giftAmount: event.type === 'gift' ? event.giftAmount : null,
+          liveId: event.type === 'live' ? event.liveId : null,
         },
       ],
       skipDuplicates: true,
@@ -173,6 +175,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
         SELECT notification_id, actor_id, read_at,
                type::text || ':' || CASE WHEN type IN ('like', 'repost', 'gift') THEN video_id::text
                                          WHEN type = 'follow' THEN ''
+                                         WHEN type = 'live' THEN live_id::text
                                          ELSE notification_id::text END AS group_key
         FROM notifications
         WHERE user_id = ${recipientId}::uuid ${excluded} ${only}
@@ -238,6 +241,7 @@ function toNotification(row: NotificationRow): Notification {
         }
       : null,
     gift: row.giftCode && row.giftAmount !== null ? { code: row.giftCode, amount: row.giftAmount } : null,
+    liveId: row.liveId,
     readAt: row.readAt,
     createdAt: row.createdAt,
   };

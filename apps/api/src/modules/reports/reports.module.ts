@@ -7,6 +7,8 @@ import { MessagingService } from '../messaging/application/messaging.service';
 import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { LiveService } from '../live/application/live.service';
+import { LiveModule } from '../live/live.module';
 import { StoriesService } from '../stories/application/stories.service';
 import { StoriesModule } from '../stories/stories.module';
 import { UsersService } from '../users/application/users.service';
@@ -26,7 +28,7 @@ import { ReportsController } from './interfaces/reports.controller';
 // Exporte ReportsService pour le module admin (file de modération, décisions, journal). Aucun de ces modules ne
 // dépend de reports.
 @Module({
-  imports: [UsersModule, VideosModule, InteractionsModule, MessagingModule, NotificationsModule, StoriesModule],
+  imports: [UsersModule, VideosModule, InteractionsModule, MessagingModule, NotificationsModule, StoriesModule, LiveModule],
   controllers: [ReportsController],
   providers: [
     { provide: ReportRepository, useClass: PrismaReportRepository },
@@ -42,9 +44,10 @@ import { ReportsController } from './interfaces/reports.controller';
         messaging: MessagingService,
         notifications: NotificationsService,
         stories: StoriesService,
+        lives: LiveService,
         rateLimiter: RateLimiter,
         suspended: SuspendedAccounts,
-      ) => new ReportsService(reports, actions, users, videos, interactions, messaging, notifications, stories, rateLimiter, suspended),
+      ) => new ReportsService(reports, actions, users, videos, interactions, messaging, notifications, stories, lives, rateLimiter, suspended),
       inject: [
         ReportRepository,
         ModerationActionRepository,
@@ -54,6 +57,7 @@ import { ReportsController } from './interfaces/reports.controller';
         MessagingService,
         NotificationsService,
         StoriesService,
+        LiveService,
         RateLimiter,
         SuspendedAccounts,
       ],

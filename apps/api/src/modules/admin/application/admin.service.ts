@@ -1,6 +1,7 @@
 import type { AuthService } from '../../auth/application/auth.service';
 import { CannotSuspendAdminError } from '../../auth/domain/auth.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
+import type { LiveService } from '../../live/application/live.service';
 import type { StoriesService } from '../../stories/application/stories.service';
 import { StoryNotFoundError } from '../../stories/domain/story.errors';
 import type { MessagingService } from '../../messaging/application/messaging.service';
@@ -46,6 +47,7 @@ export class AdminService {
     private readonly reports: ReportsService,
     private readonly messaging: MessagingService,
     private readonly stories: StoriesService,
+    private readonly lives: LiveService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -110,6 +112,8 @@ export class AdminService {
       throw error;
     }
     await this.realtime.disconnectUser(userId);
+    // Son live en cours s'arrête (ADR-053).
+    await this.lives.endForSuspension(userId);
     // Ses signalements ouverts sont clos, les personnes qui ont signalé prévenues, l'action journalisée (ADR-038).
     if (!wasSuspended) await this.reports.accountSuspended(userId, adminId, reason.trim());
     return this.getAccount(userId);
@@ -199,6 +203,18 @@ export class AdminService {
         throw error;
       }
     });
+  }
+
+  // Arrêt d'un live signalé (ADR-053) : l'auteur est prévenu avec le motif. Un live déjà terminé est introuvable.
+  async removeLive(adminId: string, liveId: string, reason: ReportReason): Promise<void> {
+    const [item] = await this.lives.getLivesByIds([liveId]);
+    if (!item || item.live.status !== 'live') throw new AdminTargetNotFoundError('Live', liveId);
+    await this.reports.removeContent(
+      { adminId, target: { type: 'live', id: liveId }, authorId: item.live.userId, excerpt: item.live.title, reason },
+      async () => {
+        if (!(await this.lives.removeLive(liveId))) throw new AdminTargetNotFoundError('Live', liveId);
+      },
+    );
   }
 
   // Journal de modération (ADR-038), du plus récent au plus ancien ; `targetUserId` : actions sur ce compte.
@@ -303,13 +319,16 @@ export class AdminService {
     }[],
   ): Promise<ModeratedReportTarget[]> {
     const idsOf = (type: ReportTarget['type']) => rows.filter((r) => r.target.type === type).map((r) => r.target.id);
-    const [users, videos, comments, messages, stories] = await Promise.all([
+    const [users, videos, comments, messages, stories, lives] = await Promise.all([
       this.usersById(rows.flatMap((r) => (r.targetUserId ? [r.targetUserId] : []))),
       this.videos.getPublishedVideos(idsOf('video')),
       this.interactions.getComments(idsOf('comment')),
       this.messaging.getMessages(idsOf('message')),
       this.stories.getStoriesByIds(idsOf('story')),
+      this.lives.getLivesByIds(idsOf('live')),
     ]);
+    // Un live est disponible tant qu'il est en cours (pas de replay).
+    const liveIds = new Set(lives.filter((item) => item.live.status === 'live').map((item) => item.live.id));
     // Une story expirée mais pas encore supprimée n'est plus disponible.
     const storiesById = new Map(stories.filter((s) => s.status === 'ready' && s.expiresAt && s.expiresAt > this.now()).map((s) => [s.id, s]));
     const videosById = new Map(videos.map((v) => [v.id, v]));
@@ -321,7 +340,13 @@ export class AdminService {
       const comment = target.type === 'comment' ? commentsById.get(target.id) : undefined;
       const story = target.type === 'story' ? storiesById.get(target.id) : undefined;
       const available =
-        target.type === 'account' ? !!targetUser : target.type === 'message' ? messageIds.has(target.id) : !!video || !!comment || !!story;
+        target.type === 'account'
+          ? !!targetUser
+          : target.type === 'message'
+            ? messageIds.has(target.id)
+            : target.type === 'live'
+              ? liveIds.has(target.id)
+              : !!video || !!comment || !!story;
       return {
         target,
         targetUser,

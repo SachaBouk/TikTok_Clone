@@ -1,5 +1,6 @@
 import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { User } from '../../users/domain/user';
+import type { LiveItem } from '../../live/application/live.service';
 import type { ActiveStory } from '../../stories/domain/story';
 import type { PublishedVideo } from '../../videos/domain/video';
 
@@ -19,6 +20,8 @@ export interface Message {
   sharedVideoId: string | null;
   // Story à laquelle répond le message (ADR-051) : un texte l'accompagne toujours.
   storyId: string | null;
+  // Live partagé (ADR-053).
+  liveId: string | null;
   createdAt: Date;
 }
 
@@ -36,10 +39,18 @@ export interface RepliedStory {
   story: ActiveStory | null;
 }
 
+// Live partagé, résolu à la lecture : null s'il est masqué au lecteur (blocage, auteur suspendu) ou si son compte a été
+// supprimé ; sinon en cours ou terminé.
+export interface SharedLive {
+  id: string;
+  item: LiveItem | null;
+}
+
 export interface MessageItem {
   message: Message;
   sharedVideo: SharedVideo | null;
   repliedStory: RepliedStory | null;
+  sharedLive: SharedLive | null;
   // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
   // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
   clientMessageId?: string;

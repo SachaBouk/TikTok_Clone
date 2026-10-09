@@ -3,6 +3,7 @@ import type {
   NotificationCommentDto,
   NotificationDto,
   NotificationGiftDto,
+  NotificationLiveDto,
   NotificationGroupDto,
   ModerationOutcome,
   NotificationGroupPageDto,
@@ -77,6 +78,12 @@ export class NotificationGiftResponse implements NotificationGiftDto {
   amount!: number;
 }
 
+// Live lancé (ADR-053).
+export class NotificationLiveResponse implements NotificationLiveDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+}
+
 export class NotificationResponse implements NotificationDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -106,6 +113,10 @@ export class NotificationResponse implements NotificationDto {
   @ApiPropertyOptional({ type: NotificationGiftResponse })
   gift?: NotificationGiftResponse;
 
+  // Présent pour un live seulement.
+  @ApiPropertyOptional({ type: NotificationLiveResponse })
+  live?: NotificationLiveResponse;
+
   @ApiProperty()
   read!: boolean;
 
@@ -124,7 +135,7 @@ export class NotificationPageResponse implements NotificationPageDto {
 export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiProperty({
     description:
-      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `follow`, `comment:<notificationId>`, `moderation:<notificationId>`.',
+      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `live:<liveId>`, `moderation:<notificationId>`.',
   })
   key!: string;
 
@@ -152,6 +163,10 @@ export class NotificationGroupResponse implements NotificationGroupDto {
   // Cadeau de la notification la plus récente du groupe.
   @ApiPropertyOptional({ type: NotificationGiftResponse })
   gift?: NotificationGiftResponse;
+
+  // Live (groupe toujours seul).
+  @ApiPropertyOptional({ type: NotificationLiveResponse })
+  live?: NotificationLiveResponse;
 
   @ApiProperty({ description: 'Faux si au moins une notification du groupe n’est pas lue.' })
   read!: boolean;
@@ -190,6 +205,7 @@ export function toNotificationDto({ notification, actor, video }: NotificationWi
   if (moderation) dto.moderation = moderation;
   const gift = toGiftDto(notification);
   if (gift) dto.gift = gift;
+  if (notification.liveId) dto.live = { id: notification.liveId };
   if (video) dto.video = { id: video.id, thumbnailUrl: video.thumbnailUrl };
   if (notification.commentId && notification.commentText !== null) {
     dto.comment = { id: notification.commentId, content: notification.commentText };
@@ -216,6 +232,7 @@ export function toNotificationGroupDto({ group, actors, video }: NotificationGro
   if (moderation) dto.moderation = moderation;
   const gift = toGiftDto(latest);
   if (gift) dto.gift = gift;
+  if (latest.liveId) dto.live = { id: latest.liveId };
   return dto;
 }
 

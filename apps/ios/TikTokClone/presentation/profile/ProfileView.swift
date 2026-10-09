@@ -287,16 +287,33 @@ private struct ProfileHeader: View {
     var body: some View {
         VStack(spacing: 8) {
             let ring = container.stories.ring(for: profile.id)
+            // En direct (ADR-053) : la photo ouvre le live, avant les stories.
+            let live = container.lives.live(of: profile.id)
             Button {
-                container.router.openStories([summary], source: .profile)
+                if let live {
+                    container.router.openLive(live.id, source: .profile)
+                } else {
+                    container.router.openStories([summary], source: .profile)
+                }
             } label: {
-                StoryAvatar(url: profile.avatarURL, name: profile.displayName, size: 96, ring: ring)
+                if live != nil {
+                    AvatarView(url: profile.avatarURL, name: profile.displayName, size: 96)
+                        .padding(6)
+                        .overlay { Circle().strokeBorder(.red, lineWidth: 4) }
+                        .overlay(alignment: .bottom) { LiveBadge().offset(y: 8) }
+                        .padding(.bottom, 6)
+                } else {
+                    StoryAvatar(url: profile.avatarURL, name: profile.displayName, size: 96, ring: ring)
+                }
             }
             .buttonStyle(.plain)
-            .disabled(ring == nil)
-            .accessibilityLabel(ring == nil ? "Photo de profil" : "Stories de @\(profile.username)")
+            .disabled(ring == nil && live == nil)
+            .accessibilityLabel(
+                live != nil ? "@\(profile.username) est en direct" : ring == nil ? "Photo de profil" : "Stories de @\(profile.username)"
+            )
             .accessibilityIdentifier("profile.avatar")
             .task(id: profile.id) { await container.stories.loadRing(for: summary) }
+            .task(id: profile.id) { await container.lives.load(for: summary) }
             Text(profile.displayName).font(.title3.bold())
             Text("@\(profile.username)").foregroundStyle(.secondary)
             HStack(spacing: 32) {

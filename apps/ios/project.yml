@@ -36,6 +36,10 @@ packages:
   RevenueCat:
     url: https://github.com/RevenueCat/purchases-ios-spm
     exactVersion: 5.91.0
+  # Live (ADR-053) : SDK officiel de LiveKit (Apache 2.0), pour diffuser et regarder ; version figée.
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    exactVersion: 2.17.0
 
 targets:
   TikTokClone:
@@ -46,6 +50,7 @@ targets:
     dependencies:
       - package: TikTokAPI
       - package: PostHog
+      - package: LiveKit
       - package: RevenueCat
     info:
       path: TikTokClone/Info.plist

@@ -32,6 +32,14 @@ export class SharedVideoNotFoundError extends MessagingError {
 }
 
 // Story inconnue, expirée, masquée, ou qui n'est pas celle de l'autre participant (ADR-051) : 404.
+// Live partagé terminé, inconnu ou masqué à l'expéditeur (ADR-053) : 404.
+export class SharedLiveNotFoundError extends MessagingError {
+  constructor(id: string) {
+    super(`Live introuvable : ${id}`);
+    this.name = 'SharedLiveNotFoundError';
+  }
+}
+
 export class RepliedStoryNotFoundError extends MessagingError {
   constructor(id: string) {
     super(`Story introuvable : ${id}`);

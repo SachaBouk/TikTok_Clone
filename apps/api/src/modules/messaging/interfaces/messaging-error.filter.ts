@@ -45,6 +45,7 @@ function toHttpException(error: MessagingError): HttpException {
       HttpStatus.TOO_MANY_REQUESTS,
     );
   }
-  // ConversationNotFoundError, MessageNotFoundError, RecipientNotFoundError, SharedVideoNotFoundError, RepliedStoryNotFoundError
+  // ConversationNotFoundError, MessageNotFoundError, RecipientNotFoundError, SharedVideoNotFoundError, RepliedStoryNotFoundError,
+  // SharedLiveNotFoundError
   return new NotFoundException(error.message);
 }

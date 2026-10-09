@@ -65,3 +65,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-050](ADR-050-cadeaux-jetons.md) — Cadeaux en jetons
 - Complété par [ADR-051](ADR-051-stories.md) — Stories
 - Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app
+- Complété par [ADR-053](ADR-053-live-comparaison-diffusion.md) — Live

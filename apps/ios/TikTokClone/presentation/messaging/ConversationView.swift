@@ -133,6 +133,8 @@ struct ConversationView: View {
                         }
                         MessageBubble(message: message, isOwn: isOwn) { videoID in
                             container.router.presentedVideo = AppRouter.VideoRoute(id: videoID)
+                        } openLive: { liveID in
+                            container.router.openLive(liveID, source: .message)
                         }
                         .contextMenu {
                             if !message.content.isEmpty {
@@ -319,6 +321,7 @@ private struct MessageBubble: View {
     let message: DirectMessage
     let isOwn: Bool
     let openVideo: (String) -> Void
+    let openLive: (String) -> Void
 
     var body: some View {
         VStack(alignment: isOwn ? .trailing : .leading, spacing: 4) {
@@ -327,6 +330,9 @@ private struct MessageBubble: View {
             }
             if let video = message.sharedVideo {
                 SharedVideoCard(video: video, open: openVideo)
+            }
+            if let live = message.live {
+                SharedLiveCard(live: live, open: openLive)
             }
             if !message.content.isEmpty {
                 TextBubble(text: message.content, isOwn: isOwn)
@@ -423,6 +429,41 @@ private struct SharedVideoCard: View {
             .accessibilityIdentifier("conversation.sharedVideo")
         } else {
             Label("Vidéo indisponible", systemImage: "video.slash")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(12)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// Live partagé (ADR-053) : auteur et titre, « EN DIRECT » ; « Live terminé » une fois fini (ou masqué au lecteur).
+private struct SharedLiveCard: View {
+    let live: SharedLive
+    let open: (String) -> Void
+
+    var body: some View {
+        if live.available {
+            Button {
+                open(live.id)
+            } label: {
+                HStack(spacing: 10) {
+                    if let host = live.host { AvatarView(url: host.avatarURL, name: host.displayName, size: 44) }
+                    VStack(alignment: .leading, spacing: 4) {
+                        LiveBadge()
+                        Text(live.host.map { "@\($0.username)" } ?? "Live").font(.subheadline.bold())
+                        if let title = live.title { Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                    }
+                }
+                .padding(12)
+                .frame(width: 240, alignment: .leading)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Live de @\(live.host?.username ?? "")")
+            .accessibilityIdentifier("conversation.sharedLive")
+        } else {
+            Label("Live terminé", systemImage: "dot.radiowaves.left.and.right")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(12)

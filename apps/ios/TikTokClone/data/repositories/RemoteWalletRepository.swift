@@ -73,6 +73,27 @@ struct RemoteGiftRepository: GiftRepository {
     }
 }
 
+extension RemoteGiftRepository {
+    func sendLive(liveID: String, giftCode: String, clientGiftID: UUID) async throws -> SentGift {
+        let body = Components.Schemas.SendGiftRequest(gift: giftCode, clientGiftId: clientGiftID.uuidString.lowercased())
+        let output = try await mappingErrors { try await client.sendLiveGift(path: .init(id: liveID), body: .json(body)) }
+        switch output {
+        case .created(let created):
+            let sent = try created.body.json
+            return SentGift(id: sent.id, gift: GiftInfo(sent.gift), amount: sent.amount, balance: sent.balance)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .code402: throw AppError.insufficientBalance
+        case .forbidden: throw AppError.blocked
+        // Live terminé (ou masqué) entre-temps.
+        case .notFound: throw AppError.rejected("Ce live est terminé.")
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .tooManyRequests(let response): throw AppError.tooManyActions(.gifts, retryAfter: response.headers.retryAfter ?? 60)
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+}
+
 extension GiftInfo {
     init(_ dto: Components.Schemas.GiftResponse) {
         self.init(code: dto.code, name: dto.name, emoji: dto.emoji)

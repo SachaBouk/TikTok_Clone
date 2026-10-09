@@ -11,6 +11,7 @@ import {
   CannotGiftYourselfError,
   GiftBlockedError,
   GiftIdConflictError,
+  GiftLiveUnavailableError,
   GiftVideoUnavailableError,
   InsufficientBalanceError,
   TooManyGiftsError,
@@ -19,6 +20,8 @@ import {
 import type { CurrencyEvent, LedgerFilter, WalletLedgerEntry, WalletStats, WalletTransaction, WalletTransactionKind } from '../domain/wallet';
 import type { WalletEventPublisher } from '../domain/wallet-events';
 import type { WalletRepository } from '../domain/wallet.repository';
+import type { LiveService } from '../../live/application/live.service';
+import { LiveError, OwnLiveError } from '../../live/domain/live.errors';
 
 export interface WalletSettings {
   // Refuser les achats de test (SANDBOX) : à activer en production si TestFlight ne doit rien créditer.
@@ -56,9 +59,11 @@ export interface SentGift {
   balance: number;
 }
 
-// Modules dont dépend la dépense (ADR-003) : vidéo et auteur, masquage et blocages, notification, limite de débit.
+// Modules dont dépend la dépense (ADR-003) : vidéo et auteur, live et son auteur (ADR-053), masquage et blocages,
+// notification, limite de débit.
 export interface GiftDependencies {
   videos: VideosService;
+  lives: LiveService;
   interactions: InteractionsService;
   notifications: NotificationsService;
   rateLimiter: RateLimiter;
@@ -130,48 +135,81 @@ export class WalletService {
     if (authorId === senderId) throw new CannotGiftYourselfError();
     // Suspendu : masqué pour tous, invités compris (ADR-037).
     if ((await this.gifts.interactions.getHiddenAccountIds(null)).has(authorId)) throw new GiftVideoUnavailableError(videoId);
-    const blocks = await this.gifts.interactions.getBlocks(senderId, [authorId]);
-    if (blocks.blockedByMe.has(authorId) || blocks.blockedMe.has(authorId)) throw new GiftBlockedError();
+    const sent = await this.deliver(senderId, authorId, { videoId, liveId: null }, giftCode, catalogItem.price, clientGiftId);
+    if (sent.fresh) {
+      try {
+        await this.gifts.notifications.notify({
+          type: 'gift',
+          actorId: senderId,
+          recipientId: authorId,
+          videoId,
+          giftCode,
+          giftAmount: catalogItem.price,
+        });
+      } catch {
+        // Notification perdue : le cadeau reste envoyé et visible dans le portefeuille du créateur.
+      }
+    }
+    return sent.result;
+  }
+
+  // Cadeau pendant un live (ADR-053) : même dépense, vers l'auteur du live. Annoncé dans la salle (animation chez tous) ;
+  // pas de notification d'activité, l'auteur le voit en direct.
+  async sendLiveGift(senderId: string, liveId: string, giftCode: string, clientGiftId: string): Promise<SentGift> {
+    const catalogItem = findGift(giftCode);
+    if (!catalogItem) throw new UnknownGiftError(giftCode);
+    let hostId: string;
+    try {
+      hostId = (await this.gifts.lives.getGiftableLive(senderId, liveId)).hostId;
+    } catch (error) {
+      if (error instanceof OwnLiveError) throw new CannotGiftYourselfError();
+      if (error instanceof LiveError) throw new GiftLiveUnavailableError(liveId);
+      throw error;
+    }
+    const sent = await this.deliver(senderId, hostId, { videoId: null, liveId }, giftCode, catalogItem.price, clientGiftId);
+    if (sent.fresh) {
+      try {
+        await this.gifts.lives.recordGift(liveId, senderId, { code: giftCode, amount: catalogItem.price });
+      } catch {
+        // Annonce perdue : le cadeau reste envoyé et compté dans le portefeuille du créateur.
+      }
+    }
+    return sent.result;
+  }
+
+  // Dépense commune (ADR-050) : blocages, renvoi, limite, débit atomique, soldes poussés aux deux comptes. `fresh` :
+  // faux pour un renvoi (le cadeau existait déjà).
+  private async deliver(
+    senderId: string,
+    recipientId: string,
+    target: { videoId: string | null; liveId: string | null },
+    giftCode: string,
+    amount: number,
+    clientGiftId: string,
+  ): Promise<{ result: SentGift; fresh: boolean }> {
+    const blocks = await this.gifts.interactions.getBlocks(senderId, [recipientId]);
+    if (blocks.blockedByMe.has(recipientId) || blocks.blockedMe.has(recipientId)) throw new GiftBlockedError();
 
     // Renvoi (réponse perdue) : le cadeau existant, avant la limite de débit, qui ne doit pas le refuser.
     const existing = await this.wallets.findGiftByClientId(senderId, clientGiftId);
-    if (existing) return this.alreadySent(existing, videoId, giftCode, senderId);
+    if (existing) return { result: await this.alreadySent(existing, target, giftCode, senderId), fresh: false };
 
     const limitKey = `gift:${senderId}`;
     const retryAfter = await this.gifts.rateLimiter.check(limitKey, GIFT_RATE_LIMITS);
     if (retryAfter !== null) throw new TooManyGiftsError(retryAfter);
 
-    const result = await this.wallets.sendGift({
-      senderId,
-      recipientId: authorId,
-      videoId,
-      giftCode,
-      amount: catalogItem.price,
-      clientGiftId,
-    });
-    if (result.status === 'insufficientBalance') throw new InsufficientBalanceError(result.balance, catalogItem.price);
-    if (result.status === 'duplicate') return this.alreadySent(result.gift, videoId, giftCode, senderId);
+    const result = await this.wallets.sendGift({ senderId, recipientId, ...target, giftCode, amount, clientGiftId });
+    if (result.status === 'insufficientBalance') throw new InsufficientBalanceError(result.balance, amount);
+    if (result.status === 'duplicate') return { result: await this.alreadySent(result.gift, target, giftCode, senderId), fresh: false };
 
     // Seuls les cadeaux envoyés comptent dans la limite.
     await this.gifts.rateLimiter.hit(limitKey, GIFT_RATE_LIMITS);
     // Au mieux (ADR-050) : le cadeau est débité, ce qui suit ne doit pas faire échouer la requête.
-    const recipientAmounts = await this.wallets.getAmounts(authorId);
+    const recipientAmounts = await this.wallets.getAmounts(recipientId);
     const senderEarned = (await this.wallets.getAmounts(senderId)).earned;
     await this.events.balanceChanged(senderId, { balance: result.senderBalance, earned: senderEarned });
-    await this.events.balanceChanged(authorId, recipientAmounts);
-    try {
-      await this.gifts.notifications.notify({
-        type: 'gift',
-        actorId: senderId,
-        recipientId: authorId,
-        videoId,
-        giftCode,
-        giftAmount: catalogItem.price,
-      });
-    } catch {
-      // Notification perdue : le cadeau reste envoyé et visible dans le portefeuille du créateur.
-    }
-    return { gift: result.gift, balance: result.senderBalance };
+    await this.events.balanceChanged(recipientId, recipientAmounts);
+    return { result: { gift: result.gift, balance: result.senderBalance }, fresh: true };
   }
 
   // Cadeaux reçus par le compte, du plus récent au plus ancien (ADR-050). Curseur : identifiant du dernier reçu.
@@ -235,8 +273,13 @@ export class WalletService {
   }
 
   // Renvoi d'un cadeau déjà envoyé : le même seulement s'il porte sur la même vidéo et le même cadeau.
-  private async alreadySent(gift: Gift, videoId: string, giftCode: string, senderId: string): Promise<SentGift> {
-    if (gift.videoId !== videoId || gift.giftCode !== giftCode) throw new GiftIdConflictError();
+  private async alreadySent(
+    gift: Gift,
+    target: { videoId: string | null; liveId: string | null },
+    giftCode: string,
+    senderId: string,
+  ): Promise<SentGift> {
+    if (gift.videoId !== target.videoId || gift.liveId !== target.liveId || gift.giftCode !== giftCode) throw new GiftIdConflictError();
     return { gift, balance: await this.wallets.getBalance(senderId) };
   }
 

@@ -4,16 +4,24 @@ import UIKit
 
 // Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie ou filmée par la caméra, modifiée au besoin
 // dans l'éditeur (ADR-052), avec sa description. En mode Story (ADR-051) : une vidéo de 60 s au plus ou une photo, sans
-// description. À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran).
+// description. À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran). En mode
+// Live (ADR-053) : un titre facultatif, puis le live s'ouvre en plein écran (rien n'est envoyé ici).
 @MainActor
 @Observable
 final class PublishDraftViewModel {
     enum Mode: String, CaseIterable, Identifiable {
         case video
         case story
+        case live
 
         var id: String { rawValue }
-        var title: String { self == .video ? "Vidéo" : "Story" }
+        var title: String {
+            switch self {
+            case .video: "Vidéo"
+            case .story: "Story"
+            case .live: "Live"
+            }
+        }
     }
 
     // Média choisi dans la galerie : fichier vidéo temporaire, ou données d'une photo (mode Story).
@@ -51,6 +59,10 @@ final class PublishDraftViewModel {
     }
     private(set) var state: State = .empty
     // Changer de mode abandonne le média choisi.
+    // Titre du live (mode Live), nettoyé au lancement.
+    var liveTitle = ""
+    var liveTitleRemaining: Int { LiveRules.maxTitleLength - liveTitle.count }
+
     var mode: Mode = .video {
         didSet { if mode != oldValue { discard() } }
     }

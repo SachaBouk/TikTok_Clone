@@ -61,3 +61,16 @@ struct GiftBurst: Identifiable, Equatable, Sendable {
         return "\(gift.name) \(sent) à @\(recipientUsername)"
     }
 }
+
+// Destinataire d'un cadeau : l'auteur d'une vidéo (ADR-050), ou celui d'un live en cours (ADR-053).
+enum GiftTarget: Equatable, Sendable {
+    case video(id: String, author: UserSummary)
+    case live(id: String, host: UserSummary)
+
+    var recipient: UserSummary {
+        switch self {
+        case .video(_, let author): author
+        case .live(_, let host): host
+        }
+    }
+}

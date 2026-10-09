@@ -131,6 +131,12 @@ final class FakeMessagingRepository: MessagingRepository {
         return message
     }
 
+    func shareLive(conversationID: String, liveID: String) async throws -> DirectMessage {
+        var message = try await send(conversationID: conversationID, content: nil, videoID: nil, clientMessageID: nil)
+        message.live = SharedLive(id: liveID, available: true, title: nil, host: nil)
+        return message
+    }
+
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges {
         try state.withLock { state in
             state.markedUpTo.append(upToID)

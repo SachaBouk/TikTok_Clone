@@ -64,7 +64,7 @@ import {
 } from './admin.responses';
 
 const INVALID_QUERY = { type: ErrorResponse, description: 'Paramètre invalide (curseur, limite, filtre).' };
-const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account', message: 'message', story: 'story' });
+const TARGET_TYPE = new ParseEnumPipe({ video: 'video', comment: 'comment', account: 'account', message: 'message', story: 'story', live: 'live' });
 const TARGET_TYPE_PARAM = { name: 'targetType', enum: REPORT_TARGET_TYPES, enumName: 'ReportTargetType' };
 const REMOVAL_REFUSED = { type: ErrorResponse, description: 'Identifiant ou motif invalide.' };
 
@@ -188,6 +188,20 @@ export class AdminController {
     @Query() query: AdminRemovalQuery,
   ): Promise<void> {
     await this.adminService.removeStory(admin.userId, id, query.reason);
+  }
+
+  // Arrêt d'un live signalé (ADR-053) : la salle est fermée, l'auteur prévenu avec le motif.
+  @Delete('lives/:id')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Live arrêté ; auteur prévenu avec le motif.' })
+  @ApiBadRequestResponse(REMOVAL_REFUSED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Live introuvable ou déjà terminé.' })
+  async deleteAdminLive(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: AdminRemovalQuery,
+  ): Promise<void> {
+    await this.adminService.removeLive(admin.userId, id, query.reason);
   }
 
   // Journal de modération (ADR-038) : toutes les actions des administrateurs, ou celles sur un compte.

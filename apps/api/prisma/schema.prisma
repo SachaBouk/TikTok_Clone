@@ -35,20 +35,20 @@ enum UserRole {
 }
 
 model User {
-  id             String   @id @default(uuid(7)) @map("user_id") @db.Uuid
+  id               String    @id @default(uuid(7)) @map("user_id") @db.Uuid
   // Nul pour un compte Apple dont l'email n'a pas été partagé.
-  email          String?  @unique
+  email            String?   @unique
   // Nul pour un compte créé uniquement via Sign in with Apple.
-  passwordHash   String?  @map("password_hash")
+  passwordHash     String?   @map("password_hash")
   // Identifiant stable renvoyé par Sign in with Apple (`sub`).
-  appleSub       String?  @unique @map("apple_sub")
+  appleSub         String?   @unique @map("apple_sub")
   // Pseudo (@handle).
-  username       String   @unique
+  username         String    @unique
   // Nom affiché.
-  displayName    String   @map("display_name")
-  avatarUrl      String?  @map("avatar_url")
-  bio            String?
-  role           UserRole @default(user)
+  displayName      String    @map("display_name")
+  avatarUrl        String?   @map("avatar_url")
+  bio              String?
+  role             UserRole  @default(user)
   // Suspension par un administrateur (ADR-037), propriété du module auth : connexion refusée, contenus masqués.
   // Les trois colonnes sont remplies ou vides ensemble (CHECK écrit à la main), sauf `suspended_by`, mis à nul si
   // l'administrateur supprime son compte.
@@ -57,10 +57,10 @@ model User {
   suspensionReason String?   @map("suspension_reason")
   suspendedById    String?   @map("suspended_by") @db.Uuid
   // Compteurs dénormalisés, maintenus par les services applicatifs.
-  followersCount Int      @default(0) @map("followers_count")
-  followingCount Int      @default(0) @map("following_count")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  followersCount   Int       @default(0) @map("followers_count")
+  followingCount   Int       @default(0) @map("following_count")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   videos                   Video[]
   likes                    Like[]
@@ -92,6 +92,8 @@ model User {
   walletTransactions       WalletTransaction[]
   stories                  Story[]
   storyViews               StoryView[]
+  lives                    Live[]
+  liveMessages             LiveMessage[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
   @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
@@ -364,6 +366,86 @@ model StoryView {
   @@map("story_views")
 }
 
+// ─── Live (ADR-053) ──────────────────────────────────────────────────────────
+
+enum LiveStatus {
+  live
+  ended
+
+  @@map("live_status")
+}
+
+// Fin d'un live : par son auteur, à la durée maximale, auteur déconnecté du serveur vidéo, par un administrateur,
+// ou à la suspension du compte.
+enum LiveEndReason {
+  host
+  timeLimit    @map("time_limit")
+  disconnected
+  moderation
+  suspension
+
+  @@map("live_end_reason")
+}
+
+// Live : la vidéo passe par le serveur LiveKit (salle = identifiant du live), jamais par l'API. Gardé à sa fin pour ses
+// chiffres (pas de replay) ; son chat est supprimé.
+model Live {
+  id          String         @id @default(uuid(7)) @map("live_id") @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  title       String?
+  status      LiveStatus     @default(live)
+  startedAt   DateTime       @default(now()) @map("started_at")
+  endedAt     DateTime?      @map("ended_at")
+  endReason   LiveEndReason? @map("end_reason")
+  // Plus grand nombre de spectateurs connectés en même temps (webhook du serveur vidéo).
+  peakViewers Int            @default(0) @map("peak_viewers")
+  heartsCount Int            @default(0) @map("hearts_count")
+  giftsCount  Int            @default(0) @map("gifts_count")
+  giftsAmount Int            @default(0) @map("gifts_amount")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  viewers       LiveViewer[]
+  messages      LiveMessage[]
+  gifts         GiftSent[]
+  notifications Notification[]
+
+  // Un seul live en cours par compte.
+  @@unique([userId], map: "lives_in_progress_key", where: raw("status = 'live'"))
+  // Lives d'un compte, et maintenance (lives en cours).
+  @@index([userId, startedAt])
+  @@index([status, startedAt])
+  @@map("lives")
+}
+
+// Une ligne par spectateur d'un live (compte `user:<id>`, ou invité `guest:<id>`) : total des spectateurs distincts.
+model LiveViewer {
+  liveId   String   @map("live_id") @db.Uuid
+  identity String
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  live Live @relation(fields: [liveId], references: [id], onDelete: Cascade)
+
+  @@id([liveId, identity])
+  @@map("live_viewers")
+}
+
+// Message du chat d'un live, supprimé à la fin du live.
+model LiveMessage {
+  id        String   @id @default(uuid(7)) @map("live_message_id") @db.Uuid
+  liveId    String   @map("live_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  live Live @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Derniers messages d'un live (identifiant UUID v7, ordonné dans le temps).
+  @@index([liveId, id])
+  @@index([userId])
+  @@map("live_messages")
+}
+
 // ─── Messagerie directe (ADR-006, ADR-011) ───────────────────────────────────
 
 model Conversation {
@@ -412,6 +494,8 @@ model Message {
   sharedVideoId   String?  @map("shared_video_id") @db.Uuid
   // Story à laquelle répond le message (ADR-051). Sans clé étrangère : une story expirée reste signalée « expirée ».
   storyId         String?  @map("story_id") @db.Uuid
+  // Live partagé (ADR-053). Sans clé étrangère, comme une vidéo partagée.
+  liveId          String?  @map("live_id") @db.Uuid
   // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
   // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
   clientMessageId String?  @map("client_message_id") @db.Uuid
@@ -420,10 +504,10 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
-  // Pagination et dernier message d'une conversation, par identifiant (UUID v7, ordonné dans le temps).
-  @@index([conversationId, id])
   // Un identifiant d'envoi par expéditeur (les valeurs nulles ne se gênent pas).
   @@unique([senderId, clientMessageId], map: "messages_client_message_key")
+  // Pagination et dernier message d'une conversation, par identifiant (UUID v7, ordonné dans le temps).
+  @@index([conversationId, id])
   @@map("messages")
 }
 
@@ -439,39 +523,44 @@ enum NotificationType {
   contentRemoved @map("content_removed")
   // Cadeau reçu sur une vidéo (ADR-050).
   gift
+  // Un compte suivi lance un live (ADR-053).
+  live
 
   @@map("notification_type")
 }
 
 model Notification {
-  id          String           @id @default(uuid(7)) @map("notification_id") @db.Uuid
+  id                   String            @id @default(uuid(7)) @map("notification_id") @db.Uuid
   // Destinataire.
-  userId      String           @map("user_id") @db.Uuid
+  userId               String            @map("user_id") @db.Uuid
   // Auteur de l'action ; nul pour une notification de modération (CHECK écrit à la main).
-  actorId     String?          @map("actor_id") @db.Uuid
-  type        NotificationType
+  actorId              String?           @map("actor_id") @db.Uuid
+  type                 NotificationType
   // Renseignés selon le type (nuls pour un follow).
-  videoId     String?          @map("video_id") @db.Uuid
-  commentId   String?          @map("comment_id") @db.Uuid
+  videoId              String?           @map("video_id") @db.Uuid
+  commentId            String?           @map("comment_id") @db.Uuid
   // Copie du commentaire (type comment) : le module notifications ne lit pas la table des commentaires
   // (ADR-003). Pas de décalage possible : un commentaire ne se modifie pas, et sa suppression supprime
   // la notification (cascade).
-  commentText String?          @map("comment_text")
+  commentText          String?           @map("comment_text")
   // Modération (ADR-038) : contenu concerné, motif (contenu retiré), décision (signalement examiné), texte copié.
   moderationTargetType ReportTargetType? @map("moderation_target_type")
   moderationReason     ReportReason?     @map("moderation_reason")
   moderationOutcome    ReportResolution? @map("moderation_outcome")
   moderationExcerpt    String?           @map("moderation_excerpt")
   // Cadeau (ADR-050) : code du catalogue et prix, copiés (ce module ne lit pas les tables du portefeuille).
-  giftCode    String?          @map("gift_code")
-  giftAmount  Int?             @map("gift_amount")
-  readAt      DateTime?        @map("read_at")
-  createdAt   DateTime         @default(now()) @map("created_at")
+  giftCode             String?           @map("gift_code")
+  giftAmount           Int?              @map("gift_amount")
+  // Live lancé (type live).
+  liveId               String?           @map("live_id") @db.Uuid
+  readAt               DateTime?         @map("read_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
 
   user    User     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor   User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
   video   Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
   comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  live    Live?    @relation(fields: [liveId], references: [id], onDelete: Cascade)
 
   // Au plus une notification par like, republication et follow : retirée au retrait de l'interaction,
   // recréée si elle revient. `createMany({ skipDuplicates })` s'appuie sur ces index.
@@ -479,6 +568,8 @@ model Notification {
   @@unique([actorId, videoId], map: "notifications_like_key", where: raw("type = 'like'"))
   @@unique([actorId, videoId], map: "notifications_repost_key", where: raw("type = 'repost'"))
   @@unique([actorId, userId], map: "notifications_follow_key", where: raw("type = 'follow'"))
+  // Une notification par live et par abonné (lancement rejoué).
+  @@unique([liveId, userId], map: "notifications_live_key", where: raw("type = 'live'"))
   @@index([userId, createdAt])
   // Suppression d'une vidéo ou d'un compte : ses notifications sont relues, retirées et annoncées (ADR-043), avant la
   // cascade qui cherche aussi par ces colonnes.
@@ -559,6 +650,8 @@ model GiftSent {
   giftCode           String   @map("gift_code")
   // Vidéo sur laquelle le cadeau a été envoyé ; nulle si elle a été supprimée depuis.
   videoId            String?  @map("video_id") @db.Uuid
+  // Live pendant lequel le cadeau a été envoyé (ADR-053) ; jamais avec une vidéo.
+  liveId             String?  @map("live_id") @db.Uuid
   // Identifiant d'envoi choisi par l'app : un renvoi ne débite pas deux fois (index unique avec l'expéditeur).
   clientGiftId       String   @map("client_gift_id") @db.Uuid
   // Solde de l'expéditeur après le débit (historique de son portefeuille).
@@ -568,6 +661,7 @@ model GiftSent {
   sender    User?  @relation("GiftSender", fields: [senderId], references: [id], onDelete: SetNull)
   recipient User?  @relation("GiftRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
   video     Video? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  live      Live?  @relation(fields: [liveId], references: [id], onDelete: SetNull)
 
   @@unique([senderId, clientGiftId])
   // Historiques du portefeuille (envoyés, reçus), du plus récent au plus ancien (identifiants UUID v7).
@@ -624,6 +718,7 @@ enum ReportTargetType {
   account
   message
   story
+  live
 
   @@map("report_target_type")
 }
@@ -652,26 +747,26 @@ enum ReportResolution {
 }
 
 model Report {
-  id           String           @id @default(uuid(7)) @map("report_id") @db.Uuid
+  id             String            @id @default(uuid(7)) @map("report_id") @db.Uuid
   // Nul si la personne qui a signalé a supprimé son compte depuis (le signalement reste dans l'historique).
-  reporterId   String?          @map("reporter_id") @db.Uuid
-  targetType   ReportTargetType @map("target_type")
+  reporterId     String?           @map("reporter_id") @db.Uuid
+  targetType     ReportTargetType  @map("target_type")
   // Vidéo, commentaire ou compte signalé. Pas de clé étrangère : le signalement survit à la suppression du contenu.
-  targetId     String           @map("target_id") @db.Uuid
+  targetId       String            @map("target_id") @db.Uuid
   // Compte visé (auteur du contenu, ou le compte lui-même) ; nul s'il a été supprimé depuis (signalement gardé, anonymisé).
-  targetUserId   String?          @map("target_user_id") @db.Uuid
+  targetUserId   String?           @map("target_user_id") @db.Uuid
   // Pseudo du compte visé au moment du signalement, pour l'historique.
-  targetUsername String           @map("target_username")
-  reason       ReportReason
+  targetUsername String            @map("target_username")
+  reason         ReportReason
   // Précision facultative de la personne qui signale (500 caractères au plus).
-  details      String?
+  details        String?
   // Copie du texte signalé au moment du signalement (commentaire, description de la vidéo).
-  excerpt      String?
-  createdAt    DateTime         @default(now()) @map("created_at")
+  excerpt        String?
+  createdAt      DateTime          @default(now()) @map("created_at")
   // Décision d'un administrateur : nulle tant que le signalement est ouvert (CHECK écrit à la main).
-  resolution   ReportResolution?
-  resolvedAt   DateTime?        @map("resolved_at")
-  resolvedById String?          @map("resolved_by") @db.Uuid
+  resolution     ReportResolution?
+  resolvedAt     DateTime?         @map("resolved_at")
+  resolvedById   String?           @map("resolved_by") @db.Uuid
 
   reporter   User? @relation("Reporter", fields: [reporterId], references: [id], onDelete: SetNull)
   targetUser User? @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
@@ -693,6 +788,7 @@ enum ModerationActionType {
   commentRemoved   @map("comment_removed")
   messageRemoved   @map("message_removed")
   storyRemoved     @map("story_removed")
+  liveEnded        @map("live_ended")
   accountSuspended @map("account_suspended")
   suspensionLifted @map("suspension_lifted")
   reportsDismissed @map("reports_dismissed")

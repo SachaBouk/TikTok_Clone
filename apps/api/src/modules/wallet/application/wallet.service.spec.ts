@@ -16,6 +16,7 @@ import {
   CannotGiftYourselfError,
   GiftBlockedError,
   GiftIdConflictError,
+  GiftLiveUnavailableError,
   GiftVideoUnavailableError,
   InsufficientBalanceError,
   TooManyGiftsError,
@@ -31,6 +32,7 @@ import { InMemoryWalletEventPublisher } from '../infrastructure/in-memory-wallet
 import { InMemoryWalletRepository } from '../infrastructure/in-memory-wallet.repository';
 import { WalletService, type WalletHistoryItem } from './wallet.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
 
 const ALICE = '0192f3a0-0000-7000-8000-00000000000a';
 const BOB = '0192f3a0-0000-7000-8000-00000000000b';
@@ -81,6 +83,7 @@ describe('WalletService', () => {
   let notificationRepository: InMemoryNotificationRepository;
   let suspended: InMemorySuspendedAccounts;
   let rateLimiter: InMemoryRateLimiter;
+  let lives: ReturnType<typeof inMemoryLive>;
 
   function build(rejectSandbox = false) {
     wallets = new InMemoryWalletRepository();
@@ -110,7 +113,14 @@ describe('WalletService', () => {
       new InMemoryProfileCountersPublisher(),
     );
     rateLimiter = new InMemoryRateLimiter();
-    service = new WalletService(wallets, users, events, { rejectSandbox }, { videos, interactions, notifications, rateLimiter });
+    lives = inMemoryLive(users, interactions, notifications);
+    service = new WalletService(
+      wallets,
+      users,
+      events,
+      { rejectSandbox },
+      { videos, lives: lives.service, interactions, notifications, rateLimiter },
+    );
   }
 
   // Vidéo publiée de `userId`.
@@ -253,6 +263,27 @@ describe('WalletService', () => {
       await interactions.setBlock(ALICE, 'bob', true);
       await expect(service.sendGift(ALICE, video, 'rose', clientId())).rejects.toBeInstanceOf(GiftBlockedError);
       expect(wallets.gifts).toHaveLength(0);
+    });
+
+    it('pendant un live (ADR-053) : même dépense vers son auteur, annoncé dans la salle, sans notification', async () => {
+      const { item } = await lives.service.start(BOB, {});
+      const id = clientId();
+      const sent = await service.sendLiveGift(ALICE, item.live.id, 'crown', id);
+      expect(sent).toMatchObject({ balance: 50, gift: { recipientId: BOB, videoId: null, liveId: item.live.id, amount: 50 } });
+      await expect(service.getAmounts(BOB)).resolves.toEqual({ balance: 0, earned: 50 });
+      expect(lives.room.events.filter((e) => e.type === 'gift')).toMatchObject([{ sender: ALICE, code: 'crown', giftsAmount: 50 }]);
+      expect(notificationRepository.notifications.size).toBe(0);
+      // Renvoi : le même cadeau ; même identifiant sur une vidéo : conflit.
+      await expect(service.sendLiveGift(ALICE, item.live.id, 'crown', id)).resolves.toMatchObject({ gift: { id: sent.gift.id } });
+      await expect(service.sendGift(ALICE, await publish(BOB), 'crown', id)).rejects.toBeInstanceOf(GiftIdConflictError);
+      expect(lives.room.events.filter((e) => e.type === 'gift')).toHaveLength(1);
+      // Son propre live, un live terminé ou inconnu.
+      await expect(service.sendLiveGift(BOB, item.live.id, 'rose', clientId())).rejects.toBeInstanceOf(CannotGiftYourselfError);
+      await lives.service.stop(BOB, item.live.id);
+      await expect(service.sendLiveGift(ALICE, item.live.id, 'rose', clientId())).rejects.toBeInstanceOf(GiftLiveUnavailableError);
+      await expect(service.sendLiveGift(ALICE, '0192f3a0-0000-7000-8000-0000000000ee', 'rose', clientId())).rejects.toBeInstanceOf(
+        GiftLiveUnavailableError,
+      );
     });
 
     it('limite à 30 cadeaux par minute', async () => {

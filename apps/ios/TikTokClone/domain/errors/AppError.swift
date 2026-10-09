@@ -57,6 +57,8 @@ enum AppError: Error, Equatable, Sendable {
 // Actions limitées par l'API (ADR-039).
 enum LimitedAction: Sendable {
     case signup, reactions, comments, follows, uploads, gifts, stories, storyLikes
+    // Live (ADR-053) : lancements, messages du chat, cœurs.
+    case lives, liveMessages, hearts
 
     var tooMany: String {
         switch self {
@@ -68,6 +70,9 @@ enum LimitedAction: Sendable {
         case .gifts: "Trop de cadeaux envoyés en peu de temps."
         case .stories: "Trop de stories publiées récemment."
         case .storyLikes: "Trop de likes en peu de temps."
+        case .lives: "Trop de lives lancés aujourd’hui."
+        case .liveMessages: "Trop de messages en peu de temps."
+        case .hearts: "Trop de cœurs en peu de temps."
         }
     }
 }

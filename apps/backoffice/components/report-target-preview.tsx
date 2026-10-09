@@ -12,14 +12,16 @@ export function ReportTargetPreview({ target }: { target: AdminReportTargetDto }
       <div className="flex min-w-0 flex-col gap-1">
         <span className="flex items-center gap-2">
           <Badge variant="outline">{REPORT_TARGET_LABELS[target.targetType]}</Badge>
-          {!target.available && <Badge variant="destructive">Supprimé</Badge>}
+          {!target.available && <Badge variant="destructive">{target.targetType === 'live' ? 'Terminé' : 'Supprimé'}</Badge>}
         </span>
         <span className="line-clamp-2 max-w-md text-sm">
           {target.targetType === 'account'
             ? `@${target.targetUser?.username ?? target.targetUsername}`
             : target.targetType === 'story'
               ? `Story ${target.storyMediaType === 'video' ? 'vidéo' : target.storyMediaType === 'photo' ? 'photo' : ''} de @${target.targetUser?.username ?? target.targetUsername}`
-              : (target.excerpt ?? '—')}
+              : target.targetType === 'live'
+                ? `Live de @${target.targetUser?.username ?? target.targetUsername}${target.excerpt ? ` : « ${target.excerpt} »` : ''}`
+                : (target.excerpt ?? '—')}
         </span>
       </div>
     </div>

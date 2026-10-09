@@ -35,3 +35,4 @@ Critères pour le choix final :
 - ADR-007 — Upload vidéo direct
 - ADR-012 — Traitement asynchrone
 - Complété par [ADR-027](ADR-027-images-docker.md) — Images Docker des applications
+- Complété par [ADR-053](ADR-053-live-comparaison-diffusion.md) — Live (serveur LiveKit)

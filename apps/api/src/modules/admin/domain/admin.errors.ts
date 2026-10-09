@@ -3,7 +3,7 @@
 export abstract class AdminError extends Error {}
 
 export class AdminTargetNotFoundError extends AdminError {
-  constructor(kind: 'Compte' | 'Vidéo' | 'Commentaire' | 'Message' | 'Signalement' | 'Story', id: string) {
+  constructor(kind: 'Compte' | 'Vidéo' | 'Commentaire' | 'Message' | 'Signalement' | 'Story' | 'Live', id: string) {
     super(`${kind} introuvable : ${id}`);
     this.name = 'AdminTargetNotFoundError';
   }

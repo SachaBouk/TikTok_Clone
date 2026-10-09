@@ -55,4 +55,26 @@ export class GiftsController {
   ): Promise<SentGiftDto> {
     return toSentGiftDto(await this.walletService.sendGift(user.userId, videoId, body.gift, body.clientGiftId.toLowerCase()));
   }
+
+  // Pendant un live (ADR-053) : même dépense, vers l'auteur du live, annoncé dans la salle.
+  @Post('lives/:id/gifts')
+  @HttpCode(201)
+  @ApiCreatedResponse({
+    type: SentGiftResponse,
+    description: 'Cadeau envoyé, annoncé dans la salle, et solde après le débit. Renvoi avec le même `clientGiftId` : le même cadeau.',
+  })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Cadeau inconnu, son propre live, ou corps invalide.' })
+  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
+  @ApiResponse({ status: 402, type: ErrorResponse, description: 'Solde insuffisant.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Blocage avec l’auteur du live, dans un sens ou dans l’autre.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Live inconnu, terminé, ou d’un compte suspendu.' })
+  @ApiConflictResponse({ type: ErrorResponse, description: 'Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre cible.' })
+  @ApiTooManyRequests('Trop de cadeaux envoyés')
+  async sendLiveGift(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) liveId: string,
+    @Body() body: SendGiftRequest,
+  ): Promise<SentGiftDto> {
+    return toSentGiftDto(await this.walletService.sendLiveGift(user.userId, liveId, body.gift, body.clientGiftId.toLowerCase()));
+  }
 }

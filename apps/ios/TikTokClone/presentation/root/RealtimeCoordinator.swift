@@ -3,7 +3,8 @@ import Foundation
 // Ouvre la connexion temps réel quand un compte est connecté et l'app au premier plan, la ferme sinon
 // (l'app suspendue ne reçoit rien ; les notifications push prendront le relais), et distribue les événements
 // aux écrans : fin du transcodage des publications (vidéos et stories), centre d'activité, messagerie, solde de jetons,
-// compteurs du profil ; la rangée de stories est relue à chaque (re)connexion.
+// compteurs du profil ; la rangée de stories et les lives des abonnements (ADR-053) sont relus à chaque (re)connexion, et
+// les lives à l'annonce d'un nouveau live.
 @MainActor
 final class RealtimeCoordinator {
     private let channel: any RealtimeChannel
@@ -13,6 +14,7 @@ final class RealtimeCoordinator {
     private let wallet: WalletModel
     private let stories: StoriesModel
     private let ownProfile: OwnProfileSync
+    private let lives: LiveModel?
     private var wantsConnection = false
     // Connexions et déconnexions appliquées dans l'ordre.
     private var lastOperation: Task<Void, Never>?
@@ -20,7 +22,7 @@ final class RealtimeCoordinator {
 
     init(
         channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel,
-        stories: StoriesModel, ownProfile: OwnProfileSync
+        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil
     ) {
         self.channel = channel
         self.publishing = publishing
@@ -29,6 +31,7 @@ final class RealtimeCoordinator {
         self.wallet = wallet
         self.stories = stories
         self.ownProfile = ownProfile
+        self.lives = lives
     }
 
     func update(signedIn: Bool, active: Bool) {
@@ -63,12 +66,14 @@ final class RealtimeCoordinator {
             Task { await wallet.refresh() }
             Task { await ownProfile.refresh() }
             Task { await stories.refresh() }
+            Task { await lives?.refresh() }
         case .videoProcessed(let video):
             publishing.videoProcessed(video)
         case .storyProcessed(let story):
             publishing.storyProcessed(story)
         case .notificationCreated(let notification, let unreadCount):
             activity.received(notification, unreadCount: unreadCount)
+            if notification.kind == .live { Task { await lives?.refresh() } }
         case .unreadNotificationsChanged(let count):
             activity.unreadChanged(count)
         case .notificationsRemoved(let removed, let groups, let unreadCount):

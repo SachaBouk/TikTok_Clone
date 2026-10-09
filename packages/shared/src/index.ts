@@ -6,6 +6,7 @@ export * from './auth.js';
 export * from './feed.js';
 export * from './health.js';
 export * from './interactions.js';
+export * from './live.js';
 export * from './messaging.js';
 export * from './notifications.js';
 export * from './realtime.js';

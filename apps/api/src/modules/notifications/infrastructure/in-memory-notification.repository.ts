@@ -19,7 +19,10 @@ export class InMemoryNotificationRepository extends NotificationRepository {
 
   async add(event: ActivityEvent): Promise<Notification | null> {
     // Commentaires et cadeaux : une notification par action.
-    if (event.type !== 'comment' && event.type !== 'gift' && this.find(event)) return null;
+    if (event.type === 'live') {
+      if ([...this.notifications.values()].some((n) => n.type === 'live' && n.liveId === event.liveId && n.recipientId === event.recipientId))
+        return null;
+    } else if (event.type !== 'comment' && event.type !== 'gift' && this.find(event)) return null;
     // Identifiants croissants, comme les UUID v7 de la base.
     const id = `${String(++this.sequence).padStart(8, '0')}-${randomUUID()}`;
     const created: Notification = {
@@ -27,11 +30,12 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       recipientId: event.recipientId,
       actorId: event.actorId,
       type: event.type,
-      videoId: event.type === 'follow' ? null : event.videoId,
+      videoId: event.type === 'follow' || event.type === 'live' ? null : event.videoId,
       commentId: event.type === 'comment' ? event.commentId : null,
       commentText: event.type === 'comment' ? event.commentText : null,
       moderation: null,
       gift: event.type === 'gift' ? { code: event.giftCode, amount: event.giftAmount } : null,
+      liveId: event.type === 'live' ? event.liveId : null,
       readAt: null,
       createdAt: new Date(),
     };
@@ -56,6 +60,7 @@ export class InMemoryNotificationRepository extends NotificationRepository {
         excerpt: event.excerpt,
       },
       gift: null,
+      liveId: null,
       readAt: null,
       createdAt: new Date(),
     };

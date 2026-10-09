@@ -13,6 +13,9 @@ async function bootstrap() {
   // `rawBody` : corps brut gardé à côté du JSON lu (`req.rawBody`), pour vérifier la signature HMAC du webhook
   // RevenueCat, calculée sur les octets reçus (ADR-031).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  // Webhook du serveur vidéo LiveKit (ADR-053) : `application/webhook+json`, lu tel quel (texte) pour vérifier sa
+  // signature, calculée sur les octets reçus.
+  app.useBodyParser('text', { type: 'application/webhook+json' });
   // Adresse IP du client derrière un proxy (limites de débit, ADR-030) : voir TRUST_PROXY dans .env.example.
   app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
   // SIGTERM / SIGINT : ferme proprement les workers BullMQ et les connexions (onModuleDestroy).

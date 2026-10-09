@@ -38,16 +38,20 @@ struct PublishView: View {
                     .listRowInsets(EdgeInsets())
                     .accessibilityIdentifier("publish.mode")
                 }
-                Section {
-                    draftContent
-                } header: {
-                    Text(draft.mode == .story ? "Nouvelle story" : "Nouvelle vidéo")
-                } footer: {
-                    if case .empty = draft.state {
-                        Text(
-                            draft.mode == .story
-                                ? "Une vidéo de 60 secondes au plus, ou une photo (recadrée en 9:16). Visible 24 heures, sans sa position."
-                                : "3 minutes et 1 Go au plus, sans sa position. Découpe, vitesse, filtres et textes dans l’éditeur.")
+                if draft.mode == .live {
+                    liveSection
+                } else {
+                    Section {
+                        draftContent
+                    } header: {
+                        Text(draft.mode == .story ? "Nouvelle story" : "Nouvelle vidéo")
+                    } footer: {
+                        if case .empty = draft.state {
+                            Text(
+                                draft.mode == .story
+                                    ? "Une vidéo de 60 secondes au plus, ou une photo (recadrée en 9:16). Visible 24 heures, sans sa position."
+                                    : "3 minutes et 1 Go au plus, sans sa position. Découpe, vitesse, filtres et textes dans l’éditeur.")
+                        }
                     }
                 }
 
@@ -125,6 +129,29 @@ struct PublishView: View {
                 Task { await draft.edited(result, request: request) }
             } onCancel: {
                 draft.editorClosed()
+            }
+        }
+    }
+
+    // Live (ADR-053) : titre facultatif, puis le live s'ouvre en plein écran par-dessus les onglets.
+    private var liveSection: some View {
+        @Bindable var draft = draft
+        return Section {
+            TextField("Titre (facultatif)", text: $draft.liveTitle, axis: .vertical)
+                .lineLimit(1...3)
+                .accessibilityIdentifier("publish.live.title")
+            Button("Lancer le live", systemImage: "dot.radiowaves.left.and.right") {
+                router.startLive(title: draft.liveTitle)
+                draft.liveTitle = ""
+            }
+            .disabled(draft.liveTitleRemaining < 0)
+            .accessibilityIdentifier("publish.live.start")
+        } header: {
+            Text("Nouveau live")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                if draft.liveTitleRemaining < 20 { Text("\(draft.liveTitleRemaining) caractères restants") }
+                Text("Tes abonnés sont prévenus. 2 heures au plus, rien n’est enregistré. Il faut un iPhone (caméra et micro).")
             }
         }
     }

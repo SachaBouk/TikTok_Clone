@@ -146,6 +146,14 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - **Conversation** : une réponse montre la miniature de la story (« A répondu à ta story »), puis « Story expirée ».
 - Pour tester en simulateur : `xcrun simctl addmedia booted photo.jpg` ; une story dure 24 h, ce qui se teste côté API (voir CLAUDE.md, « Stories »).
 
+## Live (ADR-053)
+
+- **Lancer** : onglet « Publier » en mode Live, titre facultatif, « Lancer le live » ; l'écran du live s'ouvre en plein écran (caméra avant et micro publiés dans la salle LiveKit, `LiveKitRoom`). « Terminer le live » montre ensuite les chiffres (durée, spectateurs, cœurs, cadeaux). Sans caméra (simulateur, autorisation refusée), le live est arrêté aussitôt avec un message.
+- **Regarder** : rangée de la boîte de réception (« EN DIRECT » avant les stories), photo d'un profil (anneau rouge), activité (« … est en direct. »), carte reçue en message, ou lien `tiktokclone://lives/<id>`. En invité : regarder seulement.
+- **Pendant le live** : chat (appui long : copier, retirer), cœurs (envoyés par lots), cadeaux (feuille des cadeaux, même solde que pour les vidéos), partage (lien d'app et « Envoyer par message »), « … » → « Signaler ». Fin annoncée dans la salle (auteur, 2 h, auteur déconnecté, modération).
+- **Serveur** : LiveKit lancé par `pnpm infra:up` (`infra/livekit.yaml`) ; l'app reçoit l'adresse WebSocket de l'API (`LIVEKIT_PUBLIC_URL`, `ws://localhost:7880` en local ; sur un iPhone physique, l'IP du Mac).
+- **Tester dans le simulateur** (pas de caméra) : lancer un live par l'API (`POST /lives` avec un compte jetable : la réponse contient le jeton de l'auteur), publier depuis le Mac avec une page web `livekit-client` (image d'un `canvas`, son d'un oscillateur), puis regarder dans le simulateur. Diffuser depuis l'app ne se vérifie que sur un iPhone.
+
 ## Écran de profil
 
 - Son profil (onglet Profil) ou celui d'un autre compte, ouvert depuis le pseudo ou l'avatar d'une vidéo, un commentaire, une liste d'abonnés. Lisible en invité ; « Suivre » ouvre alors la connexion.

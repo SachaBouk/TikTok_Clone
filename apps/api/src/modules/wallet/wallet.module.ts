@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { InteractionsService } from '../interactions/application/interactions.service';
 import { InteractionsModule } from '../interactions/interactions.module';
+import { LiveService } from '../live/application/live.service';
+import { LiveModule } from '../live/live.module';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RealtimeModule } from '../realtime/realtime.module';
@@ -21,9 +23,9 @@ import { RevenueCatConfig } from './wallet.config';
 
 // Portefeuille de jetons (ADR-009) : achats validés par RevenueCat, crédités par son webhook, solde tenu ici.
 // Cadeaux (ADR-050) : débités ici, vidéo et auteur lus via VideosService, masquage et blocages via InteractionsService,
-// notification via NotificationsService (ADR-003) ; solde poussé aux appareils par le module realtime (ADR-011).
+// notification via NotificationsService (ADR-003) ; cadeaux pendant un live via LiveService (ADR-053) ; solde poussé aux appareils par le module realtime (ADR-011).
 @Module({
-  imports: [UsersModule, RealtimeModule, VideosModule, InteractionsModule, NotificationsModule],
+  imports: [UsersModule, RealtimeModule, VideosModule, InteractionsModule, NotificationsModule, LiveModule],
   controllers: [WalletController, GiftsController, RevenueCatWebhookController],
   providers: [
     { provide: RevenueCatConfig, useFactory: () => RevenueCatConfig.fromEnv() },
@@ -40,7 +42,15 @@ import { RevenueCatConfig } from './wallet.config';
         interactions: InteractionsService,
         notifications: NotificationsService,
         rateLimiter: RateLimiter,
-      ) => new WalletService(wallets, users, events, { rejectSandbox: config.rejectSandbox }, { videos, interactions, notifications, rateLimiter }),
+        lives: LiveService,
+      ) =>
+        new WalletService(
+          wallets,
+          users,
+          events,
+          { rejectSandbox: config.rejectSandbox },
+          { videos, lives, interactions, notifications, rateLimiter },
+        ),
       inject: [
         WalletRepository,
         UsersService,
@@ -50,6 +60,7 @@ import { RevenueCatConfig } from './wallet.config';
         InteractionsService,
         NotificationsService,
         RateLimiter,
+        LiveService,
       ],
     },
   ],

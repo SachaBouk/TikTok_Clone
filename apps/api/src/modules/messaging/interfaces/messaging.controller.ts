@@ -139,7 +139,7 @@ export class MessagingController {
   @ApiNotFoundResponse({
     type: ErrorResponse,
     description:
-      'Conversation inconnue (ou non participant), vidéo introuvable, ou story introuvable (expirée, ou pas celle de l’autre participant).',
+      'Conversation inconnue (ou non participant), vidéo introuvable, story introuvable (expirée, ou pas celle de l’autre participant), ou live introuvable (terminé ou masqué).',
   })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Identifiant d’envoi déjà utilisé pour un message d’une autre conversation.' })
   @ApiTooManyRequestsResponse({
@@ -154,6 +154,7 @@ export class MessagingController {
         content: body.content,
         videoId: body.videoId,
         storyId: body.storyId,
+        liveId: body.liveId,
         clientMessageId: body.clientMessageId,
       }),
     );

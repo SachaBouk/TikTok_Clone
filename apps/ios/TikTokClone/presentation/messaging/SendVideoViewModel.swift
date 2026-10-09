@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// « Envoyer par message » (action de la feuille de partage, choix du développeur) : la vidéo est envoyée à un
-// ou plusieurs comptes, choisis parmi les conversations récentes puis les abonnements. L'API compte chaque
-// envoi comme un partage ; le compteur affiché suit.
+// « Envoyer par message » (action de la feuille de partage, choix du développeur) : la vidéo (ou le live en cours,
+// ADR-053) est envoyée à un ou plusieurs comptes, choisis parmi les conversations récentes puis les abonnements. L'API
+// compte chaque envoi d'une vidéo comme un partage ; le compteur affiché suit.
 @MainActor
 @Observable
 final class SendVideoViewModel {
@@ -18,17 +18,24 @@ final class SendVideoViewModel {
         var id: String { user.id }
     }
 
-    let video: FeedVideo
+    // Ce qui est envoyé.
+    enum Item: Equatable {
+        case video(FeedVideo)
+        case live(LiveStream)
+    }
+
+    let item: Item
     let following: PagedList<FollowEntry>
     private(set) var deliveries: [String: Delivery] = [:]
     var errorMessage: String?
 
     private let messaging: MessagingModel
     private let share: ShareVideoByMessageUseCase
+    private let shareLive: ShareLiveByMessageUseCase?
     private let interactions: VideoInteractionsModel
     private let session: SessionStore
 
-    init(
+    convenience init(
         video: FeedVideo,
         messaging: MessagingModel,
         loadFollows: LoadFollowsUseCase,
@@ -36,7 +43,22 @@ final class SendVideoViewModel {
         interactions: VideoInteractionsModel,
         session: SessionStore
     ) {
-        self.video = video
+        self.init(
+            item: .video(video), messaging: messaging, loadFollows: loadFollows, share: share, shareLive: nil, interactions: interactions,
+            session: session)
+    }
+
+    init(
+        item: Item,
+        messaging: MessagingModel,
+        loadFollows: LoadFollowsUseCase,
+        share: ShareVideoByMessageUseCase,
+        shareLive: ShareLiveByMessageUseCase?,
+        interactions: VideoInteractionsModel,
+        session: SessionStore
+    ) {
+        self.item = item
+        self.shareLive = shareLive
         self.messaging = messaging
         self.share = share
         self.interactions = interactions
@@ -69,9 +91,15 @@ final class SendVideoViewModel {
         guard deliveries[recipient.id] == nil else { return }
         deliveries[recipient.id] = .sending
         do {
-            _ = try await share(videoID: video.id, to: recipient.user.username)
+            switch item {
+            case .video(let video):
+                _ = try await share(videoID: video.id, to: recipient.user.username)
+                interactions.sharedByMessage(video)
+            case .live(let live):
+                guard let shareLive else { throw AppError.unexpected }
+                _ = try await shareLive(liveID: live.id, to: recipient.user.username)
+            }
             deliveries[recipient.id] = .sent
-            interactions.sharedByMessage(video)
         } catch {
             deliveries[recipient.id] = nil
             let error = AppError.from(error)

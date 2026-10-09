@@ -12,6 +12,7 @@ const messageSelect = {
   content: true,
   sharedVideoId: true,
   storyId: true,
+  liveId: true,
   createdAt: true,
 } as const;
 // Plus petit UUID : repère « rien de lu / rien de supprimé ».
@@ -32,6 +33,7 @@ interface ViewRow {
   last_content: string | null;
   last_shared_video_id: string | null;
   last_story_id: string | null;
+  last_live_id: string | null;
   last_created_at: Date | null;
   unread_count: number;
   own_count: number;
@@ -120,6 +122,7 @@ export class PrismaConversationRepository extends ConversationRepository {
     content: string;
     sharedVideoId: string | null;
     storyId: string | null;
+    liveId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
@@ -143,6 +146,7 @@ export class PrismaConversationRepository extends ConversationRepository {
     content: string;
     sharedVideoId: string | null;
     storyId: string | null;
+    liveId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
@@ -155,6 +159,7 @@ export class PrismaConversationRepository extends ConversationRepository {
           content: input.content,
           sharedVideoId: input.sharedVideoId,
           storyId: input.storyId,
+          liveId: input.liveId,
           clientMessageId: input.clientMessageId,
         },
         select: messageSelect,
@@ -270,7 +275,8 @@ export class PrismaConversationRepository extends ConversationRepository {
       SELECT c.conversation_id AS id, c.created_at, c.request_sender_id, c.accepted_at, c.declined_at,
              other.user_id AS participant_id, other.last_read_message_id AS participant_last_read,
              last.message_id AS last_id, last.sender_id AS last_sender_id, last.content AS last_content,
-             last.shared_video_id AS last_shared_video_id, last.story_id AS last_story_id, last.created_at AS last_created_at,
+             last.shared_video_id AS last_shared_video_id, last.story_id AS last_story_id, last.live_id AS last_live_id,
+             last.created_at AS last_created_at,
              (SELECT count(*)::int FROM messages u
                WHERE u.conversation_id = c.conversation_id AND u.sender_id <> me.user_id
                  AND u.message_id > GREATEST(COALESCE(me.last_read_message_id, ${ZERO}), COALESCE(me.cleared_up_to_message_id, ${ZERO}))
@@ -282,7 +288,7 @@ export class PrismaConversationRepository extends ConversationRepository {
       JOIN conversations c ON c.conversation_id = me.conversation_id
       JOIN conversation_participants other ON other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
       LEFT JOIN LATERAL (
-        SELECT m.message_id, m.sender_id, m.content, m.shared_video_id, m.story_id, m.created_at FROM messages m
+        SELECT m.message_id, m.sender_id, m.content, m.shared_video_id, m.story_id, m.live_id, m.created_at FROM messages m
         WHERE m.conversation_id = c.conversation_id AND m.message_id > COALESCE(me.cleared_up_to_message_id, ${ZERO})
         ORDER BY m.message_id DESC LIMIT 1
       ) last ON true
@@ -304,6 +310,7 @@ export class PrismaConversationRepository extends ConversationRepository {
             content: row.last_content!,
             sharedVideoId: row.last_shared_video_id,
             storyId: row.last_story_id,
+            liveId: row.last_live_id,
             createdAt: row.last_created_at!,
           }
         : null,

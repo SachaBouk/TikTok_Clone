@@ -2,6 +2,8 @@ import type { InteractionsService } from '../../interactions/application/interac
 import { CommentNotFoundError } from '../../interactions/domain/interaction.errors';
 import type { MessagingService } from '../../messaging/application/messaging.service';
 import { MessageNotFoundError } from '../../messaging/domain/messaging.errors';
+import type { LiveService } from '../../live/application/live.service';
+import { LiveNotFoundError } from '../../live/domain/live.errors';
 import type { NotificationsService } from '../../notifications/application/notifications.service';
 import type { StoriesService } from '../../stories/application/stories.service';
 import { StoryNotFoundError } from '../../stories/domain/story.errors';
@@ -70,12 +72,14 @@ const REMOVAL_ACTIONS: Record<ReportTargetType, ModerationActionType> = {
   comment: 'commentRemoved',
   message: 'messageRemoved',
   story: 'storyRemoved',
+  live: 'liveEnded',
   // Un compte ne se « retire » pas : il se suspend (voir `accountSuspended`).
   account: 'accountSuspended',
 };
 
 // Service applicatif des signalements et de la modération (ADR-038, ADR-003).
-// - Une personne signale ce qu'elle voit : une vidéo publiée, un commentaire, un compte, un message reçu, une story active. Rien n'est
+// - Une personne signale ce qu'elle voit : une vidéo publiée, un commentaire, un compte, un message reçu, une story active,
+//   un live en cours (ADR-053). Rien n'est
 //   masqué ensuite : seul un administrateur décide.
 // - Un seul signalement ouvert par personne et par cible ; un doublon ne change rien et ne compte pas dans la limite.
 // - Une décision d'administrateur clôt les signalements ouverts concernés, prévient les personnes qui les ont envoyés
@@ -92,6 +96,7 @@ export class ReportsService {
     private readonly messaging: MessagingService,
     private readonly notifications: NotificationsService,
     private readonly stories: StoriesService,
+    private readonly lives: LiveService,
     private readonly rateLimiter: RateLimiter,
     private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
@@ -265,6 +270,14 @@ export class ReportsService {
           throw error;
         });
         return { userId: story.userId, excerpt: null };
+      }
+      case 'live': {
+        // Live en cours, visible de la personne : son titre est copié (sans replay, rien d'autre à examiner).
+        const live = await this.lives.getVisibleLive(reporterId, target.id).catch((error: unknown) => {
+          if (error instanceof LiveNotFoundError) throw new ReportTargetNotFoundError();
+          throw error;
+        });
+        return { userId: live.userId, excerpt: live.title };
       }
       case 'account': {
         const user = await this.users.getById(target.id).catch((error: unknown) => {

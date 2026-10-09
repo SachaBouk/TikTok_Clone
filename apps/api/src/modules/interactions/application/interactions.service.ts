@@ -411,6 +411,12 @@ export class InteractionsService {
     return following.filter((id) => !hidden.has(id));
   }
 
+  // Pour le module live (abonnés prévenus, ADR-053) : abonnés de `userId`, hors comptes suspendus.
+  async listVisibleFollowerIds(userId: string): Promise<string[]> {
+    const [followers, suspended] = await Promise.all([this.interactions.listFollowerIds(userId), this.suspended.all()]);
+    return followers.filter((id) => !suspended.has(id));
+  }
+
   // Pour le module messaging : parmi `userIds`, les abonnés mutuels de `userId` (seuls autorisés à s'écrire).
   getMutualFollowers(userId: string, userIds: string[]): Promise<Set<string>> {
     return this.interactions.findMutualFollows(userId, [...new Set(userIds)]);

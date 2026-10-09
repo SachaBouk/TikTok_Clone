@@ -1,7 +1,8 @@
 import SwiftUI
 
 // Rangée de stories en tête de la boîte de réception (ADR-051, comme TikTok) : « Ta story » d'abord (le « + » ouvre la
-// publication en mode Story), puis les comptes suivis qui ont une story, ceux à voir en premier.
+// publication en mode Story), puis les comptes suivis en direct (ADR-053, « EN DIRECT »), puis ceux qui ont une story,
+// ceux à voir en premier.
 struct StoryTrayView: View {
     let container: AppContainer
 
@@ -11,6 +12,16 @@ struct StoryTrayView: View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 14) {
                 ownBubble
+                ForEach(container.lives.followingLives) { live in
+                    Button {
+                        container.router.openLive(live.id, source: .tray)
+                    } label: {
+                        LiveBubble(user: live.host)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(live.host.displayName), en direct")
+                    .accessibilityIdentifier("lives.tray.entry")
+                }
                 ForEach(Array(stories.followedEntries.enumerated()), id: \.element.id) { index, entry in
                     Button {
                         container.router.openStories(stories.followedEntries.map(\.user), startAuthor: index, source: .tray)
@@ -76,6 +87,25 @@ private struct StoryBubble: View {
             StoryAvatar(url: user.avatarURL, name: user.displayName, size: 60, ring: ring)
                 .frame(width: 68, height: 68)
             Text(title)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: 72)
+        }
+    }
+}
+
+// Compte en direct : anneau rouge et pastille « EN DIRECT ».
+private struct LiveBubble: View {
+    let user: UserSummary
+
+    var body: some View {
+        VStack(spacing: 6) {
+            AvatarView(url: user.avatarURL, name: user.displayName, size: 60)
+                .padding(5)
+                .overlay { Circle().strokeBorder(.red, lineWidth: 3) }
+                .overlay(alignment: .bottom) { LiveBadge().offset(y: 6) }
+                .frame(width: 68, height: 68)
+            Text(user.displayName)
                 .font(.caption)
                 .lineLimit(1)
                 .frame(width: 72)

@@ -32,6 +32,13 @@ struct SendGiftUseCase: Sendable {
     func callAsFunction(videoID: String, giftCode: String, clientGiftID: UUID) async throws -> SentGift {
         try await gifts.send(videoID: videoID, giftCode: giftCode, clientGiftID: clientGiftID)
     }
+
+    func callAsFunction(target: GiftTarget, giftCode: String, clientGiftID: UUID) async throws -> SentGift {
+        switch target {
+        case .video(let id, _): try await gifts.send(videoID: id, giftCode: giftCode, clientGiftID: clientGiftID)
+        case .live(let id, _): try await gifts.sendLive(liveID: id, giftCode: giftCode, clientGiftID: clientGiftID)
+        }
+    }
 }
 
 struct LoadWalletTransactionsUseCase: Sendable {

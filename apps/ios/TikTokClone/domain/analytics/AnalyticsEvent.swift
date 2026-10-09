@@ -128,6 +128,17 @@ extension AnalyticsEvent {
             properties: ["gift_code": .string(code), "amount": .int(amount), "video_id": .string(videoID), "author_id": .string(authorID)])
     }
 
+    // Cadeau d'une vidéo ou d'un live (ADR-053 : `live_id` à la place de `video_id`).
+    static func giftSent(code: String, amount: Int, target: GiftTarget) -> AnalyticsEvent {
+        switch target {
+        case .video(let id, let author): giftSent(code: code, amount: amount, videoID: id, authorID: author.id)
+        case .live(let id, let host):
+            AnalyticsEvent(
+                name: "gift_sent",
+                properties: ["gift_code": .string(code), "amount": .int(amount), "live_id": .string(id), "author_id": .string(host.id)])
+        }
+    }
+
     static func paywallViewed(source: PaywallSource) -> AnalyticsEvent {
         AnalyticsEvent(name: "paywall_viewed", properties: ["source": .string(source.rawValue)])
     }
@@ -158,6 +169,29 @@ extension AnalyticsEvent {
         var properties = details.properties(photo: photo)
         properties["media_type"] = .string(photo ? "photo" : "video")
         return AnalyticsEvent(name: "story_upload_started", properties: properties)
+    }
+
+    // Live (ADR-053) : lancement, fin (chiffres), visionnage (source), message, partage.
+    static let liveStarted = AnalyticsEvent(name: "live_started", properties: [:])
+
+    static func liveEnded(_ stats: LiveStats?) -> AnalyticsEvent {
+        guard let stats else { return AnalyticsEvent(name: "live_ended", properties: [:]) }
+        return AnalyticsEvent(
+            name: "live_ended",
+            properties: [
+                "duration_s": .int(stats.durationSeconds), "peak_viewers": .int(stats.peakViewers), "viewers": .int(stats.viewersCount),
+                "hearts": .int(stats.heartsCount), "gifts": .int(stats.giftsCount),
+            ])
+    }
+
+    static func liveViewed(source: LiveSource) -> AnalyticsEvent {
+        AnalyticsEvent(name: "live_viewed", properties: ["source": .string(source.rawValue)])
+    }
+
+    static let liveMessageSent = AnalyticsEvent(name: "live_message_sent", properties: [:])
+
+    static func liveShared(byMessage: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "live_shared", properties: ["method": .string(byMessage ? "message" : "system")])
     }
 
     static func storyPublished(ready: Bool) -> AnalyticsEvent {

@@ -107,6 +107,23 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
+    func shareLive(conversationID: String, liveID: String) async throws -> DirectMessage {
+        let output = try await mappingErrors {
+            try await client.sendMessage(path: .init(id: conversationID), body: .json(.init(liveId: liveID)))
+        }
+        switch output {
+        case .created(let created): return DirectMessage(try created.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        // Live terminé ou masqué entre-temps.
+        case .notFound: throw AppError.rejected("Ce live est terminé.")
+        case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .conflict: throw AppError.unexpected
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges {
         let output = try await mappingErrors {
             try await client.markConversationRead(path: .init(id: conversationID), body: .json(.init(upToId: upToID)))
@@ -176,7 +193,8 @@ extension DirectMessage {
             sharedVideo: dto.sharedVideo.map(SharedVideo.init),
             createdAt: dto.createdAt,
             clientMessageID: dto.clientMessageId,
-            story: dto.story.map(RepliedStory.init)
+            story: dto.story.map(RepliedStory.init),
+            live: dto.live.map { SharedLive(id: $0.id, available: $0.available, title: $0.title ?? nil, host: $0.host.map(UserSummary.init)) }
         )
     }
 }

@@ -85,6 +85,20 @@ services:
       "
     restart: "no"
 
+  livekit:
+    # Serveur vidéo du live (ADR-053) : une salle par live, ouverte par l'API. Configuration (clés, webhook vers l'API)
+    # dans infra/livekit.yaml. 7880 : API et signalisation (WebSocket) ; 7881/tcp et 7882/udp : média.
+    image: livekit/livekit-server:v1.13.7
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./infra/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # ─── Apps dans leurs images (profil `apps`, ADR-015) ──────────────────────────
   # Même configuration que `pnpm dev` (.env), sauf les hôtes internes : dans le réseau Docker, PostgreSQL,
   # Redis et MinIO s'appellent par leur nom de service. Les URLs données à l'app iOS et au navigateur

@@ -13,6 +13,14 @@ enum ConversationStatus: Equatable, Sendable {
     case requestReceived
 }
 
+// Live partagé dans un message (ADR-053) : `available` faux une fois terminé, ou s'il est masqué au lecteur.
+struct SharedLive: Equatable, Sendable {
+    let id: String
+    let available: Bool
+    let title: String?
+    let host: UserSummary?
+}
+
 // Vidéo partagée dans un message ; `available` faux si elle a été supprimée depuis (autres champs nuls).
 struct SharedVideo: Equatable, Sendable {
     let id: String
@@ -35,10 +43,12 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     var clientMessageID: String? = nil
     // Story à laquelle répond le message (ADR-051).
     var story: RepliedStory? = nil
+    // Live partagé (ADR-053).
+    var live: SharedLive? = nil
 
     // Aperçu d'une ligne de la boîte de réception.
     func preview(ownID: String?) -> String {
-        let text = content.isEmpty ? "Vidéo partagée" : content
+        let text = content.isEmpty ? (live != nil ? "Live partagé" : "Vidéo partagée") : content
         return senderID == ownID ? "Toi : \(text)" : text
     }
 }

@@ -131,6 +131,7 @@ export class InMemoryWalletRepository extends WalletRepository {
       senderId: gift.senderId,
       recipientId: gift.recipientId,
       videoId: gift.videoId,
+      liveId: gift.liveId,
       giftCode: gift.giftCode,
       amount: gift.amount,
       senderBalanceAfter: senderBalance,

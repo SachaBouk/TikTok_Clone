@@ -54,6 +54,11 @@ final class FakeGiftRepository: GiftRepository {
             return try state.results.removeFirst().get()
         }
     }
+
+    // Les cadeaux d'un live sont notés avec `live:<id>` à la place de la vidéo.
+    func sendLive(liveID: String, giftCode: String, clientGiftID: UUID) async throws -> SentGift {
+        try await send(videoID: "live:\(liveID)", giftCode: giftCode, clientGiftID: clientGiftID)
+    }
 }
 
 // Store simulé : packs fixes, issue de l'achat choisie par le test, action pendant l'achat (crédit anticipé).

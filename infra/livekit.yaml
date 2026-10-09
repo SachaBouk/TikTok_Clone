@@ -1,0 +1,23 @@
+# Serveur vidéo LiveKit en local (ADR-053), monté par docker-compose.yml. En production : LiveKit auto-hébergé avec
+# sa propre configuration (ports UDP, TURN, IP publique), ou LiveKit Cloud.
+port: 7880
+rtc:
+  # Média : un seul port UDP, et TCP en secours. L'app (simulateur) et le Mac joignent le serveur par localhost.
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  node_ip: 127.0.0.1
+# Clé et secret de développement : les mêmes que LIVEKIT_API_KEY et LIVEKIT_API_SECRET de .env.example.
+keys:
+  devkey: secret-de-developpement-a-changer-0123456789
+room:
+  # Les salles sont ouvertes par l'API au lancement d'un live, jamais par un jeton.
+  auto_create: false
+  empty_timeout: 300
+webhook:
+  api_key: devkey
+  urls:
+    # L'API tourne sur la machine (pnpm dev).
+    - http://host.docker.internal:3000/webhooks/livekit
+logging:
+  level: info

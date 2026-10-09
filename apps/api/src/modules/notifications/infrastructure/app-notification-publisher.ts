@@ -82,6 +82,8 @@ function pushBody({ notification }: NotificationWithContext): string {
       const gift = giftDisplay(notification.gift?.code ?? '');
       return `t'a envoyé ${gift.emoji} ${gift.name}`;
     }
+    case 'live':
+      return 'est en direct';
   }
 }
 
@@ -91,6 +93,7 @@ const REMOVED: Record<ModerationTargetType, string> = {
   comment: 'Ton commentaire a été retiré.',
   message: 'Ton message a été retiré.',
   story: 'Ta story a été retirée.',
+  live: 'Ton live a été arrêté.',
   // Un compte n'est pas « retiré » (suspension, annoncée à la connexion) : jamais envoyé.
   account: 'Ton compte a été suspendu.',
 };
