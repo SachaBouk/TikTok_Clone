@@ -56,3 +56,4 @@ apps/ios/TikTokClone.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
 apps/ios/TikTokClone/Info.plist
 # Réglages locaux de l'app (jeton du projet PostHog, ADR-013)
 apps/ios/Config/Local.xcconfig
+docker-compose.override.yml

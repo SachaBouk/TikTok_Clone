@@ -15,8 +15,8 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Pas encore d'équipe de signature (compte Apple Developer) : le simulateur n'en a pas besoin.
-    DEVELOPMENT_TEAM: ""
+    # Équipe de signature : DEVELOPMENT_TEAM dans Config/Local.xcconfig (non versionné), pour installer l'app sur un
+    # iPhone avec un Apple ID gratuit (« Personal Team »). Le simulateur n'en a pas besoin.
     CODE_SIGN_STYLE: Automatic
 
 configFiles:
