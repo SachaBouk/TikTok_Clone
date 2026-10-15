@@ -36,3 +36,4 @@ Précisions sur les frontières :
 - ADR-003 — Architecture backend
 - ADR-019 — Backoffice : rôle administrateur, périmètre et session
 - ADR-022 — Temps réel : protocole
+- Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages

@@ -60,3 +60,4 @@ Blocage :
 - Complété par [ADR-036](ADR-036-suivre-en-retour-activite.md) — « Suivre en retour » dans le centre d'activité
 - Complété par [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) — Suppression des commentaires par l'auteur de la vidéo
 - Complété par [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) — Renvoi d'un message en échec : identifiant d'envoi
+- Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages

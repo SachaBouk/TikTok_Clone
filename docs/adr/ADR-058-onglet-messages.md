@@ -1,7 +1,7 @@
 # ADR-058 — Onglet « Messages » façon TikTok : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre : messagerie, activité), [ADR-018](ADR-018-modules-messaging-push-admin.md) (module `messaging`) et [ADR-028](ADR-028-regles-produit-premiere-version.md) (règles de la messagerie et du centre d'activité), sans les remplacer.
 
