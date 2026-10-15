@@ -2294,6 +2294,59 @@
         ]
       }
     },
+    "/users/me/suggestions": {
+      "get": {
+        "operationId": "listSuggestions",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSuggestionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nombre invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
     "/users/{username}/followers": {
       "get": {
         "operationId": "listFollowers",
@@ -2675,6 +2728,17 @@
               "default": 20,
               "type": "integer"
             }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/NotificationType"
+              }
+            }
           }
         ],
         "responses": {
@@ -2689,7 +2753,7 @@
             }
           },
           "400": {
-            "description": "Curseur ou taille de page invalide.",
+            "description": "Curseur, taille de page ou type invalide.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4754,6 +4818,70 @@
           },
           "404": {
             "description": "Pseudo inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/search": {
+      "get": {
+        "operationId": "searchMessages",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "Texte cherché, sans casse.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages trouvés, du plus récent au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSearchResultListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Texte manquant ou trop long, nombre invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8289,6 +8417,56 @@
           "items"
         ]
       },
+      "AccountSuggestionResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "followersCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "followsYou": {
+            "type": "boolean",
+            "description": "Ce compte suit le compte connecté (« Te suit »)."
+          },
+          "followedBy": {
+            "description": "Comptes suivis par le compte connecté qui suivent ce compte, 3 au plus.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSummaryResponse"
+            }
+          },
+          "followedByCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nombre de comptes suivis par le compte connecté qui suivent ce compte."
+          }
+        },
+        "required": [
+          "user",
+          "followersCount",
+          "followsYou",
+          "followedBy",
+          "followedByCount"
+        ]
+      },
+      "AccountSuggestionListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Ceux qui te suivent d’abord, puis par nombre de comptes suivis en commun.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountSuggestionResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
       "FollowViewerStateResponse": {
         "type": "object",
         "properties": {
@@ -9697,6 +9875,55 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "MessageSearchResultResponse": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "conversationId",
+          "messageId",
+          "content",
+          "createdAt",
+          "participant",
+          "sender"
+        ]
+      },
+      "MessageSearchResultListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Du plus récent au plus ancien.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageSearchResultResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "OpenConversationRequest": {

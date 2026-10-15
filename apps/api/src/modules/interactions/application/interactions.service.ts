@@ -69,6 +69,14 @@ export interface FollowItem {
   viewer?: { following: boolean; followedBy: boolean };
 }
 
+// Compte suggéré (ADR-058) : le compte (avec son nombre d'abonnés), s'il nous suit, et les comptes suivis qui le suivent.
+export interface AccountSuggestion {
+  user: User;
+  followsMe: boolean;
+  followedBy: User[];
+  followedByCount: number;
+}
+
 export interface FollowPage {
   items: FollowItem[];
   nextCursor: string | null;
@@ -395,6 +403,22 @@ export class InteractionsService {
     const ids = [...new Set(userIds)];
     const [blocks, suspended] = await Promise.all([this.interactions.findBlocks(userId, ids), this.suspended.all()]);
     return { blockedByMe: blocks.blockedByMe, blockedMe: new Set([...blocks.blockedMe, ...ids.filter((id) => suspended.has(id))]) };
+  }
+
+  // Comptes suggérés (ADR-058) : amis d'amis et abonnés non suivis, sans comptes masqués (bloqués, suspendus). Un
+  // compte disparu entre-temps est sauté ; « suivi par » ne montre que des comptes visibles.
+  async listSuggestions(userId: string, limit: number): Promise<AccountSuggestion[]> {
+    const hidden = await this.hiddenAccounts(userId);
+    const candidates = await this.interactions.findSuggestionCandidates(userId, [...hidden], limit);
+    if (candidates.length === 0) return [];
+    const ids = [...new Set(candidates.flatMap((c) => [c.userId, ...c.followedByIds]))];
+    const users = new Map((await this.users.getByIds(ids)).map((u) => [u.id, u]));
+    return candidates.flatMap((c) => {
+      const user = users.get(c.userId);
+      if (!user) return [];
+      const followedBy = c.followedByIds.flatMap((id) => (hidden.has(id) ? [] : (users.get(id) ?? [])));
+      return [{ user, followsMe: c.followsMe, followedBy, followedByCount: c.followedByCount }];
+    });
   }
 
   // Pour les modules feed et messaging : comptes dont les contenus (vidéos, commentaires, présence dans les listes)

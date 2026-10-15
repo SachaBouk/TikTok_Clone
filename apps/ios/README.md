@@ -174,20 +174,22 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - Supprimer une de ses vidéos : « Supprimer » dans la feuille de partage du lecteur ; elle disparaît de tous les écrans.
 - Signaler (ADR-038) : « Signaler » dans la feuille de partage de la vidéo d'un autre, geste « Signaler » sur son commentaire, « Signaler » dans le menu « … » de son profil, appui long sur un message reçu (seul ce message est transmis). Feuille commune en étapes, comme TikTok : motif, page du motif (explication, précision facultative de 500 caractères, « Envoyer »), puis « Merci pour ton signalement » avec « Bloquer @… » (auteur d'une vidéo, d'un commentaire, ou compte signalé). Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité (« Signalement examiné »). L'auteur d'un contenu retiré y reçoit « Contenu retiré » avec le motif.
 
-## Boîte de réception et messagerie
+## Onglet « Messages » et messagerie
 
-- Onglet « Boîte de réception », comme TikTok : lignes « Activité » et « Demandes de message » (s'il y en a) en tête, puis les conversations, de la plus récemment active à la plus ancienne. Glisser une conversation : la supprimer pour soi. Bouton ✎ : écrire à un de ses abonnements.
+- Onglet « Messages » (ADR-058, ex-« Boîte de réception »), comme TikTok : rangée de stories (« Créer »), ligne « Activité et nouveaux abonnés » (dernière activité, badge), « Demandes de message » (s'il y en a), puis les conversations, de la plus récemment active à la plus ancienne (aperçu et date sur une ligne, non lus en rouge). Glisser une conversation : la supprimer pour soi.
+- Loupe : recherche « Compte et messages » (`searchAccounts`, `searchMessages`) ; avant la saisie, les comptes des conversations récentes ; toucher un compte ou un message ouvre la conversation. Sensible aux accents.
 - Badge de l'onglet : notifications non lues, conversations non lues et demandes reçues, suivis en direct.
 - Conversation : messages texte et vidéos partagées (toucher : la vidéo en plein écran), « Vu » sous son dernier message lu, « … » quand l'autre écrit. Appui long : copier, retirer son message (pour les deux). Menu « … » : profil, supprimer la conversation.
 - Demande reçue : « Accepter », « Refuser », ou répondre (ce qui l'accepte). Demande envoyée : quelques messages avant acceptation, indiqués sous le champ. Blocage : le champ laisse place à une explication.
 - Message non envoyé (coupure, limite, refus ; ADR-044) : la bulle reste affichée « Non envoyé · Toucher pour réessayer ». Un toucher ouvre « Réessayer », « Copier », « Supprimer ». Chaque essai porte le même identifiant d'envoi (`clientMessageId`) : un renvoi ne crée pas de doublon si le premier était arrivé. Gardé pendant la session de l'app, même conversation fermée.
 - Limite d'envoi atteinte : l'envoi et le renvoi sont bloqués, avec un compte à rebours.
-- Écrire à un compte : bouton « Message » de son profil.
+- Écrire à un compte : bouton « Message » de son profil, ou la recherche de l'onglet.
 - Partager une vidéo par message : « Partager », puis toucher un contact dans la première ligne de la feuille « Envoyer à » (conversations récentes, puis abonnements).
 
 ## Centre d'activité
 
-- Ligne « Activité » de la boîte de réception : activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
+- Écran d'activité (ADR-058) : onglets « Activité ▾ » (sans les abonnements ; menu de filtres par type, `listNotificationGroups` avec `kind` répété) et « Nouveaux followers » (« Suivre en retour », ou « Message » pour un ami), 3 lignes puis « Tout voir » / « Voir plus », puis « Comptes suggérés » (`listSuggestions` : amis d'amis et abonnés non suivis ; × écarte sur l'appareil).
+- Activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
 - Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
 - « Suivre en retour » (ADR-036) : sur l'abonnement d'un seul compte et sur chaque ligne de « Nouveaux abonnés », puis « Ami(e)s » (toucher à nouveau : ne plus suivre). La relation est lue à part, une requête par page (`getRelationships`).
 - Une notification reçue en direct rejoint son groupe, qui remonte en tête.

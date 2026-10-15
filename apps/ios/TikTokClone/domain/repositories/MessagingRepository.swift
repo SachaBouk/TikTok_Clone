@@ -2,6 +2,8 @@
 protocol MessagingRepository: Sendable {
     // Boîte de réception : conversations acceptées et demandes envoyées, de la plus récemment active à la plus ancienne.
     func conversations(cursor: String?) async throws -> ConversationPage
+    // Recherche dans le texte de ses messages (ADR-058), du plus récent au plus ancien.
+    func searchMessages(query: String) async throws -> [MessageSearchResult]
     // Demandes reçues en attente.
     func requests(cursor: String?) async throws -> ConversationPage
     // La conversation avec ce compte : l'existante, sinon une nouvelle, vide.

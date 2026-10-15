@@ -36,6 +36,9 @@ export abstract class ConversationRepository {
   abstract findMessage(messageId: string): Promise<Message | null>;
   // Messages existants parmi `ids`, dans un ordre quelconque.
   abstract findMessagesByIds(ids: string[]): Promise<Message[]>;
+  // Recherche (ADR-058) : messages de `userId` et de ceux qui lui écrivent dont le texte contient `query` (sans casse),
+  // dans ses conversations, hors messages supprimés pour lui et demandes reçues qu'il a refusées ; du plus récent au plus ancien.
+  abstract searchMessages(userId: string, query: string, limit: number): Promise<Message[]>;
   abstract deleteMessage(messageId: string): Promise<void>;
   // Du plus récent au plus ancien, strictement avant `beforeId` et après `afterId` s'ils sont donnés.
   abstract listMessages(conversationId: string, beforeId: string | null, afterId: string | null, limit: number): Promise<Message[]>;

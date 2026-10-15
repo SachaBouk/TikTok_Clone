@@ -52,7 +52,7 @@ struct StoryTrayView: View {
                     container.router.requestedPublishMode = .story
                 }
             } label: {
-                StoryBubble(user: me, ring: stories.ownEntry.map { _ in .seen }, title: "Ta story")
+                StoryBubble(user: me, ring: stories.ownEntry.map { _ in .seen }, title: stories.ownEntry == nil ? "Créer" : "Ta story")
                     .overlay(alignment: .topTrailing) {
                         Button {
                             container.router.requestedPublishMode = .story

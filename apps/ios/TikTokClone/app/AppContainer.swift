@@ -26,6 +26,8 @@ final class AppContainer {
     let wallet: WalletModel
     // Historique des recherches (ADR-049), sur l'appareil.
     let searchHistory: SearchHistoryModel
+    // Comptes suggérés de l'onglet Messages (ADR-058).
+    let suggestions: SuggestionsModel
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
     let stories: StoriesModel
     // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
@@ -86,6 +88,9 @@ final class AppContainer {
             logout: LogoutUseCase(auth: auth)
         )
         expiry.session = session
+        suggestions = SuggestionsModel(
+            load: LoadSuggestionsUseCase(suggestions: RemoteSuggestionRepository(client: client)), store: UserDefaultsPreferencesStore(),
+            session: session)
         let analyticsService: any AnalyticsService =
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
@@ -181,7 +186,10 @@ final class AppContainer {
         // Pendant la reprise de la session, « non connecté » n'est pas un état : le retenir effaçait l'historique à
         // chaque lancement d'un compte connecté (`sessionRestored` pose l'état de départ).
         if session.state != .restoring {
-            if let lastSignedIn, lastSignedIn != signedIn { searchHistory.clear() }
+            if let lastSignedIn, lastSignedIn != signedIn {
+                searchHistory.clear()
+                suggestions.reset()
+            }
             lastSignedIn = signedIn
         }
         realtime.update(signedIn: signedIn, active: active)
@@ -214,17 +222,6 @@ final class AppContainer {
             session: session,
             analytics: analytics
         )
-    }
-
-    // Abonnements du compte connecté (« Nouveau message »).
-    func makeFollowingList() -> PagedList<FollowEntry> {
-        let load = LoadFollowsUseCase(relationships: relationships)
-        let username = session.profile?.username
-        return PagedList(session: session) { cursor in
-            guard let username else { return ([], nil) }
-            let page = try await load(.following, username: username, cursor: cursor)
-            return (page.entries, page.nextCursor)
-        }
     }
 
     // « Envoyer par message » depuis la feuille de partage d'une vidéo.
@@ -309,6 +306,23 @@ final class AppContainer {
     }
 
     // Liste complète d'un groupe du centre d'activité.
+    // Groupes de certains types seulement (filtre « Activité ▾ », ADR-058).
+    func makeFilteredActivityGroupList(_ kinds: [ActivityKind]) -> PagedList<ActivityGroup> {
+        let load = LoadActivityGroupsUseCase(
+            activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships))
+        return PagedList(session: session) { cursor in
+            let page = try await load(kinds: kinds, cursor: cursor)
+            return (page.groups, page.nextCursor)
+        }
+    }
+
+    // Recherche « Compte et messages » de l'onglet Messages (ADR-058).
+    func makeInboxSearchViewModel() -> InboxSearchViewModel {
+        InboxSearchViewModel(
+            searchAccounts: SearchAccountsUseCase(search: search), searchMessages: SearchMessagesUseCase(messaging: messagingRepository),
+            session: session)
+    }
+
     func makeActivityGroupList(_ filter: ActivityFilter) -> PagedList<ActivityNotification> {
         let load = LoadActivityGroupUseCase(
             activity: activityRepository, actorRelationships: LoadActorRelationshipsUseCase(relationships: relationships))

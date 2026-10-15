@@ -32,6 +32,17 @@ protocol RelationshipRepository: Sendable {
     func blockedUsers() async throws -> [UserSummary]
 }
 
+// Comptes suggérés (ADR-058) : amis d'amis et abonnés que l'on ne suit pas.
+protocol SuggestionRepository: Sendable {
+    func suggestions() async throws -> [AccountSuggestion]
+}
+
+// Suggestions écartées (×), sur l'appareil seulement (ADR-058).
+protocol DismissedSuggestionsStore: Sendable {
+    var dismissedSuggestions: [String] { get }
+    func setDismissedSuggestions(_ ids: [String])
+}
+
 // Port des listes de vidéos au format du feed (module feed) et de l'historique de visionnage.
 protocol VideoListRepository: Sendable {
     func page(of list: VideoList, cursor: String?) async throws -> FeedPage

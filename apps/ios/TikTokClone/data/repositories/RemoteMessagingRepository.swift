@@ -25,6 +25,20 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
+    func searchMessages(query: String) async throws -> [MessageSearchResult] {
+        switch try await mappingErrors({ try await client.searchMessages(query: .init(q: query)) }) {
+        case .ok(let ok):
+            return try ok.body.json.items.map {
+                MessageSearchResult(
+                    conversationID: $0.conversationId, messageID: $0.messageId, content: $0.content, createdAt: $0.createdAt,
+                    participant: UserSummary($0.participant), sender: UserSummary($0.sender))
+            }
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func open(username: String) async throws -> Conversation {
         switch try await mappingErrors({ try await client.openConversation(body: .json(.init(username: username))) }) {
         case .ok(let ok): return Conversation(try ok.body.json)

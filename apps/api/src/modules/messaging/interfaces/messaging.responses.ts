@@ -4,6 +4,8 @@ import type {
   ConversationPageDto,
   ConversationStatus,
   MessageDto,
+  MessageSearchResultDto,
+  MessageSearchResultListDto,
   MessagePageDto,
   SharedVideoDto,
   UnreadConversationsDto,
@@ -11,7 +13,7 @@ import type {
 import { MessageLiveResponse, toMessageLiveDto } from '../../live/interfaces/live.responses';
 import { MessageStoryResponse, toMessageStoryDto } from '../../stories/interfaces/stories.responses';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
-import type { ConversationWithParticipant } from '../application/messaging.service';
+import type { ConversationWithParticipant, MessageSearchResult } from '../application/messaging.service';
 import type { MessageItem, MessagingBadges, SharedVideo } from '../domain/messaging';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
@@ -194,4 +196,40 @@ export function toConversationDto(item: ConversationWithParticipant): Conversati
 
 export function toUnreadConversationsDto(badges: MessagingBadges): UnreadConversationsDto {
   return { unreadCount: badges.unreadConversations, requestCount: badges.pendingRequests };
+}
+
+export class MessageSearchResultResponse implements MessageSearchResultDto {
+  @ApiProperty({ format: 'uuid' })
+  conversationId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  messageId!: string;
+
+  @ApiProperty()
+  content!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ type: UserSummaryResponse })
+  participant!: UserSummaryResponse;
+
+  @ApiProperty({ type: UserSummaryResponse })
+  sender!: UserSummaryResponse;
+}
+
+export class MessageSearchResultListResponse implements MessageSearchResultListDto {
+  @ApiProperty({ type: [MessageSearchResultResponse], description: 'Du plus récent au plus ancien.' })
+  items!: MessageSearchResultResponse[];
+}
+
+export function toMessageSearchResultDto({ message, participant, sender }: MessageSearchResult): MessageSearchResultDto {
+  return {
+    conversationId: message.conversationId,
+    messageId: message.id,
+    content: message.content,
+    createdAt: message.createdAt.toISOString(),
+    participant: toUserSummary(participant),
+    sender: toUserSummary(sender),
+  };
 }

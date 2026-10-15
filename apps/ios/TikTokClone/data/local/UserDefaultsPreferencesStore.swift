@@ -13,6 +13,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let analyticsConsent = "analyticsConsent"
         static let guestPromptDecided = "guestPromptDecided"
         static let searchHistory = "searchHistory"
+        static let dismissedSuggestions = "dismissedSuggestions"
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
     }
@@ -65,6 +66,21 @@ extension UserDefaultsPreferencesStore: SearchHistoryStore {
             defaults.removeObject(forKey: Key.searchHistory)
         } else if let data = try? JSONEncoder().encode(entries) {
             defaults.set(data, forKey: Key.searchHistory)
+        }
+    }
+}
+
+// Suggestions de comptes écartées (ADR-058) : sur l'appareil seulement.
+extension UserDefaultsPreferencesStore: DismissedSuggestionsStore {
+    var dismissedSuggestions: [String] {
+        defaults.stringArray(forKey: Key.dismissedSuggestions) ?? []
+    }
+
+    func setDismissedSuggestions(_ ids: [String]) {
+        if ids.isEmpty {
+            defaults.removeObject(forKey: Key.dismissedSuggestions)
+        } else {
+            defaults.set(ids, forKey: Key.dismissedSuggestions)
         }
     }
 }

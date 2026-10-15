@@ -7,8 +7,10 @@ struct RemoteActivityRepository: ActivityRepository {
 
     let client: Client
 
-    func groups(cursor: String?) async throws -> ActivityGroupPage {
-        let output = try await mappingErrors { try await client.listNotificationGroups(query: .init(cursor: cursor, limit: Self.pageSize)) }
+    func groups(kinds: [ActivityKind], cursor: String?) async throws -> ActivityGroupPage {
+        let query = Operations.ListNotificationGroups.Input.Query(
+            cursor: cursor, limit: Self.pageSize, kind: kinds.isEmpty ? nil : kinds.map { .init($0) })
+        let output = try await mappingErrors { try await client.listNotificationGroups(query: query) }
         switch output {
         case .ok(let ok):
             let page = try ok.body.json

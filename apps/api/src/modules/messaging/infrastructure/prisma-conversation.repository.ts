@@ -140,6 +140,24 @@ export class PrismaConversationRepository extends ConversationRepository {
     return this.prisma.message.findUnique({ where: { senderId_clientMessageId: { senderId, clientMessageId } }, select: messageSelect });
   }
 
+  // `ILIKE` avec `%`, `_` et `\` échappés ; demandes refusées par `userId` exclues (jamais remises).
+  async searchMessages(userId: string, query: string, limit: number): Promise<Message[]> {
+    const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const rows = await this.prisma.$queryRaw<{ message_id: string }[]>`
+      SELECT m.message_id::text AS message_id
+      FROM messages m
+      JOIN conversation_participants p ON p.conversation_id = m.conversation_id AND p.user_id = ${userId}::uuid
+      JOIN conversations c ON c.conversation_id = m.conversation_id
+      WHERE m.content ILIKE ${pattern}
+        AND m.message_id > COALESCE(p.cleared_up_to_message_id, ${ZERO})
+        AND NOT (c.declined_at IS NOT NULL AND c.request_sender_id IS DISTINCT FROM ${userId}::uuid)
+      ORDER BY m.message_id DESC
+      LIMIT ${limit}`;
+    if (rows.length === 0) return [];
+    const messages = await this.prisma.message.findMany({ where: { id: { in: rows.map((r) => r.message_id) } }, select: messageSelect });
+    return messages.sort((a, b) => (a.id < b.id ? 1 : -1));
+  }
+
   private addMessageNow(input: {
     conversationId: string;
     senderId: string;

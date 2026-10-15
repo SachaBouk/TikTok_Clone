@@ -4,10 +4,12 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUI
 import {
   DEFAULT_COMMENTS_PAGE_SIZE,
   DEFAULT_FOLLOWS_PAGE_SIZE,
+  DEFAULT_SUGGESTIONS,
   MAX_COMMENT_LENGTH,
   MAX_COMMENTS_PAGE_SIZE,
   MAX_FOLLOWS_PAGE_SIZE,
   MAX_RELATIONSHIP_IDS,
+  MAX_SUGGESTIONS,
 } from '../domain/interaction';
 
 // Corps et paramètres de requête validés par le ValidationPipe global (main.ts).
@@ -66,4 +68,14 @@ export class RelationshipsQuery {
   @ArrayMaxSize(MAX_RELATIONSHIP_IDS)
   @IsUUID('all', { each: true })
   userIds!: string[];
+}
+
+export class SuggestionsQuery {
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: MAX_SUGGESTIONS, default: DEFAULT_SUGGESTIONS })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_SUGGESTIONS)
+  limit: number = DEFAULT_SUGGESTIONS;
 }

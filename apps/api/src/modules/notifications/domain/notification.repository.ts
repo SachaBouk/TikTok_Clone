@@ -1,4 +1,12 @@
-import type { ActivityEvent, ModerationEvent, Notification, NotificationFilter, NotificationGroup, RetractableActivity } from './notification';
+import type {
+  ActivityEvent,
+  ModerationEvent,
+  Notification,
+  NotificationFilter,
+  NotificationGroup,
+  RetractableActivity,
+  NotificationType,
+} from './notification';
 
 // Port de la table notifications (ADR-006).
 export abstract class NotificationRepository {
@@ -33,7 +41,14 @@ export abstract class NotificationRepository {
   ): Promise<Notification[]>;
   // Groupes (voir `groupKey`), du plus récemment actif au plus ancien : ceux dont la notification la plus récente
   // est strictement avant `beforeId`. `recentActorIds` : `GROUP_ACTORS_SHOWN` au plus.
-  abstract listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]>;
+  // `types` : seulement ces types (filtre de l'écran d'activité, ADR-058) ; vide ou absent : tous.
+  abstract listGroups(
+    recipientId: string,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+    types?: NotificationType[],
+  ): Promise<NotificationGroup[]>;
   // Les groupes désignés par `filters` (voir `groupFilter`), recalculés après un retrait (ADR-043) ; un groupe vide est
   // absent.
   abstract findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]>;

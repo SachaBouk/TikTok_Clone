@@ -8,6 +8,7 @@ import {
   type NotificationFilter,
   type NotificationGroup,
   type RetractableActivity,
+  NotificationType,
 } from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
@@ -110,8 +111,14 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       .slice(0, limit);
   }
 
-  async listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
-    return this.groups(this.newestFirst(recipientId, excludedActorIds))
+  async listGroups(
+    recipientId: string,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+    types?: NotificationType[],
+  ): Promise<NotificationGroup[]> {
+    return this.groups(this.newestFirst(recipientId, excludedActorIds).filter((n) => !types?.length || types.includes(n.type)))
       .filter((g) => !beforeId || g.latest.id < beforeId)
       .slice(0, limit);
   }

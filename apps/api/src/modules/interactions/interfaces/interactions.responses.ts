@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type {
+  AccountSuggestionDto,
+  AccountSuggestionListDto,
   BlockedUsersDto,
   CommentDto,
   CommentedVideoDto,
@@ -142,4 +144,26 @@ export class CommentHistoryPageResponse implements CommentHistoryPageDto {
 
   @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus.' })
   nextCursor!: string | null;
+}
+
+export class AccountSuggestionResponse implements AccountSuggestionDto {
+  @ApiProperty({ type: UserSummaryResponse })
+  user!: UserSummaryResponse;
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  followersCount!: number;
+
+  @ApiProperty({ description: 'Ce compte suit le compte connecté (« Te suit »).' })
+  followsYou!: boolean;
+
+  @ApiProperty({ type: [UserSummaryResponse], description: 'Comptes suivis par le compte connecté qui suivent ce compte, 3 au plus.' })
+  followedBy!: UserSummaryResponse[];
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Nombre de comptes suivis par le compte connecté qui suivent ce compte.' })
+  followedByCount!: number;
+}
+
+export class AccountSuggestionListResponse implements AccountSuggestionListDto {
+  @ApiProperty({ type: [AccountSuggestionResponse], description: 'Ceux qui te suivent d’abord, puis par nombre de comptes suivis en commun.' })
+  items!: AccountSuggestionResponse[];
 }

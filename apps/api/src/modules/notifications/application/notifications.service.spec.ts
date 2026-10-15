@@ -13,6 +13,7 @@ import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
 import { InMemoryNotificationPublisher } from '../infrastructure/in-memory-notification-publisher';
+import type { NotificationType } from '../domain/notification';
 import { InMemoryNotificationRepository } from '../infrastructure/in-memory-notification.repository';
 import { NotificationsService } from './notifications.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
@@ -206,6 +207,17 @@ describe('NotificationsService', () => {
         2,
       ]);
       expect((await service.listGroups('bob', null, 10)).items.map((g) => g.group.latest.type)).toEqual(['follow', 'like']);
+    });
+
+    it("groupes filtrés par type (écran d'activité, ADR-058)", async () => {
+      await service.notify(like('alice'));
+      await service.notify({ type: 'follow', actorId: 'alice', recipientId: 'bob' });
+      await service.notify({ type: 'comment', actorId: 'carol', recipientId: 'bob', videoId: video, commentId: 'c1', commentText: 'Top' });
+      const types = async (filter?: NotificationType[]) => (await service.listGroups('bob', null, 10, filter)).items.map((g) => g.group.latest.type);
+      expect(await types()).toEqual(['comment', 'follow', 'like']);
+      expect(await types(['like', 'comment'])).toEqual(['comment', 'like']);
+      expect(await types(['follow'])).toEqual(['follow']);
+      expect(await types([])).toEqual(['comment', 'follow', 'like']);
     });
 
     it('compte supprimé : ses actions sont retirées chez chaque destinataire, groupes recalculés', async () => {

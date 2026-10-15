@@ -59,6 +59,7 @@
 | [ADR-055](ADR-055-onboarding.md) | Onboarding : lancement, introduction, connexion par email ou pseudo, inscription par étapes (complète ADR-010 et ADR-017) | Accepté |
 | [ADR-056](ADR-056-profil-facon-tiktok.md) | Profil façon TikTok : compteur « J'aime », photo recadrée et story, modification par champ (complète ADR-016 et ADR-046) | Accepté |
 | [ADR-057](ADR-057-menu-profil-solde-parametres.md) | Menu du profil, page « Solde », centre des activités et paramètres façon TikTok, date de visionnage dans l'historique (complète ADR-016, ADR-006 et ADR-009) | Accepté |
+| [ADR-058](ADR-058-onglet-messages.md) | Onglet « Messages » façon TikTok : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages (complète ADR-016, ADR-018 et ADR-028) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

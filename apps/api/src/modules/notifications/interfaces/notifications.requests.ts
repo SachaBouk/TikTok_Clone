@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { DEFAULT_NOTIFICATIONS_PAGE_SIZE, MAX_NOTIFICATIONS_PAGE_SIZE, type NotificationType } from '../domain/notification';
 import { NOTIFICATION_TYPES } from '../domain/notification';
@@ -19,6 +19,15 @@ export class NotificationsQuery {
   @Min(1)
   @Max(MAX_NOTIFICATIONS_PAGE_SIZE)
   limit: number = DEFAULT_NOTIFICATIONS_PAGE_SIZE;
+}
+
+// Groupes, filtrés par type (écran d'activité, ADR-058) : `kind` répété ; absent, tous les types.
+export class NotificationGroupsQuery extends NotificationsQuery {
+  @ApiPropertyOptional({ enum: NOTIFICATION_TYPES, enumName: 'NotificationType', isArray: true })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === undefined ? undefined : Array.isArray(value) ? value : [value]))
+  @IsIn(NOTIFICATION_TYPES, { each: true })
+  kind?: NotificationType[];
 }
 
 // Liste complète d'un groupe : son type, et sa vidéo pour un like ou une republication.

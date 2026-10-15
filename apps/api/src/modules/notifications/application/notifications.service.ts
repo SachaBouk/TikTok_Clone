@@ -13,6 +13,7 @@ import {
   type NotificationWithContext,
   type RemovedNotification,
   type RetractableActivity,
+  NotificationType,
 } from '../domain/notification';
 import type { NotificationPublisher } from '../domain/notification-publisher';
 import type { NotificationRepository } from '../domain/notification.repository';
@@ -108,8 +109,9 @@ export class NotificationsService {
   // Groupes du plus récemment actif au plus ancien. Curseur : notification la plus récente du dernier groupe
   // reçu. Un groupe qui reçoit une nouvelle notification pendant le scroll remonte en tête : il peut alors
   // manquer dans les pages suivantes (l'app recharge la première page à chaque nouvelle notification).
-  async listGroups(recipientId: string, cursor: string | null, limit: number): Promise<NotificationGroupPage> {
-    const rows = await this.notifications.listGroups(recipientId, cursor, limit + 1, await this.excludedActors());
+  // `types` : filtre de l'écran d'activité (ADR-058), par exemple tout sauf les abonnements, à part dans « Nouveaux followers ».
+  async listGroups(recipientId: string, cursor: string | null, limit: number, types?: NotificationType[]): Promise<NotificationGroupPage> {
+    const rows = await this.notifications.listGroups(recipientId, cursor, limit + 1, await this.excludedActors(), types);
     const page = rows.slice(0, limit);
     return {
       items: await this.groupsWithContext(page),

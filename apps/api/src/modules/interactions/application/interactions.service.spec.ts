@@ -402,6 +402,27 @@ describe('InteractionsService', () => {
       await lists.setFollow(id(2), 'u5', true);
     });
 
+    it("comptes suggérés (ADR-058) : ceux qui me suivent d'abord, puis amis d'amis ; ni suivis, ni moi, ni masqués", async () => {
+      // u4 suit u1, qui suit u3 ; u2 suit u4.
+      await lists.setFollow(id(2), 'u4', true);
+      const suggestions = async () =>
+        (await lists.listSuggestions(id(4), 20)).map((s) => [s.user.username, s.followsMe, s.followedBy.map((u) => u.username), s.followedByCount]);
+      expect(await suggestions()).toEqual([
+        ['u2', true, [], 0],
+        ['u3', false, ['u1'], 1],
+      ]);
+      expect(await lists.listSuggestions(id(4), 1)).toHaveLength(1);
+      // Suivi : n'est plus suggéré.
+      await lists.setFollow(id(4), 'u3', true);
+      expect((await suggestions()).map(([username]) => username)).toEqual(['u2']);
+      await lists.setFollow(id(4), 'u3', false);
+      // Bloqué ou suspendu : masqué.
+      await lists.setBlock(id(4), 'u3', true);
+      expect((await suggestions()).map(([username]) => username)).toEqual(['u2']);
+      await suspended.add(id(2));
+      expect(await suggestions()).toEqual([]);
+    });
+
     it('liste les abonnés du plus récent au plus ancien, page par page, sans doublon ni oubli', async () => {
       const first = await lists.listFollows('followers', 'u1', undefined, null, 3);
       expect(usernames(first)).toEqual(['u5', 'u4', 'u3']);

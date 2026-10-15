@@ -106,3 +106,19 @@ export const DEFAULT_FOLLOWS_PAGE_SIZE = 20;
 export const MAX_FOLLOWS_PAGE_SIZE = 50;
 // Relations lues en une fois (une page du centre d'activité : 50 notifications au plus).
 export const MAX_RELATIONSHIP_IDS = 50;
+
+// Comptes suggérés (ADR-058) : amis d'amis. Candidats = comptes suivis par ceux que l'on suit, et ses abonnés que
+// l'on ne suit pas ; jamais soi-même, un compte déjà suivi ni un compte masqué (bloqué, suspendu). Classement : ceux
+// qui nous suivent d'abord, puis le nombre de comptes suivis qui les suivent, puis l'identifiant. Pas de pagination.
+export const DEFAULT_SUGGESTIONS = 20;
+export const MAX_SUGGESTIONS = 50;
+// Comptes suivis qui suivent la suggestion, affichés (« Suivi(e) par … »).
+export const SUGGESTION_FOLLOWERS_SHOWN = 3;
+
+export interface SuggestionCandidate {
+  userId: string;
+  followsMe: boolean;
+  // Comptes que l'on suit et qui suivent ce compte : les plus récemment abonnés d'abord (3 au plus), et leur nombre.
+  followedByIds: string[];
+  followedByCount: number;
+}

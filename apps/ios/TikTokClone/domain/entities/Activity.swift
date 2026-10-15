@@ -3,7 +3,7 @@ import Foundation
 // Centre d'activité (ADR-016, module notifications de l'API) : une notification par like, commentaire,
 // republication ou follow reçu (pas de favori). La boîte de réception les affiche regroupées (`ActivityGroup`).
 // S'y ajoutent les décisions de modération (ADR-038), sans auteur : signalement examiné, contenu retiré.
-enum ActivityKind: String, Equatable, Sendable {
+enum ActivityKind: String, CaseIterable, Equatable, Sendable {
     // `gift` : cadeau reçu sur une vidéo (ADR-050). `live` : un compte suivi lance un live (ADR-053).
     case like, comment, follow, repost, reportResolved, contentRemoved, gift, live
 

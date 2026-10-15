@@ -6,6 +6,7 @@ import type {
   FollowPosition,
   FollowRelations,
   ReactionPosition,
+  SuggestionCandidate,
   VideoReaction,
   ViewerInteractions,
   ViewPosition,
@@ -71,6 +72,8 @@ export abstract class InteractionRepository {
   abstract listBlocked(blockerId: string): Promise<string[]>;
 
   // Parmi `userIds`, ceux qui suivent `userId` et que `userId` suit.
+  // Comptes suggérés (ADR-058), déjà classés, sans `excludedIds`.
+  abstract findSuggestionCandidates(userId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]>;
   abstract findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>>;
 
   abstract findViewerInteractions(userId: string, videoIds: string[], authorIds: string[]): Promise<ViewerInteractions>;

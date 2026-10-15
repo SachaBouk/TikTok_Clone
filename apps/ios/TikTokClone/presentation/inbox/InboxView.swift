@@ -1,19 +1,19 @@
 import SwiftUI
 
-// Onglet « Boîte de réception » (choix du développeur, comme TikTok) : la rangée de stories (ADR-051), puis deux lignes,
-// « Activité » (centre d'activité, avec son badge) et « Demandes de message » (s'il y en a), puis les conversations, de la plus
-// récemment active à la plus ancienne. Le bouton ✎ écrit à l'un de ses abonnements.
+// Onglet « Messages », comme TikTok (ADR-058) : titre « Messages » et loupe (recherche « Compte et messages »), la rangée
+// de stories (ADR-051, « Créer » d'abord), la ligne « Activité et nouveaux abonnés » (dernière activité, badge), la ligne
+// « Demandes de message » (s'il y en a), puis les conversations, de la plus récemment active à la plus ancienne. On
+// écrit à quelqu'un depuis la recherche ou le bouton « Message » de son profil. Chats de groupe : étape suivante.
 struct InboxView: View {
     enum Route: Hashable {
         case activity
         case requests
+        case search
     }
 
     let container: AppContainer
+    @Environment(\.navigationPath) private var navigationPath
     @State private var openedConversation: ConversationRoute?
-    @State private var isComposing = false
-    // Compte choisi dans « Nouveau message » : la conversation s'ouvre une fois la feuille fermée.
-    @State private var composedUsername: String?
     @State private var deleting: Conversation?
     @State private var alertMessage: String?
 
@@ -29,18 +29,33 @@ struct InboxView: View {
                     .listRowSeparator(.hidden)
             }
             Section {
-                NavigationLink(value: Route.activity) {
-                    InboxShortcutRow(title: "Activité", systemImage: "bell.fill", count: activity.unreadCount)
+                // Un bouton qui pousse la route : dans une `List`, un lien ajoute un chevron (absent chez TikTok).
+                Button {
+                    navigationPath?.wrappedValue.append(Route.activity)
+                } label: {
+                    InboxShortcutRow(
+                        title: "Activité et nouveaux abonnés",
+                        subtitle: latestActivity,
+                        systemImage: "bolt.fill",
+                        count: activity.unreadCount
+                    )
                 }
+                .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
                 .accessibilityIdentifier("inbox.activityRow")
                 if messaging.badges.pendingRequests > 0 || !messaging.requests.items.isEmpty {
-                    NavigationLink(value: Route.requests) {
-                        InboxShortcutRow(title: "Demandes de message", systemImage: "envelope.fill", count: messaging.badges.pendingRequests)
+                    Button {
+                        navigationPath?.wrappedValue.append(Route.requests)
+                    } label: {
+                        InboxShortcutRow(
+                            title: "Demandes de message", subtitle: nil, systemImage: "envelope.fill", count: messaging.badges.pendingRequests)
                     }
+                    .buttonStyle(.plain)
+                    .listRowSeparator(.hidden)
                     .accessibilityIdentifier("inbox.requestsRow")
                 }
             }
-            Section("Messages") {
+            Section {
                 ForEach(messaging.inbox.items) { conversation in
                     // Un bouton, et non un lien de navigation : dans une `List`, un lien ajoute un chevron.
                     Button {
@@ -53,6 +68,7 @@ struct InboxView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .listRowSeparator(.hidden)
                     .swipeActions {
                         Button("Supprimer", systemImage: "trash", role: .destructive) { deleting = conversation }
                     }
@@ -62,38 +78,30 @@ struct InboxView: View {
                 if messaging.inbox.items.isEmpty {
                     InboxListState(
                         list: messaging.inbox, emptyTitle: "Aucun message",
-                        emptyDescription: "Écris à un de tes abonnements avec ✎, ou depuis le bouton « Message » d’un profil.")
+                        emptyDescription: "Cherche un compte avec la loupe, ou écris depuis le bouton « Message » d’un profil.")
                 }
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Boîte de réception")
+        .navigationTitle("Messages")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Nouveau message", systemImage: "square.and.pencil") { isComposing = true }
-                    .accessibilityIdentifier("inbox.compose")
+                NavigationLink(value: Route.search) {
+                    Label("Rechercher", systemImage: "magnifyingglass")
+                }
+                .accessibilityIdentifier("inbox.searchButton")
             }
         }
         .navigationDestination(for: Route.self) { route in
             switch route {
             case .activity: ActivityView(container: container)
             case .requests: MessageRequestsView(container: container)
+            case .search: InboxSearchView(container: container)
             }
         }
         .navigationDestination(item: $openedConversation) { route in
             ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
-        }
-        .sheet(
-            isPresented: $isComposing,
-            onDismiss: {
-                if let username = composedUsername { openedConversation = ConversationRoute(username: username) }
-                composedUsername = nil
-            }
-        ) {
-            NewMessageView(list: container.makeFollowingList()) { user in
-                composedUsername = user.username
-                isComposing = false
-            }
         }
         .confirmationDialog(
             "Supprimer la conversation ?",
@@ -123,33 +131,51 @@ struct InboxView: View {
             await messaging.inbox.loadFirstIfNeeded()
             await messaging.requests.loadFirstIfNeeded()
         }
+        // Dernière activité affichée sous « Activité et nouveaux abonnés » (sans marquer lu : seul l'écran d'activité le fait).
+        .task { await activity.list.loadFirstIfNeeded() }
         // Rangée relue à chaque affichage de l'onglet : les stories expirent d'elles-mêmes.
         // Lives des abonnements (ADR-053) aussi : un live terminé disparaît.
         .task { await container.stories.refresh() }
         .task { await container.lives.refresh() }
         .refreshable {
             await messaging.refresh()
-            await activity.refresh()
+            await activity.reload()
             await container.stories.refresh()
             await container.lives.refresh()
         }
     }
+
+    // « rayyy a republié ta vidéo. » : le groupe le plus récent.
+    private var latestActivity: String? {
+        activity.list.items.first.map { InboxShortcutRow.sentence(for: $0) }
+    }
 }
 
-// Ligne d'accès en tête de la boîte de réception, avec son compteur.
+// Ligne d'accès en tête de l'onglet, comme TikTok : rond rose, titre, aperçu en gris, compteur.
 private struct InboxShortcutRow: View {
     let title: String
+    let subtitle: String?
     let systemImage: String
     let count: Int
 
+    // Phrase d'un groupe d'activité : « Inès et Nathan ont aimé ta vidéo. »
+    static func sentence(for group: ActivityGroup) -> String {
+        group.actorNames.isEmpty ? group.summary : "\(group.actorNames) \(group.summary)"
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: systemImage)
-                .font(.title3)
+                .font(.title2)
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.accentColor, in: Circle())
-            Text(title).font(.body.weight(.semibold))
+                .frame(width: 56, height: 56)
+                .background(Color.brandPink, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.85)
+                if let subtitle {
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
             Spacer()
             if count > 0 {
                 Text(count, format: .number)
@@ -161,11 +187,13 @@ private struct InboxShortcutRow: View {
                     .accessibilityLabel("\(count) non lus")
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
-// Une conversation : photo, nom, aperçu du dernier message (ou « En train d'écrire… »), date, pastille non lue.
+// Une conversation, comme TikTok : photo, nom, aperçu du dernier message (ou « En train d'écrire… ») et sa date, puis le
+// nombre de messages non lus en rouge. Non lue : nom et aperçu en gras.
 struct ConversationRow: View {
     let conversation: Conversation
     let ownID: String?
@@ -174,28 +202,33 @@ struct ConversationRow: View {
     private var isUnread: Bool { conversation.unreadCount > 0 }
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(url: conversation.participant.avatarURL, name: conversation.participant.displayName, size: 52)
+        HStack(spacing: 14) {
+            AvatarView(url: conversation.participant.avatarURL, name: conversation.participant.displayName, size: 56)
             VStack(alignment: .leading, spacing: 2) {
                 Text(conversation.participant.displayName)
-                    .font(.body.weight(.semibold))
+                    .font(.body.weight(isUnread ? .semibold : .regular))
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.subheadline.weight(isUnread ? .semibold : .regular))
-                    .foregroundStyle(isUnread || isTyping ? .primary : .secondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(subtitle)
+                        .fontWeight(isUnread ? .semibold : .regular)
+                        .foregroundStyle(isUnread || isTyping ? .primary : .secondary)
+                        .lineLimit(1)
+                        .layoutPriority(-1)
+                    if let date = conversation.lastMessage?.createdAt, !isTyping {
+                        Text("·").foregroundStyle(.secondary)
+                        Text.relative(date).foregroundStyle(.secondary).fixedSize()
+                    }
+                }
+                .font(.subheadline)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .trailing, spacing: 6) {
-                if let date = conversation.lastMessage?.createdAt {
-                    Text.relative(date)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if isUnread {
-                    Circle().fill(Color.red).frame(width: 10, height: 10)
-                        .accessibilityLabel("Non lu")
-                }
+            if isUnread {
+                Text(conversation.unreadCount, format: .number)
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .background(Color.red, in: Circle())
+                    .accessibilityLabel("\(conversation.unreadCount) non lus")
             }
         }
         .padding(.vertical, 4)

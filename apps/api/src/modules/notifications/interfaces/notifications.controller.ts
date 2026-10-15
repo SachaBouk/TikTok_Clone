@@ -4,7 +4,7 @@ import type { NotificationGroupPageDto, NotificationPageDto, UnreadNotifications
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { NotificationsService } from '../application/notifications.service';
-import { MarkNotificationsReadRequest, NotificationListQuery, NotificationsQuery } from './notifications.requests';
+import { MarkNotificationsReadRequest, NotificationGroupsQuery, NotificationListQuery } from './notifications.requests';
 import {
   NotificationGroupPageResponse,
   NotificationPageResponse,
@@ -32,13 +32,13 @@ export class NotificationsController {
   }
 
   // Boîte de réception : groupes (« Inès, Nathan et 3 autres ont aimé ta vidéo »). Like et republication par
-  // vidéo, tous les follows ensemble, chaque commentaire seul.
+  // vidéo, tous les follows ensemble, chaque commentaire seul. `kind` répété : seulement ces types (ADR-058).
   @Get('groups')
   @ApiOkResponse({ type: NotificationGroupPageResponse })
-  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur, taille de page ou type invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
-  async listNotificationGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationsQuery): Promise<NotificationGroupPageDto> {
-    const page = await this.notifications.listGroups(user.userId, query.cursor ?? null, query.limit);
+  async listNotificationGroups(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationGroupsQuery): Promise<NotificationGroupPageDto> {
+    const page = await this.notifications.listGroups(user.userId, query.cursor ?? null, query.limit, query.kind);
     return { items: page.items.map(toNotificationGroupDto), nextCursor: page.nextCursor };
   }
 

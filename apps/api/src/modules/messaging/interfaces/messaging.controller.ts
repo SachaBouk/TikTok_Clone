@@ -11,18 +11,27 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { ConversationDto, ConversationPageDto, MessageDto, MessagePageDto, UnreadConversationsDto } from '@repo/shared';
+import type {
+  ConversationDto,
+  ConversationPageDto,
+  MessageDto,
+  MessagePageDto,
+  MessageSearchResultListDto,
+  UnreadConversationsDto,
+} from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { MessagingService } from '../application/messaging.service';
 import { MessagingErrorFilter } from './messaging-error.filter';
-import { MarkConversationReadRequest, OpenConversationRequest, PageQuery, SendMessageRequest } from './messaging.requests';
+import { MarkConversationReadRequest, MessageSearchQuery, OpenConversationRequest, PageQuery, SendMessageRequest } from './messaging.requests';
 import {
   ConversationPageResponse,
   ConversationResponse,
   MessagePageResponse,
   MessageResponse,
+  MessageSearchResultListResponse,
   toConversationDto,
+  toMessageSearchResultDto,
   toMessageDto,
   toUnreadConversationsDto,
   UnreadConversationsResponse,
@@ -49,6 +58,16 @@ export class MessagingController {
   async listConversations(@CurrentUser() user: AuthenticatedUser, @Query() query: PageQuery): Promise<ConversationPageDto> {
     const page = await this.messaging.listConversations(user.userId, query.cursor ?? null, query.limit);
     return { items: page.items.map(toConversationDto), nextCursor: page.nextCursor };
+  }
+
+  // Recherche dans le texte de ses messages (ADR-058). Déclarée avant `conversations/:id`.
+  @Get('conversations/search')
+  @ApiOkResponse({ type: MessageSearchResultListResponse, description: 'Messages trouvés, du plus récent au plus ancien.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Texte manquant ou trop long, nombre invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  async searchMessages(@CurrentUser() user: AuthenticatedUser, @Query() query: MessageSearchQuery): Promise<MessageSearchResultListDto> {
+    const results = await this.messaging.searchMessages(user.userId, query.q, query.limit);
+    return { items: results.map(toMessageSearchResultDto) };
   }
 
   @Get('conversations/requests')

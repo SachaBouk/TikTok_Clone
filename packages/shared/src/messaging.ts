@@ -79,3 +79,18 @@ export interface UnreadConversationsDto {
   // Demandes reçues en attente.
   requestCount: number;
 }
+
+// Message trouvé par la recherche (ADR-058) : il ouvre sa conversation.
+export interface MessageSearchResultDto {
+  conversationId: string;
+  messageId: string;
+  content: string;
+  createdAt: string;
+  // L'autre participant de la conversation.
+  participant: UserSummaryDto;
+  sender: UserSummaryDto;
+}
+
+export interface MessageSearchResultListDto {
+  items: MessageSearchResultDto[];
+}

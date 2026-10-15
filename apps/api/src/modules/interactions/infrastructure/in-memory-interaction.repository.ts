@@ -9,10 +9,12 @@ import type {
   FollowPosition,
   FollowRelations,
   ReactionPosition,
+  SuggestionCandidate,
   VideoReaction,
   ViewerInteractions,
   ViewPosition,
 } from '../domain/interaction';
+import { SUGGESTION_FOLLOWERS_SHOWN } from '../domain/interaction';
 import { InteractionRepository } from '../domain/interaction.repository';
 
 const COUNTERS = { like: 'likesCount', favorite: 'favoritesCount', repost: 'repostsCount' } as const;
@@ -226,6 +228,28 @@ export class InMemoryInteractionRepository extends InteractionRepository {
       .filter((key) => key.startsWith(`${blockerId}:`))
       .map((key) => key.split(':')[1])
       .reverse();
+  }
+
+  async findSuggestionCandidates(userId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]> {
+    const following = new Set(await this.listFollowingIds(userId));
+    const fans = new Set(await this.listFollowerIds(userId));
+    // Ordre d'insertion des follows = ordre du temps : les plus récents en dernier.
+    const via = new Map<string, string[]>();
+    for (const key of this.follows.keys()) {
+      const [followerId, followingId] = key.split(':') as [string, string];
+      if (following.has(followerId)) via.set(followingId, [followerId, ...(via.get(followingId) ?? [])]);
+    }
+    const excluded = new Set([userId, ...following, ...excludedIds]);
+    return [...new Set([...via.keys(), ...fans])]
+      .filter((id) => !excluded.has(id))
+      .map((id) => ({
+        userId: id,
+        followsMe: fans.has(id),
+        followedByIds: (via.get(id) ?? []).slice(0, SUGGESTION_FOLLOWERS_SHOWN),
+        followedByCount: via.get(id)?.length ?? 0,
+      }))
+      .sort((a, b) => Number(b.followsMe) - Number(a.followsMe) || b.followedByCount - a.followedByCount || (a.userId < b.userId ? -1 : 1))
+      .slice(0, limit);
   }
 
   async findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>> {

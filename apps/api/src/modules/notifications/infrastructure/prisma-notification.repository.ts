@@ -10,6 +10,7 @@ import {
   type NotificationFilter,
   type NotificationGroup,
   type RetractableActivity,
+  NotificationType,
 } from '../domain/notification';
 import { NotificationRepository } from '../domain/notification.repository';
 
@@ -143,9 +144,16 @@ export class PrismaNotificationRepository extends NotificationRepository {
   // Regroupement en SQL, sur les seules notifications du compte (index `user_id`) : une ligne par groupe, avec
   // la notification la plus récente (UUID v7 : l'ordre du texte est l'ordre du temps), le nombre, l'état de
   // lecture et les auteurs les plus récents. Les notifications les plus récentes sont ensuite relues par Prisma.
-  listGroups(recipientId: string, beforeId: string | null, limit: number, excludedActorIds: string[]): Promise<NotificationGroup[]> {
+  listGroups(
+    recipientId: string,
+    beforeId: string | null,
+    limit: number,
+    excludedActorIds: string[],
+    types?: NotificationType[],
+  ): Promise<NotificationGroup[]> {
     const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
-    return this.groups(recipientId, Prisma.empty, before, limit, excludedActorIds);
+    const only = types?.length ? Prisma.sql`AND type::text = ANY(${types}::text[])` : Prisma.empty;
+    return this.groups(recipientId, only, before, limit, excludedActorIds);
   }
 
   // Mêmes groupes, restreints aux notifications de `filters` avant le regroupement.

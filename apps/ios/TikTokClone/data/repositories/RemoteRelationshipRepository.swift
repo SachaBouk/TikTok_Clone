@@ -171,3 +171,21 @@ struct RemoteVideoListRepository: VideoListRepository {
         }
     }
 }
+
+// Comptes suggérés (ADR-058), `GET /users/me/suggestions`.
+struct RemoteSuggestionRepository: SuggestionRepository {
+    let client: Client
+
+    func suggestions() async throws -> [AccountSuggestion] {
+        switch try await mappingErrors({ try await client.listSuggestions(query: .init()) }) {
+        case .ok(let ok):
+            return try ok.body.json.items.map {
+                AccountSuggestion(
+                    user: UserSummary($0.user), followersCount: $0.followersCount, followsYou: $0.followsYou,
+                    followedBy: $0.followedBy.map(UserSummary.init), followedByCount: $0.followedByCount)
+            }
+        case .unauthorized: throw AppError.sessionExpired
+        case .badRequest, .undocumented: throw AppError.unexpected
+        }
+    }
+}

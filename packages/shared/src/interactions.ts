@@ -102,3 +102,18 @@ export interface CommentHistoryPageDto {
   // À renvoyer tel quel pour la page suivante ; null s'il n'y en a plus.
   nextCursor: string | null;
 }
+
+// Compte suggéré (ADR-058) : amis d'amis et abonnés que l'on ne suit pas.
+export interface AccountSuggestionDto {
+  user: UserSummaryDto;
+  followersCount: number;
+  // Ce compte suit le compte connecté (« Te suit »).
+  followsYou: boolean;
+  // Comptes suivis par le compte connecté qui suivent ce compte (3 au plus), et leur nombre (« Suivi(e) par … »).
+  followedBy: UserSummaryDto[];
+  followedByCount: number;
+}
+
+export interface AccountSuggestionListDto {
+  items: AccountSuggestionDto[];
+}

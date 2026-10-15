@@ -108,3 +108,30 @@ extension UserProfile {
         followersCount: 10, followingCount: 2, createdAt: Date(timeIntervalSince1970: 1_767_268_800)
     )
 }
+
+// Comptes suggérés (ADR-058) en mémoire.
+final class FakeSuggestionRepository: SuggestionRepository {
+    let stored: Mutex<[AccountSuggestion]>
+    let calls = Mutex(0)
+
+    init(_ suggestions: [AccountSuggestion] = []) {
+        stored = Mutex(suggestions)
+    }
+
+    func suggestions() async throws -> [AccountSuggestion] {
+        calls.withLock { $0 += 1 }
+        return stored.withLock { $0 }
+    }
+}
+
+// Suggestions écartées, en mémoire (ADR-058).
+final class InMemoryDismissedSuggestionsStore: DismissedSuggestionsStore {
+    private let stored: Mutex<[String]>
+
+    init(_ ids: [String] = []) {
+        stored = Mutex(ids)
+    }
+
+    var dismissedSuggestions: [String] { stored.withLock { $0 } }
+    func setDismissedSuggestions(_ ids: [String]) { stored.withLock { $0 = ids } }
+}

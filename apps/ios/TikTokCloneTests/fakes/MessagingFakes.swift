@@ -20,6 +20,9 @@ final class FakeMessagingRepository: MessagingRepository {
         // Identifiants « n101 »… : après les « mNN » des tests (ordre des UUID v7).
         var nextID = 100
         var repliedStoryIDs: [String] = []
+        // Recherche dans les messages (ADR-058) : résultats rendus tels quels, recherches reçues.
+        var searchResults: [MessageSearchResult] = []
+        var searches: [String] = []
     }
 
     let state = Mutex(State())
@@ -55,6 +58,14 @@ final class FakeMessagingRepository: MessagingRepository {
 
     func conversations(cursor: String?) async throws -> ConversationPage {
         try page(cursor: cursor, call: "conversations") { $0.status != .requestReceived }
+    }
+
+    func searchMessages(query: String) async throws -> [MessageSearchResult] {
+        try state.withLock { state in
+            state.searches.append(query)
+            if let error = state.error { throw error }
+            return state.searchResults.filter { $0.content.localizedCaseInsensitiveContains(query) }
+        }
     }
 
     func requests(cursor: String?) async throws -> ConversationPage {

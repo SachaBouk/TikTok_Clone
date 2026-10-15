@@ -9,10 +9,12 @@ import type {
   FollowPosition,
   FollowRelations,
   ReactionPosition,
+  SuggestionCandidate,
   VideoReaction,
   ViewerInteractions,
   ViewPosition,
 } from '../domain/interaction';
+import { SUGGESTION_FOLLOWERS_SHOWN } from '../domain/interaction';
 import { VideoNotAvailableError } from '../domain/interaction.errors';
 import { InteractionRepository } from '../domain/interaction.repository';
 
@@ -249,6 +251,33 @@ export class PrismaInteractionRepository extends InteractionRepository {
   async listBlocked(blockerId: string): Promise<string[]> {
     const rows = await this.prisma.block.findMany({ where: { blockerId }, orderBy: { createdAt: 'desc' }, select: { blockedId: true } });
     return rows.map((r) => r.blockedId);
+  }
+
+  // Une requête : ceux que l'on suit (`mine`), les comptes qu'ils suivent (`via`) et ses abonnés (`fans`), regroupés par
+  // candidat. Index `follows(follower_id)` (clé) et `(following_id, created_at)`.
+  async findSuggestionCandidates(userId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]> {
+    const rows = await this.prisma.$queryRaw<{ user_id: string; follows_me: boolean; via_ids: string[] | null; via_count: number }[]>`
+      WITH mine AS (
+        SELECT following_id FROM follows WHERE follower_id = ${userId}::uuid
+      ), via AS (
+        SELECT f.following_id AS candidate, f.follower_id AS via_id, f.created_at
+        FROM follows f JOIN mine m ON f.follower_id = m.following_id
+      ), fans AS (
+        SELECT follower_id AS candidate FROM follows WHERE following_id = ${userId}::uuid
+      ), candidates AS (
+        SELECT candidate FROM via UNION SELECT candidate FROM fans
+      )
+      SELECT c.candidate::text AS user_id,
+             EXISTS (SELECT 1 FROM fans WHERE fans.candidate = c.candidate) AS follows_me,
+             (SELECT (array_agg(v.via_id::text ORDER BY v.created_at DESC))[1:${SUGGESTION_FOLLOWERS_SHOWN}] FROM via v WHERE v.candidate = c.candidate) AS via_ids,
+             (SELECT count(*)::int FROM via v WHERE v.candidate = c.candidate) AS via_count
+      FROM candidates c
+      WHERE c.candidate <> ${userId}::uuid
+        AND c.candidate NOT IN (SELECT following_id FROM mine)
+        AND NOT (c.candidate = ANY(${excludedIds}::uuid[]))
+      ORDER BY follows_me DESC, via_count DESC, c.candidate
+      LIMIT ${limit}`;
+    return rows.map((r) => ({ userId: r.user_id, followsMe: r.follows_me, followedByIds: r.via_ids ?? [], followedByCount: r.via_count }));
   }
 
   async findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>> {

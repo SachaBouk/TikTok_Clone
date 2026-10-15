@@ -58,8 +58,9 @@ struct MainTabView: View {
             }
             // Publications en cours d'envoi ou de traitement.
             .badge(container.publishing.inProgressCount)
-            Tab("Boîte de réception", systemImage: "tray", value: .inbox) {
-                SignedInOnly(title: "Boîte de réception", systemImage: "tray", reason: "Connecte-toi pour voir ton activité et tes messages.") {
+            // Onglet « Messages » (ADR-058, ex-« Boîte de réception ») : activité et conversations.
+            Tab("Messages", systemImage: "message", value: .inbox) {
+                SignedInOnly(title: "Messages", systemImage: "message", reason: "Connecte-toi pour voir tes messages et ton activité.") {
                     NavigationStack(path: $inboxPath) {
                         InboxView(container: container)
                             .appDestinations(container)

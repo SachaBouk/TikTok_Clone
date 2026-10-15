@@ -107,6 +107,10 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
 // Messages qu'on peut envoyer dans une demande pas encore acceptée.
 export const REQUEST_MESSAGE_LIMIT = 3;
+// Recherche dans les messages (ADR-058) : texte cherché et nombre de résultats.
+export const MAX_SEARCH_QUERY_LENGTH = 100;
+export const DEFAULT_SEARCH_RESULTS = 20;
+export const MAX_SEARCH_RESULTS = 50;
 // Limites d'envoi par compte (fenêtres fixes) : messages de toute sorte, et nouvelles demandes.
 export const MESSAGE_RATE_LIMITS: RateLimitRule[] = [
   { limit: 20, windowSeconds: 60 },

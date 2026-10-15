@@ -112,6 +112,20 @@ export class InMemoryConversationRepository extends ConversationRepository {
     if (index >= 0) this.messages.splice(index, 1);
   }
 
+  async searchMessages(userId: string, query: string, limit: number): Promise<Message[]> {
+    const needle = query.toLowerCase();
+    return this.messages
+      .filter((m) => {
+        const conversation = this.conversations.get(m.conversationId);
+        const member = conversation?.members.get(userId);
+        if (!conversation || !member || !after(m.id, member.clearedUpToMessageId)) return false;
+        if (conversation.declinedAt && conversation.requestSenderId !== userId) return false;
+        return m.content.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .slice(0, limit);
+  }
+
   async listMessages(conversationId: string, beforeId: string | null, afterId: string | null, limit: number): Promise<Message[]> {
     return this.messages
       .filter((m) => m.conversationId === conversationId && (!beforeId || m.id < beforeId) && after(m.id, afterId))

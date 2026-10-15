@@ -1,7 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { DEFAULT_PAGE_SIZE, MAX_MESSAGE_LENGTH, MAX_PAGE_SIZE } from '../domain/messaging';
+import {
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_SEARCH_RESULTS,
+  MAX_MESSAGE_LENGTH,
+  MAX_PAGE_SIZE,
+  MAX_SEARCH_QUERY_LENGTH,
+  MAX_SEARCH_RESULTS,
+} from '../domain/messaging';
 
 // Corps et paramètres de requête validés par le ValidationPipe global (main.ts).
 
@@ -71,4 +78,21 @@ export class PageQuery {
   @Min(1)
   @Max(MAX_PAGE_SIZE)
   limit: number = DEFAULT_PAGE_SIZE;
+}
+
+// Recherche dans ses messages (ADR-058).
+export class MessageSearchQuery {
+  @ApiProperty({ minLength: 1, maxLength: MAX_SEARCH_QUERY_LENGTH, description: 'Texte cherché, sans casse.' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(MAX_SEARCH_QUERY_LENGTH)
+  q!: string;
+
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: MAX_SEARCH_RESULTS, default: DEFAULT_SEARCH_RESULTS })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_SEARCH_RESULTS)
+  limit: number = DEFAULT_SEARCH_RESULTS;
 }

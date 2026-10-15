@@ -63,6 +63,13 @@ export interface MessagePage {
   nextCursor: string | null;
 }
 
+// Message trouvé par la recherche (ADR-058), avec l'autre participant de sa conversation et son expéditeur.
+export interface MessageSearchResult {
+  message: Message;
+  participant: User;
+  sender: User;
+}
+
 export interface SendMessageInput {
   content?: string;
   videoId?: string;
@@ -127,6 +134,40 @@ export class MessagingService {
     const rows = await this.conversations.listRequests(userId, cursor, limit + 1);
     const page = await this.page(userId, rows, limit);
     return { ...page, items: page.items.filter((item) => item.canSend) };
+  }
+
+  // Recherche dans le texte de ses messages (ADR-058) : ses conversations seulement, sans les messages supprimés pour
+  // lui ni les demandes reçues qu'il a refusées ; une demande reçue en attente d'un compte masqué (bloqué, suspendu) est
+  // sautée, comme dans la liste des demandes. Du plus récent au plus ancien.
+  async searchMessages(userId: string, query: string, limit: number): Promise<MessageSearchResult[]> {
+    const text = query.trim();
+    if (!text) return [];
+    const messages = await this.conversations.searchMessages(userId, text, limit);
+    if (messages.length === 0) return [];
+    const conversationIds = [...new Set(messages.map((m) => m.conversationId))];
+    const conversations = new Map(
+      (await Promise.all(conversationIds.map((id) => this.conversations.findConversation(id)))).flatMap((c) => (c ? [[c.id, c] as const] : [])),
+    );
+    const others = new Map(
+      [...conversations.values()].flatMap((c) => {
+        const other = c.members.find((m) => m.userId !== userId);
+        return other ? [[c.id, other.userId] as const] : [];
+      }),
+    );
+    const [users, hidden] = await Promise.all([
+      this.users.getByIds([...new Set([userId, ...others.values()])]),
+      this.interactions.getHiddenAccountIds(userId),
+    ]);
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return messages.flatMap((message) => {
+      const conversation = conversations.get(message.conversationId);
+      const participant = byId.get(others.get(message.conversationId) ?? '');
+      const sender = byId.get(message.senderId);
+      if (!conversation || !participant || !sender) return [];
+      const pendingReceived = !conversation.acceptedAt && !conversation.declinedAt && conversation.requestSenderId === participant.id;
+      if (pendingReceived && hidden.has(participant.id)) return [];
+      return [{ message, participant, sender }];
+    });
   }
 
   // Du plus récent au plus ancien, sans les messages de la conversation supprimée pour ce compte.

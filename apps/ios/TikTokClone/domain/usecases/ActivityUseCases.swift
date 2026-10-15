@@ -17,8 +17,9 @@ struct LoadActivityGroupsUseCase: Sendable {
     let activity: any ActivityRepository
     let actorRelationships: LoadActorRelationshipsUseCase
 
-    func callAsFunction(cursor: String?) async throws -> ActivityGroupPage {
-        let page = try await activity.groups(cursor: cursor)
+    // `kinds` : filtre de l'écran d'activité (ADR-058) ; vide : tous les types.
+    func callAsFunction(kinds: [ActivityKind] = [], cursor: String?) async throws -> ActivityGroupPage {
+        let page = try await activity.groups(kinds: kinds, cursor: cursor)
         let relationships = await actorRelationships(page.groups.compactMap(\.followBackActor?.id))
         let groups = page.groups.map { group in
             var group = group

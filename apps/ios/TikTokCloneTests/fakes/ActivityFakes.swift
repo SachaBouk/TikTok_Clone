@@ -23,11 +23,11 @@ final class FakeActivityRepository: ActivityRepository {
         state.withLock { $0.notifications.insert(notification, at: 0) }
     }
 
-    func groups(cursor: String?) async throws -> ActivityGroupPage {
+    func groups(kinds: [ActivityKind], cursor: String?) async throws -> ActivityGroupPage {
         try state.withLock { state in
             if let error = state.error { throw error }
             var groups: [ActivityGroup] = []
-            for notification in state.notifications.reversed() {
+            for notification in state.notifications.reversed() where kinds.isEmpty || kinds.contains(notification.kind) {
                 let key = ActivityGroup.key(for: notification)
                 let existing = groups.first { $0.key == key }
                 groups.removeAll { $0.key == key }

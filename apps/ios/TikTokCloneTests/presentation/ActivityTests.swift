@@ -43,7 +43,7 @@ struct ActivityDataTests {
                     log.record(request, operation)
                     return operation == "listNotificationGroups" ? json(.ok, body) : json(.ok, #"{"items":[],"nextCursor":null}"#)
                 }))
-        let page = try await repository.groups(cursor: nil)
+        let page = try await repository.groups(kinds: [], cursor: nil)
         let group = try #require(page.groups.first)
         #expect(group.key == "like:v1")
         #expect(group.actorNames == "Ines, Nathan et 3 autres")
@@ -66,7 +66,7 @@ struct ActivityDataTests {
             "moderation":{"targetType":"video","outcome":"dismissed","excerpt":"Démo"},"createdAt":"2026-09-26T07:00:00.000Z"}],"nextCursor":null}
             """
         let repository = RemoteActivityRepository(client: makeClient(transport: MockTransport { _, _ in json(.ok, body) }))
-        let page = try await repository.groups(cursor: nil)
+        let page = try await repository.groups(kinds: [], cursor: nil)
         let removed = try #require(page.groups.first)
         #expect(removed.kind == .contentRemoved)
         #expect(removed.actors.isEmpty)

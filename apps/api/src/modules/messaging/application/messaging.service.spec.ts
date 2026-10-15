@@ -329,6 +329,38 @@ describe('MessagingService', () => {
     });
   });
 
+  describe('recherche dans les messages (ADR-058)', () => {
+    it('ses conversations seulement, sans casse, du plus récent au plus ancien ; ni supprimés pour soi ni demandes refusées', async () => {
+      await befriend('alice', 'bob');
+      const withBob = await open('alice', 'bob');
+      await send('alice', withBob, 'On se voit au Cinéma ?');
+      await send('bob', withBob, 'oui, cinéma à 20 h');
+      await send('bob', withBob, 'autre chose');
+      const found = async (userId: string, q: string) =>
+        (await service.searchMessages(userId, q, 20)).map((r) => [r.message.content, r.participant.username, r.sender.username]);
+      expect(await found('alice', 'CINÉ')).toEqual([
+        ['oui, cinéma à 20 h', 'bob', 'bob'],
+        ['On se voit au Cinéma ?', 'bob', 'alice'],
+      ]);
+      expect(await found('bob', 'cinéma')).toHaveLength(2);
+      // Ni les conversations des autres, ni les caractères de LIKE pris pour des jokers.
+      expect(await found('carol', 'cinéma')).toEqual([]);
+      expect(await found('alice', '%')).toEqual([]);
+      expect(await service.searchMessages('alice', 'cinéma', 1)).toHaveLength(1);
+      // Supprimée pour soi : plus rien, l'autre garde tout.
+      await service.deleteConversation('alice', withBob);
+      expect(await found('alice', 'cinéma')).toEqual([]);
+      expect(await found('bob', 'cinéma')).toHaveLength(2);
+      // Demande refusée : ses messages ne sont pas trouvés par celui qui l'a refusée.
+      const fromCarol = await open('carol', 'alice');
+      await send('carol', fromCarol, 'cinéma demain ?');
+      expect(await found('alice', 'demain')).toEqual([['cinéma demain ?', 'carol', 'carol']]);
+      await service.declineRequest('alice', fromCarol);
+      expect(await found('alice', 'demain')).toEqual([]);
+      expect(await found('carol', 'demain')).toHaveLength(1);
+    });
+  });
+
   describe('blocage', () => {
     it('plus aucun envoi dans les deux sens ; historique lisible', async () => {
       const id = await open('alice', 'bob');

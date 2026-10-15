@@ -10,6 +10,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type {
+  AccountSuggestionListDto,
   BlockedUsersDto,
   CommentDto,
   CommentHistoryPageDto,
@@ -27,8 +28,9 @@ import { Public } from '../../auth/interfaces/public.decorator';
 import { toUserSummary } from '../../users/interfaces/user-summary.response';
 import { InteractionsService, type CommentHistoryPage, type CommentWithAuthor, type FollowPage } from '../application/interactions.service';
 import { InteractionErrorFilter } from './interaction-error.filter';
-import { CommentsQuery, CreateCommentRequest, FollowsQuery, RelationshipsQuery } from './interactions.requests';
+import { CommentsQuery, CreateCommentRequest, FollowsQuery, RelationshipsQuery, SuggestionsQuery } from './interactions.requests';
 import {
+  AccountSuggestionListResponse,
   BlockedUsersResponse,
   CommentHistoryPageResponse,
   CommentPageResponse,
@@ -248,6 +250,24 @@ export class InteractionsController {
     const relationships = await this.interactions.getRelationships(user.userId, query.userIds);
     return {
       items: relationships.map((r) => ({ userId: r.userId, following: r.following, followedBy: r.followedBy, blockedByMe: r.blockedByMe })),
+    };
+  }
+
+  // Comptes suggérés (ADR-058) : amis d'amis et abonnés que l'on ne suit pas, sans comptes bloqués ni suspendus.
+  @Get('users/me/suggestions')
+  @ApiOkResponse({ type: AccountSuggestionListResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Nombre invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  async listSuggestions(@CurrentUser() user: AuthenticatedUser, @Query() query: SuggestionsQuery): Promise<AccountSuggestionListDto> {
+    const suggestions = await this.interactions.listSuggestions(user.userId, query.limit);
+    return {
+      items: suggestions.map((s) => ({
+        user: toUserSummary(s.user),
+        followersCount: s.user.followersCount,
+        followsYou: s.followsMe,
+        followedBy: s.followedBy.map(toUserSummary),
+        followedByCount: s.followedByCount,
+      })),
     };
   }
 
