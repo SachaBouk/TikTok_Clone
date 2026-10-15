@@ -55,6 +55,23 @@ struct RemoteFeedRepositoryTests {
         await #expect(throws: AppError.sessionExpired) { try await RemoteFeedRepository(client: expired).followingPage(cursor: nil) }
     }
 
+    @Test("feed des amis (ADR-054) : page, curseur transmis ; 401 → session expirée")
+    func friends() async throws {
+        let log = RequestLog()
+        let client = makeClient(
+            transport: MockTransport { request, operationID in
+                log.record(request, operationID)
+                return json(.ok, #"{"items":[\#(Self.item)}],"nextCursor":"c2"}"#)
+            })
+        let page = try await RemoteFeedRepository(client: client).friendsPage(cursor: "c1")
+        #expect(page.videos.map(\.id) == ["v1"])
+        #expect(page.nextCursor == "c2")
+        #expect(log.operations == ["getFriendsFeed"])
+
+        let expired = makeClient(transport: MockTransport { _, _ in json(.unauthorized, errorJSON(401, "x")) })
+        await #expect(throws: AppError.sessionExpired) { try await RemoteFeedRepository(client: expired).friendsPage(cursor: nil) }
+    }
+
     @Test("vue : 204 accepté, vidéo supprimée ignorée, 401 → session expirée")
     func recordView() async throws {
         for (status, expected) in [(HTTPResponse.Status.noContent, nil), (.notFound, nil), (.unauthorized, AppError.sessionExpired)] {

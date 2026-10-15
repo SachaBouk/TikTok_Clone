@@ -193,12 +193,13 @@ struct AnalyticsInstrumentationTests {
         #expect(second.properties["watch_ms"] == .int(4000))
     }
 
-    @Test("source du visionnage : feed principal, feed des abonnements (ADR-048), liste")
+    @Test("source du visionnage : feed principal, feeds des abonnements (ADR-048) et des amis (ADR-054), liste")
     func watchSource() async throws {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))
         await session.restore()
         for (mode, source) in [
-            (FeedViewModel.Mode.endlessFeed, "feed"), (.followingFeed, "following"), (.list(page(["a"], next: nil), startIndex: 0), "list"),
+            (FeedViewModel.Mode.endlessFeed, "feed"), (.followingFeed, "following"), (.friendsFeed, "friends"),
+            (.list(page(["a"], next: nil), startIndex: 0), "list"),
         ] {
             let viewModel = FeedViewModel(
                 loadPage: LoadFeedPageUseCase(feed: FakeFeedRepository([.success(page(["a"], next: nil))])),

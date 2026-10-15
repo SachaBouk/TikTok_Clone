@@ -31,6 +31,10 @@ final class FakeFeedRepository: FeedRepository {
         try next(cursor: cursor, feed: "following")
     }
 
+    func friendsPage(cursor: String?) async throws -> FeedPage {
+        try next(cursor: cursor, feed: "friends")
+    }
+
     private func next(cursor: String?, feed: String) throws -> FeedPage {
         try state.withLock { state in
             state.cursors.append(cursor)

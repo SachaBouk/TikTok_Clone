@@ -85,6 +85,21 @@ struct FeedViewModelTests {
         #expect(feed.requestedCursors == [nil, "c1", nil])
     }
 
+    @Test("feed des amis (ADR-054) : sa route, puis arrêt à la fin")
+    func friendsFeed() async {
+        let feed = FakeFeedRepository([.success(page(["a"], next: "c1")), .success(page(["b"], next: nil))])
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
+        await session.restore()
+        let viewModel = FeedViewModel(
+            loadPage: LoadFriendsFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
+            playback: playback, session: session, analytics: makeAnalytics(), mode: .friendsFeed, viewDelay: .milliseconds(20))
+        await viewModel.start()
+        await viewModel.loadMore()
+        await viewModel.loadMore()
+        #expect(feed.requestedFeeds == ["friends", "friends"])
+        #expect(viewModel.entries.map(\.video.id) == ["a", "b"])
+    }
+
     @Test("vue enregistrée après le délai de lecture, une seule fois par vidéo")
     func recordsView() async throws {
         let (viewModel, _) = await makeViewModel([.success(page(["a", "b"], next: nil))])

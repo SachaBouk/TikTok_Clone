@@ -56,6 +56,26 @@ export class FeedController {
     }
   }
 
+  // Feed des amis (ADR-054) : vidéos des abonnés mutuels, compte connecté seulement.
+  @Get('friends')
+  @ApiOkResponse({
+    type: FeedPageResponse,
+    description:
+      'Vidéos publiées des amis (comptes suivis qui suivent en retour), de la plus récente à la plus ancienne (ni ses propres vidéos, ' +
+      'ni les republications). Avec le `nextCursor` reçu : page suivante. `nextCursor` nul : fin de la liste.',
+  })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
+  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
+  async getFriendsFeed(@CurrentUser() user: AuthenticatedUser, @Query() query: FeedQuery): Promise<FeedPageDto> {
+    try {
+      const page = await this.feed.listFriends(user.userId, query.cursor, query.limit);
+      return { items: page.items.map(toFeedItemDto), nextCursor: page.nextCursor };
+    } catch (error) {
+      if (error instanceof InvalidFeedCursorError) throw new BadRequestException(error.message);
+      throw error;
+    }
+  }
+
   // Une vidéo seule, au format du feed (compteurs, auteur, état des boutons) : pour l'ouvrir dans le lecteur
   // depuis une notification, l'historique des commentaires ou un message partagé. `GET /videos/:id` ne donne
   // que son état de traitement et ses URLs.

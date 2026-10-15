@@ -55,9 +55,10 @@
 | [ADR-051](ADR-051-stories.md) | Stories (complète ADR-016, ADR-007, ADR-008 et ADR-012) | Accepté |
 | [ADR-052](ADR-052-enregistrement-edition-video.md) | Enregistrement et édition vidéo dans l'app (complète ADR-016, ADR-035 et ADR-040) | Accepté |
 | [ADR-053](ADR-053-live-comparaison-diffusion.md) | Live : comparaison des technologies de diffusion (complète ADR-016 et ADR-015) | Accepté |
+| [ADR-054](ADR-054-feed-amis.md) | Feed des amis (complète ADR-016 et ADR-048) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 053 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+Les ADR 017 à 054 consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
 l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
 (« Complété par »).

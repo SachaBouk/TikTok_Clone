@@ -440,6 +440,47 @@ describe('FeedService', () => {
     });
   });
 
+  describe('feed des amis (ADR-054)', () => {
+    it('donne les vidéos des seuls abonnés mutuels, de la plus récente à la plus ancienne, jusqu’à une vraie fin', async () => {
+      const bobs = [await publish('bob'), await publish('bob')];
+      await publish('dave');
+      await publish('alice'); // ses propres vidéos n'y sont pas
+      await interactions.setFollow('alice', 'bob', true);
+      await interactions.setFollow('bob', 'alice', true);
+      await interactions.setFollow('alice', 'dave', true); // suivi sans retour : pas un ami
+      const first = await feed.listFriends('alice', undefined, 1);
+      expect(first.items.map((i) => i.video.id)).toEqual([bobs[1]]);
+      const second = await feed.listFriends('alice', first.nextCursor!, 1);
+      expect(second).toMatchObject({ items: [{ video: { id: bobs[0] }, viewer: { followingAuthor: true } }], nextCursor: null });
+    });
+
+    it('ne compte pas un abonné que l’on ne suit pas', async () => {
+      await publish('bob');
+      await interactions.setFollow('bob', 'alice', true);
+      expect(await feed.listFriends('alice', undefined, 10)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('suit les relations : désabonnement, blocage et suspension retirent l’ami', async () => {
+      const bobs = await publish('bob');
+      await publish('dave');
+      for (const friend of ['bob', 'dave']) {
+        await interactions.setFollow('alice', friend, true);
+        await interactions.setFollow(friend, 'alice', true);
+      }
+      await interactions.setFollow('dave', 'alice', false);
+      expect((await feed.listFriends('alice', undefined, 10)).items.map((i) => i.video.id)).toEqual([bobs]);
+      await suspended.add('bob');
+      expect((await feed.listFriends('alice', undefined, 10)).items).toEqual([]);
+      await suspended.remove('bob');
+      await interactions.setBlock('alice', 'bob', true);
+      expect(await feed.listFriends('alice', undefined, 10)).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('refuse un curseur qui n’a pas été produit par l’API', async () => {
+      await expect(feed.listFriends('alice', 'pas-un-curseur', 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    });
+  });
+
   describe('page d’un hashtag (ADR-049)', () => {
     // Vidéo publiée avec ses hashtags, comme après `finishTranscoding`.
     let published = 0;

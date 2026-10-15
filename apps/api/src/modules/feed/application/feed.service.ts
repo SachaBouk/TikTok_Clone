@@ -118,8 +118,18 @@ export class FeedService {
   // avant la lecture : pas de page raccourcie par eux. Une vidéo publiée pendant le parcours apparaît au
   // prochain rechargement (sans curseur).
   async listFollowing(viewerId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
+    return this.listByAuthors(await this.interactions.listVisibleFollowingIds(viewerId), viewerId, cursor, limit);
+  }
+
+  // Feed des amis (ADR-054) : comme le feed des abonnements, limité aux amis (abonnés mutuels) de `viewerId`.
+  async listFriends(viewerId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
+    return this.listByAuthors(await this.interactions.listVisibleFriendIds(viewerId), viewerId, cursor, limit);
+  }
+
+  // Vidéos publiées de `authors`, de la plus récente à la plus ancienne, pagination par clé (feeds des abonnements et
+  // des amis). Lève InvalidFeedCursorError pour un curseur invalide.
+  private async listByAuthors(authors: string[], viewerId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
     const after = cursor ? decodeListCursor(cursor) : null;
-    const authors = await this.interactions.listVisibleFollowingIds(viewerId);
     const rows = await this.videos.listPublishedByAuthors(authors, after && { createdAt: after.at, id: after.videoId }, limit + 1);
     const page = rows.slice(0, limit);
     const last = page.at(-1);

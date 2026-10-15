@@ -4,7 +4,7 @@ import Observation
 // Lecteur vertical : pages de l'API, lecture de la vidéo courante, préchargement des voisines, vues comptées
 // après 1 s. Trois usages :
 // - le feed principal (ADR-016) : à la fin d'une session, il repart sur un nouvel ordre, il ne s'arrête jamais ;
-// - le feed des abonnements (ADR-048) : du plus récent au plus ancien, il s'arrête à la fin ;
+// - les feeds des abonnements (ADR-048) et des amis (ADR-054) : du plus récent au plus ancien, ils s'arrêtent à la fin ;
 // - une liste (grille d'un profil, historique) : ouverte sur la vidéo touchée, elle s'arrête à la fin.
 // Mesure d'audience (ADR-013) : visionnage de chaque vidéo, et expérience « invitation invité » (quelques vidéos
 // regardées sans compte ouvrent la connexion, pour la variante).
@@ -20,6 +20,7 @@ final class FeedViewModel {
     enum Mode {
         case endlessFeed
         case followingFeed
+        case friendsFeed
         // Vidéos déjà chargées par la grille, et vidéo touchée.
         case list(FeedPage, startIndex: Int)
     }
@@ -79,12 +80,13 @@ final class FeedViewModel {
             switch mode {
             case .endlessFeed: .feed
             case .followingFeed: .following
+            case .friendsFeed: .friends
             case .list: .list
             }
         watch = WatchReporter(source: source, playback: playback, analytics: analytics, now: now)
     }
 
-    // Le feed des abonnements et une liste s'arrêtent à leur fin ; le feed principal repart sur un nouvel ordre.
+    // Les feeds des abonnements et des amis, et une liste, s'arrêtent à leur fin ; le feed principal repart sur un nouvel ordre.
     private var stopsAtEnd: Bool {
         if case .endlessFeed = mode { return false }
         return true

@@ -29,6 +29,18 @@ struct RemoteFeedRepository: FeedRepository {
         }
     }
 
+    func friendsPage(cursor: String?) async throws -> FeedPage {
+        let output = try await mappingErrors { try await client.getFriendsFeed(query: .init(cursor: cursor, limit: Self.pageSize)) }
+        switch output {
+        case .ok(let ok):
+            let page = try ok.body.json
+            return FeedPage(videos: page.items.compactMap(FeedVideo.init), nextCursor: page.nextCursor)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func video(id: String) async throws -> FeedVideo {
         switch try await mappingErrors({ try await client.getFeedItem(path: .init(id: id)) }) {
         case .ok(let ok):

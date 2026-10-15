@@ -21,6 +21,8 @@ enum VideoSource: String, Sendable {
     case feed
     // Feed des abonnements (ADR-048).
     case following
+    // Feed des amis (ADR-054).
+    case friends
     // Lecteur vertical ouvert depuis une grille (profil, historique).
     case list
     // Vidéo seule (lien, notification, message).

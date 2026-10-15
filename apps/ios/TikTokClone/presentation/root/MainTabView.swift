@@ -3,7 +3,7 @@ import SwiftUI
 // Barre d'onglets native. En invité, seul l'accueil est accessible ; les autres onglets proposent de se connecter.
 struct MainTabView: View {
     enum Destination: Hashable {
-        case home, publish, inbox, profile
+        case home, friends, publish, inbox, profile
     }
 
     let container: AppContainer
@@ -12,6 +12,7 @@ struct MainTabView: View {
     // Écrans poussés au-dessus du feed (profils, lecteur d'une grille) : le feed se met en pause.
     @State private var feedPath = NavigationPath()
     // Chemins des autres onglets : une page de hashtag y est poussée par valeur (ADR-049).
+    @State private var friendsPath = NavigationPath()
     @State private var inboxPath = NavigationPath()
     @State private var profilePath = NavigationPath()
     private var router: AppRouter { container.router }
@@ -33,6 +34,20 @@ struct MainTabView: View {
                 }
                 .providesNavigationPath($feedPath)
                 .environment(\.isTabActive, selection == .home && !router.coversTabs)
+            }
+            // Feed des amis (ADR-054), entre l'accueil et la publication.
+            Tab("Amis", systemImage: "person.2", value: .friends) {
+                SignedInOnly(title: "Amis", systemImage: "person.2", reason: "Connecte-toi pour voir les vidéos de tes amis.") {
+                    NavigationStack(path: $friendsPath) {
+                        FriendsFeedView(container: container, isTabActive: selection == .friends && !router.coversTabs) {
+                            selection = .home
+                        }
+                        .toolbar(.hidden, for: .navigationBar)
+                        .appDestinations(container)
+                    }
+                    .providesNavigationPath($friendsPath)
+                    .environment(\.isTabActive, selection == .friends && !router.coversTabs)
+                }
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
                 SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {

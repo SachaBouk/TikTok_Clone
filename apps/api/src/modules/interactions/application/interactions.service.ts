@@ -411,6 +411,15 @@ export class InteractionsService {
     return following.filter((id) => !hidden.has(id));
   }
 
+  // Pour le feed des amis (ADR-054) : comptes que suit `userId` et qui le suivent en retour (abonnés mutuels), sans
+  // les comptes masqués (suspendus ; un blocage retire déjà les follows dans les deux sens).
+  async listVisibleFriendIds(userId: string): Promise<string[]> {
+    const following = await this.listVisibleFollowingIds(userId);
+    if (following.length === 0) return [];
+    const mutual = await this.interactions.findMutualFollows(userId, following);
+    return following.filter((id) => mutual.has(id));
+  }
+
   // Pour le module live (abonnés prévenus, ADR-053) : abonnés de `userId`, hors comptes suspendus.
   async listVisibleFollowerIds(userId: string): Promise<string[]> {
     const [followers, suspended] = await Promise.all([this.interactions.listFollowerIds(userId), this.suspended.all()]);

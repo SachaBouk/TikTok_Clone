@@ -66,3 +66,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-051](ADR-051-stories.md) — Stories
 - Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app
 - Complété par [ADR-053](ADR-053-live-comparaison-diffusion.md) — Live
+- Complété par [ADR-054](ADR-054-feed-amis.md) — Feed des amis
