@@ -1,21 +1,18 @@
 import SwiftUI
 
-// Attente de la reprise de session, au lancement. Même fond noir que l'écran de lancement système
-// (couleur `LaunchBackground`, `UILaunchScreen` dans project.yml) et que le feed qui suit : pas d'éclair blanc
-// entre les trois.
+// Écran de lancement (ADR-055), pendant la reprise de session : logo et nom de l'app au centre, sur le même fond noir
+// que l'écran de lancement système (couleur `LaunchBackground`, `UILaunchScreen` dans project.yml) et que le feed qui
+// suit : pas d'éclair blanc entre les trois.
 struct LaunchView: View {
     var body: some View {
         ZStack {
             Color("LaunchBackground").ignoresSafeArea()
-            VStack(spacing: 20) {
-                Text("TikTok Clone")
-                    .font(.title.bold())
-                    .foregroundStyle(.white)
-                ProgressView()
-                    .tint(.white)
+            VStack(spacing: 18) {
+                AppLogo(size: 76)
+                AppWordmark(size: 30)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Chargement de TikTok Clone")
     }
 }

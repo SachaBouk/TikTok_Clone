@@ -5,8 +5,9 @@ struct LoginUseCase: Sendable {
     let auth: any AuthRepository
     let profiles: any ProfileRepository
 
-    func callAsFunction(email: String, password: String) async throws -> UserProfile {
-        try await auth.login(email: email.trimmingCharacters(in: .whitespaces), password: password)
+    // `identifier` : email ou pseudo (ADR-055).
+    func callAsFunction(identifier: String, password: String) async throws -> UserProfile {
+        try await auth.login(identifier: identifier.trimmingCharacters(in: .whitespaces), password: password)
         return try await profiles.myProfile()
     }
 }

@@ -2,6 +2,8 @@ import type { AccountSuspension, AuthAccount, NewAccount } from './auth-account'
 
 export abstract class AuthAccountRepository {
   abstract findByEmail(email: string): Promise<AuthAccount | null>;
+  // Connexion par pseudo (ADR-055).
+  abstract findByUsername(username: string): Promise<AuthAccount | null>;
   abstract findByAppleSub(appleSub: string): Promise<AuthAccount | null>;
   // Lève EmailAlreadyUsedError ou UsernameAlreadyUsedError en cas de doublon.
   abstract create(account: NewAccount): Promise<AuthAccount>;

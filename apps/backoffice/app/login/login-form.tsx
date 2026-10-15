@@ -14,8 +14,8 @@ export function LoginForm({ returnTo, notice }: { returnTo: string; notice: stri
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="suite" value={returnTo} />
       <div className="flex flex-col gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="username" defaultValue={state.email} required />
+        <Label htmlFor="email">Email ou pseudo</Label>
+        <Input id="email" name="email" type="text" autoCapitalize="none" autoComplete="username" defaultValue={state.email} required />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="password">Mot de passe</Label>

@@ -7,8 +7,9 @@ struct RemoteAuthRepository: AuthRepository {
     let store: any TokenStore
     var now: @Sendable () -> Date = { Date() }
 
-    func login(email: String, password: String) async throws {
-        let output = try await mappingErrors { try await client.login(body: .json(.init(email: email, password: password))) }
+    // Email ou pseudo (ADR-055).
+    func login(identifier: String, password: String) async throws {
+        let output = try await mappingErrors { try await client.login(body: .json(.init(identifier: identifier, password: password))) }
         switch output {
         case .ok(let ok): try save(try ok.body.json)
         case .unauthorized: throw AppError.invalidCredentials

@@ -15,12 +15,12 @@ export interface LoginState {
   email: string;
 }
 
-// Connexion par email et mot de passe (`/auth/login` de l'API), réservée aux administrateurs : le rôle est
+// Connexion par email ou pseudo (ADR-055) et mot de passe (`/auth/login` de l'API), réservée aux administrateurs : le rôle est
 // vérifié avant d'ouvrir la session du backoffice. Un compte sans rôle voit sa session API révoquée aussitôt.
 export async function login(_previous: LoginState, form: FormData): Promise<LoginState> {
   const email = textField(form, 'email').trim();
   const password = textField(form, 'password');
-  if (!email || !password) return { error: 'Saisis ton email et ton mot de passe.', email };
+  if (!email || !password) return { error: 'Saisis ton email ou ton pseudo, et ton mot de passe.', email };
 
   try {
     const tokens = await auth.login(email, password, clientAddress((await headers()).get('x-forwarded-for')));
@@ -32,7 +32,7 @@ export async function login(_previous: LoginState, form: FormData): Promise<Logi
     }
     await saveSession(tokens);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return { error: 'Email ou mot de passe incorrect.', email };
+    if (error instanceof ApiError && error.status === 401) return { error: 'Identifiant ou mot de passe incorrect.', email };
     if (error instanceof ApiError && error.status === 403) return { error: 'Ce compte n’a pas accès au backoffice.', email };
     if (error instanceof ApiError && error.status === 429) {
       return { error: `Trop de tentatives de connexion. Réessaie dans ${formatDelay(error.retryAfterSeconds ?? 60)}.`, email };

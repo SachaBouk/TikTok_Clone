@@ -21,14 +21,15 @@ struct RemoteAuthRepositoryTests {
 
     @Test("connexion : enregistre la paire de tokens et son expiration")
     func loginSavesTokens() async throws {
-        try await repository { _ in json(.ok, tokensJSON(access: "A1", refresh: "R1")) }.login(email: "a@b.c", password: "motdepasse")
+        try await repository { _ in json(.ok, tokensJSON(access: "A1", refresh: "R1")) }.login(identifier: "a@b.c", password: "motdepasse")
         #expect(store.load() == AuthTokens(accessToken: "A1", refreshToken: "R1", accessTokenExpiresAt: now.addingTimeInterval(900)))
     }
 
     @Test("connexion refusée : invalidCredentials, rien d'enregistré")
     func loginRejected() async {
         await #expect(throws: AppError.invalidCredentials) {
-            try await repository { _ in json(.unauthorized, errorJSON(401, "Email ou mot de passe incorrect")) }.login(email: "a@b.c", password: "x")
+            try await repository { _ in json(.unauthorized, errorJSON(401, "Email ou mot de passe incorrect")) }.login(
+                identifier: "a@b.c", password: "x")
         }
         #expect(store.load() == nil)
     }
@@ -36,7 +37,7 @@ struct RemoteAuthRepositoryTests {
     @Test("compte suspendu (ADR-037) : 403 → message générique, rien d'enregistré")
     func loginSuspended() async {
         await #expect(throws: AppError.accountSuspended) {
-            try await repository { _ in json(.forbidden, errorJSON(403, "Compte suspendu")) }.login(email: "a@b.c", password: "motdepasse")
+            try await repository { _ in json(.forbidden, errorJSON(403, "Compte suspendu")) }.login(identifier: "a@b.c", password: "motdepasse")
         }
         #expect(store.load() == nil)
         #expect(AppError.accountSuspended.message == "Ton compte est suspendu.")
@@ -49,7 +50,7 @@ struct RemoteAuthRepositoryTests {
                 var response = HTTPResponse(status: .tooManyRequests, headerFields: [.contentType: "application/json"])
                 response.headerFields[HTTPField.Name("Retry-After")!] = "840"
                 return (response, HTTPBody(errorJSON(429, "Trop de tentatives de connexion")))
-            }.login(email: "a@b.c", password: "x")
+            }.login(identifier: "a@b.c", password: "x")
         }
         #expect(store.load() == nil)
         #expect(AppError.tooManyLoginAttempts(retryAfter: 840).message == "Trop de tentatives de connexion. Réessaie dans 14 min.")
@@ -78,14 +79,14 @@ struct RemoteAuthRepositoryTests {
     func validationMessages() async {
         let body = #"{"statusCode":400,"message":["email must be an email","password too short"]}"#
         await #expect(throws: AppError.rejected("email must be an email\npassword too short")) {
-            try await repository { _ in json(.badRequest, body) }.login(email: "x", password: "y")
+            try await repository { _ in json(.badRequest, body) }.login(identifier: "x", password: "y")
         }
     }
 
     @Test("API injoignable : network")
     func network() async {
         await #expect(throws: AppError.network) {
-            try await repository { _ in throw URLError(.cannotConnectToHost) }.login(email: "a@b.c", password: "motdepasse")
+            try await repository { _ in throw URLError(.cannotConnectToHost) }.login(identifier: "a@b.c", password: "motdepasse")
         }
     }
 

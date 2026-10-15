@@ -20,9 +20,9 @@ final class FakeAuthRepository: AuthRepository {
         state = Mutex(State(loginError: loginError, registerError: registerError, hasSession: hasSession))
     }
 
-    func login(email: String, password: String) async throws {
+    func login(identifier: String, password: String) async throws {
         try state.withLock {
-            $0.logins.append(email)
+            $0.logins.append(identifier)
             if let error = $0.loginError { throw error }
             $0.hasSession = true
         }

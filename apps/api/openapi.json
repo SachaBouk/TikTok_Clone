@@ -130,7 +130,7 @@
             }
           },
           "401": {
-            "description": "Email ou mot de passe incorrect.",
+            "description": "Identifiant (email ou pseudo) ou mot de passe incorrect.",
             "content": {
               "application/json": {
                 "schema": {
@@ -150,7 +150,7 @@
             }
           },
           "429": {
-            "description": "Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "description": "Trop d’échecs de connexion récents pour ce compte ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).",
             "headers": {
               "Retry-After": {
                 "description": "Secondes à attendre avant de réessayer.",
@@ -7403,8 +7403,9 @@
       "LoginRequest": {
         "type": "object",
         "properties": {
-          "email": {
+          "identifier": {
             "type": "string",
+            "maxLength": 254,
             "example": "alice@example.com"
           },
           "password": {
@@ -7414,7 +7415,7 @@
           }
         },
         "required": [
-          "email",
+          "identifier",
           "password"
         ]
       },

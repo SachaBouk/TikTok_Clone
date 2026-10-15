@@ -27,7 +27,7 @@ Ajouter un composant shadcn : `pnpm dlx shadcn@latest add <nom>` dans `apps/back
 
 ## Session
 
-- Connexion par `POST /auth/login`, puis `GET /admin/me` : un compte sans rôle `admin` est refusé et sa session API révoquée aussitôt.
+- Connexion par email ou pseudo (`POST /auth/login`, ADR-055), puis `GET /admin/me` : un compte sans rôle `admin` est refusé et sa session API révoquée aussitôt.
 - Échecs de connexion limités par l'API (ADR-030) : 429 → « Trop de tentatives de connexion. Réessaie dans N min. ». L'adresse du navigateur est transmise dans `X-Forwarded-For` ; l'API ne s'en sert pour sa limite par IP que si `TRUST_PROXY` désigne le backoffice (sinon, tous les administrateurs partagent l'adresse du serveur Next).
 - Jetons dans deux cookies `httpOnly` (`bo_access`, `bo_refresh`, `SameSite=Lax`, `Secure` en production) : le navigateur ne voit jamais un jeton.
   Le cookie de l'access token expire une minute avant lui ; la session dure 7 jours sans activité.

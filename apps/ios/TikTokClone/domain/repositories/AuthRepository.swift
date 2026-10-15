@@ -2,7 +2,7 @@
 // le domaine ne les manipule jamais.
 protocol AuthRepository: Sendable {
     // Lève AppError.invalidCredentials, .rejected, .network…
-    func login(email: String, password: String) async throws
+    func login(identifier: String, password: String) async throws
     func register(_ registration: Registration) async throws
     // Oublie la session localement, puis la révoque côté serveur si possible. Ne lève jamais.
     func logout() async

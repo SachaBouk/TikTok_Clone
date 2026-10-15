@@ -29,6 +29,8 @@ final class AppContainer {
     let stories: StoriesModel
     // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
     let lives: LiveModel
+    // Onboarding du premier lancement (ADR-055).
+    let onboarding = OnboardingModel(preferences: UserDefaultsPreferencesStore())
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let feed: any FeedRepository

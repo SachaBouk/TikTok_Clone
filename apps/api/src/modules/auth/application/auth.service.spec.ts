@@ -95,6 +95,14 @@ describe('AuthService', () => {
       await expect(service.login('alice@example.com', 'motdepasse', '10.0.9.9')).resolves.toHaveProperty('accessToken');
     });
 
+    it('email et pseudo du même compte partagent la limite (ADR-055)', async () => {
+      await service.register(registration);
+      for (let i = 0; i < 3; i++) await expect(fail('alice@example.com', `10.0.0.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      for (let i = 0; i < 2; i++) await expect(fail('@alice', `10.0.1.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.login('alice', 'motdepasse', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+      await expect(service.login('ALICE@example.com', 'motdepasse', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+    });
+
     it('une connexion réussie remet à zéro le compteur de l’email', async () => {
       await service.register(registration);
       for (let i = 0; i < 4; i++) await expect(fail()).rejects.toBeInstanceOf(InvalidCredentialsError);
@@ -174,6 +182,10 @@ describe('AuthService', () => {
     it('connecte avec le bon mot de passe, email insensible à la casse', async () => {
       await service.register(registration);
       await expect(service.login('ALICE@example.com', 'motdepasse')).resolves.toHaveProperty('accessToken');
+      // Par pseudo (ADR-055), sans casse ni « @ » initial.
+      await expect(service.login('alice', 'motdepasse')).resolves.toHaveProperty('accessToken');
+      await expect(service.login(' @Alice ', 'motdepasse')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('bob', 'motdepasse')).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
 
     it('refuse un mauvais mot de passe ou un email inconnu avec la même erreur', async () => {

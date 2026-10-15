@@ -39,17 +39,17 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @ApiOkResponse({ type: AuthTokensResponse })
-  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Email ou mot de passe incorrect.' })
+  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Identifiant (email ou pseudo) ou mot de passe incorrect.' })
   @ApiForbiddenResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037), après vérification de l’identité.' })
   @ApiTooManyRequestsResponse({
     type: ErrorResponse,
     description:
-      'Trop d’échecs de connexion récents pour cet email ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
+      'Trop d’échecs de connexion récents pour ce compte ou cette adresse IP : réessayer après le délai de l’en-tête Retry-After (secondes).',
     // Documenté pour que le client Swift généré l'expose (`headers.retryAfter`).
     headers: { 'Retry-After': { description: 'Secondes à attendre avant de réessayer.', schema: { type: 'integer', minimum: 1 } } },
   })
   async login(@Body() body: LoginRequest, @Ip() ip: string | undefined): Promise<AuthTokensDto> {
-    return toTokensDto(await this.auth.login(body.email, body.password, ip || null));
+    return toTokensDto(await this.auth.login(body.identifier, body.password, ip || null));
   }
 
   @Post('apple')

@@ -41,16 +41,18 @@ final class FakeAnalyticsService: AnalyticsService {
 }
 
 final class InMemoryPreferencesStore: PreferencesStore {
-    private let state: Mutex<(consent: Bool?, guestPromptDecided: Bool)>
+    private let state: Mutex<(consent: Bool?, guestPromptDecided: Bool, onboardingCompleted: Bool)>
 
-    init(consent: Bool? = nil) {
-        state = Mutex((consent, false))
+    init(consent: Bool? = nil, onboardingCompleted: Bool = false) {
+        state = Mutex((consent, false, onboardingCompleted))
     }
 
     var analyticsConsent: Bool? { state.withLock { $0.consent } }
     func setAnalyticsConsent(_ consent: Bool) { state.withLock { $0.consent = consent } }
     var guestPromptDecided: Bool { state.withLock { $0.guestPromptDecided } }
     func markGuestPromptDecided() { state.withLock { $0.guestPromptDecided = true } }
+    var onboardingCompleted: Bool { state.withLock { $0.onboardingCompleted } }
+    func markOnboardingCompleted() { state.withLock { $0.onboardingCompleted = true } }
 }
 
 // Mesure d'audience acceptée, avec un service simulé.

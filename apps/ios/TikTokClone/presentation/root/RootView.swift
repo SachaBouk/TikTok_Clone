@@ -31,9 +31,24 @@ struct RootView: View {
             container.activityChanged(signedIn: state[0], active: state[1])
         }
         .onOpenURL { container.router.open($0) }
-        // Mesure d'audience (ADR-013) : consentement demandé une fois la session reprise, compte identifié.
+        // Session reprise : onboarding du premier lancement (ADR-055), puis consentement à la mesure d'audience
+        // (ADR-013), après l'onboarding et pas par-dessus.
         .onChange(of: session.state == .restoring) { _, restoring in
-            if !restoring { analytics.askConsentIfNeeded() }
+            guard !restoring, session.state != .unavailable else { return }
+            // Sans l'animation de présentation (glissement depuis le bas) : l'introduction remplace l'écran de lancement.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { container.onboarding.sessionRestored(signedIn: session.isSignedIn) }
+            if !container.onboarding.isPresented { analytics.askConsentIfNeeded() }
+        }
+        .fullScreenCover(isPresented: Binding(get: { container.onboarding.isPresented }, set: { if !$0 { finishOnboarding() } })) {
+            OnboardingView(container: container) { finishOnboarding() }
+                .environment(session)
+                .environment(analytics)
+                // Connexion ou inscription faite pendant l'onboarding : il se termine.
+                .onChange(of: session.isSignedIn) { _, signedIn in
+                    if signedIn { finishOnboarding() }
+                }
         }
         .onChange(of: session.profile?.id, initial: true) { _, userID in
             analytics.sessionChanged(userID: userID)
@@ -48,5 +63,11 @@ struct RootView: View {
         ) {
             AnalyticsConsentView()
         }
+    }
+
+    private func finishOnboarding() {
+        guard container.onboarding.isPresented else { return }
+        container.onboarding.finish()
+        analytics.askConsentIfNeeded()
     }
 }

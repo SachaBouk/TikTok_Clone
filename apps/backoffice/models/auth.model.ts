@@ -18,8 +18,8 @@ async function post(path: string, body: unknown, extraHeaders: Record<string, st
 // Email et mot de passe : ApiError 401 s'ils sont incorrects, 429 après trop d'échecs (ADR-030).
 // `clientIp` : adresse du navigateur, transmise dans X-Forwarded-For. L'API ne s'en sert pour sa limite par IP
 // que si TRUST_PROXY désigne le backoffice comme proxy de confiance ; sinon, elle compte l'adresse du serveur Next.
-export async function login(email: string, password: string, clientIp: string | null = null): Promise<AuthTokensDto> {
-  const response = await post('/auth/login', { email, password }, clientIp ? { 'X-Forwarded-For': clientIp } : {});
+export async function login(identifier: string, password: string, clientIp: string | null = null): Promise<AuthTokensDto> {
+  const response = await post('/auth/login', { identifier, password }, clientIp ? { 'X-Forwarded-For': clientIp } : {});
   if (!response.ok) throw await ApiError.from(response);
   return (await response.json()) as AuthTokensDto;
 }

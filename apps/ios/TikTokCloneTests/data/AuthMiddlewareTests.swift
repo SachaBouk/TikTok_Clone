@@ -103,7 +103,7 @@ struct AuthMiddlewareTests {
 
     @Test("les routes d'authentification partent sans token")
     func authRoutesUnauthenticated() async throws {
-        _ = try await makeClient().login(body: .json(.init(email: "a@b.c", password: "motdepasse"))).ok
+        _ = try await makeClient().login(body: .json(.init(identifier: "a@b.c", password: "motdepasse"))).ok
         #expect(log.authorizations == [nil])
     }
 }

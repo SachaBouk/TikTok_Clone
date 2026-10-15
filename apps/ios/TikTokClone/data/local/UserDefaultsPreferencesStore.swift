@@ -13,6 +13,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let analyticsConsent = "analyticsConsent"
         static let guestPromptDecided = "guestPromptDecided"
         static let searchHistory = "searchHistory"
+        static let onboardingCompleted = "onboardingCompleted"
     }
 
     var analyticsConsent: Bool? {
@@ -29,6 +30,14 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
 
     func markGuestPromptDecided() {
         defaults.set(true, forKey: Key.guestPromptDecided)
+    }
+
+    var onboardingCompleted: Bool {
+        defaults.bool(forKey: Key.onboardingCompleted)
+    }
+
+    func markOnboardingCompleted() {
+        defaults.set(true, forKey: Key.onboardingCompleted)
     }
 }
 

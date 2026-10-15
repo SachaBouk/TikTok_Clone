@@ -15,6 +15,14 @@ struct AnalyticsEvent: Equatable, Sendable {
     let properties: [String: AnalyticsValue]
 }
 
+// D'où l'écran de connexion est ouvert (ADR-055).
+enum AuthSource: String, Sendable {
+    // Premier lancement de l'app.
+    case onboarding
+    // Action d'invité (like, commenter…) ou invitation de l'expérience A/B.
+    case prompt
+}
+
 // Écran où une vidéo est lue.
 enum VideoSource: String, Sendable {
     // Feed principal (« Pour toi »).
@@ -113,8 +121,11 @@ extension AnalyticsEvent {
             ])
     }
 
-    // Parcours d'onboarding : feuille de connexion affichée, inscription commencée puis terminée, connexion.
-    static let authSheetShown = AnalyticsEvent(name: "auth_sheet_shown", properties: [:])
+    // Parcours d'onboarding : écran de connexion affiché (`source` : `onboarding` au premier lancement, `prompt` ouvert
+    // par une action d'invité, ADR-055), inscription commencée puis terminée, connexion.
+    static func authSheetShown(source: AuthSource) -> AnalyticsEvent {
+        AnalyticsEvent(name: "auth_sheet_shown", properties: ["source": .string(source.rawValue)])
+    }
     static let signupStarted = AnalyticsEvent(name: "signup_started", properties: [:])
     static let signupCompleted = AnalyticsEvent(name: "signup_completed", properties: [:])
     static let loginCompleted = AnalyticsEvent(name: "login_completed", properties: [:])

@@ -34,10 +34,12 @@ export class RegisterRequest {
 
 // Pas de règle de format ici : la connexion ne doit rien révéler des règles d'inscription.
 export class LoginRequest {
-  @ApiProperty({ example: 'alice@example.com' })
+  // Email ou pseudo (ADR-055) ; un « @ » devant le pseudo est ignoré.
+  @ApiProperty({ maxLength: 254, example: 'alice@example.com' })
   @IsString()
   @IsNotEmpty()
-  email!: string;
+  @MaxLength(254)
+  identifier!: string;
 
   @ApiProperty({ maxLength: 128, format: 'password' })
   @IsString()

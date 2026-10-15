@@ -198,7 +198,7 @@ async function ensureAccount({ username, displayName }: (typeof ACCOUNTS)[number
 }
 
 async function login(email: string, username: string): Promise<string> {
-  const response = await request('POST', '/auth/login', { body: { email, password: PASSWORD } });
+  const response = await request('POST', '/auth/login', { body: { identifier: email, password: PASSWORD } });
   if (response.status !== 200) throw apiError(`connexion de @${username} (compte existant avec un autre mot de passe ?)`, response);
   return (response.body as AuthTokensDto).accessToken;
 }

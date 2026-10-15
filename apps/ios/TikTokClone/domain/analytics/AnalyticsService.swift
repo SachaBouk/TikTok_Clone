@@ -23,4 +23,7 @@ protocol PreferencesStore: Sendable {
     // Expérience « invitation invité » déjà tranchée sur cet appareil (une fois par installation).
     var guestPromptDecided: Bool { get }
     func markGuestPromptDecided()
+    // Onboarding (introduction et écran « Connexion ») déjà passé sur cet appareil (ADR-055).
+    var onboardingCompleted: Bool { get }
+    func markOnboardingCompleted()
 }

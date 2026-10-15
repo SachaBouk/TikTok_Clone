@@ -14,6 +14,10 @@ export class InMemoryAuthAccountRepository extends AuthAccountRepository {
     return toAuthAccount(this.accounts.find((a) => a.email === email));
   }
 
+  async findByUsername(username: string): Promise<AuthAccount | null> {
+    return toAuthAccount(this.accounts.find((a) => a.username === username));
+  }
+
   async findByAppleSub(appleSub: string): Promise<AuthAccount | null> {
     return toAuthAccount(this.accounts.find((a) => a.appleSub === appleSub));
   }

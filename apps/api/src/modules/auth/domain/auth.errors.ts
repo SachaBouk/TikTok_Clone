@@ -3,10 +3,10 @@ import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
 // Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
 export abstract class AuthError extends Error {}
 
-// Message volontairement identique pour un email inconnu et un mauvais mot de passe.
+// Message volontairement identique pour un identifiant inconnu et un mauvais mot de passe.
 export class InvalidCredentialsError extends AuthError {
   constructor() {
-    super('Email ou mot de passe incorrect');
+    super('Identifiant ou mot de passe incorrect');
     this.name = 'InvalidCredentialsError';
   }
 }

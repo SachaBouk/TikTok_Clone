@@ -5,7 +5,7 @@ struct LoginView: View {
     @FocusState private var focusedField: Field?
 
     private enum Field {
-        case email, password
+        case identifier, password
     }
 
     init(viewModel: LoginViewModel) {
@@ -14,19 +14,14 @@ struct LoginView: View {
 
     var body: some View {
         Form {
-            if let message = viewModel.invitation {
-                Section {
-                    Label(message, systemImage: "person.crop.circle.badge.plus")
-                        .accessibilityIdentifier("login.invitation")
-                }
-            }
             Section {
-                TextField("Email", text: $viewModel.email)
+                // Email ou pseudo (ADR-055).
+                TextField("Email ou nom d’utilisateur", text: $viewModel.identifier)
                     .textContentType(.username)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .focused($focusedField, equals: .email)
+                    .focused($focusedField, equals: .identifier)
                     .submitLabel(.next)
                     .accessibilityIdentifier("login.email")
                 SecureField("Mot de passe", text: $viewModel.password)
@@ -64,10 +59,10 @@ struct LoginView: View {
         .navigationTitle("Connexion")
         .onSubmit {
             switch focusedField {
-            case .email: focusedField = .password
+            case .identifier: focusedField = .password
             default: Task { await viewModel.submit() }
             }
         }
-        .onAppear { focusedField = .email }
+        .onAppear { focusedField = .identifier }
     }
 }

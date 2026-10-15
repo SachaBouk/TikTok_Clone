@@ -299,7 +299,7 @@ struct AnalyticsInstrumentationTests {
         let analytics = makeAnalytics(service)
         let viewModel = LoginViewModel(
             login: LoginUseCase(auth: FakeAuthRepository(), profiles: FakeProfileRepository()), session: session, analytics: analytics)
-        viewModel.email = "alice@test.local"
+        viewModel.identifier = "alice@test.local"
         viewModel.password = "password"
         await viewModel.submit()
         #expect(service.eventNames == ["login_completed"])

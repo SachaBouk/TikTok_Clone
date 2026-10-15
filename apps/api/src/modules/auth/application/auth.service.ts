@@ -13,7 +13,7 @@ import {
   TooManySignupsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
-import { LOGIN_EMAIL_RATE_LIMITS, LOGIN_IP_RATE_LIMITS, SIGNUP_IP_RATE_LIMITS } from '../domain/login-rules';
+import { LOGIN_ACCOUNT_RATE_LIMITS, LOGIN_IP_RATE_LIMITS, parseLoginIdentifier, SIGNUP_IP_RATE_LIMITS } from '../domain/login-rules';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { RESERVED_USERNAMES } from '../../users/domain/profile-rules';
@@ -82,26 +82,28 @@ export class AuthService {
 
   // `ip` : adresse du client (null hors HTTP). Échecs limités par email et par IP (ADR-030) : la limite est
   // vérifiée avant le mot de passe (qui n'est alors pas testé), et un échec est compté après coup.
-  async login(email: string, password: string, ip: string | null = null): Promise<AuthTokens> {
-    const normalized = normalizeEmail(email);
-    // Empreinte de l'email : aucune adresse en clair dans les clés Redis.
-    const emailKey = `login-email:${createHash('sha256').update(normalized).digest('hex')}`;
+  // Connexion par email ou pseudo (ADR-055) et mot de passe.
+  async login(identifier: string, password: string, ip: string | null = null): Promise<AuthTokens> {
+    const parsed = parseLoginIdentifier(identifier);
+    const account = parsed.kind === 'email' ? await this.accounts.findByEmail(parsed.value) : await this.accounts.findByUsername(parsed.value);
+    // Compté par compte : email et pseudo du même compte partagent la limite. Identifiant inconnu : son empreinte
+    // (aucun identifiant en clair dans les clés Redis).
+    const accountKey = `login-account:${account?.id ?? createHash('sha256').update(`${parsed.kind}:${parsed.value}`).digest('hex')}`;
     const ipKey = ip ? `login-ip:${ip}` : null;
     const waits = await Promise.all([
-      this.rateLimiter.check(emailKey, LOGIN_EMAIL_RATE_LIMITS),
+      this.rateLimiter.check(accountKey, LOGIN_ACCOUNT_RATE_LIMITS),
       ipKey ? this.rateLimiter.check(ipKey, LOGIN_IP_RATE_LIMITS) : null,
     ]);
     const retryAfter = Math.max(...waits.map((wait) => wait ?? 0));
     if (retryAfter > 0) throw new TooManyLoginAttemptsError(retryAfter);
 
-    const account = await this.accounts.findByEmail(normalized);
     // Vérification faite même si le compte n'existe pas (voir PasswordHasher.verify).
     const valid = await this.passwords.verify(password, account?.passwordHash ?? null);
     if (!account || !valid) {
-      await Promise.all([this.rateLimiter.hit(emailKey, LOGIN_EMAIL_RATE_LIMITS), ipKey && this.rateLimiter.hit(ipKey, LOGIN_IP_RATE_LIMITS)]);
+      await Promise.all([this.rateLimiter.hit(accountKey, LOGIN_ACCOUNT_RATE_LIMITS), ipKey && this.rateLimiter.hit(ipKey, LOGIN_IP_RATE_LIMITS)]);
       throw new InvalidCredentialsError();
     }
-    await this.rateLimiter.reset(emailKey, LOGIN_EMAIL_RATE_LIMITS);
+    await this.rateLimiter.reset(accountKey, LOGIN_ACCOUNT_RATE_LIMITS);
     await this.assertNotSuspended(account.id);
     return this.startSession(account.id);
   }

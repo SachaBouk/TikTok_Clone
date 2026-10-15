@@ -13,7 +13,7 @@ struct SessionAndViewModelsTests {
         let viewModel = LoginViewModel(
             login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
         #expect(!viewModel.canSubmit)
-        viewModel.email = " alice@example.com "
+        viewModel.identifier = " alice@example.com "
         viewModel.password = "motdepasse"
         #expect(viewModel.canSubmit)
 
@@ -29,10 +29,10 @@ struct SessionAndViewModelsTests {
         let session = makeSession(auth: auth)
         let viewModel = LoginViewModel(
             login: LoginUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
-        viewModel.email = "alice@example.com"
+        viewModel.identifier = "alice@example.com"
         viewModel.password = "mauvais"
         await viewModel.submit()
-        #expect(viewModel.errorMessage == "Email ou mot de passe incorrect.")
+        #expect(viewModel.errorMessage == "Identifiant ou mot de passe incorrect.")
         #expect(!session.isSignedIn)
         #expect(!viewModel.isSubmitting)
     }

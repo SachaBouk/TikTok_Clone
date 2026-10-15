@@ -1,6 +1,6 @@
 // Erreurs des appels à l'API, vues par le domaine : indépendantes du transport (ADR-002).
 enum AppError: Error, Equatable, Sendable {
-    // Email ou mot de passe incorrect (le serveur ne dit pas lequel).
+    // Identifiant (email ou pseudo) ou mot de passe incorrect (le serveur ne dit pas lequel).
     case invalidCredentials
     // Requête refusée par l'API, avec son message (pseudo déjà pris, email invalide…).
     case rejected(String)
@@ -30,7 +30,7 @@ enum AppError: Error, Equatable, Sendable {
     // Message affiché à l'utilisateur.
     var message: String {
         switch self {
-        case .invalidCredentials: "Email ou mot de passe incorrect."
+        case .invalidCredentials: "Identifiant ou mot de passe incorrect."
         case .rejected(let message): message
         case .sessionExpired: "Ta session a expiré. Reconnecte-toi."
         case .blocked: "Action impossible : l’un de vous a bloqué l’autre."

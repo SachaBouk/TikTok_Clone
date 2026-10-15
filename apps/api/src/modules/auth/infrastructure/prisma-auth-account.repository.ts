@@ -19,6 +19,10 @@ export class PrismaAuthAccountRepository extends AuthAccountRepository {
     return this.prisma.user.findUnique({ where: { email }, select: accountSelect });
   }
 
+  findByUsername(username: string): Promise<AuthAccount | null> {
+    return this.prisma.user.findUnique({ where: { username }, select: accountSelect });
+  }
+
   findByAppleSub(appleSub: string): Promise<AuthAccount | null> {
     return this.prisma.user.findUnique({ where: { appleSub }, select: accountSelect });
   }
