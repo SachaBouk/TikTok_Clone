@@ -24,6 +24,10 @@ export class UserProfileResponse implements UserProfileDto {
   @ApiProperty({ type: 'integer', minimum: 0 })
   followingCount!: number;
 
+  // Likes reçus sur ses vidéos publiées (ADR-056).
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  likesCount!: number;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 }

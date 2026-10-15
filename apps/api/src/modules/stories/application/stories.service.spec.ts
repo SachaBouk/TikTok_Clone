@@ -36,6 +36,7 @@ import {
 } from '../domain/story.errors';
 import { STORY_CLEANUP_DELAY_MS } from '../domain/story-queues';
 import { inMemoryStories, jpegHeader, publishTestStory } from '../infrastructure/in-memory-stories';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -76,6 +77,7 @@ describe('StoriesService (ADR-051)', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const videos = new VideosService(
       videoRepository,

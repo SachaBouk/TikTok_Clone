@@ -15,7 +15,7 @@ import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { Public } from '../../auth/interfaces/public.decorator';
 import { UsersService } from '../application/users.service';
-import type { User } from '../domain/user';
+import type { UserProfileView } from '../domain/user';
 import { AvatarUploadResponse } from './avatar-upload.response';
 import { UserInterestsResponse, UsernameAvailabilityResponse } from './interests.responses';
 import { UserErrorFilter } from './user-error.filter';
@@ -38,7 +38,7 @@ export class UsersController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
   async getMyProfile(@CurrentUser() user: AuthenticatedUser): Promise<UserProfileDto> {
-    return toProfileDto(await this.usersService.getById(user.userId));
+    return toProfileDto(await this.usersService.profileView(await this.usersService.getById(user.userId)));
   }
 
   // Seuls les champs présents changent.
@@ -50,7 +50,9 @@ export class UsersController {
   @ApiConflictResponse({ type: ErrorResponse, description: 'Pseudo déjà pris.' })
   async updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateProfileRequest): Promise<UserProfileDto> {
     return toProfileDto(
-      await this.usersService.updateProfile(user.userId, { username: body.username, displayName: body.displayName, bio: body.bio }),
+      await this.usersService.profileView(
+        await this.usersService.updateProfile(user.userId, { username: body.username, displayName: body.displayName, bio: body.bio }),
+      ),
     );
   }
 
@@ -85,7 +87,7 @@ export class UsersController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
   async setMyAvatar(@CurrentUser() user: AuthenticatedUser, @Body() body: SetAvatarRequest): Promise<UserProfileDto> {
-    return toProfileDto(await this.usersService.setAvatar(user.userId, body.avatarId));
+    return toProfileDto(await this.usersService.profileView(await this.usersService.setAvatar(user.userId, body.avatarId)));
   }
 
   @Delete('me/avatar')
@@ -93,7 +95,7 @@ export class UsersController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
   async removeMyAvatar(@CurrentUser() user: AuthenticatedUser): Promise<UserProfileDto> {
-    return toProfileDto(await this.usersService.removeAvatar(user.userId));
+    return toProfileDto(await this.usersService.profileView(await this.usersService.removeAvatar(user.userId)));
   }
 
   // Centres d'intérêt du compte (ADR-055), privés.
@@ -130,12 +132,12 @@ export class UsersController {
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Pseudo inconnu.' })
   @ApiGoneResponse({ type: ErrorResponse, description: 'Compte suspendu par un administrateur (ADR-037).' })
   async getProfile(@Param('username') username: string): Promise<UserProfileDto> {
-    return toProfileDto(await this.usersService.getPublicProfile(username));
+    return toProfileDto(await this.usersService.profileView(await this.usersService.getPublicProfile(username)));
   }
 }
 
 // Mapping explicite : un champ ajouté au type de domaine n'est pas exposé par l'API sans le vouloir.
-function toProfileDto(user: User): UserProfileDto {
+function toProfileDto({ user, likesCount }: UserProfileView): UserProfileDto {
   return {
     id: user.id,
     username: user.username,
@@ -144,6 +146,7 @@ function toProfileDto(user: User): UserProfileDto {
     bio: user.bio,
     followersCount: user.followersCount,
     followingCount: user.followingCount,
+    likesCount,
     createdAt: user.createdAt.toISOString(),
   };
 }

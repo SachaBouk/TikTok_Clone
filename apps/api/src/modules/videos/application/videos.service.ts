@@ -279,6 +279,11 @@ export class VideosService {
     return this.videos.countByAuthors([...new Set(userIds)]);
   }
 
+  // Pour le module users : likes reçus par un compte, sur ses vidéos publiées (compteur « J'aime » du profil, ADR-056).
+  countLikesReceived(userId: string): Promise<number> {
+    return this.videos.sumLikesByAuthor(userId);
+  }
+
   // Hashtags (ADR-049). Pour le module search : hashtags qui commencent par `prefix` (« # » initial ignoré), ayant au
   // moins une vidéo, du plus utilisé au moins utilisé. Début de nom invalide : aucun.
   searchHashtags(prefix: string, limit: number): Promise<Hashtag[]> {

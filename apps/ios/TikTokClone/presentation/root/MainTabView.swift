@@ -99,6 +99,19 @@ struct MainTabView: View {
                 AuthFlowView(container: container)
             }
         }
+        // Profil ouvert par un lien d'app (ADR-056), avec sa propre pile.
+        .sheet(item: $router.presentedProfile) { route in
+            NavigationStack {
+                ProfileView(viewModel: container.makeProfileViewModel(username: route.username), container: container)
+                    .appDestinations(container)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Fermer", systemImage: "xmark") { router.presentedProfile = nil }
+                        }
+                    }
+            }
+            .environment(container.stories)
+        }
         // Visionneuse de stories (ADR-051), sauf quand la vidéo seule est ouverte : elle la présente elle-même.
         .storiesPresenter(container) { container.router.presentedVideo == nil }
         // Live (ADR-053), par-dessus tout.

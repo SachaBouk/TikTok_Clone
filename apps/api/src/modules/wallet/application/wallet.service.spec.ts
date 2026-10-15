@@ -34,6 +34,7 @@ import { InMemoryWalletRepository } from '../infrastructure/in-memory-wallet.rep
 import { WalletService, type WalletHistoryItem } from './wallet.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 const ALICE = '0192f3a0-0000-7000-8000-00000000000a';
 const BOB = '0192f3a0-0000-7000-8000-00000000000b';
@@ -97,6 +98,7 @@ describe('WalletService', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     let tick = 0;
     videoRepository = new InMemoryVideoRepository(() => new Date(Date.UTC(2026, 0, 1) + ++tick * 1000));

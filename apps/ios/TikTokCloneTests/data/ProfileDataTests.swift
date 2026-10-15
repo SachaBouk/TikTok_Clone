@@ -7,7 +7,7 @@ import TikTokAPI
 
 private let bobJSON = """
     {"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null,"bio":null,\
-    "followersCount":10,"followingCount":2,"createdAt":"2026-01-01T12:00:00.123Z"}
+    "followersCount":10,"followingCount":2,"likesCount":25,"createdAt":"2026-01-01T12:00:00.123Z"}
     """
 
 private let userSummaryJSON = #"{"id":"u2","username":"bob","displayName":"Bob","avatarUrl":"http://cdn.test/bob.jpg"}"#
@@ -27,6 +27,7 @@ struct ProfileDataTests {
         let profile = try await RemoteProfileRepository(client: client { _ in json(.ok, bobJSON) }).profile(username: "bob")
         #expect(profile.username == "bob")
         #expect(profile.bio == nil)
+        #expect(profile.likesCount == 25)
         await #expect(throws: AppError.notFound) {
             try await RemoteProfileRepository(client: client { _ in json(.notFound, errorJSON(404, "x")) }).profile(username: "x")
         }

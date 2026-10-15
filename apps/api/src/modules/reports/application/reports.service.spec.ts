@@ -29,6 +29,7 @@ import { ReportsService } from './reports.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -92,6 +93,7 @@ describe('ReportsService', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const videos = new VideosService(
       videoRepository,

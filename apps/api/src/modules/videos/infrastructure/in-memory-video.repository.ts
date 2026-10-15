@@ -151,6 +151,14 @@ export class InMemoryVideoRepository extends VideoRepository {
     return counts;
   }
 
+  async sumLikesByAuthor(userId: string): Promise<number> {
+    let sum = 0;
+    for (const video of this.videos.values()) {
+      if (video.userId === userId && video.status === 'ready') sum += video.counters.likesCount;
+    }
+    return sum;
+  }
+
   // Reproduit les triggers de compteurs de la base (migration interaction_counters), pour les tests.
   adjustCounter(id: string, counter: Counter, delta: number) {
     const video = this.videos.get(id);

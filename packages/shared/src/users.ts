@@ -7,6 +7,8 @@ export interface UserProfileDto {
   bio: string | null;
   followersCount: number;
   followingCount: number;
+  // Likes reçus sur ses vidéos publiées (compteur « J'aime » du profil, ADR-056).
+  likesCount: number;
   createdAt: string;
 }
 

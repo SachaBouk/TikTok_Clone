@@ -31,6 +31,7 @@ import { InMemoryInteractionRepository } from '../infrastructure/in-memory-inter
 import { InteractionsService } from './interactions.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -81,6 +82,7 @@ describe('InteractionsService', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const videos = new VideosService(
       videoRepository,
@@ -367,6 +369,7 @@ describe('InteractionsService', () => {
         new InMemoryAccountContentCleanup(),
         new InMemoryInterestRepository(),
         suspended,
+        new InMemoryReceivedLikesCounter(),
       );
       const videos = new VideosService(
         videoRepository,

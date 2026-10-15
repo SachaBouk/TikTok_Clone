@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import TikTokAPI
+import UIKit
 
 // Injection de dépendances manuelle (ADR-002) : seul endroit où les implémentations de la couche data/
 // sont choisies. Les vues demandent leurs ViewModels ici ; les ViewModels ne voient que des protocoles.
@@ -487,7 +488,21 @@ final class AppContainer {
             updateProfile: UpdateProfileUseCase(profiles: profiles),
             changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: URLSessionAvatarUploader()),
             removeAvatar: RemoveAvatarUseCase(profiles: profiles),
-            session: session
+            session: session,
+            // Story « nouvelle photo de profil » (ADR-056) : dessinée, préparée comme une story photo, puis mise en file.
+            publishStory: { [session, publishing] avatar in
+                guard let username = session.profile?.username, let image = UIImage(data: avatar),
+                    let story = ProfilePhotoStory.render(avatar: image, username: username, date: .now)
+                else { return "Impossible de préparer la story." }
+                do {
+                    let file = try await PrepareStoryPhotoUseCase(renderer: UIKitStoryPhotoRenderer())(story)
+                    return publishing.publish(
+                        file: file, description: "", preview: UIImage(data: story), kind: .story,
+                        details: PublicationDetails(source: .profilePhoto))
+                } catch {
+                    return AppError.from(error).message
+                }
+            }
         )
     }
 

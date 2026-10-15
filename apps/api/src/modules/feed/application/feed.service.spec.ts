@@ -28,6 +28,7 @@ import { InMemoryFeedSnapshotStore } from '../infrastructure/in-memory-feed-snap
 import { FeedService } from './feed.service';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -95,6 +96,7 @@ describe('FeedService', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const notifications = new NotificationsService(
       new InMemoryNotificationRepository(),

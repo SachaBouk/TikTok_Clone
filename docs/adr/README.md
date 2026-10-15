@@ -57,6 +57,7 @@
 | [ADR-053](ADR-053-live-comparaison-diffusion.md) | Live : comparaison des technologies de diffusion (complète ADR-016 et ADR-015) | Accepté |
 | [ADR-054](ADR-054-feed-amis.md) | Feed des amis (complète ADR-016 et ADR-048) | Accepté |
 | [ADR-055](ADR-055-onboarding.md) | Onboarding : lancement, introduction, connexion par email ou pseudo, inscription par étapes (complète ADR-010 et ADR-017) | Accepté |
+| [ADR-056](ADR-056-profil-facon-tiktok.md) | Profil façon TikTok : compteur « J'aime », photo recadrée et story, modification par champ (complète ADR-016 et ADR-046) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

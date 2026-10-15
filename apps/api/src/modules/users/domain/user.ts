@@ -11,6 +11,13 @@ export interface User {
   createdAt: Date;
 }
 
+// Profil affiché (`GET /users/me`, `GET /users/:username`…) : le compte et ses likes reçus (ADR-056), calculés à la
+// lecture du profil seulement (les autres lectures de comptes n'en ont pas besoin).
+export interface UserProfileView {
+  user: User;
+  likesCount: number;
+}
+
 // Champs du profil modifiables par le compte ; seuls les champs présents changent.
 export interface ProfileChanges {
   username?: string;

@@ -12,6 +12,14 @@ final class AppRouter {
 
     var presentedVideo: VideoRoute?
 
+    // Profil ouvert par un lien d'app (tiktokclone://users/<pseudo>, « Partager le profil », ADR-056), dans une feuille.
+    struct ProfileSheetRoute: Identifiable, Equatable {
+        let username: String
+        var id: String { username }
+    }
+
+    var presentedProfile: ProfileSheetRoute?
+
     // Visionneuse de stories (ADR-051) : les stories d'un compte, puis celles des suivants (rangée).
     struct StoriesRoute: Identifiable, Equatable {
         let id = UUID()
@@ -72,6 +80,10 @@ final class AppRouter {
     func open(_ url: URL) -> Bool {
         if let liveID = LiveLink.liveID(from: url) {
             openLive(liveID, source: .link)
+            return true
+        }
+        if let username = ProfileLink.username(from: url) {
+            presentedProfile = ProfileSheetRoute(username: username)
             return true
         }
         guard let videoID = VideoLink.videoID(from: url) else { return false }

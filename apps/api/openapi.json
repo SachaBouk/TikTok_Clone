@@ -7640,6 +7640,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "likesCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -7653,6 +7657,7 @@
           "bio",
           "followersCount",
           "followingCount",
+          "likesCount",
           "createdAt"
         ]
       },

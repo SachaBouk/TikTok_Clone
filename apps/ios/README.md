@@ -161,7 +161,9 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 
 - Son profil (onglet Profil) ou celui d'un autre compte, ouvert depuis le pseudo ou l'avatar d'une vidéo, un commentaire, une liste d'abonnés. Lisible en invité ; « Suivre » ouvre alors la connexion.
 - Grilles en 3 colonnes : vidéos et republications ; favoris et likes sur son seul profil. Toucher une vidéo ouvre le lecteur vertical sur elle, avec la suite de la liste. En tête de ses vidéos : ses publications en cours ou en échec.
-- « Modifier le profil » : nom, pseudo, bio, photo (recadrée en carré de 512 px, envoyée directement au stockage).
+- Comme TikTok (ADR-056) : grande photo avec un « + » pour la changer, @pseudo, Abonnements | Abonnés | J'aime (likes reçus), boutons « Modifier le profil », « Partager le profil » (lien `tiktokclone://users/<pseudo>`) et jetons, « + Ajouter une bio », onglets des grilles en icônes.
+- Photo : « Prendre une photo » ou « Choisir une photo », recadrage rond au doigt, « Publier cette photo en story » (cochée par défaut, aperçu) : l'app dessine la story « J'ai une nouvelle photo de profil » et la publie comme une story photo. Photo envoyée en carré de 512 px, directement au stockage.
+- « Modifier le profil » : page avec la photo, puis Nom, Pseudo (et le lien du profil à copier), Bio ; chaque champ sur sa page (« Annuler », « Enregistrer »), puis « Enregistré ». Tester un lien de profil : `xcrun simctl openurl booted "tiktokclone://users/<pseudo>"`.
 - Abonnés et abonnements : listes avec bouton d'abonnement (« Suivre », « Suivre en retour », « Abonné(e) », « Ami(e)s »).
 - Compteurs de son profil en direct (ADR-045) : abonnés et abonnements suivent l'événement `profileCountersChanged` (un abonnement reçu, ou fait depuis un autre appareil) ; le profil est relu à chaque reconnexion du temps réel.
 - Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
@@ -204,7 +206,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 
 ## Jetons et paywall (ADR-009)
 
-- Bouton « Jetons » (avec le solde) sur son profil, et ligne « Portefeuille » dans Paramètres : solde, gains (« jetons reçus en cadeaux »,
+- Bouton jetons (à côté de « Partager le profil ») sur son profil, et ligne « Portefeuille » dans Paramètres : solde, gains (« jetons reçus en cadeaux »,
   ADR-050), packs en vente, historique en deux listes (« Mouvements », cadeaux envoyés compris ; « Cadeaux reçus »).
 - **Cadeaux** (ADR-050) : bouton 🎁 du lecteur (pas sur ses propres vidéos) → feuille de cadeaux (solde, « Recharger », catalogue,
   « Envoyer »), animation chez l'expéditeur. Routes : `getGiftCatalog`, `sendGift(path:body:)` avec un `clientGiftId` (UUID, le même

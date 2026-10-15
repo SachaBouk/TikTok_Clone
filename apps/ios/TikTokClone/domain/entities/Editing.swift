@@ -8,6 +8,8 @@ import Foundation
 enum MediaSource: String, Equatable, Sendable {
     case camera
     case gallery
+    // Story « nouvelle photo de profil », dessinée par l'app (ADR-056).
+    case profilePhoto = "profile_photo"
 }
 
 // Fichier d'origine : segment filmé, ou vidéo de la galerie déjà nettoyée de ses métadonnées (ADR-035).

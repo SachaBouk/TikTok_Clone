@@ -17,7 +17,8 @@ import {
   isAvatarContentType,
   isValidAvatarContent,
 } from '../domain/profile-rules';
-import type { ProfileChanges, User } from '../domain/user';
+import type { ReceivedLikesCounter } from '../domain/received-likes-counter';
+import type { ProfileChanges, User, UserProfileView } from '../domain/user';
 import {
   AvatarNotUploadedError,
   InvalidAvatarError,
@@ -62,8 +63,14 @@ export class UsersService {
     private readonly contentCleanup: AccountContentCleanup,
     private readonly interests: InterestRepository,
     private readonly suspended: SuspendedAccounts,
+    private readonly receivedLikes: ReceivedLikesCounter,
     private readonly now: () => Date = () => new Date(),
   ) {}
+
+  // Profil affiché : le compte et ses likes reçus (compteur « J'aime », ADR-056).
+  async profileView(user: User): Promise<UserProfileView> {
+    return { user, likesCount: await this.receivedLikes.countFor(user.id) };
+  }
 
   async getById(id: string): Promise<User> {
     const user = await this.users.findById(id);

@@ -32,6 +32,7 @@ import {
   TooManyLiveActionsError,
 } from '../domain/live.errors';
 import { inMemoryLive } from '../infrastructure/in-memory-live';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -71,6 +72,7 @@ describe('LiveService (ADR-053)', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const videos = new VideosService(
       videoRepository,

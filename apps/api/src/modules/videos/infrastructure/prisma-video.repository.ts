@@ -212,6 +212,11 @@ export class PrismaVideoRepository extends VideoRepository {
     const rows = await this.prisma.video.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _count: { _all: true } });
     return new Map(rows.map((row) => [row.userId, row._count._all]));
   }
+
+  async sumLikesByAuthor(userId: string): Promise<number> {
+    const result = await this.prisma.video.aggregate({ where: { userId, status: 'ready' }, _sum: { likesCount: true } });
+    return result._sum.likesCount ?? 0;
+  }
 }
 
 const detailsSelect = {

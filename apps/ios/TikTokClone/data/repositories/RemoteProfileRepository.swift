@@ -97,7 +97,8 @@ extension UserProfile {
             bio: dto.bio,
             followersCount: dto.followersCount,
             followingCount: dto.followingCount,
-            createdAt: dto.createdAt
+            createdAt: dto.createdAt,
+            likesCount: dto.likesCount
         )
     }
 }

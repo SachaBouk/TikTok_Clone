@@ -503,6 +503,19 @@ describe('VideosService', () => {
       return video;
     }
 
+    it("likes reçus d'un compte (ADR-056) : somme des likes de ses vidéos publiées seulement", async () => {
+      const first = await videoOf(ALICE, 'ready');
+      const second = await videoOf(ALICE, 'ready');
+      const failed = await videoOf(ALICE, 'failed');
+      const other = await videoOf(BOB, 'ready');
+      videos.adjustCounter(first.id, 'likesCount', 3);
+      videos.adjustCounter(second.id, 'likesCount', 2);
+      videos.adjustCounter(failed.id, 'likesCount', 7);
+      videos.adjustCounter(other.id, 'likesCount', 5);
+      expect(await service.countLikesReceived(ALICE)).toBe(5);
+      expect(await service.countLikesReceived('sans-video')).toBe(0);
+    });
+
     it("retire la vidéo de n'importe quel auteur, avec le même nettoyage que l'auteur", async () => {
       const video = await videoOf(BOB, 'processing');
       await service.removeVideo(video.id);

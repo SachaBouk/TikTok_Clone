@@ -15,6 +15,7 @@ import { InMemoryAvatarStorage } from '../infrastructure/in-memory-avatar-storag
 import { InMemoryUserRepository } from '../infrastructure/in-memory-user.repository';
 import { UsersService } from './users.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { InMemoryReceivedLikesCounter } from '../infrastructure/in-memory-received-likes-counter';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -57,7 +58,32 @@ describe('UsersService', () => {
     contentCleanup = new InMemoryAccountContentCleanup();
     suspended = new InMemorySuspendedAccounts();
     interests = new InMemoryInterestRepository(new Set([alice.id, bob.id]));
-    service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }]), avatars, contentCleanup, interests, suspended, () => NOW);
+    service = new UsersService(
+      new InMemoryUserRepository([{ ...alice }, { ...bob }]),
+      avatars,
+      contentCleanup,
+      interests,
+      suspended,
+      new InMemoryReceivedLikesCounter(),
+      () => NOW,
+    );
+  });
+
+  it("profil affiché : le compte et ses likes reçus (compteur « J'aime », ADR-056)", async () => {
+    const receivedLikes = new InMemoryReceivedLikesCounter();
+    receivedLikes.counts.set(alice.id, 12);
+    const withLikes = new UsersService(
+      new InMemoryUserRepository([{ ...alice }]),
+      avatars,
+      contentCleanup,
+      interests,
+      suspended,
+      receivedLikes,
+      () => NOW,
+    );
+    const view = await withLikes.profileView(await withLikes.getById(alice.id));
+    expect(view).toEqual({ user: expect.objectContaining({ id: alice.id }), likesCount: 12 });
+    expect((await service.profileView(await service.getById(bob.id))).likesCount).toBe(0);
   });
 
   // Ce que fait l'app : demande l'URL signée, envoie le fichier, renvoie l'identifiant.
@@ -269,6 +295,7 @@ describe('UsersService', () => {
         contentCleanup,
         new InMemoryInterestRepository(),
         suspended,
+        new InMemoryReceivedLikesCounter(),
         () => NOW,
       );
     });

@@ -21,6 +21,7 @@ import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-v
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
 import { encodeSearchCursor, InvalidSearchCursorError, MAX_SEARCH_RESULTS } from '../domain/search-rules';
 import { SearchService } from './search.service';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 class NoopTranscodingQueue extends TranscodingQueue {
   async enqueue() {}
@@ -72,6 +73,7 @@ describe('SearchService (ADR-049)', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const notifications = new NotificationsService(
       new InMemoryNotificationRepository(),
@@ -122,7 +124,14 @@ describe('SearchService (ADR-049)', () => {
   it('s’arrête à 100 résultats et refuse un curseur forgé', async () => {
     users = new InMemoryUserRepository(Array.from({ length: 120 }, (_, i) => user(`u${String(i).padStart(3, '0')}`, `fan${i}`, 'Fan')));
     search = new SearchService(
-      new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemoryInterestRepository(), suspended),
+      new UsersService(
+        users,
+        new InMemoryAvatarStorage(),
+        new InMemoryAccountContentCleanup(),
+        new InMemoryInterestRepository(),
+        suspended,
+        new InMemoryReceivedLikesCounter(),
+      ),
       interactions,
       null!,
     );

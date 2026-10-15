@@ -181,6 +181,58 @@ struct ProfileViewModelTests {
         #expect(session.profile?.avatarURL == nil)
     }
 
+    @Test("photo recadrée (ADR-056) : enregistrée, puis la story « nouvelle photo de profil » seulement si elle est cochée")
+    func photoStory() async {
+        let session = await makeSession()
+        let transport = FakeAvatarTransport()
+        var published: [Data] = []
+        var storyError: String?
+        let viewModel = EditProfileViewModel(
+            updateProfile: UpdateProfileUseCase(profiles: profiles),
+            changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: transport),
+            removeAvatar: RemoveAvatarUseCase(profiles: profiles),
+            session: session,
+            prepareImage: { _ in Data(count: 2000) },
+            publishStory: { data in
+                published.append(data)
+                return storyError
+            }
+        )
+        await viewModel.changePhoto(Data([1]), postStory: false)
+        #expect(published.isEmpty)
+        #expect(viewModel.notice == "Enregistré")
+
+        await viewModel.changePhoto(Data([1]), postStory: true)
+        #expect(published == [Data(count: 2000)])
+        #expect(viewModel.notice == "Ta story est en cours de publication. Tout le monde pourra la voir.")
+
+        storyError = "Impossible de préparer la story."
+        await viewModel.changePhoto(Data([1]), postStory: true)
+        #expect(viewModel.errorMessage == "Impossible de préparer la story.")
+
+        // Photo refusée : pas de story.
+        viewModel.errorMessage = nil
+        profiles.fail(with: .rejected("Image invalide"))
+        await viewModel.changePhoto(Data([1]), postStory: true)
+        #expect(published.count == 2)
+        #expect(viewModel.errorMessage == "Image invalide")
+    }
+
+    @Test("page d'un champ : « Annuler » remet le champ à la valeur du profil")
+    func resetField() async {
+        let session = await makeSession()
+        let viewModel = EditProfileViewModel(
+            updateProfile: UpdateProfileUseCase(profiles: profiles),
+            changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: FakeAvatarTransport()),
+            removeAvatar: RemoveAvatarUseCase(profiles: profiles),
+            session: session
+        )
+        viewModel.bio = "Autre chose"
+        viewModel.reset()
+        #expect(viewModel.bio == (session.profile?.bio ?? ""))
+        #expect(!viewModel.hasChanges)
+    }
+
     @Test("paramètres : déconnexion ; suppression du compte, envois oubliés, retour en invité")
     func accountSettings() async throws {
         let session = await makeSession()

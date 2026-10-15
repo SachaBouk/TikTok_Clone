@@ -16,6 +16,7 @@ import { InMemoryNotificationPublisher } from '../infrastructure/in-memory-notif
 import { InMemoryNotificationRepository } from '../infrastructure/in-memory-notification.repository';
 import { NotificationsService } from './notifications.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -61,7 +62,14 @@ describe('NotificationsService', () => {
     suspended = new InMemorySuspendedAccounts();
     service = new NotificationsService(
       repository,
-      new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemoryInterestRepository(), suspended),
+      new UsersService(
+        userRepository,
+        new InMemoryAvatarStorage(),
+        new InMemoryAccountContentCleanup(),
+        new InMemoryInterestRepository(),
+        suspended,
+        new InMemoryReceivedLikesCounter(),
+      ),
       videos,
       publisher,
       suspended,

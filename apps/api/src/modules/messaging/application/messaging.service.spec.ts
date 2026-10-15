@@ -41,6 +41,7 @@ import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter'
 import { MessagingService } from './messaging.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
+import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -91,6 +92,7 @@ describe('MessagingService', () => {
       new InMemoryAccountContentCleanup(),
       new InMemoryInterestRepository(),
       suspended,
+      new InMemoryReceivedLikesCounter(),
     );
     const videos = new VideosService(
       videoRepository,

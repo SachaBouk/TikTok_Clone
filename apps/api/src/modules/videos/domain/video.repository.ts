@@ -41,6 +41,8 @@ export abstract class VideoRepository {
   abstract countCreatedSince(since: Date): Promise<number>;
   // Nombre de vidéos (tous statuts) de chaque compte de `userIds` ; un compte sans vidéo est absent.
   abstract countByAuthors(userIds: string[]): Promise<Map<string, number>>;
+  // Likes reçus par un compte : somme des likes de ses vidéos publiées (ADR-056).
+  abstract sumLikesByAuthor(userId: string): Promise<number>;
 
   // Hashtags (ADR-049), écrits par `finishTranscoding`.
   abstract findHashtag(name: string): Promise<Hashtag | null>;

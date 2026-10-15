@@ -2,8 +2,9 @@ import Foundation
 import Observation
 import UIKit
 
-// Modification de son profil : nom, pseudo, bio (envoyés ensemble, seuls les champs changés), et photo
-// (appliquée tout de suite, indépendamment du reste).
+// Modification de son profil : nom, pseudo, bio (chacun sur sa page, seuls les champs changés sont envoyés), et photo
+// (recadrée en rond puis appliquée tout de suite ; story « nouvelle photo de profil » si elle est cochée, ADR-056).
+// `notice` : message bref affiché après un enregistrement (« Enregistré »).
 @MainActor
 @Observable
 final class EditProfileViewModel {
@@ -11,6 +12,7 @@ final class EditProfileViewModel {
     var username: String
     var bio: String
     var errorMessage: String?
+    var notice: String?
     private(set) var isSaving = false
     private(set) var isChangingPhoto = false
 
@@ -19,19 +21,23 @@ final class EditProfileViewModel {
     private let removeAvatar: RemoveAvatarUseCase
     private let session: SessionStore
     private let prepareImage: @Sendable (Data) -> Data?
+    // Publie la story « nouvelle photo de profil » à partir de la photo recadrée ; renvoie un message d'erreur.
+    private let publishStory: (@MainActor (Data) async -> String?)?
 
     init(
         updateProfile: UpdateProfileUseCase,
         changeAvatar: ChangeAvatarUseCase,
         removeAvatar: RemoveAvatarUseCase,
         session: SessionStore,
-        prepareImage: @escaping @Sendable (Data) -> Data? = { AvatarImage.jpeg(from: $0) }
+        prepareImage: @escaping @Sendable (Data) -> Data? = { AvatarImage.jpeg(from: $0) },
+        publishStory: (@MainActor (Data) async -> String?)? = nil
     ) {
         self.updateProfile = updateProfile
         self.changeAvatar = changeAvatar
         self.removeAvatar = removeAvatar
         self.session = session
         self.prepareImage = prepareImage
+        self.publishStory = publishStory
         displayName = session.profile?.displayName ?? ""
         username = session.profile?.username ?? ""
         bio = session.profile?.bio ?? ""
@@ -52,13 +58,21 @@ final class EditProfileViewModel {
         }
     }
 
-    // Vrai si le profil est enregistré (la feuille peut se fermer).
+    // Champs remis à l'état du profil (« Annuler » d'une page de modification).
+    func reset() {
+        displayName = session.profile?.displayName ?? ""
+        username = session.profile?.username ?? ""
+        bio = session.profile?.bio ?? ""
+    }
+
+    // Vrai si le profil est enregistré (la page peut se fermer).
     func save() async -> Bool {
         guard let profile, !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
             session.update(try await updateProfile(profile, username: username, displayName: displayName, bio: bio))
+            notice = "Enregistré"
             return true
         } catch {
             errorMessage = handle(error)
@@ -66,8 +80,9 @@ final class EditProfileViewModel {
         }
     }
 
-    // `data` : l'image choisie dans la galerie, telle quelle ; recadrée en carré de 512 px et encodée en JPEG.
-    func changePhoto(_ data: Data) async {
+    // `data` : la photo recadrée (ou une image de la galerie, recadrée au centre) ; ramenée à un carré de 512 px en
+    // JPEG. `postStory` : la story « nouvelle photo de profil » part ensuite dans la file d'envoi, si la photo est enregistrée.
+    func changePhoto(_ data: Data, postStory: Bool = false) async {
         guard !isChangingPhoto else { return }
         guard let jpeg = prepareImage(data) else {
             errorMessage = "Cette image n’a pas pu être lue."
@@ -77,8 +92,16 @@ final class EditProfileViewModel {
         defer { isChangingPhoto = false }
         do {
             session.update(try await changeAvatar(jpeg, type: .jpeg))
+            notice = "Enregistré"
         } catch {
             errorMessage = handle(error)
+            return
+        }
+        guard postStory, let publishStory else { return }
+        if let message = await publishStory(jpeg) {
+            errorMessage = message
+        } else {
+            notice = "Ta story est en cours de publication. Tout le monde pourra la voir."
         }
     }
 
@@ -107,6 +130,20 @@ final class EditProfileViewModel {
 // 512 px de côté, JPEG. L'orientation de la photo est appliquée.
 enum AvatarImage {
     static let quality: CGFloat = 0.85
+
+    // Carré `crop` (en points de l'image, orientation appliquée) dessiné sur 512 px (recadrage rond, `AvatarCrop`).
+    static func square(from image: UIImage, crop: CGRect) -> UIImage? {
+        guard crop.width > 0 else { return nil }
+        let side = CGFloat(ProfileRules.avatarSide)
+        let ratio = side / crop.width
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            image.draw(
+                in: CGRect(x: -crop.minX * ratio, y: -crop.minY * ratio, width: image.size.width * ratio, height: image.size.height * ratio))
+        }
+    }
 
     static func jpeg(from data: Data) -> Data? {
         guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
