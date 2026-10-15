@@ -61,3 +61,4 @@ Ce qui existe déjà :
 - ADR-016 — Périmètre du MVP
 - ADR-029 — Blocage : contenus masqués
 - ADR-037 — Suspension de compte
+- Complété par [ADR-054](ADR-054-feed-amis.md) — Feed des amis
