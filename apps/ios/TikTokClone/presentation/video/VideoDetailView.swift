@@ -97,7 +97,8 @@ struct VideoDetailView: View {
                     openHashtag: { path.append(HashtagRoute(name: $0)) },
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
                     openStories: { container.router.openStories([video.author], source: .feed) }
-                )
+                ),
+                progress: { pool.progress(of: video.id) }
             )
         }
     }

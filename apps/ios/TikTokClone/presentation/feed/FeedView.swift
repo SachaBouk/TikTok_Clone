@@ -151,7 +151,9 @@ struct FeedView: View {
                             gift: { openGifts(entry.video) },
                             // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
                             openStories: { container.router.openStories([entry.video.author], source: .feed) }
-                        )
+                        ),
+                        // Barre de progression : la vidéo courante seulement.
+                        progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
                     .id(entry.id)
@@ -244,7 +246,8 @@ struct VideoPageActions {
     var openStories: (() -> Void)? = nil
 }
 
-// Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; auteur, description et boutons.
+// Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; pastille de republication, auteur, description
+// et boutons ; fine barre de progression tout en bas, au-dessus de la barre d'onglets.
 // Toucher : pause ou reprise ; double toucher : like, avec un cœur qui éclate à l'endroit touché.
 struct FeedPageView: View {
     let video: FeedVideo
@@ -253,6 +256,8 @@ struct FeedPageView: View {
     let bottomInset: CGFloat
     let showsFollowButton: Bool
     let actions: VideoPageActions
+    // Position de lecture, lue à chaque image tant que la vidéo joue ; nil : pas de barre (page qui n'est pas la courante).
+    var progress: (() -> PlaybackProgress?)? = nil
     @State private var burst: HeartBurst?
 
     private struct HeartBurst: Identifiable, Equatable {
@@ -281,11 +286,12 @@ struct FeedPageView: View {
                 .exclusively(before: TapGesture().onEnded { actions.togglePause() })
             )
             .overlay {
+                // Grand triangle « lecture » semi-transparent, comme TikTok.
                 if showsPauseIndicator {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .shadow(radius: 8)
+                        .font(.system(size: 80))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .shadow(color: .black.opacity(0.2), radius: 6)
                         .transition(.scale.combined(with: .opacity))
                         .allowsHitTesting(false)
                         .accessibilityLabel("En pause")
@@ -306,6 +312,10 @@ struct FeedPageView: View {
             .overlay(alignment: .bottom) {
                 HStack(alignment: .bottom, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
+                        if let badge = RepostBadge.of(video, isOwn: !showsFollowButton) {
+                            RepostPill(badge: badge, toggle: { actions.toggle(.repost) })
+                                .padding(.bottom, 4)
+                        }
                         NavigationLink(value: ProfileRoute(username: video.author.username)) {
                             Text("@\(video.author.username)").font(.headline)
                         }
@@ -326,15 +336,89 @@ struct FeedPageView: View {
                     FeedActionColumn(video: video, showsFollowButton: showsFollowButton, actions: actions)
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, bottomInset + 12)
+                .padding(.bottom, bottomInset + 14)
                 .background(alignment: .bottom) {
                     LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 280 + bottomInset)
                         .allowsHitTesting(false)
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let progress {
+                    PlaybackProgressBar(progress: progress, isPaused: showsPauseIndicator)
+                        .padding(.bottom, bottomInset)
+                        .allowsHitTesting(false)
+                }
+            }
             .foregroundStyle(.white)
             .animation(.easeOut(duration: 0.15), value: showsPauseIndicator)
+    }
+}
+
+// Pastille blanche au-dessus du pseudo (`RepostBadge`) : « Republier » republie au toucher ; « Tu as republié » (avec
+// la photo du compte connecté) propose de retirer la republication, confirmation attachée à la pastille.
+struct RepostPill: View {
+    let badge: RepostBadge
+    let toggle: () -> Void
+    @State private var isConfirmingRemoval = false
+    @Environment(SessionStore.self) private var session: SessionStore?
+
+    var body: some View {
+        Button {
+            if badge == .reposted { isConfirmingRemoval = true } else { toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                switch badge {
+                case .repost:
+                    Image(systemName: "arrow.2.squarepath").font(.system(size: 13, weight: .semibold))
+                    Text("Republier")
+                case .reposted:
+                    if let profile = session?.profile {
+                        AvatarView(url: profile.avatarURL, name: profile.displayName, size: 20)
+                    }
+                    Text("Tu as republié")
+                }
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.black)
+            .padding(.leading, badge == .reposted && session?.profile != nil ? 3 : 10)
+            .padding(.trailing, 10)
+            .frame(height: 26)
+            .background(.white.opacity(0.92), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(badge == .reposted ? "Tu as republié, retirer la republication" : "Republier")
+        .accessibilityIdentifier("video.repost")
+        .confirmationDialog("Retirer la republication ?", isPresented: $isConfirmingRemoval, titleVisibility: .visible) {
+            Button("Retirer", role: .destructive, action: toggle)
+        } message: {
+            Text("La vidéo disparaîtra de tes republications.")
+        }
+    }
+}
+
+// Fine barre de progression de la lecture, avec un point à la position courante. Relue à chaque image tant que la
+// vidéo joue, figée en pause.
+struct PlaybackProgressBar: View {
+    let progress: () -> PlaybackProgress?
+    let isPaused: Bool
+
+    var body: some View {
+        TimelineView(.animation(paused: isPaused)) { _ in
+            let fraction = progress()?.fraction ?? 0
+            GeometryReader { geometry in
+                let x = geometry.size.width * fraction
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.25)).frame(height: 2)
+                    Capsule().fill(.white.opacity(0.9)).frame(width: x, height: 2)
+                    Circle().fill(.white).frame(width: 6, height: 6).offset(x: min(max(0, x - 3), geometry.size.width - 6))
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 6)
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -357,7 +441,8 @@ struct HeartBurstView: View {
     }
 }
 
-// Colonne de droite : auteur (avec « + » pour le suivre), puis like, commentaires, favori, republication, partage.
+// Colonne de droite, comme TikTok : auteur (avec « + » rouge pour le suivre), puis like (rouge une fois aimée),
+// commentaires, favori (jaune une fois enregistrée), partage. La republication est la pastille en bas à gauche.
 struct FeedActionColumn: View {
     let video: FeedVideo
     let showsFollowButton: Bool
@@ -398,7 +483,7 @@ struct FeedActionColumn: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(width: 22, height: 22)
-                            .background(Color.accentColor, in: Circle())
+                            .background(Color.brandPink, in: Circle())
                     }
                     .offset(y: 11)
                     .accessibilityLabel("Suivre @\(video.author.username)")
@@ -418,11 +503,6 @@ struct FeedActionColumn: View {
                 label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris"
             ) { actions.toggle(.favorite) }
             .accessibilityIdentifier("video.favorite")
-            FeedCounter(
-                systemImage: "arrow.2.squarepath", count: video.stats.reposts, isActive: viewer.reposted, activeColor: .green,
-                label: viewer.reposted ? "Annuler la republication" : "Republier"
-            ) { actions.toggle(.repost) }
-            .accessibilityIdentifier("video.repost")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
             // Cadeau (ADR-050) : sur la vidéo d'un autre seulement. Aucun compteur : les cadeaux ne sont pas publics.

@@ -32,4 +32,22 @@ struct FeedRulesTests {
         #expect(!tracker.needsRecording("a"))
         #expect(tracker.needsRecording("b"))
     }
+
+    @Test("pastille de republication : « Republier », « Tu as republié », rien sur sa propre vidéo")
+    func repostBadge() {
+        #expect(RepostBadge.of(.sample("v1", viewer: .empty), isOwn: false) == .repost)
+        #expect(RepostBadge.of(.sample("v1", viewer: ViewerState.empty.with(.repost, active: true)), isOwn: false) == .reposted)
+        // Invité : « Republier » (la connexion s'ouvre au toucher).
+        #expect(RepostBadge.of(.sample("v1", viewer: nil), isOwn: false) == .repost)
+        #expect(RepostBadge.of(.sample("v1", viewer: .empty), isOwn: true) == nil)
+    }
+
+    @Test("barre de progression : part lue entre 0 et 1, rien tant que la durée est inconnue")
+    func progressFraction() {
+        #expect(PlaybackProgress(position: .seconds(5), duration: .seconds(20)).fraction == 0.25)
+        #expect(PlaybackProgress(position: .seconds(25), duration: .seconds(20)).fraction == 1)
+        #expect(PlaybackProgress(position: .zero, duration: .seconds(20)).fraction == 0)
+        #expect(PlaybackProgress(position: .seconds(5), duration: nil).fraction == nil)
+        #expect(PlaybackProgress(position: .seconds(5), duration: .zero).fraction == nil)
+    }
 }

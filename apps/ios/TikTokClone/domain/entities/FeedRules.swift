@@ -30,3 +30,15 @@ struct ViewTracker: Sendable {
         recorded.insert(videoID)
     }
 }
+
+// Pastille de republication en bas à gauche d'une page, au-dessus du pseudo (comme TikTok) : « Republier », puis
+// « Tu as republié » une fois fait. Rien sur sa propre vidéo. Invité : « Republier » (la connexion s'ouvre).
+enum RepostBadge: Equatable {
+    case repost
+    case reposted
+
+    static func of(_ video: FeedVideo, isOwn: Bool) -> RepostBadge? {
+        guard !isOwn else { return nil }
+        return video.viewer?.reposted == true ? .reposted : .repost
+    }
+}

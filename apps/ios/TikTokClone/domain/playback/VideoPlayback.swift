@@ -18,3 +18,11 @@ struct PlaybackProgress: Equatable, Sendable {
     // Nil tant que le lecteur ne la connaît pas.
     let duration: Duration?
 }
+
+extension PlaybackProgress {
+    // Part lue de la boucle en cours, entre 0 et 1 (barre de progression du lecteur) ; nil tant que la durée est inconnue.
+    var fraction: Double? {
+        guard let duration, duration > .zero else { return nil }
+        return min(1, max(0, position / duration))
+    }
+}

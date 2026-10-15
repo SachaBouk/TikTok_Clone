@@ -89,7 +89,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 ## Feed et lecteur
 
-- Une vidéo par page, défilement vertical natif (`ScrollView` en pagination), toucher pour mettre en pause.
+- Une vidéo par page, défilement vertical natif (`ScrollView` en pagination), toucher pour mettre en pause (grand triangle « lecture » au centre). Fine barre de progression de la lecture tout en bas, au-dessus de la barre d'onglets.
 - Lecture HLS (`AVPlayerPool`) : 3 lecteurs au plus (vidéo courante, suivante, précédente), bouclés ; les voisines sont préchargées. La miniature s'affiche jusqu'à la première image.
 - Vue envoyée (`recordView`) après 1 s de lecture continue, une fois par vidéo et par session, pour un compte connecté seulement.
 - Fin de session du feed : l'app repart sans curseur, sur un nouvel ordre ; le feed est sans fin.
@@ -109,7 +109,8 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 ## Interactions
 
-- Colonne de droite : like, commentaires, favori, republication, partage ; « + » sur l'avatar pour suivre l'auteur. Double toucher sur la vidéo : like.
+- Colonne de droite, comme TikTok : avatar avec « + » rouge pour suivre l'auteur, cœur (rouge une fois aimée), commentaires, favori (signet jaune une fois enregistrée), partage, chacun avec son compteur. Double toucher sur la vidéo : like.
+- Republication : pastille en bas à gauche, au-dessus du pseudo : « Republier », puis « Tu as republié » (toucher : retirer, après confirmation). Absente sur ses propres vidéos.
 - Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
 - En invité, toute action ouvre la connexion.
 - Commentaires : feuille native à mi-hauteur, glisser vers la gauche pour supprimer le sien ; sur sa propre vidéo, aussi ceux des autres (confirmation, sans prévenir leur auteur, ADR-042).
