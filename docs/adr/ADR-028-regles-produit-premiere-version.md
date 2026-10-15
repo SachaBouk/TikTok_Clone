@@ -61,3 +61,4 @@ Blocage :
 - Complété par [ADR-042](ADR-042-suppression-commentaires-auteur-video.md) — Suppression des commentaires par l'auteur de la vidéo
 - Complété par [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) — Renvoi d'un message en échec : identifiant d'envoi
 - Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages
+- Complété par [ADR-059](ADR-059-chats-de-groupe.md) — Chats de groupe

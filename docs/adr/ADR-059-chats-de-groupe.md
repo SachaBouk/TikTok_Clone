@@ -1,7 +1,7 @@
 # ADR-059 — Chats de groupe
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre : messagerie), [ADR-018](ADR-018-modules-messaging-push-admin.md) (module `messaging`) et [ADR-028](ADR-028-regles-produit-premiere-version.md) (règles de la messagerie), sans les remplacer.
 

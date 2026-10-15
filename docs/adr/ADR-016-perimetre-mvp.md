@@ -70,3 +70,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-056](ADR-056-profil-facon-tiktok.md) — Profil façon TikTok
 - Complété par [ADR-057](ADR-057-menu-profil-solde-parametres.md) — Menu du profil, Solde, centre des activités et paramètres
 - Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages
+- Complété par [ADR-059](ADR-059-chats-de-groupe.md) — Chats de groupe
