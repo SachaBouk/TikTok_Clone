@@ -54,5 +54,18 @@ struct SearchRulesTests {
         #expect(history.queries.first == "q24")
         history.remove("q24")
         #expect(history.queries.first == "q23")
+        history.remove(["q23", "q22"])
+        #expect(history.queries.first == "q21")
+    }
+
+    @Test("historique : chaque recherche garde sa date, remise à jour quand elle revient (ADR-057)")
+    func historyDates() {
+        var history = SearchHistory()
+        let first = Date(timeIntervalSince1970: 1_000)
+        let later = Date(timeIntervalSince1970: 2_000)
+        history.record("lea", at: first)
+        history.record("chat", at: first)
+        history.record("LEA", at: later)
+        #expect(history.entries == [SearchHistoryEntry(query: "LEA", searchedAt: later), SearchHistoryEntry(query: "chat", searchedAt: first)])
     }
 }

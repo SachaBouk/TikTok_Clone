@@ -283,10 +283,8 @@ struct ProfileView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             if viewModel.isOwn {
-                NavigationLink(value: AccountRoute.settings) {
-                    Label("Paramètres", systemImage: "line.3.horizontal")
-                }
-                .accessibilityIdentifier("profile.settings")
+                Button("Menu", systemImage: "line.3.horizontal") { container.router.isProfileMenuOpen = true }
+                    .accessibilityIdentifier("profile.settings")
             } else if container.session.isSignedIn, viewModel.profile != nil {
                 Menu {
                     if let profile = viewModel.profile {

@@ -89,7 +89,8 @@ struct SearchTests {
         viewModel.text = "#plage"
         viewModel.resultOpened()
         #expect(history.queries == ["#plage", "lea"])
-        #expect(historyStore.searchHistory == ["#plage", "lea"])
+        #expect(historyStore.searchHistory.map(\.query) == ["#plage", "lea"])
+        #expect(historyStore.searchHistory.allSatisfy { $0.searchedAt != nil })
 
         viewModel.search(fromHistory: "lea")
         await viewModel.waitForSearch()
@@ -99,7 +100,7 @@ struct SearchTests {
         history.clear()
         #expect(historyStore.searchHistory.isEmpty)
         // Relu au lancement suivant.
-        historyStore.setSearchHistory(["chat"])
+        historyStore.setSearchHistory([SearchHistoryEntry(query: "chat")])
         #expect(SearchHistoryModel(store: historyStore).queries == ["chat"])
     }
 

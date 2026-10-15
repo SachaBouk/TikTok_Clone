@@ -310,6 +310,10 @@ describe('FeedService', () => {
       const { items } = await feed.listHistory('alice', undefined, 10);
       expect(items[0].video.viewsCount).toBe(1);
       expect(items.every((i) => i.viewer !== null)).toBe(true);
+      // Date de la dernière vue (ADR-057), de la plus récente à la plus ancienne ; absente des autres listes.
+      expect(items.every((i) => i.viewedAt instanceof Date)).toBe(true);
+      expect(items.map((i) => i.viewedAt!.getTime())).toEqual([...items.map((i) => i.viewedAt!.getTime())].sort((x, y) => y - x));
+      expect((await feed.listLikes('alice', undefined, 10)).items.every((i) => i.viewedAt === undefined)).toBe(true);
 
       // Vidéo supprimée depuis : sautée.
       await videoRepository.delete(c);

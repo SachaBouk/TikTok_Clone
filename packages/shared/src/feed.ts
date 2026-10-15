@@ -31,6 +31,8 @@ export interface FeedItemDto {
   viewer?: FeedViewerStateDto;
   // Anneau autour de l'avatar (ADR-051) : absent si l'auteur n'a pas de story visible.
   authorStory?: AuthorStoryDto;
+  // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo par le compte connecté.
+  viewedAt?: string;
 }
 
 export interface FeedPageDto {

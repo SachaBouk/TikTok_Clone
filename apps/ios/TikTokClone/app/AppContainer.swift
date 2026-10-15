@@ -170,11 +170,20 @@ final class AppContainer {
         return configuration.revenueCatAPIKey.map { RevenueCatPurchaseService(apiKey: $0) } ?? UnavailablePurchaseService()
     }
 
+    // Session reprise au lancement : état de départ des changements de session (historique des recherches).
+    func sessionRestored(signedIn: Bool) {
+        lastSignedIn = signedIn
+    }
+
     // Connexion, déconnexion, passage au premier plan ou en arrière-plan.
     func activityChanged(signedIn: Bool, active: Bool) {
         // Connexion, déconnexion ou suppression du compte (pas au lancement) : historique des recherches effacé.
-        if let lastSignedIn, lastSignedIn != signedIn { searchHistory.clear() }
-        lastSignedIn = signedIn
+        // Pendant la reprise de la session, « non connecté » n'est pas un état : le retenir effaçait l'historique à
+        // chaque lancement d'un compte connecté (`sessionRestored` pose l'état de départ).
+        if session.state != .restoring {
+            if let lastSignedIn, lastSignedIn != signedIn { searchHistory.clear() }
+            lastSignedIn = signedIn
+        }
         realtime.update(signedIn: signedIn, active: active)
         Task { await publishing.update(signedIn: signedIn, active: active) }
         if !signedIn {

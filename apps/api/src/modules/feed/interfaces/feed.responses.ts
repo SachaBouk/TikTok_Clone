@@ -64,6 +64,13 @@ export class FeedItemResponse implements FeedItemDto {
 
   @ApiPropertyOptional({ type: AuthorStoryResponse })
   authorStory?: AuthorStoryResponse;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo par le compte connecté.',
+  })
+  viewedAt?: string;
 }
 
 export class FeedPageResponse implements FeedPageDto {
@@ -87,7 +94,7 @@ export class VideoPageResponse implements VideoPageDto {
 }
 
 // Mapping explicite, partagé par le feed et les grilles du profil : rien n'est exposé par accident (ADR-003).
-export function toFeedItemDto({ video, author, viewer, authorStory }: FeedItem): FeedItemDto {
+export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: FeedItem): FeedItemDto {
   return {
     id: video.id,
     description: video.description,
@@ -111,5 +118,6 @@ export function toFeedItemDto({ video, author, viewer, authorStory }: FeedItem):
       },
     }),
     ...(authorStory && { authorStory: { hasUnseen: authorStory.hasUnseen } }),
+    ...(viewedAt && { viewedAt: viewedAt.toISOString() }),
   };
 }

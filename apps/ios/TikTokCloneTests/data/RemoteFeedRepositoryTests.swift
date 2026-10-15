@@ -35,6 +35,16 @@ struct RemoteFeedRepositoryTests {
         #expect(log.operations == ["getFeed"])
     }
 
+    @Test("historique de visionnage (ADR-057) : date de la dernière vue, absente ailleurs")
+    func viewedAt() async throws {
+        let body =
+            #"{"items":[\#(Self.item),"viewedAt":"2026-10-15T12:30:00.000Z"},\#(Self.item.replacingOccurrences(of: "\"v1\"", with: "\"v2\""))}],"nextCursor":null}"#
+        let client = makeClient(transport: MockTransport { _, _ in json(.ok, body) })
+        let page = try await RemoteFeedRepository(client: client).page(cursor: nil)
+        #expect(page.videos[0].viewedAt == ISO8601DateFormatter().date(from: "2026-10-15T12:30:00Z"))
+        #expect(page.videos[1].viewedAt == nil)
+    }
+
     @Test("feed des abonnements (ADR-048) : page, curseur transmis ; 401 → session expirée")
     func following() async throws {
         let log = RequestLog()

@@ -38,6 +38,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     let viewer: ViewerState?
     // Anneau autour de l'avatar de l'auteur (ADR-051) : nil s'il n'a pas de story visible.
     var authorStory: StoryRing? = nil
+    // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo.
+    var viewedAt: Date? = nil
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

@@ -91,25 +91,38 @@ enum HashtagRules {
     }
 }
 
+// Recherche retenue, avec sa date (ADR-057 : page « Historique des recherches », rangée par jour). Sans date pour
+// une recherche gardée avant l'ADR-057.
+struct SearchHistoryEntry: Equatable, Codable, Sendable {
+    let query: String
+    var searchedAt: Date?
+}
+
 // Historique des recherches, gardé sur l'appareil (ADR-049) : la plus récente d'abord, sans doublon (casse comprise).
 struct SearchHistory: Equatable, Sendable {
     static let maxEntries = 20
 
-    private(set) var queries: [String]
+    private(set) var entries: [SearchHistoryEntry]
 
-    init(_ queries: [String] = []) {
-        self.queries = Array(queries.prefix(Self.maxEntries))
+    init(_ entries: [SearchHistoryEntry] = []) {
+        self.entries = Array(entries.prefix(Self.maxEntries))
     }
 
-    mutating func record(_ query: String) {
+    var queries: [String] { entries.map(\.query) }
+
+    mutating func record(_ query: String, at date: Date = .now) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        queries.removeAll { $0.compare(trimmed, options: .caseInsensitive) == .orderedSame }
-        queries.insert(trimmed, at: 0)
-        queries = Array(queries.prefix(Self.maxEntries))
+        entries.removeAll { $0.query.compare(trimmed, options: .caseInsensitive) == .orderedSame }
+        entries.insert(SearchHistoryEntry(query: trimmed, searchedAt: date), at: 0)
+        entries = Array(entries.prefix(Self.maxEntries))
     }
 
     mutating func remove(_ query: String) {
-        queries.removeAll { $0 == query }
+        entries.removeAll { $0.query == query }
+    }
+
+    mutating func remove(_ queries: Set<String>) {
+        entries.removeAll { queries.contains($0.query) }
     }
 }

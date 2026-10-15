@@ -20,6 +20,9 @@ final class AppRouter {
 
     var presentedProfile: ProfileSheetRoute?
 
+    // Menu ☰ de son profil (ADR-057), panneau par-dessus les onglets.
+    var isProfileMenuOpen = false
+
     // Visionneuse de stories (ADR-051) : les stories d'un compte, puis celles des suivants (rangée).
     struct StoriesRoute: Identifiable, Equatable {
         let id = UUID()

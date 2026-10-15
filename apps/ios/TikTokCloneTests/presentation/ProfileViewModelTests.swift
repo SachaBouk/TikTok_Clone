@@ -355,6 +355,39 @@ struct ProfileViewModelTests {
         #expect(videoLists.state.withLock { ($0.removed, $0.cleared) } == (["v1"], 1))
     }
 
+    @Test("historique de visionnage (ADR-057) : rangé par jour de visionnage ; supprimer une sélection")
+    func viewHistorySections() async {
+        let session = await makeSession()
+        let today = Date.now
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        var videos = page(["v1", "v2", "v3"], next: nil).videos
+        videos[0].viewedAt = today
+        videos[1].viewedAt = today
+        videos[2].viewedAt = yesterday
+        videoLists.set(.myHistory, [FeedPage(videos: videos, nextCursor: nil)])
+        let viewModel = ViewHistoryViewModel(
+            loadVideoPage: LoadVideoPageUseCase(videos: videoLists),
+            removeFromHistory: RemoveFromHistoryUseCase(videos: videoLists),
+            clearHistory: ClearHistoryUseCase(videos: videoLists),
+            session: session
+        )
+        await viewModel.list.loadFirst()
+        #expect(viewModel.sections.map(\.title) == ["Aujourd’hui", "Hier"])
+        #expect(viewModel.sections.map { $0.items.map(\.id) } == [["v1", "v2"], ["v3"]])
+
+        await viewModel.remove(["v3", "v1"])
+        #expect(viewModel.list.items.map(\.id) == ["v2"])
+        // Dans l'ordre de la liste.
+        #expect(videoLists.state.withLock { $0.removed } == ["v1", "v3"])
+    }
+
+    @Test("code QR du profil (ADR-057) : dessiné à partir du lien")
+    func profileQRCode() throws {
+        let image = try #require(QRCodeImage.make(ProfileLink.url(for: "alice").absoluteString))
+        #expect(image.size.width == image.size.height)
+        #expect(image.size.width >= 21)
+    }
+
     @Test("liste paginée : page suivante à l'approche de la fin, sans doublon ; session expirée → invité")
     func pagedList() async {
         let session = await makeSession()

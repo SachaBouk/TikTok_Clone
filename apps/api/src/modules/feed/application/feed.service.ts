@@ -27,6 +27,8 @@ export interface FeedItem {
   viewer: FeedViewerState | null;
   // Anneau autour de l'avatar (ADR-051) : null si l'auteur n'a pas de story visible.
   authorStory: { hasUnseen: boolean } | null;
+  // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo par le compte.
+  viewedAt?: Date;
 }
 
 export interface FeedPage {
@@ -190,12 +192,14 @@ export class FeedService {
     ]);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
+    const viewedAt = new Map(page.map((row) => [row.videoId, row.viewedAt]));
+    const items = await this.loadItems(
+      page.map((row) => row.videoId),
+      userId,
+      hidden,
+    );
     return {
-      items: await this.loadItems(
-        page.map((row) => row.videoId),
-        userId,
-        hidden,
-      ),
+      items: items.map((item) => ({ ...item, viewedAt: viewedAt.get(item.video.id) })),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.viewedAt, videoId: last.videoId }) : null,
     };
   }

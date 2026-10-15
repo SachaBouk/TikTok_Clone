@@ -35,6 +35,7 @@ struct RootView: View {
         // (ADR-013), après l'onboarding et pas par-dessus.
         .onChange(of: session.state == .restoring) { _, restoring in
             guard !restoring, session.state != .unavailable else { return }
+            container.sessionRestored(signedIn: session.isSignedIn)
             // Sans l'animation de présentation (glissement depuis le bas) : l'introduction remplace l'écran de lancement.
             var transaction = Transaction()
             transaction.disablesAnimations = true

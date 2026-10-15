@@ -166,7 +166,10 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - « Modifier le profil » : page avec la photo, puis Nom, Pseudo (et le lien du profil à copier), Bio ; chaque champ sur sa page (« Annuler », « Enregistrer »), puis « Enregistré ». Tester un lien de profil : `xcrun simctl openurl booted "tiktokclone://users/<pseudo>"`.
 - Abonnés et abonnements : listes avec bouton d'abonnement (« Suivre », « Suivre en retour », « Abonné(e) », « Ami(e)s »).
 - Compteurs de son profil en direct (ADR-045) : abonnés et abonnements suivent l'événement `profileCountersChanged` (un abonnement reçu, ou fait depuis un autre appareil) ; le profil est relu à chaque reconnexion du temps réel.
-- Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
+- Menu ☰ de son profil (ADR-057, proposé) : panneau latéral par-dessus les onglets avec « Solde », « Centre des activités », « Ton code QR » et « Paramètres et confidentialité ».
+- Centre des activités : historique de visionnage rangé par jour (`viewedAt` de l'API ; « Sélectionner » pour en retirer plusieurs, « Tout effacer », appui long pour une vidéo), historique des commentaires, historique des recherches rangé par jour avec l'heure (toucher relance la recherche).
+- Ton code QR : le lien du profil (`tiktokclone://users/<pseudo>`) en code QR, dessiné sur l'iPhone.
+- Paramètres et confidentialité : centres d'intérêt, page « Compte » (pseudo, suppression du compte, alerte explicative, définitive), partager le profil, comptes bloqués, mesure d'audience, déconnexion.
 - Bloquer ou débloquer un compte : menu « … » de son profil. Ses vidéos, commentaires et lignes d'abonnés disparaissent aussitôt des écrans déjà chargés ; l'API ne les renvoie plus ensuite (ADR-029).
 - Supprimer une de ses vidéos : « Supprimer » dans la feuille de partage du lecteur ; elle disparaît de tous les écrans.
 - Signaler (ADR-038) : « Signaler » dans la feuille de partage de la vidéo d'un autre, geste « Signaler » sur son commentaire, « Signaler » dans le menu « … » de son profil, appui long sur un message reçu (seul ce message est transmis). Feuille commune en étapes, comme TikTok : motif, page du motif (explication, précision facultative de 500 caractères, « Envoyer »), puis « Merci pour ton signalement » avec « Bloquer @… » (auteur d'une vidéo, d'un commentaire, ou compte signalé). Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité (« Signalement examiné »). L'auteur d'un contenu retiré y reçoit « Contenu retiré » avec le motif.
@@ -206,8 +209,9 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 
 ## Jetons et paywall (ADR-009)
 
-- Bouton jetons (à côté de « Partager le profil ») sur son profil, et ligne « Portefeuille » dans Paramètres : solde, gains (« jetons reçus en cadeaux »,
-  ADR-050), packs en vente, historique en deux listes (« Mouvements », cadeaux envoyés compris ; « Cadeaux reçus »).
+- Page « Solde » (ADR-057) : « Solde » du menu ☰, bouton jetons (à côté de « Partager le profil ») et « Recharger » d'un cadeau (ces deux-là ouvrent
+  d'emblée les packs). En grand les gains (jetons reçus en cadeaux, ADR-050, masquables), pastille « Jetons N | Obtenir des jetons » (packs en vente
+  dans une feuille), « Transactions » (cadeaux envoyés compris) et « Cadeaux reçus » sur leurs pages.
 - **Cadeaux** (ADR-050) : bouton 🎁 du lecteur (pas sur ses propres vidéos) → feuille de cadeaux (solde, « Recharger », catalogue,
   « Envoyer »), animation chez l'expéditeur. Routes : `getGiftCatalog`, `sendGift(path:body:)` avec un `clientGiftId` (UUID, le même
   à chaque essai : un renvoi ne débite pas deux fois ; `.code402` = solde insuffisant, `.tooManyRequests` avec `retryAfter`),
@@ -312,7 +316,7 @@ case .data: break
 - Feed des abonnements (ADR-048) : `getFollowingFeed(query: .init(cursor:limit:))`, même élément que le feed, du plus récent au plus ancien ; `nextCursor` nil = fin ; `.unauthorized` en invité.
 - Ouvrir une vidéo seule dans le lecteur (notification, historique des commentaires, message partagé, lien) : `getFeedItem`, même élément que le feed ; `.notFound` si elle a été supprimée.
 - Historique des commentaires (centre d'activités) : `listMyComments`, chaque élément avec la vidéo commentée (miniature, auteur) ; supprimer avec `deleteComment`.
-- Historique de visionnage : `listMyHistory` (grille privée, même lecteur), `removeFromHistory` et `clearHistory`.
+- Historique de visionnage : `listMyHistory` (grille privée, même lecteur, `viewedAt` sur chaque élément, ADR-057), `removeFromHistory` et `clearHistory`.
 - `listFollowers` / `listFollowing` (publiques) : du follow le plus récent au plus ancien, `nextCursor` à renvoyer tel quel. Connecté, chaque ligne porte `viewer` : `following` (bouton « Abonné(e) ») et `followedBy` (« Suivre en retour » ; les deux : « Ami(e)s ») ; `viewer` est nil en mode invité.
 
 ## Messagerie : statuts, demandes et limites

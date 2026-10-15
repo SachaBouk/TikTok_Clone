@@ -6,9 +6,13 @@ struct SearchView: View {
     @State private var viewModel: SearchViewModel
     @FocusState private var isFieldFocused: Bool
     @Environment(\.navigationPath) private var navigationPath
+    // Recherche relancée depuis la page « Historique des recherches » (ADR-057).
+    private let initialQuery: String?
+    @State private var didApplyInitialQuery = false
 
-    init(viewModel: SearchViewModel) {
+    init(viewModel: SearchViewModel, initialQuery: String? = nil) {
         _viewModel = State(initialValue: viewModel)
+        self.initialQuery = initialQuery
     }
 
     var body: some View {
@@ -29,7 +33,12 @@ struct SearchView: View {
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
         .task {
-            isFieldFocused = true
+            if let initialQuery, !didApplyInitialQuery {
+                didApplyInitialQuery = true
+                viewModel.search(fromHistory: initialQuery)
+            } else if viewModel.text.isEmpty {
+                isFieldFocused = true
+            }
             await viewModel.loadTrendingIfNeeded()
         }
         .onChange(of: viewModel.blockedUserIDs) { _, ids in viewModel.removeBlocked(ids) }

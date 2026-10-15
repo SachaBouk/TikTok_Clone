@@ -84,6 +84,12 @@ struct MainTabView: View {
                 }
             }
         }
+        // Menu ☰ de son profil (ADR-057) : par-dessus la barre d'onglets ; une ligne pousse sa page dans le profil.
+        .overlay {
+            ProfileMenuOverlay(isOpen: $router.isProfileMenuOpen) { route in profilePath.append(route) }
+        }
+        .onChange(of: selection) { router.isProfileMenuOpen = false }
+        .onChange(of: session.isSignedIn) { router.isProfileMenuOpen = false }
         .sheet(isPresented: $session.isPresentingSignIn) {
             AuthFlowView(container: container)
         }

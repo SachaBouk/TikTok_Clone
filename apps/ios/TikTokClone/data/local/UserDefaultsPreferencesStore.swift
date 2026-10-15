@@ -51,16 +51,20 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
 }
 
 // Historique des recherches (ADR-049) : sur l'appareil seulement.
+// Entrées en JSON (ADR-057 : avec leur date) ; une liste de textes gardée avant est relue sans date.
 extension UserDefaultsPreferencesStore: SearchHistoryStore {
-    var searchHistory: [String] {
-        defaults.stringArray(forKey: Key.searchHistory) ?? []
+    var searchHistory: [SearchHistoryEntry] {
+        if let data = defaults.data(forKey: Key.searchHistory), let entries = try? JSONDecoder().decode([SearchHistoryEntry].self, from: data) {
+            return entries
+        }
+        return (defaults.stringArray(forKey: Key.searchHistory) ?? []).map { SearchHistoryEntry(query: $0) }
     }
 
-    func setSearchHistory(_ queries: [String]) {
-        if queries.isEmpty {
+    func setSearchHistory(_ entries: [SearchHistoryEntry]) {
+        if entries.isEmpty {
             defaults.removeObject(forKey: Key.searchHistory)
-        } else {
-            defaults.set(queries, forKey: Key.searchHistory)
+        } else if let data = try? JSONEncoder().encode(entries) {
+            defaults.set(data, forKey: Key.searchHistory)
         }
     }
 }

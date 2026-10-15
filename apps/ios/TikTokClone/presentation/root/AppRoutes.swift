@@ -14,17 +14,26 @@ struct FollowListRoute: Hashable {
 
 // Écrans de son propre compte.
 enum AccountRoute: Hashable {
+    // « Paramètres et confidentialité » et sa page « Compte » (ADR-057).
     case settings
+    case account
+    // Centre des activités et ses historiques (ADR-057).
+    case activityCenter
     case viewHistory
     case commentHistory
+    case searchHistory
     case blockedAccounts
     case interests
-    // Paywall et portefeuille de jetons (ADR-009).
+    // Page « Solde » : portefeuille de jetons (ADR-009, ADR-057).
     case wallet(PaywallSource)
+    // Code QR de son profil (ADR-057).
+    case qrCode
 }
 
-// Recherche (ADR-049), ouverte par la loupe du feed.
-struct SearchRoute: Hashable {}
+// Recherche (ADR-049), ouverte par la loupe du feed ; avec une recherche de l'historique, relancée (ADR-057).
+struct SearchRoute: Hashable {
+    var query: String?
+}
 
 // Page d'un hashtag (ADR-049) : nom sans « # ».
 struct HashtagRoute: Hashable, Identifiable {
@@ -65,8 +74,8 @@ extension View {
             .navigationDestination(for: FollowListRoute.self) { route in
                 FollowListView(viewModel: container.makeFollowListViewModel(route))
             }
-            .navigationDestination(for: SearchRoute.self) { _ in
-                SearchView(viewModel: container.makeSearchViewModel())
+            .navigationDestination(for: SearchRoute.self) { route in
+                SearchView(viewModel: container.makeSearchViewModel(), initialQuery: route.query)
             }
             .navigationDestination(for: HashtagRoute.self) { route in
                 HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
@@ -76,7 +85,11 @@ extension View {
             }
             .navigationDestination(for: AccountRoute.self) { route in
                 switch route {
-                case .settings: AccountSettingsView(viewModel: container.makeAccountSettingsViewModel(), wallet: container.wallet)
+                case .settings: AccountSettingsView(viewModel: container.makeAccountSettingsViewModel())
+                case .account: AccountDetailsView(viewModel: container.makeAccountSettingsViewModel())
+                case .activityCenter: ActivityCenterView()
+                case .searchHistory: SearchHistoryView(history: container.searchHistory)
+                case .qrCode: ProfileQRCodeView(session: container.session)
                 case .viewHistory: ViewHistoryView(viewModel: container.makeViewHistoryViewModel(), container: container)
                 case .commentHistory: CommentHistoryView(viewModel: container.makeCommentHistoryViewModel(), router: container.router)
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())

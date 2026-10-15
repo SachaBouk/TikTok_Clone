@@ -1,8 +1,8 @@
 import Observation
 import SwiftUI
 
-// Historique de visionnage (privé) : grille du plus récent au plus ancien, même lecteur que le feed.
-// Effacement manuel (choix du développeur) : une vidéo, ou tout l'historique.
+// Historique de visionnage (privé) : grille du plus récent au plus ancien, rangée par jour de visionnage (ADR-057),
+// même lecteur que le feed. Effacement manuel (choix du développeur) : une vidéo, une sélection, ou tout l'historique.
 @MainActor
 @Observable
 final class ViewHistoryViewModel {
@@ -22,12 +22,22 @@ final class ViewHistoryViewModel {
         }
     }
 
+    var sections: [DaySection<FeedVideo>] { DaySections.group(list.items, date: \.viewedAt) }
+
     func remove(_ video: FeedVideo) async {
-        do {
-            try await removeFromHistory(videoID: video.id)
-            list.remove { $0.id == video.id }
-        } catch {
-            errorMessage = handle(error)
+        await remove([video.id])
+    }
+
+    // Une requête par vidéo ; à la première erreur, les vidéos déjà retirées disparaissent et le message s'affiche.
+    func remove(_ ids: Set<String>) async {
+        for id in list.items.map(\.id) where ids.contains(id) {
+            do {
+                try await removeFromHistory(videoID: id)
+                list.remove { $0.id == id }
+            } catch {
+                errorMessage = handle(error)
+                return
+            }
         }
     }
 
@@ -53,7 +63,11 @@ final class ViewHistoryViewModel {
 struct ViewHistoryView: View {
     @State private var viewModel: ViewHistoryViewModel
     let container: AppContainer
+    @State private var isSelecting = false
+    @State private var selection: Set<String> = []
     @State private var isConfirmingClear = false
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
     init(viewModel: ViewHistoryViewModel, container: AppContainer) {
         _viewModel = State(initialValue: viewModel)
@@ -62,29 +76,61 @@ struct ViewHistoryView: View {
 
     var body: some View {
         ScrollView {
-            VideoGrid(
-                list: viewModel.list,
-                route: { page, index in VideoPlayerRoute(list: .myHistory, page: page, startIndex: index) },
-                emptyTitle: "Aucune vidéo regardée",
-                removeTitle: "Retirer de l’historique",
-                onRemove: { video in Task { await viewModel.remove(video) } }
-            )
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(viewModel.sections) { section in
+                    Text(section.title)
+                        .font(.title2.bold())
+                        .padding(.horizontal, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 10)
+                    LazyVGrid(columns: columns, spacing: 2) {
+                        ForEach(section.items) { video in
+                            cell(video)
+                                .onAppear { Task { await viewModel.list.loadMore(ifNeededAfter: video) } }
+                        }
+                    }
+                }
+            }
+            footer
         }
         .navigationTitle("Historique de visionnage")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Effacer", role: .destructive) { isConfirmingClear = true }
-                    .disabled(viewModel.list.items.isEmpty)
-                    .accessibilityIdentifier("history.clear")
+                Button(isSelecting ? "Annuler" : "Sélectionner") {
+                    isSelecting.toggle()
+                    selection = []
+                }
+                .disabled(viewModel.list.items.isEmpty && !isSelecting)
+                .accessibilityIdentifier("history.select")
+            }
+            if isSelecting {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button("Tout effacer", role: .destructive) { isConfirmingClear = true }
+                        .accessibilityIdentifier("history.clear")
+                    Spacer()
+                    Button("Supprimer (\(selection.count))", role: .destructive) {
+                        let ids = selection
+                        selection = []
+                        isSelecting = false
+                        Task { await viewModel.remove(ids) }
+                    }
+                    .disabled(selection.isEmpty)
+                    .accessibilityIdentifier("history.delete")
+                }
             }
         }
+        .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
         .task { await viewModel.list.loadFirstIfNeeded() }
         .refreshable { await viewModel.list.loadFirst() }
         .onChange(of: container.videoInteractions.deletedVideoIDs) { _, ids in viewModel.list.remove { ids.contains($0.id) } }
         .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in viewModel.list.remove { ids.contains($0.author.id) } }
         .confirmationDialog("Effacer tout l’historique de visionnage ?", isPresented: $isConfirmingClear, titleVisibility: .visible) {
-            Button("Effacer l’historique", role: .destructive) { Task { await viewModel.clear() } }
+            Button("Effacer l’historique", role: .destructive) {
+                selection = []
+                isSelecting = false
+                Task { await viewModel.clear() }
+            }
         } message: {
             Text("Les vues déjà comptées sur les vidéos ne changent pas.")
         }
@@ -99,6 +145,69 @@ struct ViewHistoryView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    // Toucher ouvre le lecteur vertical sur la vidéo (avec la suite de l'historique), ou la coche en sélection.
+    @ViewBuilder
+    private func cell(_ video: FeedVideo) -> some View {
+        let thumbnail = VideoGridCell(thumbnailURL: video.thumbnailURL, image: nil, views: video.stats.views)
+        Group {
+            if isSelecting {
+                Button {
+                    if selection.contains(video.id) { selection.remove(video.id) } else { selection.insert(video.id) }
+                } label: {
+                    thumbnail.overlay(alignment: .topTrailing) { SelectionMark(isSelected: selection.contains(video.id)) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection.contains(video.id) ? .isSelected : [])
+            } else if let index = viewModel.list.items.firstIndex(where: { $0.id == video.id }) {
+                NavigationLink(
+                    value: VideoPlayerRoute(
+                        list: .myHistory, page: FeedPage(videos: viewModel.list.items, nextCursor: viewModel.list.nextCursor), startIndex: index)
+                ) { thumbnail }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Retirer de l’historique", systemImage: "minus.circle", role: .destructive) {
+                        Task { await viewModel.remove(video) }
+                    }
+                }
+            }
+        }
+        .accessibilityLabel(video.description ?? "Vidéo de @\(video.author.username)")
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        let list = viewModel.list
+        switch list.state {
+        case .idle, .loading:
+            if list.items.isEmpty { ProgressView().padding(.vertical, 40).frame(maxWidth: .infinity) }
+        case .failed(let message):
+            VStack(spacing: 8) {
+                Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button("Réessayer") { Task { await list.loadFirst() } }
+            }
+            .padding(.vertical, 32)
+            .frame(maxWidth: .infinity)
+        case .loaded:
+            if list.items.isEmpty {
+                ContentUnavailableView("Aucune vidéo regardée", systemImage: "play.rectangle").padding(.vertical, 24)
+            }
+        }
+    }
+}
+
+// Rond de sélection, en haut à droite d'une miniature.
+private struct SelectionMark: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.title2)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.white, isSelected ? Color.brandPink : .black.opacity(0.25))
+            .shadow(color: .black.opacity(0.4), radius: 2)
+            .padding(6)
     }
 }
 
@@ -122,6 +231,11 @@ final class CommentHistoryViewModel {
             let page = try await loadComments(cursor: cursor)
             return (page.entries, page.nextCursor)
         }
+    }
+
+    // Son compte, en tête de chaque ligne (ADR-057).
+    var me: UserSummary? {
+        session.profile.map { UserSummary(id: $0.id, username: $0.username, displayName: $0.displayName, avatarURL: $0.avatarURL) }
     }
 
     // Comptes bloqués depuis le chargement : les commentaires sur leurs vidéos disparaissent (l'API ne les renvoie plus).
@@ -161,7 +275,7 @@ struct CommentHistoryView: View {
                 Button {
                     router.presentedVideo = AppRouter.VideoRoute(id: entry.video.id)
                 } label: {
-                    CommentHistoryRow(entry: entry)
+                    CommentHistoryRow(entry: entry, me: viewModel.me)
                 }
                 .buttonStyle(.plain)
                 .swipeActions {
@@ -198,22 +312,36 @@ struct CommentHistoryView: View {
     }
 }
 
+// Ligne comme TikTok : sa photo, « Nom ▸ auteur de la vidéo », le commentaire et sa date, la miniature à droite.
 private struct CommentHistoryRow: View {
     let entry: CommentHistoryEntry
+    let me: UserSummary?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            AvatarView(url: me?.avatarURL, name: me?.displayName ?? "", size: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Text(me?.displayName ?? "Toi")
+                    if entry.video.author.id != me?.id {
+                        Image(systemName: "arrowtriangle.right.fill").font(.caption2)
+                        Text(entry.video.author.displayName)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                Text(
+                    "\(entry.content)  \(Text(.currentDate, format: RelativeTime.style(for: entry.createdAt)).foregroundStyle(.secondary).font(.subheadline))"
+                )
+                .lineLimit(4)
+            }
+            Spacer(minLength: 8)
             VideoGridCell(thumbnailURL: entry.video.thumbnailURL, image: nil, views: nil)
                 .frame(width: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.content).lineLimit(3)
-                Text("Sur la vidéo de @\(entry.video.author.username) · \(.currentDate, format: RelativeTime.style(for: entry.createdAt))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
         }
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

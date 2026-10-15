@@ -16,15 +16,22 @@ final class SearchHistoryModel {
     }
 
     var queries: [String] { history.queries }
+    var entries: [SearchHistoryEntry] { history.entries }
 
     func record(_ query: String) {
         history.record(query)
-        store.setSearchHistory(history.queries)
+        store.setSearchHistory(history.entries)
     }
 
     func remove(_ query: String) {
         history.remove(query)
-        store.setSearchHistory(history.queries)
+        store.setSearchHistory(history.entries)
+    }
+
+    // Plusieurs recherches à la fois (« Sélectionner » de la page de l'historique, ADR-057).
+    func remove(_ queries: Set<String>) {
+        history.remove(queries)
+        store.setSearchHistory(history.entries)
     }
 
     func clear() {

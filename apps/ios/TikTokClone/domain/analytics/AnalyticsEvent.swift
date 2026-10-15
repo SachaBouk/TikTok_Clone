@@ -45,7 +45,8 @@ enum VideoSource: String, Sendable {
 // Écran d'où le paywall est ouvert.
 enum PaywallSource: String, Hashable, Sendable {
     case profile
-    case settings
+    // « Solde » du menu ☰ de son profil (ADR-057).
+    case menu
     // « Recharger » de la feuille de cadeaux (ADR-050).
     case gift
 }

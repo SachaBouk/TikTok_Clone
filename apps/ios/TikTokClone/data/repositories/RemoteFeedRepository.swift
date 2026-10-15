@@ -95,7 +95,8 @@ extension FeedVideo {
             viewer: dto.viewer.map {
                 ViewerState(liked: $0.liked, favorited: $0.favorited, reposted: $0.reposted, followingAuthor: $0.followingAuthor)
             },
-            authorStory: dto.authorStory.map { StoryRing(hasUnseen: $0.hasUnseen) }
+            authorStory: dto.authorStory.map { StoryRing(hasUnseen: $0.hasUnseen) },
+            viewedAt: dto.viewedAt
         )
     }
 }

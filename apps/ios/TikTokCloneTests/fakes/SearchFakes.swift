@@ -45,14 +45,14 @@ final class FakeSearchRepository: SearchRepository {
 }
 
 final class InMemorySearchHistoryStore: SearchHistoryStore {
-    private let stored: Mutex<[String]>
+    private let stored: Mutex<[SearchHistoryEntry]>
 
-    init(_ queries: [String] = []) {
-        stored = Mutex(queries)
+    init(_ entries: [SearchHistoryEntry] = []) {
+        stored = Mutex(entries)
     }
 
-    var searchHistory: [String] { stored.withLock { $0 } }
-    func setSearchHistory(_ queries: [String]) { stored.withLock { $0 = queries } }
+    var searchHistory: [SearchHistoryEntry] { stored.withLock { $0 } }
+    func setSearchHistory(_ entries: [SearchHistoryEntry]) { stored.withLock { $0 = entries } }
 }
 
 extension AccountSearchResult {

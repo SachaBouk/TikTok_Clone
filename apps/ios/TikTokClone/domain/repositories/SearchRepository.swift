@@ -11,6 +11,6 @@ protocol SearchRepository: Sendable {
 
 // Historique des recherches, sur l'appareil seulement (ADR-049).
 protocol SearchHistoryStore: Sendable {
-    var searchHistory: [String] { get }
-    func setSearchHistory(_ queries: [String])
+    var searchHistory: [SearchHistoryEntry] { get }
+    func setSearchHistory(_ entries: [SearchHistoryEntry])
 }

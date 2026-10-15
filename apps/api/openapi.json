@@ -9345,6 +9345,11 @@
           },
           "authorStory": {
             "$ref": "#/components/schemas/AuthorStoryResponse"
+          },
+          "viewedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo par le compte connecté."
           }
         },
         "required": [
