@@ -47,3 +47,4 @@ Parcours :
 - ADR-028 — Règles produit de la première version
 - Complété par [ADR-033](ADR-033-ci-ios.md) — Intégration continue de l'app iOS
 - Complété par [ADR-034](ADR-034-package-resolved-versionne.md) — Versions des paquets Swift : Package.resolved versionné
+- Complété par [ADR-055](ADR-055-onboarding.md) — Onboarding : lancement, introduction, connexion par email ou pseudo, inscription par étapes

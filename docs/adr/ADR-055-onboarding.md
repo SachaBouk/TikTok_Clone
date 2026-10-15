@@ -1,7 +1,7 @@
 # ADR-055 — Onboarding : écran de lancement, introduction, connexion par email ou pseudo, inscription par étapes
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-010](ADR-010-authentification.md) (authentification) et [ADR-017](ADR-017-app-ios-choix-implementation.md) (app iOS), sans les remplacer : le développeur veut un parcours d'arrivée inspiré de TikTok (écran de lancement avec logo, introduction, puis écrans « Connexion » et « Inscription » qui listent les moyens de se connecter).
 

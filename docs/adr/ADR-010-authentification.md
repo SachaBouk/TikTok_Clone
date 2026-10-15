@@ -30,3 +30,4 @@ Apple impose la suppression du compte depuis l'application si celle-ci permet d'
 ## Liens
 - ADR-003 — Architecture backend
 - ADR-011 — Temps réel
+- Complété par [ADR-055](ADR-055-onboarding.md) — Onboarding : lancement, introduction, connexion par email ou pseudo, inscription par étapes
