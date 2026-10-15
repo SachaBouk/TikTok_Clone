@@ -78,6 +78,61 @@ struct ReportViewModelTests {
         return ReportViewModel(target: target, sendReport: SendReportUseCase(reports: reports), session: session, analytics: makeAnalytics(analytics))
     }
 
+    // Feuille ouverte sur la vidéo de bob, qui propose de le bloquer après l'envoi.
+    func makeBlockingViewModel(relationships: FakeRelationshipRepository) async -> (ReportViewModel, VideoInteractionsModel) {
+        let session = makeSession(auth: FakeAuthRepository(hasSession: true))
+        await session.restore()
+        let analyticsModel = makeAnalytics(analytics)
+        let interactions = VideoInteractionsModel(
+            setReaction: SetReactionUseCase(interactions: FakeInteractionRepository()),
+            setFollow: SetFollowUseCase(interactions: FakeInteractionRepository()),
+            recordShare: ShareVideoUseCase(interactions: FakeInteractionRepository()),
+            deleteVideo: DeleteVideoUseCase(videos: FakeVideoPublishingRepository()),
+            session: session,
+            analytics: analyticsModel
+        )
+        let viewModel = ReportViewModel(
+            target: .video(id: "v1"), sendReport: SendReportUseCase(reports: reports), session: session, analytics: analyticsModel,
+            author: .bob, setBlocked: SetBlockedUseCase(relationships: relationships), interactions: interactions)
+        return (viewModel, interactions)
+    }
+
+    @Test("après l'envoi : bloquer l'auteur ; ses contenus quittent les écrans")
+    func blockAuthor() async {
+        let relationships = FakeRelationshipRepository()
+        let (viewModel, interactions) = await makeBlockingViewModel(relationships: relationships)
+        #expect(viewModel.author == .bob)
+        await viewModel.blockAuthor()
+        await viewModel.blockAuthor()
+        #expect(viewModel.blockState == .blocked)
+        #expect(relationships.calls == ["block-bob"])
+        #expect(interactions.blockedUserIDs == ["bob-id"])
+    }
+
+    @Test("blocage refusé : rien ne change, message affiché")
+    func blockAuthorFails() async {
+        let relationships = FakeRelationshipRepository()
+        relationships.fail(with: .rejected("Impossible"))
+        let (viewModel, interactions) = await makeBlockingViewModel(relationships: relationships)
+        await viewModel.blockAuthor()
+        #expect(viewModel.blockState == .idle)
+        #expect(viewModel.errorMessage == "Impossible")
+        #expect(interactions.blockedUserIDs.isEmpty)
+    }
+
+    @Test("sans moyen de bloquer : aucun auteur proposé")
+    func noBlockWithoutUseCase() async {
+        let viewModel = await makeViewModel()
+        #expect(viewModel.author == nil)
+        await viewModel.blockAuthor()
+        #expect(viewModel.blockState == .idle)
+    }
+
+    @Test("chaque motif a son explication")
+    func explanations() {
+        for reason in ReportReason.allCases { #expect(!reason.explanation.isEmpty) }
+    }
+
     @Test("motif obligatoire ; précision nettoyée ; confirmation et événement sans texte saisi")
     func send() async {
         let viewModel = await makeViewModel()

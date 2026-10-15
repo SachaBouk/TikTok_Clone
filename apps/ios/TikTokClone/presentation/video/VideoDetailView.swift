@@ -66,11 +66,6 @@ struct VideoDetailView: View {
         }
     }
 
-    // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
-    private func report(_ video: FeedVideo) {
-        if container.session.isSignedIn { reportedVideo = video } else { container.session.requestSignIn() }
-    }
-
     @ViewBuilder
     private func content(bottomInset: CGFloat) -> some View {
         switch viewModel.state {
@@ -92,7 +87,6 @@ struct VideoDetailView: View {
                     togglePause: { viewModel.togglePause() },
                     comments: { commentsVideo = interactions.display(video) },
                     share: { shareVideo = interactions.display(video) },
-                    report: { report(video) },
                     alert: { alertMessage = $0 },
                     openHashtag: { path.append(HashtagRoute(name: $0)) },
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },

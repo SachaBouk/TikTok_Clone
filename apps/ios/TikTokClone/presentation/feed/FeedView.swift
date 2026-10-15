@@ -139,7 +139,6 @@ struct FeedView: View {
                             togglePause: { viewModel.togglePause() },
                             comments: { commentsVideo = interactions.display(entry.video) },
                             share: { shareVideo = interactions.display(entry.video) },
-                            report: { report(entry.video) },
                             alert: { alertMessage = $0 },
                             openHashtag: { name in
                                 if let navigationPath {
@@ -177,11 +176,6 @@ struct FeedView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)
-    }
-
-    // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.
-    private func report(_ video: FeedVideo) {
-        if session.isSignedIn { reportedVideo = video } else { session.requestSignIn() }
     }
 
     private func updateActivity() {
@@ -235,9 +229,6 @@ struct VideoPageActions {
     var comments: () -> Void
     var share: () -> Void
     var follow: () -> Void
-    // Menu « … » : celle d'un autre, « Signaler » (ADR-038) ; sa propre vidéo, « Supprimer », confirmé dans la colonne.
-    var report: () -> Void
-    var delete: () -> Void
     // Hashtag touché dans la description (ADR-049) : sa page.
     var openHashtag: (String) -> Void = { _ in }
     // Bouton 🎁 (ADR-050) : feuille de cadeaux, sur la vidéo d'un autre.
@@ -442,13 +433,12 @@ struct HeartBurstView: View {
 }
 
 // Colonne de droite, comme TikTok : auteur (avec « + » rouge pour le suivre), puis like (rouge une fois aimée),
-// commentaires, favori (jaune une fois enregistrée), partage. La republication est la pastille en bas à gauche.
+// commentaires, favori (jaune une fois enregistrée), partage, cadeau. La republication est la pastille en bas à gauche ;
+// signaler ou supprimer sa vidéo passent par la feuille de partage (`VideoShareSheet`).
 struct FeedActionColumn: View {
     let video: FeedVideo
     let showsFollowButton: Bool
     let actions: VideoPageActions
-    // Confirmation attachée au menu : elle s'affiche à côté du bouton « … », pas dans un coin de l'écran.
-    @State private var isConfirmingDelete = false
     @Environment(StoriesModel.self) private var stories: StoriesModel?
 
     var body: some View {
@@ -518,28 +508,6 @@ struct FeedActionColumn: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Offrir un cadeau")
                 .accessibilityIdentifier("video.gift")
-            }
-            Menu {
-                if showsFollowButton {
-                    Button("Signaler", systemImage: "flag", role: .destructive, action: actions.report)
-                } else {
-                    Button("Supprimer la vidéo", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 24, weight: .bold))
-                    .shadow(radius: 4)
-                    .frame(width: 56, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(showsFollowButton ? "Plus d’options" : "Gérer la vidéo")
-            .accessibilityIdentifier("video.manage")
-            // Sa propre vidéo : suppression, quel que soit son statut (les autres écrans la retirent ensuite).
-            .confirmationDialog("Supprimer cette vidéo ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
-                Button("Supprimer", role: .destructive, action: actions.delete)
-            } message: {
-                Text("Ses likes, commentaires et republications disparaîtront aussi.")
             }
         }
     }

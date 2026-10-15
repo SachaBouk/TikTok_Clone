@@ -9,7 +9,6 @@ extension VideoPageActions {
         togglePause: @escaping () -> Void,
         comments: @escaping () -> Void,
         share: @escaping () -> Void,
-        report: @escaping () -> Void = {},
         alert: @escaping (String) -> Void,
         openHashtag: @escaping (String) -> Void = { _ in },
         gift: @escaping () -> Void = {},
@@ -22,8 +21,6 @@ extension VideoPageActions {
             comments: comments,
             share: share,
             follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } },
-            report: report,
-            delete: { Task { if let message = await interactions.delete(video) { alert(message) } } },
             openHashtag: openHashtag,
             gift: gift,
             openStories: openStories
@@ -56,9 +53,14 @@ private struct VideoInteractionSheets: ViewModifier {
     @Binding var alert: String?
     let interactions: VideoInteractionsModel
     let container: AppContainer
-    // « Envoyer par message » choisi : la feuille des destinataires s'ouvre une fois celle du partage fermée.
-    @State private var chosenForMessage: FeedVideo?
-    @State private var sendByMessage: FeedVideo?
+    // Suite choisie dans la feuille de partage, faite une fois celle-ci fermée (une feuille présentée pendant la
+    // fermeture d'une autre serait ignorée).
+    @State private var afterShare: AfterShare?
+
+    private enum AfterShare {
+        case report(FeedVideo)
+        case signIn
+    }
 
     func body(content: Content) -> some View {
         content
@@ -72,38 +74,29 @@ private struct VideoInteractionSheets: ViewModifier {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(
-                item: $share,
-                onDismiss: {
-                    sendByMessage = chosenForMessage
-                    chosenForMessage = nil
-                }
-            ) { video in
-                ActivityShareSheet(items: video.shareItems, allowsSendByMessage: container.session.isSignedIn) { outcome in
-                    switch outcome {
-                    case .shared: Task { await interactions.shareCompleted(video) }
-                    // UIKit ferme parfois la feuille avant d'appeler ce gestionnaire : la feuille des
-                    // destinataires s'ouvre alors tout de suite, sinon à sa fermeture.
-                    case .sendByMessage:
-                        if share == nil { sendByMessage = video } else { chosenForMessage = video }
-                    case .cancelled: break
-                    }
-                    share = nil
-                }
-                .presentationDetents([.medium, .large])
-                .ignoresSafeArea()
+            // Feuille « Envoyer à », comme TikTok (`VideoShareSheet`).
+            .sheet(item: $share, onDismiss: runAfterShare) { video in
+                VideoShareSheet(
+                    video: video,
+                    interactions: interactions,
+                    container: container,
+                    onReport: { afterShare = container.session.isSignedIn ? .report(video) : .signIn },
+                    onDelete: { Task { if let message = await interactions.delete(video) { alert = message } } },
+                    onSignInRequired: { afterShare = .signIn },
+                    onAlert: { alert = $0 }
+                )
+                .presentationDetents([.height(440), .large])
+                .presentationCornerRadius(16)
+                // Fond blanc plein, comme TikTok (iOS 26 rend sinon la feuille translucide à cette hauteur).
+                .presentationBackground(.white)
+                .environment(\.colorScheme, .light)
             }
-            .sheet(item: $sendByMessage) { video in
-                SendVideoView(viewModel: container.makeSendVideoViewModel(video: video))
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-            // Vidéo d'un autre compte signalée depuis le menu « … » (ADR-038).
+            // Vidéo d'un autre compte signalée depuis la feuille de partage (ADR-038) ; l'auteur est proposé au blocage.
             .reportSheet(
                 Binding(
                     get: { report.map { ReportTarget.video(id: $0.id) } },
                     set: { if $0 == nil { report = nil } }
-                ), container: container
+                ), container: container, author: report?.author
             )
             .alert(
                 "Action impossible",
@@ -116,6 +109,15 @@ private struct VideoInteractionSheets: ViewModifier {
             } message: {
                 Text(alert ?? "")
             }
+    }
+
+    private func runAfterShare() {
+        switch afterShare {
+        case .report(let video): report = video
+        case .signIn: container.session.requestSignIn()
+        case nil: break
+        }
+        afterShare = nil
     }
 }
 

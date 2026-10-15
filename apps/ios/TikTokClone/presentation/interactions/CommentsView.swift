@@ -8,6 +8,8 @@ struct CommentsView: View {
     let container: AppContainer
     @State private var isPresentingSignIn = false
     @State private var reportTarget: ReportTarget?
+    // Auteur du commentaire signalé : l'écran de remerciement propose de le bloquer.
+    @State private var reportedAuthor: UserSummary?
     // Commentaire d'un autre à supprimer de sa vidéo, en attente de confirmation.
     @State private var removing: VideoComment?
     @FocusState private var isComposing: Bool
@@ -40,7 +42,7 @@ struct CommentsView: View {
         .sheet(isPresented: $isPresentingSignIn) {
             AuthFlowView(container: container)
         }
-        .reportSheet($reportTarget, container: container)
+        .reportSheet($reportTarget, container: container, author: reportedAuthor)
         .alert(
             "Commentaires",
             isPresented: Binding(
@@ -94,7 +96,12 @@ struct CommentsView: View {
                                     .tint(.red)
                             }
                             Button("Signaler", systemImage: "flag") {
-                                if viewModel.isSignedIn { reportTarget = .comment(id: comment.id) } else { isPresentingSignIn = true }
+                                if viewModel.isSignedIn {
+                                    reportedAuthor = comment.author
+                                    reportTarget = .comment(id: comment.id)
+                                } else {
+                                    isPresentingSignIn = true
+                                }
                             }
                             .tint(.orange)
                         }

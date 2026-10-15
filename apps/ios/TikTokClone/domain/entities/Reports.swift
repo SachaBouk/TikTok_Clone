@@ -19,6 +19,21 @@ enum ReportReason: String, CaseIterable, Identifiable, Sendable {
         case .other: "Autre"
         }
     }
+
+    // Explication affichée sur la page du motif, avant l'envoi (parcours en étapes, comme TikTok).
+    var explanation: String {
+        switch self {
+        case .spam: "Contenu trompeur ou répétitif, faux comptes, liens douteux ou publicités non sollicitées."
+        case .harassment: "Moqueries, insultes, menaces ou intimidation qui visent une personne."
+        case .hate:
+            "Propos ou symboles qui attaquent des personnes pour leur origine, leur religion, leur genre, leur orientation sexuelle, "
+                + "leur handicap ou toute autre caractéristique."
+        case .violence: "Violence physique, menaces, incitation à la violence, activités dangereuses ou images choquantes."
+        case .sexual: "Nudité, contenu sexuel, ou tout contenu qui sexualise un mineur."
+        case .impersonation: "Compte ou contenu qui se fait passer pour une autre personne, une marque ou une organisation."
+        case .other: "Choisis ce motif si ton signalement ne correspond à aucune des catégories de la liste. Tu peux le préciser ci-dessous."
+        }
+    }
 }
 
 enum ReportTarget: Hashable, Identifiable, Sendable {

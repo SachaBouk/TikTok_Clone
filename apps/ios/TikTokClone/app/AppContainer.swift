@@ -438,8 +438,11 @@ final class AppContainer {
     }
 
     // Signalement d'une vidéo, d'un commentaire ou d'un compte (ADR-038).
-    func makeReportViewModel(target: ReportTarget) -> ReportViewModel {
-        ReportViewModel(target: target, sendReport: SendReportUseCase(reports: reports), session: session, analytics: analytics)
+    // `author` : auteur d'une vidéo ou d'un commentaire, que l'écran de remerciement propose de bloquer.
+    func makeReportViewModel(target: ReportTarget, author: UserSummary? = nil) -> ReportViewModel {
+        ReportViewModel(
+            target: target, sendReport: SendReportUseCase(reports: reports), session: session, analytics: analytics, author: author,
+            setBlocked: SetBlockedUseCase(relationships: relationships), interactions: videoInteractions)
     }
 
     func makeCommentsViewModel(video: FeedVideo, onCountChange: @escaping (Int) -> Void) -> CommentsViewModel {

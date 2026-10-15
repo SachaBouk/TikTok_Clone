@@ -114,7 +114,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
 - En invité, toute action ouvre la connexion.
 - Commentaires : feuille native à mi-hauteur, glisser vers la gauche pour supprimer le sien ; sur sa propre vidéo, aussi ceux des autres (confirmation, sans prévenir leur auteur, ADR-042).
-- Partage : feuille de partage système avec le lien `tiktokclone://videos/<id>` ; compté seulement s'il est réellement envoyé. « Copier » copie le message avec le lien, en une seule entrée. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
+- Partage : feuille « Envoyer à », comme TikTok : « Republier » et tes contacts (un toucher envoie la vidéo par message), puis « Copier le lien », SMS, Email et « Plus » (feuille système), puis « Signaler » ou, sur ta vidéo, « Supprimer ». Lien `tiktokclone://videos/<id>` ; un partage n'est compté que s'il est réellement envoyé. « Copier » copie le message avec le lien, en une seule entrée. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
 
 ## Publication
 
@@ -166,8 +166,8 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - Compteurs de son profil en direct (ADR-045) : abonnés et abonnements suivent l'événement `profileCountersChanged` (un abonnement reçu, ou fait depuis un autre appareil) ; le profil est relu à chaque reconnexion du temps réel.
 - Paramètres (engrenage) : historique de visionnage (effacer tout, ou une vidéo par appui long), historique des commentaires, comptes bloqués, déconnexion, suppression du compte (alerte explicative, définitive).
 - Bloquer ou débloquer un compte : menu « … » de son profil. Ses vidéos, commentaires et lignes d'abonnés disparaissent aussitôt des écrans déjà chargés ; l'API ne les renvoie plus ensuite (ADR-029).
-- Supprimer une de ses vidéos : bouton « … » dans la colonne de droite du lecteur ; elle disparaît de tous les écrans.
-- Signaler (ADR-038) : menu « … » du lecteur sur la vidéo d'un autre, geste « Signaler » sur son commentaire, « Signaler » dans le menu « … » de son profil, appui long sur un message reçu (seul ce message est transmis). Feuille commune : motif de la liste, précision facultative (500 caractères), puis « Ton signalement sera examiné. » ; après un signalement de compte, « Bloquer @… ». Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité (« Signalement examiné »). L'auteur d'un contenu retiré y reçoit « Contenu retiré » avec le motif.
+- Supprimer une de ses vidéos : « Supprimer » dans la feuille de partage du lecteur ; elle disparaît de tous les écrans.
+- Signaler (ADR-038) : « Signaler » dans la feuille de partage de la vidéo d'un autre, geste « Signaler » sur son commentaire, « Signaler » dans le menu « … » de son profil, appui long sur un message reçu (seul ce message est transmis). Feuille commune en étapes, comme TikTok : motif, page du motif (explication, précision facultative de 500 caractères, « Envoyer »), puis « Merci pour ton signalement » avec « Bloquer @… » (auteur d'une vidéo, d'un commentaire, ou compte signalé). Rien n'est masqué ensuite : un administrateur décide, et la décision arrive dans l'activité (« Signalement examiné »). L'auteur d'un contenu retiré y reçoit « Contenu retiré » avec le motif.
 
 ## Boîte de réception et messagerie
 
@@ -178,7 +178,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - Message non envoyé (coupure, limite, refus ; ADR-044) : la bulle reste affichée « Non envoyé · Toucher pour réessayer ». Un toucher ouvre « Réessayer », « Copier », « Supprimer ». Chaque essai porte le même identifiant d'envoi (`clientMessageId`) : un renvoi ne crée pas de doublon si le premier était arrivé. Gardé pendant la session de l'app, même conversation fermée.
 - Limite d'envoi atteinte : l'envoi et le renvoi sont bloqués, avec un compte à rebours.
 - Écrire à un compte : bouton « Message » de son profil.
-- Partager une vidéo par message : « Partager », puis « Envoyer par message » dans la feuille système, et « Envoyer » à côté de chaque destinataire (conversations récentes, puis abonnements).
+- Partager une vidéo par message : « Partager », puis toucher un contact dans la première ligne de la feuille « Envoyer à » (conversations récentes, puis abonnements).
 
 ## Centre d'activité
 
