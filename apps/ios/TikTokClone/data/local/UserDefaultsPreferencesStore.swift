@@ -14,6 +14,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let guestPromptDecided = "guestPromptDecided"
         static let searchHistory = "searchHistory"
         static let onboardingCompleted = "onboardingCompleted"
+        static let feedSwipeHintShown = "feedSwipeHintShown"
     }
 
     var analyticsConsent: Bool? {
@@ -38,6 +39,14 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
 
     func markOnboardingCompleted() {
         defaults.set(true, forKey: Key.onboardingCompleted)
+    }
+
+    var feedSwipeHintShown: Bool {
+        defaults.bool(forKey: Key.feedSwipeHintShown)
+    }
+
+    func markFeedSwipeHintShown() {
+        defaults.set(true, forKey: Key.feedSwipeHintShown)
     }
 }
 

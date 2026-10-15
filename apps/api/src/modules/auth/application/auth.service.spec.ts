@@ -8,6 +8,7 @@ import {
   InvalidAppleTokenError,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  InvalidRegistrationError,
   InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
   TooManySignupsError,
@@ -49,7 +50,7 @@ class FakeAppleVerifier extends AppleIdentityVerifier {
   }
 }
 
-const registration = { email: 'Alice@Example.com ', password: 'motdepasse', username: 'alice', displayName: 'Alice' };
+const registration = { email: 'Alice@Example.com ', password: 'motdepasse1', username: 'alice', displayName: 'Alice', birthDate: '2000-02-18' };
 
 describe('AuthService', () => {
   let accounts: InMemoryAuthAccountRepository;
@@ -86,41 +87,41 @@ describe('AuthService', () => {
     it('5 échecs par email en 15 min, puis 429 même avec le bon mot de passe, jusqu’à la fin de la fenêtre', async () => {
       await service.register(registration);
       for (let i = 0; i < 5; i++) await expect(fail('alice@example.com', `10.0.0.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
-      const blocked = await service.login('ALICE@example.com', 'motdepasse', '10.0.9.9').catch((e: unknown) => e);
+      const blocked = await service.login('ALICE@example.com', 'motdepasse1', '10.0.9.9').catch((e: unknown) => e);
       expect(blocked).toBeInstanceOf(TooManyLoginAttemptsError);
       expect((blocked as TooManyLoginAttemptsError).retryAfterSeconds).toBe(15 * 60);
       expect((blocked as TooManyLoginAttemptsError).message).toBe('Trop de tentatives de connexion : réessayez dans 15 min');
 
       now = new Date(now.getTime() + 15 * 60 * 1000);
-      await expect(service.login('alice@example.com', 'motdepasse', '10.0.9.9')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('alice@example.com', 'motdepasse1', '10.0.9.9')).resolves.toHaveProperty('accessToken');
     });
 
     it('email et pseudo du même compte partagent la limite (ADR-055)', async () => {
       await service.register(registration);
       for (let i = 0; i < 3; i++) await expect(fail('alice@example.com', `10.0.0.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
       for (let i = 0; i < 2; i++) await expect(fail('@alice', `10.0.1.${i}`)).rejects.toBeInstanceOf(InvalidCredentialsError);
-      await expect(service.login('alice', 'motdepasse', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
-      await expect(service.login('ALICE@example.com', 'motdepasse', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+      await expect(service.login('alice', 'motdepasse1', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+      await expect(service.login('ALICE@example.com', 'motdepasse1', '10.0.9.9')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
     });
 
     it('une connexion réussie remet à zéro le compteur de l’email', async () => {
       await service.register(registration);
       for (let i = 0; i < 4; i++) await expect(fail()).rejects.toBeInstanceOf(InvalidCredentialsError);
-      await service.login('alice@example.com', 'motdepasse', '10.0.0.2');
+      await service.login('alice@example.com', 'motdepasse1', '10.0.0.2');
       for (let i = 0; i < 4; i++) await expect(fail('alice@example.com', '10.0.0.3')).rejects.toBeInstanceOf(InvalidCredentialsError);
-      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.2')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('alice@example.com', 'motdepasse1', '10.0.0.2')).resolves.toHaveProperty('accessToken');
     });
 
     it('20 échecs par IP en 15 min, sur des emails différents (inconnus compris)', async () => {
       await service.register(registration);
       for (let i = 0; i < 20; i++) await expect(fail(`inconnu${i}@example.com`)).rejects.toBeInstanceOf(InvalidCredentialsError);
-      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.1')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
-      await expect(service.login('alice@example.com', 'motdepasse', '10.0.0.2')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('alice@example.com', 'motdepasse1', '10.0.0.1')).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
+      await expect(service.login('alice@example.com', 'motdepasse1', '10.0.0.2')).resolves.toHaveProperty('accessToken');
     });
 
     it('les connexions réussies ne comptent pas ; sans IP, seule la limite par email s’applique', async () => {
       await service.register(registration);
-      for (let i = 0; i < 30; i++) await service.login('alice@example.com', 'motdepasse', '10.0.0.1');
+      for (let i = 0; i < 30; i++) await service.login('alice@example.com', 'motdepasse1', '10.0.0.1');
       for (let i = 0; i < 5; i++) await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(InvalidCredentialsError);
       await expect(fail('alice@example.com', null)).rejects.toBeInstanceOf(TooManyLoginAttemptsError);
     });
@@ -128,7 +129,10 @@ describe('AuthService', () => {
 
   describe('limite des inscriptions par adresse IP (ADR-039)', () => {
     const signup = (i: number, ip: string | null = '10.0.0.1') =>
-      service.register({ email: `n${i}@example.com`, password: 'motdepasse', username: `compte${i}`, displayName: 'Nouveau' }, ip);
+      service.register(
+        { email: `n${i}@example.com`, password: 'motdepasse1', username: `compte${i}`, displayName: 'Nouveau', birthDate: '2000-02-18' },
+        ip,
+      );
 
     it('5 comptes par IP par heure, puis 429 ; seules les créations réussies comptent', async () => {
       for (let i = 0; i < 5; i++) await signup(i);
@@ -160,7 +164,7 @@ describe('AuthService', () => {
     it("crée le compte, normalise l'email et ouvre une session", async () => {
       const tokens = await service.register(registration);
 
-      expect(accounts.accounts[0]).toMatchObject({ email: 'alice@example.com', passwordHash: 'hashed:motdepasse' });
+      expect(accounts.accounts[0]).toMatchObject({ email: 'alice@example.com', passwordHash: 'hashed:motdepasse1' });
       expect(tokens.accessToken).toBe(`access:${accounts.accounts[0].id}`);
       expect(tokens.accessTokenExpiresIn).toBe(900);
       expect(tokens.refreshToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -181,17 +185,17 @@ describe('AuthService', () => {
 
     it('connecte avec le bon mot de passe, email insensible à la casse', async () => {
       await service.register(registration);
-      await expect(service.login('ALICE@example.com', 'motdepasse')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('ALICE@example.com', 'motdepasse1')).resolves.toHaveProperty('accessToken');
       // Par pseudo (ADR-055), sans casse ni « @ » initial.
-      await expect(service.login('alice', 'motdepasse')).resolves.toHaveProperty('accessToken');
-      await expect(service.login(' @Alice ', 'motdepasse')).resolves.toHaveProperty('accessToken');
-      await expect(service.login('bob', 'motdepasse')).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.login('alice', 'motdepasse1')).resolves.toHaveProperty('accessToken');
+      await expect(service.login(' @Alice ', 'motdepasse1')).resolves.toHaveProperty('accessToken');
+      await expect(service.login('bob', 'motdepasse1')).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
 
     it('refuse un mauvais mot de passe ou un email inconnu avec la même erreur', async () => {
       await service.register(registration);
       await expect(service.login('alice@example.com', 'mauvais')).rejects.toBeInstanceOf(InvalidCredentialsError);
-      await expect(service.login('inconnu@example.com', 'motdepasse')).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await expect(service.login('inconnu@example.com', 'motdepasse1')).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
   });
 
@@ -217,7 +221,7 @@ describe('AuthService', () => {
 
     it("n'affecte pas les autres sessions du même compte", async () => {
       const phone = await service.register(registration);
-      const tablet = await service.login('alice@example.com', 'motdepasse');
+      const tablet = await service.login('alice@example.com', 'motdepasse1');
       await service.refresh(phone.refreshToken);
       await expect(service.refresh(phone.refreshToken)).rejects.toBeInstanceOf(InvalidRefreshTokenError);
 
@@ -322,7 +326,7 @@ describe('AuthService', () => {
       const suspension = await service.suspend(alice, admin, '  Spam répété  ');
       expect(suspension).toEqual({ userId: alice, suspendedAt: now, reason: 'Spam répété', suspendedBy: admin });
 
-      await expect(service.login('alice@example.com', 'motdepasse')).rejects.toBeInstanceOf(AccountSuspendedError);
+      await expect(service.login('alice@example.com', 'motdepasse1')).rejects.toBeInstanceOf(AccountSuspendedError);
       // Mauvais mot de passe : rien ne révèle la suspension.
       await expect(service.login('alice@example.com', 'faux')).rejects.toBeInstanceOf(InvalidCredentialsError);
       await expect(service.refresh(session.refreshToken)).rejects.toBeInstanceOf(InvalidRefreshTokenError);
@@ -337,7 +341,7 @@ describe('AuthService', () => {
       await service.suspend(alice, admin, 'Spam');
       await service.liftSuspension(alice);
       await service.liftSuspension(alice);
-      const session = await service.login('alice@example.com', 'motdepasse');
+      const session = await service.login('alice@example.com', 'motdepasse1');
       await expect(service.verifyAccessToken(session.accessToken)).resolves.toMatchObject({ userId: alice });
       await expect(service.countSuspended()).resolves.toBe(0);
     });
@@ -375,6 +379,41 @@ describe('AuthService', () => {
       await suspended.replaceAll(['fantome']);
       await expect(service.syncSuspendedAccounts()).resolves.toBe(1);
       await expect(suspended.all()).resolves.toEqual(new Set([alice]));
+    });
+  });
+
+  describe('règles de l’inscription (ADR-055)', () => {
+    it('garde la date de naissance, et prend le pseudo comme nom par défaut', async () => {
+      await service.register({ ...registration, displayName: undefined });
+      expect(accounts.accounts[0]).toMatchObject({ displayName: 'alice', birthDate: new Date('2000-02-18T00:00:00Z') });
+      await service.register({ ...registration, email: 'b@b.fr', username: 'bob', displayName: '  ' });
+      expect(accounts.accounts[1].displayName).toBe('bob');
+    });
+
+    it('exige 13 ans révolus à la date du jour (UTC)', async () => {
+      // now = 2026-01-01 : né le 2013-01-01, 13 ans aujourd'hui ; le 2013-01-02, 12 ans encore.
+      await expect(service.register({ ...registration, birthDate: '2013-01-02' })).rejects.toThrow('au moins 13 ans');
+      await expect(service.register({ ...registration, birthDate: '2013-01-01' })).resolves.toHaveProperty('accessToken');
+    });
+
+    it('refuse une date qui n’existe pas, future ou avant 1900, sans rien créer', async () => {
+      for (const birthDate of ['2001-02-29', '2000-13-01', '2027-01-01', '1899-12-31', '18/02/2000']) {
+        await expect(service.register({ ...registration, birthDate })).rejects.toBeInstanceOf(InvalidRegistrationError);
+      }
+      expect(accounts.accounts).toHaveLength(0);
+    });
+
+    it('exige un mot de passe de 8 caractères avec une lettre et un chiffre', async () => {
+      for (const password of ['motdepasse', '12345678', 'ab1', 'é'.repeat(129) + '1']) {
+        await expect(service.register({ ...registration, password })).rejects.toBeInstanceOf(InvalidRegistrationError);
+      }
+      await expect(service.register({ ...registration, password: 'élève2026' })).resolves.toHaveProperty('accessToken');
+    });
+
+    it('un compte Sign in with Apple n’a pas de date de naissance', async () => {
+      apple.identities.set('jeton', { sub: 'apple-1', email: null });
+      await service.loginWithApple({ identityToken: 'jeton' });
+      expect(accounts.accounts[0].birthDate).toBeNull();
     });
   });
 });

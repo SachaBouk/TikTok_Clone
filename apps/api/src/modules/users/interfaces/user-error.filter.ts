@@ -14,6 +14,7 @@ import {
   InvalidAvatarError,
   InvalidProfileError,
   ProfileSuspendedError,
+  UnknownInterestError,
   UserError,
   UsernameTakenError,
 } from '../domain/user.errors';
@@ -29,7 +30,12 @@ export class UserErrorFilter implements ExceptionFilter {
 
 function toHttpException(error: UserError): HttpException {
   if (error instanceof UsernameTakenError) return new ConflictException(error.message);
-  if (error instanceof InvalidProfileError || error instanceof InvalidAvatarError || error instanceof AvatarNotUploadedError) {
+  if (
+    error instanceof InvalidProfileError ||
+    error instanceof InvalidAvatarError ||
+    error instanceof AvatarNotUploadedError ||
+    error instanceof UnknownInterestError
+  ) {
     return new BadRequestException(error.message);
   }
   if (error instanceof ProfileSuspendedError) return new GoneException(error.message);

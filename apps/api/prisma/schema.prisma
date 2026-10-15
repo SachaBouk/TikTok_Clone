@@ -49,6 +49,9 @@ model User {
   avatarUrl        String?   @map("avatar_url")
   bio              String?
   role             UserRole  @default(user)
+  // Date de naissance (ADR-055), propriété du module auth, jamais exposée. Nulle pour les comptes créés avant
+  // l'ADR-055 et ceux de Sign in with Apple.
+  birthDate        DateTime? @map("birth_date") @db.Date
   // Suspension par un administrateur (ADR-037), propriété du module auth : connexion refusée, contenus masqués.
   // Les trois colonnes sont remplies ou vides ensemble (CHECK écrit à la main), sauf `suspended_by`, mis à nul si
   // l'administrateur supprime son compte.
@@ -94,6 +97,7 @@ model User {
   storyViews               StoryView[]
   lives                    Live[]
   liveMessages             LiveMessage[]
+  interests                UserInterest[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
   @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
@@ -101,6 +105,19 @@ model User {
   @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_username_trgm_idx")
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_display_name_trgm_idx")
   @@map("users")
+}
+
+// Centres d'intérêt choisis à l'inscription (ADR-055), privés, module users. Codes du catalogue écrit dans le code
+// (`interest-catalog.ts`) ; sans effet sur le feed tant que l'algorithme For You est reporté (ADR-016).
+model UserInterest {
+  userId       String   @map("user_id") @db.Uuid
+  interestCode String   @map("interest_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, interestCode])
+  @@map("user_interests")
 }
 
 // Refresh tokens (ADR-010) : opaques, stockés hachés (SHA-256), rotatifs.

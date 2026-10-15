@@ -32,34 +32,43 @@ struct AuthUseCasesTests {
         #expect(auth.hasStoredSession())
     }
 
+    static let adult = BirthDate(year: 2000, month: 2, day: 18)
+    static let today = BirthDate(year: 2026, month: 10, day: 15)
+
     @Test(
-        "inscription : règles vérifiées avant l'envoi, textes nettoyés",
+        "inscription : règles vérifiées avant l'envoi (ADR-055)",
         arguments: [
-            ("pas-un-email", "alice", "Alice", "motdepasse", "Adresse email invalide."),
-            ("a@b.c", "Alice!", "Alice", "motdepasse", "Pseudo : 2 à 24 caractères parmi a-z, 0-9, « . » et « _ »."),
-            ("a@b.c", "me", "Alice", "motdepasse", "Ce pseudo n’est pas disponible."),
-            ("a@b.c", "alice", "   ", "motdepasse", "Nom : 1 à 50 caractères."),
-            ("a@b.c", "alice", "Alice", "court", "Mot de passe : 8 caractères au minimum."),
+            ("pas-un-email", "alice", "motdepasse1", adult, "Adresse email invalide."),
+            ("a@b.c", "Alice!", "motdepasse1", adult, "2 à 24 caractères : lettres minuscules, chiffres, « . » et « _ »."),
+            ("a@b.c", "me", "motdepasse1", adult, "Ce pseudo n’est pas disponible."),
+            ("a@b.c", "alice", "motdepasse", adult, "Mot de passe : 8 caractères au minimum, avec au moins une lettre et un chiffre."),
+            ("a@b.c", "alice", "court1", adult, "Mot de passe : 8 caractères au minimum, avec au moins une lettre et un chiffre."),
+            (
+                "a@b.c", "alice", "motdepasse1", BirthDate(year: 2013, month: 10, day: 16),
+                "Désolé, il faut avoir au moins 13 ans pour créer un compte."
+            ),
+            ("a@b.c", "alice", "motdepasse1", BirthDate(year: 2027, month: 1, day: 1), "Date de naissance invalide."),
         ])
-    func registrationRules(email: String, username: String, displayName: String, password: String, message: String) async {
+    func registrationRules(email: String, username: String, password: String, birthDate: BirthDate, message: String) async {
         let auth = FakeAuthRepository()
-        let register = RegisterUseCase(auth: auth, profiles: FakeProfileRepository())
+        let register = RegisterUseCase(auth: auth, profiles: FakeProfileRepository(), today: { Self.today })
         await #expect(throws: AppError.rejected(message)) {
-            try await register(Registration(email: email, password: password, username: username, displayName: displayName))
+            try await register(Registration(email: email, password: password, username: username, birthDate: birthDate))
         }
         #expect(auth.state.withLock { $0.registrations.isEmpty })
     }
 
-    @Test("inscription valide : envoyée nettoyée, puis profil lu")
+    @Test("inscription valide : envoyée nettoyée, sans nom (le pseudo par défaut), puis profil lu")
     func registerValid() async throws {
         let auth = FakeAuthRepository()
-        let profile = try await RegisterUseCase(auth: auth, profiles: FakeProfileRepository())(
-            Registration(email: " a@b.c ", password: "motdepasse", username: "alice", displayName: "  Alice ")
+        let birthDate = BirthDate(year: 2013, month: 10, day: 15)
+        let profile = try await RegisterUseCase(auth: auth, profiles: FakeProfileRepository(), today: { Self.today })(
+            Registration(email: " a@b.c ", password: "motdepasse1", username: "alice", displayName: "  ", birthDate: birthDate)
         )
         #expect(profile == .alice)
         #expect(
             auth.state.withLock { $0.registrations } == [
-                Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice")
+                Registration(email: "a@b.c", password: "motdepasse1", username: "alice", displayName: nil, birthDate: birthDate)
             ])
     }
 }

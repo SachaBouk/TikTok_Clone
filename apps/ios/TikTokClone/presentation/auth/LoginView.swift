@@ -50,7 +50,7 @@ struct LoginView: View {
             }
 
             Section {
-                NavigationLink("Créer un compte", value: AuthFlowView.Route.register)
+                NavigationLink("Créer un compte", value: AuthFlowView.Route.signup(.birthday))
                     .accessibilityIdentifier("login.register")
             } footer: {
                 Text("Pas encore de compte ?")

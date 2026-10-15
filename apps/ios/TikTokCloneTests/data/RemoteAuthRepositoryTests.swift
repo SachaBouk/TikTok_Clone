@@ -57,11 +57,12 @@ struct RemoteAuthRepositoryTests {
         #expect(AppError.tooManyLoginAttempts(retryAfter: 30).message == "Trop de tentatives de connexion. Réessaie dans 30 s.")
     }
 
-    @Test("inscription refusée : message de l'API (pseudo pris)")
+    @Test("inscription refusée : email ou pseudo déjà pris (409), message de l'API")
     func registerConflict() async {
-        await #expect(throws: AppError.rejected("Le pseudo @alice est déjà pris")) {
+        await #expect(throws: AppError.alreadyRegistered("Le pseudo @alice est déjà pris")) {
             try await repository { _ in json(.conflict, errorJSON(409, "Le pseudo @alice est déjà pris")) }
-                .register(Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice"))
+                .register(
+                    Registration(email: "a@b.c", password: "motdepasse1", username: "alice", birthDate: BirthDate(year: 2000, month: 2, day: 18)))
         }
     }
 
@@ -69,7 +70,8 @@ struct RemoteAuthRepositoryTests {
     func registerTooManySignups() async {
         await #expect(throws: AppError.tooManyActions(.signup, retryAfter: 1800)) {
             try await repository { _ in tooManyRequests(retryAfter: 1800) }
-                .register(Registration(email: "a@b.c", password: "motdepasse", username: "alice", displayName: "Alice"))
+                .register(
+                    Registration(email: "a@b.c", password: "motdepasse1", username: "alice", birthDate: BirthDate(year: 2000, month: 2, day: 18)))
         }
         #expect(store.load() == nil)
         #expect(AppError.tooManyActions(.signup, retryAfter: 1800).message == "Trop de comptes créés depuis cette connexion. Réessaie dans 30 min.")

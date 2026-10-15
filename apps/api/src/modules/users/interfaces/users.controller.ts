@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, UseFilters } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -10,16 +10,17 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { AvatarUploadDto, UserProfileDto } from '@repo/shared';
+import type { AvatarUploadDto, UserInterestsDto, UsernameAvailabilityDto, UserProfileDto } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { Public } from '../../auth/interfaces/public.decorator';
 import { UsersService } from '../application/users.service';
 import type { User } from '../domain/user';
 import { AvatarUploadResponse } from './avatar-upload.response';
+import { UserInterestsResponse, UsernameAvailabilityResponse } from './interests.responses';
 import { UserErrorFilter } from './user-error.filter';
 import { UserProfileResponse } from './user-profile.response';
-import { CreateAvatarUploadRequest, SetAvatarRequest, UpdateProfileRequest } from './users.requests';
+import { CreateAvatarUploadRequest, SetAvatarRequest, SetInterestsRequest, UpdateProfileRequest, UsernameAvailabilityQuery } from './users.requests';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 const ACCOUNT_NOT_FOUND = { type: ErrorResponse, description: 'Compte supprimé.' };
@@ -93,6 +94,33 @@ export class UsersController {
   @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
   async removeMyAvatar(@CurrentUser() user: AuthenticatedUser): Promise<UserProfileDto> {
     return toProfileDto(await this.usersService.removeAvatar(user.userId));
+  }
+
+  // Centres d'intérêt du compte (ADR-055), privés.
+  @Get('me/interests')
+  @ApiOkResponse({ type: UserInterestsResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
+  async getMyInterests(@CurrentUser() user: AuthenticatedUser): Promise<UserInterestsDto> {
+    return { interests: await this.usersService.getInterests(user.userId) };
+  }
+
+  @Put('me/interests')
+  @ApiOkResponse({ type: UserInterestsResponse, description: 'Liste enregistrée, dans l’ordre du catalogue.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Code absent du catalogue, ou corps invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
+  async setMyInterests(@CurrentUser() user: AuthenticatedUser, @Body() body: SetInterestsRequest): Promise<UserInterestsDto> {
+    return { interests: await this.usersService.setInterests(user.userId, body.interests) };
+  }
+
+  // Inscription (ADR-055) : disponibilité d'un pseudo pendant la saisie. Publique ; déclarée avant `:username`.
+  @Public()
+  @Get('username-availability')
+  @ApiOkResponse({ type: UsernameAvailabilityResponse })
+  async checkUsernameAvailability(@Query() query: UsernameAvailabilityQuery): Promise<UsernameAvailabilityDto> {
+    const availability = await this.usersService.checkUsernameAvailability(query.username);
+    return availability.available ? { available: true } : { available: false, reason: availability.reason };
   }
 
   // Profil public : lisible en mode invité (ADR-010).

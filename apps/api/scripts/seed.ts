@@ -39,8 +39,14 @@ const ROOT = resolve(__dirname, '../../..');
 const API_URL = (process.env.SEED_API_URL ?? `http://localhost:${process.env.PORT ?? 3000}`).replace(/\/+$/, '');
 const VIDEOS_DIR = resolve(ROOT, process.env.SEED_VIDEOS_DIR ?? 'seed/videos');
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
-// Mot de passe commun des comptes de démo : local uniquement.
-const PASSWORD = 'demo-password';
+// Mot de passe commun des comptes de démo : local uniquement. Une lettre et un chiffre (ADR-055) ; les comptes de démo
+// créés avant gardent l'ancien (`demo-password`), essayé à la connexion s'il le faut.
+const PASSWORD = 'demo-password1';
+const LEGACY_PASSWORD = 'demo-password';
+// Date de naissance des comptes de démo (ADR-055 : 13 ans au moins).
+const BIRTH_DATE = '2000-01-01';
+// Mot de passe qui fonctionne, par email (nouveau ou ancien).
+const passwords = new Map<string, string>();
 const WAIT_TIMEOUT_MS = 10 * 60_000;
 
 const ACCOUNTS = [
@@ -163,8 +169,9 @@ async function main() {
     await seedConversations(accounts);
   }
 
-  console.log(`\nComptes (mot de passe commun : ${PASSWORD}) :`);
-  for (const account of accounts) console.log(`  ${account.email}  @${account.username}`);
+  console.log('\nComptes :');
+  for (const account of accounts)
+    console.log(`  ${account.email}  @${account.username}  (mot de passe : ${passwords.get(account.email) ?? PASSWORD})`);
 }
 
 // ADR-016 : seed réservé au local et à la démo.
@@ -185,8 +192,9 @@ async function assertApiUp() {
 // Inscription, ou connexion si le compte existe déjà : le script peut être relancé.
 async function ensureAccount({ username, displayName }: (typeof ACCOUNTS)[number]): Promise<Account> {
   const email = `${username}@demo.local`;
-  const registered = await request('POST', '/auth/register', { body: { email, password: PASSWORD, username, displayName } });
+  const registered = await request('POST', '/auth/register', { body: { email, password: PASSWORD, username, displayName, birthDate: BIRTH_DATE } });
   if (registered.status === 201) {
+    passwords.set(email, PASSWORD);
     console.log(`  créé      @${username}`);
     return { username, displayName, email, token: (registered.body as AuthTokensDto).accessToken };
   }
@@ -198,9 +206,17 @@ async function ensureAccount({ username, displayName }: (typeof ACCOUNTS)[number
 }
 
 async function login(email: string, username: string): Promise<string> {
-  const response = await request('POST', '/auth/login', { body: { identifier: email, password: PASSWORD } });
-  if (response.status !== 200) throw apiError(`connexion de @${username} (compte existant avec un autre mot de passe ?)`, response);
-  return (response.body as AuthTokensDto).accessToken;
+  const candidates = passwords.has(email) ? [passwords.get(email)!] : [PASSWORD, LEGACY_PASSWORD];
+  let response: Awaited<ReturnType<typeof request>> | null = null;
+  for (const password of candidates) {
+    response = await request('POST', '/auth/login', { body: { identifier: email, password } });
+    if (response.status === 200) {
+      passwords.set(email, password);
+      return (response.body as AuthTokensDto).accessToken;
+    }
+    if (response.status !== 401) break;
+  }
+  throw apiError(`connexion de @${username} (compte existant avec un autre mot de passe ?)`, response!);
 }
 
 function listProvidedVideos(): string[] {

@@ -8,12 +8,14 @@ import {
   CannotSuspendAdminError,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
+  InvalidRegistrationError,
   InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
   TooManySignupsError,
   UsernameAlreadyUsedError,
 } from '../domain/auth.errors';
 import { LOGIN_ACCOUNT_RATE_LIMITS, LOGIN_IP_RATE_LIMITS, parseLoginIdentifier, SIGNUP_IP_RATE_LIMITS } from '../domain/login-rules';
+import { ageOn, isValidPassword, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, MIN_SIGNUP_AGE, parseBirthDate } from '../domain/registration-rules';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { RESERVED_USERNAMES } from '../../users/domain/profile-rules';
@@ -29,7 +31,10 @@ export interface RegisterInput {
   email: string;
   password: string;
   username: string;
-  displayName: string;
+  // Facultatif (ADR-055) : le pseudo par défaut, modifiable ensuite dans le profil.
+  displayName?: string;
+  // `AAAA-MM-JJ` ; 13 ans au moins.
+  birthDate: string;
 }
 
 export interface AppleLoginInput {
@@ -61,7 +66,18 @@ export class AuthService {
 
   // `ip` : adresse du client (null hors HTTP). Comptes créés limités par IP (ADR-039) : la limite est vérifiée
   // avant la création, et seule une création réussie est comptée.
+  // Règles de l'ADR-055 vérifiées d'abord : date de naissance (13 ans au moins), mot de passe (lettre et chiffre).
   async register(input: RegisterInput, ip: string | null = null): Promise<AuthTokens> {
+    const birthDate = parseBirthDate(input.birthDate, this.now());
+    if (!birthDate) throw new InvalidRegistrationError('Date de naissance invalide');
+    if (ageOn(birthDate, this.now()) < MIN_SIGNUP_AGE) {
+      throw new InvalidRegistrationError(`Il faut avoir au moins ${MIN_SIGNUP_AGE} ans pour créer un compte`);
+    }
+    if (!isValidPassword(input.password)) {
+      throw new InvalidRegistrationError(
+        `Mot de passe : ${MIN_PASSWORD_LENGTH} à ${MAX_PASSWORD_LENGTH} caractères, avec au moins une lettre et un chiffre`,
+      );
+    }
     if (RESERVED_USERNAMES.has(input.username)) throw new UsernameAlreadyUsedError(input.username);
     const ipKey = ip ? `signup-ip:${ip}` : null;
     if (ipKey) {
@@ -74,7 +90,8 @@ export class AuthService {
       passwordHash: await this.passwords.hash(input.password),
       appleSub: null,
       username: input.username,
-      displayName: input.displayName.trim(),
+      displayName: input.displayName?.trim() || input.username,
+      birthDate,
     });
     if (ipKey) await this.rateLimiter.hit(ipKey, SIGNUP_IP_RATE_LIMITS);
     return this.startSession(account.id);
@@ -219,6 +236,8 @@ export class AuthService {
           appleSub,
           username: `user${randomInt(1e9, 1e10)}`,
           displayName: displayName?.trim() || DEFAULT_DISPLAY_NAME,
+          // Apple ne la donne pas : à demander après coup (ADR-055).
+          birthDate: null,
         });
       } catch (error) {
         if (!(error instanceof UsernameAlreadyUsedError) || attempt >= APPLE_USERNAME_ATTEMPTS) throw error;

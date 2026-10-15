@@ -15,6 +15,7 @@ import {
   AuthError,
   CannotSuspendAdminError,
   EmailAlreadyUsedError,
+  InvalidRegistrationError,
   InvalidSuspensionReasonError,
   TooManyLoginAttemptsError,
   TooManySignupsError,
@@ -46,7 +47,7 @@ function toHttpException(error: AuthError): HttpException {
     return new ConflictException(error.message);
   }
   if (error instanceof AccountSuspendedError) return new ForbiddenException(error.message);
-  if (error instanceof InvalidSuspensionReasonError) return new BadRequestException(error.message);
+  if (error instanceof InvalidSuspensionReasonError || error instanceof InvalidRegistrationError) return new BadRequestException(error.message);
   // InvalidCredentialsError, InvalidRefreshTokenError, InvalidAppleTokenError
   return new UnauthorizedException(error.message);
 }

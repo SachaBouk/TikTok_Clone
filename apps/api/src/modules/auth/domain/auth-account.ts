@@ -13,6 +13,8 @@ export interface NewAccount {
   appleSub: string | null;
   username: string;
   displayName: string;
+  // Date de naissance (ADR-055), privée : jamais exposée. Nulle pour un compte Sign in with Apple.
+  birthDate: Date | null;
 }
 
 export interface AuthTokens {

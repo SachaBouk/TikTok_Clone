@@ -12,6 +12,7 @@ import { UserNotFoundError } from '../../users/domain/user.errors';
 import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-user.repository';
 import { InMemoryAvatarStorage } from '../../users/infrastructure/in-memory-avatar-storage';
 import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
+import { InMemoryInterestRepository } from '../../users/infrastructure/in-memory-interest.repository';
 import { VideosService } from '../../videos/application/videos.service';
 import { TranscodingQueue } from '../../videos/domain/transcoding-queue';
 import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
@@ -88,7 +89,13 @@ describe('FeedService', () => {
       new InMemoryRateLimiter(),
     );
     suspended = new InMemorySuspendedAccounts();
-    const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
+    const usersService = new UsersService(
+      users,
+      new InMemoryAvatarStorage(),
+      new InMemoryAccountContentCleanup(),
+      new InMemoryInterestRepository(),
+      suspended,
+    );
     const notifications = new NotificationsService(
       new InMemoryNotificationRepository(),
       usersService,

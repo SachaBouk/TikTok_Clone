@@ -26,4 +26,7 @@ protocol PreferencesStore: Sendable {
     // Onboarding (introduction et écran « Connexion ») déjà passé sur cet appareil (ADR-055).
     var onboardingCompleted: Bool { get }
     func markOnboardingCompleted()
+    // Indication « Balaie vers le haut » déjà montrée sur le feed (ADR-055, une fois par installation).
+    var feedSwipeHintShown: Bool { get }
+    func markFeedSwipeHintShown()
 }

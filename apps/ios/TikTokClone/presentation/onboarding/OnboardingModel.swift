@@ -7,11 +7,22 @@ import Observation
 @Observable
 final class OnboardingModel {
     private(set) var isPresented = false
+    // Indication « Balaie vers le haut pour en voir plus » sur la première vidéo du feed (ADR-055) : une fois par
+    // installation, à tout le monde (inscription, connexion ou invité).
+    private(set) var showsFeedSwipeHint: Bool
 
     private let preferences: any PreferencesStore
 
     init(preferences: any PreferencesStore) {
         self.preferences = preferences
+        showsFeedSwipeHint = !preferences.feedSwipeHintShown
+    }
+
+    // Premier défilement ou premier toucher : l'indication ne revient plus.
+    func feedSwipeHintSeen() {
+        guard showsFeedSwipeHint else { return }
+        showsFeedSwipeHint = false
+        preferences.markFeedSwipeHintShown()
     }
 
     // Session reprise au lancement. Déjà connecté (compte d'une version précédente) : rien à montrer, jamais.

@@ -5,6 +5,7 @@ import type { User } from '../../users/domain/user';
 import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-user.repository';
 import { InMemoryAvatarStorage } from '../../users/infrastructure/in-memory-avatar-storage';
 import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
+import { InMemoryInterestRepository } from '../../users/infrastructure/in-memory-interest.repository';
 import { VideosService } from '../../videos/application/videos.service';
 import { TranscodingQueue } from '../../videos/domain/transcoding-queue';
 import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
@@ -60,7 +61,7 @@ describe('NotificationsService', () => {
     suspended = new InMemorySuspendedAccounts();
     service = new NotificationsService(
       repository,
-      new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended),
+      new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemoryInterestRepository(), suspended),
       videos,
       publisher,
       suspended,

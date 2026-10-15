@@ -39,6 +39,15 @@ export class UsernameAlreadyUsedError extends AuthError {
   }
 }
 
+// Inscription refusée par ses règles (ADR-055) : date de naissance invalide, moins de 13 ans, mot de passe trop
+// faible. 400.
+export class InvalidRegistrationError extends AuthError {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'InvalidRegistrationError';
+  }
+}
+
 // Trop d'échecs de connexion récents pour cet email ou depuis cette adresse IP (ADR-030) : 429 avec Retry-After.
 // Le message ne dit pas laquelle des deux limites est atteinte.
 export class TooManyLoginAttemptsError extends AuthError {

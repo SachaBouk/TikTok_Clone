@@ -31,7 +31,7 @@ struct HomeFeedView: View {
 
     var body: some View {
         ZStack {
-            feed(forYou, shown: selection == .forYou, emptyState: .feed)
+            feed(forYou, shown: selection == .forYou, emptyState: .feed, showsSwipeHint: true)
             if !session.isSignedIn {
                 if selection == .following { guestPrompt }
             } else if let following {
@@ -65,14 +65,15 @@ struct HomeFeedView: View {
         }
     }
 
-    private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState) -> some View {
+    private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false) -> some View {
         FeedView(
             viewModel: viewModel,
             pool: container.playerPool,
             interactions: container.videoInteractions,
             container: container,
             isTabActive: isTabActive && shown,
-            emptyState: emptyState
+            emptyState: emptyState,
+            showsSwipeHint: showsSwipeHint
         )
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)

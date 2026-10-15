@@ -12,6 +12,7 @@ import { InMemoryNotificationRepository } from '../../notifications/infrastructu
 import { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
+import { InMemoryInterestRepository } from '../../users/infrastructure/in-memory-interest.repository';
 import { InMemoryAvatarStorage } from '../../users/infrastructure/in-memory-avatar-storage';
 import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-user.repository';
 import { VideosService } from '../../videos/application/videos.service';
@@ -85,7 +86,13 @@ describe('ReportsService', () => {
     videoRepository = new InMemoryVideoRepository();
     const userRepository = new InMemoryUserRepository(['alice', 'bob', 'carol', 'dave'].map(user));
     suspended = new InMemorySuspendedAccounts();
-    const users = new UsersService(userRepository, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
+    const users = new UsersService(
+      userRepository,
+      new InMemoryAvatarStorage(),
+      new InMemoryAccountContentCleanup(),
+      new InMemoryInterestRepository(),
+      suspended,
+    );
     const videos = new VideosService(
       videoRepository,
       new InMemoryVideoStorage(),

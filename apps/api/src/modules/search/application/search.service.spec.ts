@@ -10,6 +10,7 @@ import { InMemoryNotificationRepository } from '../../notifications/infrastructu
 import { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { InMemoryAccountContentCleanup } from '../../users/infrastructure/in-memory-account-content-cleanup';
+import { InMemoryInterestRepository } from '../../users/infrastructure/in-memory-interest.repository';
 import { InMemoryAvatarStorage } from '../../users/infrastructure/in-memory-avatar-storage';
 import { InMemoryUserRepository } from '../../users/infrastructure/in-memory-user.repository';
 import { VideosService } from '../../videos/application/videos.service';
@@ -65,7 +66,13 @@ describe('SearchService (ADR-049)', () => {
       new InMemoryVideoCleanupQueue(),
       new InMemoryRateLimiter(),
     );
-    const usersService = new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended);
+    const usersService = new UsersService(
+      users,
+      new InMemoryAvatarStorage(),
+      new InMemoryAccountContentCleanup(),
+      new InMemoryInterestRepository(),
+      suspended,
+    );
     const notifications = new NotificationsService(
       new InMemoryNotificationRepository(),
       usersService,
@@ -115,7 +122,7 @@ describe('SearchService (ADR-049)', () => {
   it('s’arrête à 100 résultats et refuse un curseur forgé', async () => {
     users = new InMemoryUserRepository(Array.from({ length: 120 }, (_, i) => user(`u${String(i).padStart(3, '0')}`, `fan${i}`, 'Fan')));
     search = new SearchService(
-      new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), suspended),
+      new UsersService(users, new InMemoryAvatarStorage(), new InMemoryAccountContentCleanup(), new InMemoryInterestRepository(), suspended),
       interactions,
       null!,
     );

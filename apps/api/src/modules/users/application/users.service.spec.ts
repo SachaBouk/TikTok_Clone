@@ -5,10 +5,12 @@ import {
   InvalidAvatarError,
   InvalidProfileError,
   ProfileSuspendedError,
+  UnknownInterestError,
   UserNotFoundError,
   UsernameTakenError,
 } from '../domain/user.errors';
 import { InMemoryAccountContentCleanup } from '../infrastructure/in-memory-account-content-cleanup';
+import { InMemoryInterestRepository } from '../infrastructure/in-memory-interest.repository';
 import { InMemoryAvatarStorage } from '../infrastructure/in-memory-avatar-storage';
 import { InMemoryUserRepository } from '../infrastructure/in-memory-user.repository';
 import { UsersService } from './users.service';
@@ -47,13 +49,15 @@ const PNG = png(512);
 describe('UsersService', () => {
   let avatars: InMemoryAvatarStorage;
   let contentCleanup: InMemoryAccountContentCleanup;
+  let interests: InMemoryInterestRepository;
   let service: UsersService;
 
   beforeEach(() => {
     avatars = new InMemoryAvatarStorage();
     contentCleanup = new InMemoryAccountContentCleanup();
     suspended = new InMemorySuspendedAccounts();
-    service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }]), avatars, contentCleanup, suspended, () => NOW);
+    interests = new InMemoryInterestRepository(new Set([alice.id, bob.id]));
+    service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }]), avatars, contentCleanup, interests, suspended, () => NOW);
   });
 
   // Ce que fait l'app : demande l'URL signée, envoie le fichier, renvoie l'identifiant.
@@ -259,7 +263,14 @@ describe('UsersService', () => {
 
     beforeEach(() => {
       suspended = new InMemorySuspendedAccounts();
-      service = new UsersService(new InMemoryUserRepository([{ ...alice }, { ...bob }, { ...carol }]), avatars, contentCleanup, suspended, () => NOW);
+      service = new UsersService(
+        new InMemoryUserRepository([{ ...alice }, { ...bob }, { ...carol }]),
+        avatars,
+        contentCleanup,
+        new InMemoryInterestRepository(),
+        suspended,
+        () => NOW,
+      );
     });
 
     it('liste tous les comptes du plus récent au plus ancien, par pages', async () => {
@@ -278,6 +289,43 @@ describe('UsersService', () => {
     it('compte les comptes, et ceux créés depuis une date', async () => {
       await expect(service.countAccounts()).resolves.toBe(3);
       await expect(service.countAccounts(new Date('2026-09-01T00:00:00Z'))).resolves.toBe(1);
+    });
+  });
+
+  describe('inscription (ADR-055)', () => {
+    it('disponibilité d’un pseudo : format, réservé, pris, libre', async () => {
+      await expect(service.checkUsernameAvailability('Alice!')).resolves.toEqual({ available: false, reason: 'invalid' });
+      await expect(service.checkUsernameAvailability('a')).resolves.toEqual({ available: false, reason: 'invalid' });
+      await expect(service.checkUsernameAvailability('me')).resolves.toEqual({ available: false, reason: 'reserved' });
+      await expect(service.checkUsernameAvailability('alice')).resolves.toEqual({ available: false, reason: 'taken' });
+      await expect(service.checkUsernameAvailability('alice.2')).resolves.toEqual({ available: true });
+    });
+
+    it('centres d’intérêt : enregistrés sans doublon, dans l’ordre du catalogue, remplacés à chaque envoi', async () => {
+      await expect(service.getInterests(alice.id)).resolves.toEqual([]);
+      await expect(service.setInterests(alice.id, ['music', 'travel', 'music'])).resolves.toEqual(['travel', 'music']);
+      await expect(service.getInterests(alice.id)).resolves.toEqual(['travel', 'music']);
+      await expect(service.setInterests(alice.id, ['art'])).resolves.toEqual(['art']);
+      await expect(service.setInterests(alice.id, [])).resolves.toEqual([]);
+      await expect(service.getInterests(bob.id)).resolves.toEqual([]);
+    });
+
+    it('un code inconnu refuse toute la liste ; un code retiré du catalogue est ignoré à la lecture', async () => {
+      await service.setInterests(alice.id, ['food']);
+      await expect(service.setInterests(alice.id, ['music', 'cooking'])).rejects.toBeInstanceOf(UnknownInterestError);
+      await expect(service.getInterests(alice.id)).resolves.toEqual(['food']);
+      interests.codes.set(alice.id, new Set(['food', 'ancien_code']));
+      await expect(service.getInterests(alice.id)).resolves.toEqual(['food']);
+    });
+
+    it('compte inconnu : 404', async () => {
+      await expect(service.setInterests('0192f3a0-0000-7000-8000-000000000099', ['art'])).rejects.toBeInstanceOf(UserNotFoundError);
+      await expect(service.getInterests('0192f3a0-0000-7000-8000-000000000099')).rejects.toBeInstanceOf(UserNotFoundError);
+    });
+
+    it('le catalogue a des codes uniques', () => {
+      const codes = service.interestCatalog().map((interest) => interest.code);
+      expect(new Set(codes).size).toBe(codes.length);
     });
   });
 });

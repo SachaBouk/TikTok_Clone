@@ -1,3 +1,5 @@
+import Foundation
+
 // Cas d'usage de l'authentification (ADR-002). Connexion et inscription se terminent par la lecture
 // du profil : l'app a besoin du compte connecté pour afficher son profil et ses boutons.
 
@@ -15,15 +17,18 @@ struct LoginUseCase: Sendable {
 struct RegisterUseCase: Sendable {
     let auth: any AuthRepository
     let profiles: any ProfileRepository
+    var today: @Sendable () -> BirthDate = { BirthDate(Date()) }
 
     func callAsFunction(_ registration: Registration) async throws -> UserProfile {
-        if let problem = RegistrationRules.problem(with: registration) { throw AppError.rejected(problem) }
+        if let problem = RegistrationRules.problem(with: registration, today: today()) { throw AppError.rejected(problem) }
+        let displayName = registration.displayName?.trimmingCharacters(in: .whitespaces)
         try await auth.register(
             Registration(
                 email: registration.email.trimmingCharacters(in: .whitespaces),
                 password: registration.password,
                 username: registration.username,
-                displayName: registration.displayName.trimmingCharacters(in: .whitespaces)
+                displayName: displayName?.isEmpty == false ? displayName : nil,
+                birthDate: registration.birthDate
             ))
         return try await profiles.myProfile()
     }

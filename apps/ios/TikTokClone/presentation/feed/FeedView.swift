@@ -11,6 +11,8 @@ struct FeedView: View {
     let isTabActive: Bool
     let allowsRefresh: Bool
     let emptyState: FeedEmptyState
+    // « Pour toi » : indication « Balaie vers le haut » sur la première vidéo, une fois par installation (ADR-055).
+    let showsSwipeHint: Bool
     @State private var scrolledID: String?
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
@@ -30,7 +32,7 @@ struct FeedView: View {
 
     init(
         viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool,
-        allowsRefresh: Bool = true, emptyState: FeedEmptyState = .feed
+        allowsRefresh: Bool = true, emptyState: FeedEmptyState = .feed, showsSwipeHint: Bool = false
     ) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
@@ -39,6 +41,7 @@ struct FeedView: View {
         self.isTabActive = isTabActive
         self.allowsRefresh = allowsRefresh
         self.emptyState = emptyState
+        self.showsSwipeHint = showsSwipeHint
     }
 
     var body: some View {
@@ -52,7 +55,10 @@ struct FeedView: View {
             if scrolledID != id { scrolledID = id }
         }
         .onChange(of: scrolledID) { _, id in
-            if let id, id != viewModel.currentEntryID { viewModel.show(id) }
+            if let id, id != viewModel.currentEntryID {
+                viewModel.show(id)
+                if showsSwipeHint { container.onboarding.feedSwipeHintSeen() }
+            }
         }
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
@@ -161,6 +167,14 @@ struct FeedView: View {
         // Nouvelle ScrollView à chaque rechargement : elle repart en haut, sur la vidéo courante.
         .id(viewModel.reloadCount)
         .accessibilityIdentifier("feed.pages")
+        .overlay {
+            // Au-dessus des pages, sous l'onboarding : attend la fin de celui-ci pour être vue.
+            if showsSwipeHint, container.onboarding.showsFeedSwipeHint, isTabActive, !container.onboarding.isPresented {
+                FeedSwipeHint { container.onboarding.feedSwipeHintSeen() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)
     }
 
     // « Signaler » (ADR-038) ; en invité, la connexion s'ouvre.

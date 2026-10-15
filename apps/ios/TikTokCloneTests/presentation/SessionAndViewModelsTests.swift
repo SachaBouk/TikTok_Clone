@@ -37,22 +37,6 @@ struct SessionAndViewModelsTests {
         #expect(!viewModel.isSubmitting)
     }
 
-    @Test("inscription : pseudo mis en minuscules, message de l'API affiché")
-    func register() async {
-        let auth = FakeAuthRepository(registerError: .rejected("Le pseudo @alice est déjà pris"))
-        let session = makeSession(auth: auth)
-        let viewModel = RegisterViewModel(
-            register: RegisterUseCase(auth: auth, profiles: FakeProfileRepository()), session: session, analytics: makeAnalytics())
-        viewModel.username = "Alice"
-        viewModel.normalizeUsername()
-        #expect(viewModel.username == "alice")
-        viewModel.email = "alice@example.com"
-        viewModel.password = "motdepasse"
-        viewModel.displayName = "Alice"
-        await viewModel.submit()
-        #expect(viewModel.errorMessage == "Le pseudo @alice est déjà pris")
-    }
-
     @Test("session expirée : retour en invité avec un message, une seule fois")
     func sessionExpired() async {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))

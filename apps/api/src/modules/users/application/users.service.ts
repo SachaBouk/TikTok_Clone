@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AccountContentCleanup } from '../domain/account-content-cleanup';
 import type { AvatarStorage, StoredObject } from '../domain/avatar-storage';
+import { INTEREST_CATALOG, inCatalogOrder, type Interest, isInterestCode } from '../domain/interest-catalog';
+import type { InterestRepository } from '../domain/interest.repository';
 import {
   AVATAR_HEADER_LENGTH,
   AVATAR_UPLOAD_URL_TTL_SECONDS,
@@ -21,6 +23,7 @@ import {
   InvalidAvatarError,
   InvalidProfileError,
   ProfileSuspendedError,
+  UnknownInterestError,
   UserNotFoundError,
   UsernameTakenError,
 } from '../domain/user.errors';
@@ -41,6 +44,9 @@ export interface AvatarUpload {
   expiresAt: Date;
 }
 
+// Disponibilité d'un pseudo pendant l'inscription (ADR-055) : libre, ou la raison du refus.
+export type UsernameAvailability = { available: true } | { available: false; reason: 'invalid' | 'reserved' | 'taken' };
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Service applicatif unique du module (ADR-003) : toute la logique métier des comptes passe ici.
@@ -54,6 +60,7 @@ export class UsersService {
     private readonly users: UserRepository,
     private readonly avatars: AvatarStorage,
     private readonly contentCleanup: AccountContentCleanup,
+    private readonly interests: InterestRepository,
     private readonly suspended: SuspendedAccounts,
     private readonly now: () => Date = () => new Date(),
   ) {}
@@ -99,6 +106,37 @@ export class UsersService {
   // Backoffice : nombre de comptes, créés depuis `createdSince` s'il est donné.
   countAccounts(createdSince: Date | null = null): Promise<number> {
     return this.users.count(createdSince);
+  }
+
+  // Inscription (ADR-055) : le pseudo est-il libre ? Règles du profil, pseudos réservés, puis comptes existants. Les
+  // pseudos sont publics (profils) : la réponse ne révèle rien de plus. Un pseudo libre peut être pris avant
+  // l'inscription (409 alors).
+  async checkUsernameAvailability(username: string): Promise<UsernameAvailability> {
+    if (!USERNAME_PATTERN.test(username)) return { available: false, reason: 'invalid' };
+    if (RESERVED_USERNAMES.has(username)) return { available: false, reason: 'reserved' };
+    if (await this.users.findByUsername(username)) return { available: false, reason: 'taken' };
+    return { available: true };
+  }
+
+  // Catalogue des centres d'intérêt (ADR-055), dans le code.
+  interestCatalog(): readonly Interest[] {
+    return INTEREST_CATALOG;
+  }
+
+  // Centres d'intérêt du compte, dans l'ordre du catalogue (un code retiré depuis est ignoré).
+  async getInterests(userId: string): Promise<string[]> {
+    await this.getById(userId);
+    return inCatalogOrder(await this.interests.findCodes(userId));
+  }
+
+  // Remplace la liste ; vide : aucun. Un code inconnu du catalogue refuse tout. Renvoie la liste enregistrée.
+  async setInterests(userId: string, codes: string[]): Promise<string[]> {
+    const unknown = codes.find((code) => !isInterestCode(code));
+    if (unknown !== undefined) throw new UnknownInterestError(unknown);
+    const ordered = inCatalogOrder(codes);
+    await this.getById(userId);
+    if (!(await this.interests.replace(userId, ordered))) throw new UserNotFoundError(userId);
+    return ordered;
   }
 
   // Modification du profil par son titulaire (ADR-016) : pseudo, nom, bio. Seuls les champs présents changent.

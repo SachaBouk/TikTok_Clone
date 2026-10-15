@@ -41,7 +41,11 @@ struct RootView: View {
             withTransaction(transaction) { container.onboarding.sessionRestored(signedIn: session.isSignedIn) }
             if !container.onboarding.isPresented { analytics.askConsentIfNeeded() }
         }
-        .fullScreenCover(isPresented: Binding(get: { container.onboarding.isPresented }, set: { if !$0 { finishOnboarding() } })) {
+        // Consentement demandé une fois le plein écran fermé : une feuille présentée pendant sa fermeture est ignorée.
+        .fullScreenCover(
+            isPresented: Binding(get: { container.onboarding.isPresented }, set: { if !$0 { finishOnboarding() } }),
+            onDismiss: { analytics.askConsentIfNeeded() }
+        ) {
             OnboardingView(container: container) { finishOnboarding() }
                 .environment(session)
                 .environment(analytics)
@@ -68,6 +72,5 @@ struct RootView: View {
     private func finishOnboarding() {
         guard container.onboarding.isPresented else { return }
         container.onboarding.finish()
-        analytics.askConsentIfNeeded()
     }
 }

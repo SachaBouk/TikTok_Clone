@@ -30,10 +30,15 @@ export class AuthController {
 
   @Post('register')
   @ApiCreatedResponse({ type: AuthTokensResponse })
+  @ApiBadRequestResponse({
+    type: ErrorResponse,
+    description: 'Corps invalide, date de naissance invalide ou moins de 13 ans, mot de passe sans lettre ou sans chiffre (ADR-055).',
+  })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Email ou pseudo déjà pris.' })
   @ApiTooManyRequests('Trop de comptes créés récemment depuis cette adresse IP')
   async register(@Body() body: RegisterRequest, @Ip() ip: string | undefined): Promise<AuthTokensDto> {
-    return toTokensDto(await this.auth.register(body, ip || null));
+    const input = { email: body.email, password: body.password, username: body.username, displayName: body.displayName, birthDate: body.birthDate };
+    return toTokensDto(await this.auth.register(input, ip || null));
   }
 
   @Post('login')

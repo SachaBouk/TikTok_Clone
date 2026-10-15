@@ -45,3 +45,11 @@ export class ProfileSuspendedError extends UserError {
     this.name = 'ProfileSuspendedError';
   }
 }
+
+// Centre d'intérêt absent du catalogue (ADR-055).
+export class UnknownInterestError extends UserError {
+  constructor(code: string) {
+    super(`Centre d'intérêt inconnu : ${code}`);
+    this.name = 'UnknownInterestError';
+  }
+}

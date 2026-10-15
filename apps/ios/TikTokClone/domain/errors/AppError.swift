@@ -4,6 +4,8 @@ enum AppError: Error, Equatable, Sendable {
     case invalidCredentials
     // Requête refusée par l'API, avec son message (pseudo déjà pris, email invalide…).
     case rejected(String)
+    // Inscription refusée car l'email ou le pseudo est déjà pris (409), avec le message de l'API.
+    case alreadyRegistered(String)
     // Session expirée ou révoquée, ou compte supprimé : il faut se reconnecter.
     case sessionExpired
     // L'un des deux comptes a bloqué l'autre (403).
@@ -31,7 +33,7 @@ enum AppError: Error, Equatable, Sendable {
     var message: String {
         switch self {
         case .invalidCredentials: "Identifiant ou mot de passe incorrect."
-        case .rejected(let message): message
+        case .rejected(let message), .alreadyRegistered(let message): message
         case .sessionExpired: "Ta session a expiré. Reconnecte-toi."
         case .blocked: "Action impossible : l’un de vous a bloqué l’autre."
         case .notFound: "Ce contenu n’est plus disponible."

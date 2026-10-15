@@ -86,7 +86,7 @@ pnpm seed --no-wait          # sans attendre la fin des transcodages
 pnpm seed --no-interactions  # sans likes, follows, commentaires ni conversations
 ```
 
-- Comptes : `lea.martin@demo.local`, `hugo.bernard@demo.local`, `chloe.dubois@demo.local`, `nathan.petit@demo.local`, `ines.moreau@demo.local`, mot de passe `demo-password`.
+- Comptes : `lea.martin@demo.local`, `hugo.bernard@demo.local`, `chloe.dubois@demo.local`, `nathan.petit@demo.local`, `ines.moreau@demo.local`, mot de passe `demo-password1` (`demo-password` pour les comptes créés avant l'ADR-055).
 - Pour publier tes propres vidéos, dépose des `.mp4` / `.mov` dans `seed/videos/` : le seed les utilise à la place des vidéos générées.
 - Les comptes voient les vidéos des autres (`views_count`, historique de visionnage), se likent, se mettent en favori, se republient, se suivent et se commentent entre eux (toujours via l'API). Les choix sont déterministes : une relance ne duplique rien.
 - Ces interactions remplissent le centre d'activité de chaque compte (`GET /notifications`) ; le seed affiche le nombre de notifications non lues par compte.

@@ -32,7 +32,7 @@ struct AuthWelcomeView: View {
                     AuthMethodButton(title: "Email ou nom d’utilisateur", systemImage: "person", route: .login)
                         .accessibilityIdentifier("auth.method.login")
                 case .signup:
-                    AuthMethodButton(title: "Email", systemImage: "person", route: .register)
+                    AuthMethodButton(title: "Email", systemImage: "person", route: .signup(.birthday))
                         .accessibilityIdentifier("auth.method.signup")
                 }
             }

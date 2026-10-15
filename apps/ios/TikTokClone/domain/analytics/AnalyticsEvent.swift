@@ -15,6 +15,11 @@ struct AnalyticsEvent: Equatable, Sendable {
     let properties: [String: AnalyticsValue]
 }
 
+// Étapes de l'inscription (ADR-055), dans l'ordre.
+enum SignupStep: String, Hashable, Sendable, CaseIterable {
+    case birthday, email, password, username, interests, tutorial
+}
+
 // D'où l'écran de connexion est ouvert (ADR-055).
 enum AuthSource: String, Sendable {
     // Premier lancement de l'app.
@@ -129,6 +134,16 @@ extension AnalyticsEvent {
     static let signupStarted = AnalyticsEvent(name: "signup_started", properties: [:])
     static let signupCompleted = AnalyticsEvent(name: "signup_completed", properties: [:])
     static let loginCompleted = AnalyticsEvent(name: "login_completed", properties: [:])
+    // Inscription par étapes (ADR-055) : étape affichée (entonnoir), centres d'intérêt choisis ou passés. Jamais la date
+    // de naissance, l'email ni le pseudo.
+    static func signupStepViewed(_ step: SignupStep) -> AnalyticsEvent {
+        AnalyticsEvent(name: "signup_step_viewed", properties: ["step": .string(step.rawValue)])
+    }
+    static func interestsSelected(_ codes: [String], skipped: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "interests_selected",
+            properties: ["count": .int(codes.count), "skipped": .bool(skipped), "interests": .string(codes.joined(separator: ","))])
+    }
 
     // Expérience « invitation invité » : invitation affichée (variante seulement).
     static let guestPromptShown = AnalyticsEvent(name: "guest_prompt_shown", properties: [:])

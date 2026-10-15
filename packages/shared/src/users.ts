@@ -27,3 +27,28 @@ export interface AvatarUploadDto {
   // Expiration de l'URL signée.
   expiresAt: string;
 }
+
+// Disponibilité d'un pseudo pendant l'inscription (ADR-055, `GET /users/username-availability`).
+export type UsernameUnavailableReason = 'invalid' | 'reserved' | 'taken';
+
+export interface UsernameAvailabilityDto {
+  available: boolean;
+  // Présent quand le pseudo n'est pas disponible : format, pseudo réservé, ou déjà pris.
+  reason?: UsernameUnavailableReason;
+}
+
+// Centres d'intérêt (ADR-055) : catalogue public (`GET /interests/catalog`), choix privés du compte.
+export interface InterestDto {
+  code: string;
+  name: string;
+  emoji: string;
+}
+
+export interface InterestCatalogDto {
+  items: InterestDto[];
+}
+
+export interface UserInterestsDto {
+  // Codes du catalogue, dans son ordre.
+  interests: string[];
+}

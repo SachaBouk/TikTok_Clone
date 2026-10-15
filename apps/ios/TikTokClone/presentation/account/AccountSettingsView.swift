@@ -76,6 +76,11 @@ struct AccountSettingsView: View {
                     Label("Historique des commentaires", systemImage: "text.bubble")
                 }
                 .accessibilityIdentifier("settings.commentHistory")
+                // Choisis à l'inscription (ADR-055), modifiables ici.
+                NavigationLink(value: AccountRoute.interests) {
+                    Label("Centres d’intérêt", systemImage: "heart.text.square")
+                }
+                .accessibilityIdentifier("settings.interests")
             }
             Section {
                 NavigationLink(value: AccountRoute.blockedAccounts) {

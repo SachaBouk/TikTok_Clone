@@ -33,6 +33,7 @@ final class AppContainer {
     let onboarding = OnboardingModel(preferences: UserDefaultsPreferencesStore())
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
+    private let signupRepository: any SignupRepository
     private let feed: any FeedRepository
     private let viewHistory: any ViewHistoryRepository
     private let interactions: any InteractionRepository
@@ -64,6 +65,7 @@ final class AppContainer {
 
         auth = RemoteAuthRepository(client: client, store: tokenStore)
         profiles = RemoteProfileRepository(client: client)
+        signupRepository = RemoteSignupRepository(client: client)
         feed = RemoteFeedRepository(client: client)
         viewHistory = RemoteViewHistoryRepository(client: client)
         interactions = RemoteInteractionRepository(client: client)
@@ -356,8 +358,24 @@ final class AppContainer {
         LoginViewModel(login: LoginUseCase(auth: auth, profiles: profiles), session: session, analytics: analytics)
     }
 
-    func makeRegisterViewModel() -> RegisterViewModel {
-        RegisterViewModel(register: RegisterUseCase(auth: auth, profiles: profiles), session: session, analytics: analytics)
+    func makeSignupFlowModel() -> SignupFlowModel {
+        SignupFlowModel(
+            register: RegisterUseCase(auth: auth, profiles: profiles),
+            checkUsername: CheckUsernameUseCase(signup: signupRepository),
+            loadCatalog: LoadInterestCatalogUseCase(signup: signupRepository),
+            saveInterests: SaveInterestsUseCase(signup: signupRepository),
+            session: session,
+            analytics: analytics
+        )
+    }
+
+    func makeInterestsSettingsViewModel() -> InterestsSettingsViewModel {
+        InterestsSettingsViewModel(
+            loadCatalog: LoadInterestCatalogUseCase(signup: signupRepository),
+            loadMine: LoadMyInterestsUseCase(signup: signupRepository),
+            save: SaveInterestsUseCase(signup: signupRepository),
+            session: session
+        )
     }
 
     func makeFeedViewModel() -> FeedViewModel {

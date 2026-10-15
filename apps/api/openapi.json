@@ -49,7 +49,7 @@
             }
           },
           "400": {
-            "description": "Corps de requête invalide.",
+            "description": "Corps invalide, date de naissance invalide ou moins de 13 ans, mot de passe sans lettre ou sans chiffre (ADR-055).",
             "content": {
               "application/json": {
                 "schema": {
@@ -637,6 +637,139 @@
         ]
       }
     },
+    "/users/me/interests": {
+      "get": {
+        "operationId": "getMyInterests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInterestsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "operationId": "setMyInterests",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetInterestsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Liste enregistrée, dans l’ordre du catalogue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInterestsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Code absent du catalogue, ou corps invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/username-availability": {
+      "get": {
+        "operationId": "checkUsernameAvailability",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "example": "alice",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameAvailabilityResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ],
+        "security": []
+      }
+    },
     "/users/{username}": {
       "get": {
         "operationId": "getProfile",
@@ -677,6 +810,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ],
+        "security": []
+      }
+    },
+    "/interests/catalog": {
+      "get": {
+        "operationId": "getInterestCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestCatalogResponse"
                 }
               }
             }
@@ -7356,7 +7511,8 @@
             "type": "string",
             "minLength": 8,
             "maxLength": 128,
-            "format": "password"
+            "format": "password",
+            "pattern": "^(?=.*\\p{L})(?=.*\\p{Nd})"
           },
           "username": {
             "type": "string",
@@ -7368,13 +7524,18 @@
             "minLength": 1,
             "maxLength": 50,
             "example": "Alice"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2000-02-18"
           }
         },
         "required": [
           "email",
           "password",
           "username",
-          "displayName"
+          "birthDate"
         ]
       },
       "AuthTokensResponse": {
@@ -7575,6 +7736,94 @@
         },
         "required": [
           "avatarId"
+        ]
+      },
+      "UserInterestsResponse": {
+        "type": "object",
+        "properties": {
+          "interests": {
+            "description": "Codes du catalogue, dans son ordre.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "interests"
+        ]
+      },
+      "SetInterestsRequest": {
+        "type": "object",
+        "properties": {
+          "interests": {
+            "maxItems": 50,
+            "description": "Codes du catalogue (`GET /interests/catalog`).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "interests"
+        ]
+      },
+      "UsernameUnavailableReason": {
+        "type": "string",
+        "enum": [
+          "invalid",
+          "reserved",
+          "taken"
+        ]
+      },
+      "UsernameAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/UsernameUnavailableReason"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "InterestResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code stable du catalogue."
+          },
+          "name": {
+            "type": "string",
+            "description": "Libellé français."
+          },
+          "emoji": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "emoji"
+        ]
+      },
+      "InterestCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterestResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "CreateUploadRequest": {

@@ -1,5 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { AVATAR_CONTENT_TYPES, MAX_AVATAR_SIZE_BYTES, MAX_BIO_LENGTH, MAX_DISPLAY_NAME_LENGTH, USERNAME_PATTERN } from '../domain/profile-rules';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
@@ -42,4 +56,21 @@ export class SetAvatarRequest {
   @ApiProperty({ format: 'uuid', description: '`avatarId` renvoyé par `POST /users/me/avatar/upload-url`.' })
   @IsUUID()
   avatarId!: string;
+}
+
+export class UsernameAvailabilityQuery {
+  @ApiProperty({ maxLength: 50, example: 'alice' })
+  @IsString()
+  @MaxLength(50)
+  username!: string;
+}
+
+// Remplace la liste (ADR-055) ; vide : aucun centre d'intérêt.
+export class SetInterestsRequest {
+  @ApiProperty({ type: [String], maxItems: 50, description: 'Codes du catalogue (`GET /interests/catalog`).' })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(50, { each: true })
+  interests!: string[];
 }
