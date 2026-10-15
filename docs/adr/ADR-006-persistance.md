@@ -55,3 +55,4 @@ L'historique des recherches n'est pas modélisé : il est reporté avec la reche
 - ADR-011 — Temps réel (messagerie directe)
 - ADR-016 — Périmètre de la première version
 - Complété par [ADR-020](ADR-020-modele-donnees-complements.md) — Modèle de données : compléments
+- Complété par [ADR-057](ADR-057-menu-profil-solde-parametres.md) — Menu du profil, Solde, centre des activités et paramètres

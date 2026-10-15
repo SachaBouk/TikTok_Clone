@@ -1,7 +1,7 @@
 # ADR-056 — Profil façon TikTok : compteur « J'aime », photo recadrée et story, modification par champ
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre : compte et profil) et [ADR-046](ADR-046-dimensions-photo-profil.md) (photo de profil), sans les remplacer.
 

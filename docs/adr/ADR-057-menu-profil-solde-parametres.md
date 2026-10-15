@@ -1,7 +1,7 @@
 # ADR-057 — Menu du profil, page « Solde », centre des activités et paramètres façon TikTok
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-016](ADR-016-perimetre-mvp.md) (périmètre : compte et profil, centre d'activités), [ADR-006](ADR-006-persistance.md) (historique de visionnage) et [ADR-009](ADR-009-paiement-jetons.md) (portefeuille de jetons), sans les remplacer.
 

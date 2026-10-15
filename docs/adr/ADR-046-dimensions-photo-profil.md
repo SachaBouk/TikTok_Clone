@@ -40,3 +40,4 @@ Un client autre que l'app (ou une app modifiée) pouvait donc installer une imag
 ## Liens
 - ADR-016 — Périmètre du MVP
 - ADR-003 — Architecture backend (règles dans le domaine)
+- Complété par [ADR-056](ADR-056-profil-facon-tiktok.md) — Profil façon TikTok
