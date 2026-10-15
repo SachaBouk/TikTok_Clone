@@ -218,9 +218,20 @@ final class AppContainer {
             answerRequest: AnswerMessageRequestUseCase(messaging: messagingRepository),
             deleteConversation: DeleteConversationUseCase(messaging: messagingRepository),
             deleteMessage: DeleteMessageUseCase(messaging: messagingRepository),
+            manageGroup: ManageGroupUseCase(messaging: messagingRepository),
             messaging: messaging,
             session: session,
             analytics: analytics
+        )
+    }
+
+    // Choix d'amis d'un chat de groupe (ADR-059) : création ou ajout de membres.
+    func makeFriendPicker(_ mode: FriendPickerModel.Mode) -> FriendPickerModel {
+        FriendPickerModel(
+            mode: mode,
+            loadFriends: LoadFriendsUseCase(relationships: relationships, search: search),
+            createGroup: CreateGroupUseCase(messaging: messagingRepository),
+            session: session
         )
     }
 

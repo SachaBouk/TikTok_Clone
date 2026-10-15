@@ -86,4 +86,9 @@ struct ShareLiveByMessageUseCase: Sendable {
         let conversation = try await messaging.open(username: username)
         return try await messaging.shareLive(conversationID: conversation.id, liveID: liveID)
     }
+
+    // Dans une conversation déjà ouverte (un groupe, ADR-059).
+    func callAsFunction(liveID: String, inConversation conversationID: String) async throws -> DirectMessage {
+        try await messaging.shareLive(conversationID: conversationID, liveID: liveID)
+    }
 }

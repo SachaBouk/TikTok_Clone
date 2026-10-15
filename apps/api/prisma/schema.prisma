@@ -465,15 +465,37 @@ model LiveMessage {
 
 // ─── Messagerie directe (ADR-006, ADR-011) ───────────────────────────────────
 
+// Conversation à deux, ou chat de groupe (ADR-059).
+enum ConversationKind {
+  direct
+  group
+
+  @@map("conversation_kind")
+}
+
+// Ligne d'événement d'un chat de groupe (ADR-059), stockée comme un message.
+enum GroupEvent {
+  created
+  added
+  removed
+  left
+  renamed
+
+  @@map("group_event")
+}
+
 model Conversation {
-  id              String    @id @default(uuid(7)) @map("conversation_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id              String           @id @default(uuid(7)) @map("conversation_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at")
+  kind            ConversationKind @default(direct)
+  // Nom d'un groupe (ADR-059), facultatif ; toujours nul pour une conversation à deux (contrainte CHECK).
+  name            String?          @db.VarChar(50)
   // Demande de message (ADR-016) : premier message envoyé hors abonnés mutuels, par ce compte.
-  requestSenderId String?   @map("request_sender_id") @db.Uuid
+  requestSenderId String?          @map("request_sender_id") @db.Uuid
   // Conversation ouverte durablement (demande acceptée, réponse, ou premier message entre abonnés mutuels).
-  acceptedAt      DateTime? @map("accepted_at")
+  acceptedAt      DateTime?        @map("accepted_at")
   // Demande refusée par son destinataire : elle ne lui est plus montrée, l'expéditeur n'en sait rien.
-  declinedAt      DateTime? @map("declined_at")
+  declinedAt      DateTime?        @map("declined_at")
 
   requestSender User?                     @relation("ConversationRequestSender", fields: [requestSenderId], references: [id], onDelete: SetNull)
   participants  ConversationParticipant[]
@@ -483,14 +505,18 @@ model Conversation {
 }
 
 model ConversationParticipant {
-  conversationId       String  @map("conversation_id") @db.Uuid
-  userId               String  @map("user_id") @db.Uuid
+  conversationId       String    @map("conversation_id") @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
   // Dernier message lu (non-lus, badge, « Vu »). Simple repère ordonné (UUID v7), sans clé étrangère :
   // si ce message disparaît (compte de son auteur supprimé), le repère reste valable.
-  lastReadMessageId    String? @map("last_read_message_id") @db.Uuid
+  lastReadMessageId    String?   @map("last_read_message_id") @db.Uuid
   // Conversation supprimée pour ce participant : les messages jusqu'à ce repère lui sont masqués.
   // Elle réapparaît au message suivant. Même principe de repère ordonné, sans clé étrangère.
-  clearedUpToMessageId String? @map("cleared_up_to_message_id") @db.Uuid
+  clearedUpToMessageId String?   @map("cleared_up_to_message_id") @db.Uuid
+  // Entrée dans la conversation : l'administrateur d'un groupe est le membre le plus ancien (ADR-059).
+  joinedAt             DateTime  @default(now()) @map("joined_at")
+  // Groupe mis en sourdine par ce membre : plus de notification push (ADR-059).
+  mutedAt              DateTime? @map("muted_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -502,21 +528,25 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              String   @id @default(uuid(7)) @map("message_id") @db.Uuid
-  conversationId  String   @map("conversation_id") @db.Uuid
-  senderId        String   @map("sender_id") @db.Uuid
+  id              String      @id @default(uuid(7)) @map("message_id") @db.Uuid
+  conversationId  String      @map("conversation_id") @db.Uuid
+  senderId        String      @map("sender_id") @db.Uuid
   // Vide si le message ne fait que partager une vidéo (contrainte CHECK : texte ou vidéo).
   content         String
   // Vidéo partagée. Sans clé étrangère : une vidéo supprimée reste signalée « indisponible » dans le message.
-  sharedVideoId   String?  @map("shared_video_id") @db.Uuid
+  sharedVideoId   String?     @map("shared_video_id") @db.Uuid
   // Story à laquelle répond le message (ADR-051). Sans clé étrangère : une story expirée reste signalée « expirée ».
-  storyId         String?  @map("story_id") @db.Uuid
+  storyId         String?     @map("story_id") @db.Uuid
   // Live partagé (ADR-053). Sans clé étrangère, comme une vidéo partagée.
-  liveId          String?  @map("live_id") @db.Uuid
+  liveId          String?     @map("live_id") @db.Uuid
   // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
   // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
-  clientMessageId String?  @map("client_message_id") @db.Uuid
-  createdAt       DateTime @default(now()) @map("created_at")
+  clientMessageId String?     @map("client_message_id") @db.Uuid
+  // Ligne d'événement d'un groupe (ADR-059) : l'expéditeur en est l'auteur, `content` le nouveau nom d'un renommage.
+  event           GroupEvent?
+  // Membre ajouté ou retiré. Sans clé étrangère : un compte supprimé depuis s'affiche « un compte supprimé ».
+  eventUserId     String?     @map("event_user_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)

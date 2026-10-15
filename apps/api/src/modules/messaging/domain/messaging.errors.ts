@@ -105,3 +105,52 @@ export class RateLimitedError extends MessagingError {
     this.name = 'RateLimitedError';
   }
 }
+
+// Chats de groupe (ADR-059).
+
+// Liste de membres invalide (trop peu d'amis à la création, trop de membres, doublon), nom trop long : 400.
+export class InvalidGroupError extends MessagingError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidGroupError';
+  }
+}
+
+// Compte qui n'est pas un ami de celui qui ajoute (abonnés mutuels), avec qui il a un blocage, ou suspendu : 403.
+// Le même message pour tous les cas : on ne révèle ni blocage ni suspension.
+export class NotAFriendError extends MessagingError {
+  constructor() {
+    super('Tu ne peux ajouter à un groupe que tes amis (comptes que tu suis et qui te suivent).');
+    this.name = 'NotAFriendError';
+  }
+}
+
+export class GroupFullError extends MessagingError {
+  constructor(max: number) {
+    super(`Un groupe compte ${max} membres au plus.`);
+    this.name = 'GroupFullError';
+  }
+}
+
+export class NotGroupAdminError extends MessagingError {
+  constructor() {
+    super('Seul l’administrateur du groupe peut retirer un membre.');
+    this.name = 'NotGroupAdminError';
+  }
+}
+
+// Action réservée aux groupes (renommer, membres, quitter, sourdine) sur une conversation à deux : 409.
+export class NotAGroupError extends MessagingError {
+  constructor() {
+    super('Cette conversation n’est pas un groupe.');
+    this.name = 'NotAGroupError';
+  }
+}
+
+// Membre à retirer qui n'est pas (ou plus) dans le groupe, ou soi-même (quitter le groupe) : 404 / 400.
+export class GroupMemberNotFoundError extends MessagingError {
+  constructor(userId: string) {
+    super(`Membre introuvable : ${userId}`);
+    this.name = 'GroupMemberNotFoundError';
+  }
+}

@@ -13,7 +13,7 @@ export interface RecordedEvent {
 // Adaptateur en mémoire pour les tests : garde les événements publiés et les notifications push, par destinataire.
 export class InMemoryMessagingEventPublisher extends MessagingEventPublisher {
   readonly events: RecordedEvent[] = [];
-  readonly pushes: { recipientId: string; senderId: string; content: string; asRequest: boolean }[] = [];
+  readonly pushes: { recipientId: string; senderId: string; content: string; asRequest: boolean; groupTitle?: string }[] = [];
   // Messages remis, tels que chaque destinataire les reçoit (vidéo partagée comprise).
   readonly created: { recipientId: string; item: MessageItem }[] = [];
 
@@ -48,5 +48,9 @@ export class InMemoryMessagingEventPublisher extends MessagingEventPublisher {
 
   async pushNewMessage(recipientId: string, sender: User, item: MessageItem, asRequest: boolean): Promise<void> {
     this.pushes.push({ recipientId, senderId: sender.id, content: item.message.content, asRequest });
+  }
+
+  async pushGroupMessage(recipientId: string, sender: User, groupTitle: string, item: MessageItem): Promise<void> {
+    this.pushes.push({ recipientId, senderId: sender.id, content: item.message.content, asRequest: false, groupTitle });
   }
 }

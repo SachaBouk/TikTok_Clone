@@ -27,4 +27,13 @@ protocol MessagingRepository: Sendable {
     func deleteConversation(id: String) async throws
     // Retrait par l'expéditeur, pour les deux.
     func deleteMessage(id: String) async throws
+
+    // Chats de groupe (ADR-059). Création avec au moins 2 amis ; renommer (nil : nom retiré) ; ajouter des amis ;
+    // retirer un membre (administrateur) ; quitter ; sourdine.
+    func createGroup(userIDs: [String], name: String?) async throws -> Conversation
+    func renameGroup(conversationID: String, name: String?) async throws -> Conversation
+    func addGroupMembers(conversationID: String, userIDs: [String]) async throws -> Conversation
+    func removeGroupMember(conversationID: String, userID: String) async throws
+    func leaveGroup(conversationID: String) async throws
+    func setGroupMuted(conversationID: String, muted: Bool) async throws
 }

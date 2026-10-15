@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import {
   DEFAULT_PAGE_SIZE,
+  MAX_GROUP_MEMBERS,
+  MAX_GROUP_NAME_LENGTH,
   DEFAULT_SEARCH_RESULTS,
   MAX_MESSAGE_LENGTH,
   MAX_PAGE_SIZE,
@@ -95,4 +97,42 @@ export class MessageSearchQuery {
   @Min(1)
   @Max(MAX_SEARCH_RESULTS)
   limit: number = DEFAULT_SEARCH_RESULTS;
+}
+
+// Chats de groupe (ADR-059). Les règles (amis, nombre de membres) sont vérifiées par le service.
+export class CreateGroupRequest {
+  @ApiProperty({
+    type: [String],
+    format: 'uuid',
+    minItems: 1,
+    maxItems: MAX_GROUP_MEMBERS - 1,
+    description: 'Amis à ajouter (abonnés mutuels), au moins 2, créateur non compris.',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_GROUP_MEMBERS - 1)
+  @IsUUID('all', { each: true })
+  userIds!: string[];
+
+  @ApiPropertyOptional({ maxLength: MAX_GROUP_NAME_LENGTH, description: 'Nom du groupe ; absent ou vide : les noms des membres.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_GROUP_NAME_LENGTH)
+  name?: string;
+}
+
+export class AddGroupMembersRequest {
+  @ApiProperty({ type: [String], format: 'uuid', minItems: 1, maxItems: MAX_GROUP_MEMBERS - 1, description: 'Amis à ajouter.' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_GROUP_MEMBERS - 1)
+  @IsUUID('all', { each: true })
+  userIds!: string[];
+}
+
+export class RenameGroupRequest {
+  @ApiProperty({ maxLength: MAX_GROUP_NAME_LENGTH, description: 'Nouveau nom ; vide : nom retiré.' })
+  @IsString()
+  @MaxLength(MAX_GROUP_NAME_LENGTH)
+  name!: string;
 }

@@ -51,11 +51,24 @@ struct MessageSearchResult: Identifiable, Equatable, Sendable {
     let messageID: String
     let content: String
     let createdAt: Date
-    // L'autre participant de la conversation.
+    // L'autre participant de la conversation ; dans un groupe, l'expéditeur.
     let participant: UserSummary
     let sender: UserSummary
+    // Message d'un groupe (ADR-059) : son nom et ses membres.
+    var group: (name: String?, members: [UserSummary])? = nil
 
     var id: String { messageID }
+
+    // Nom affiché : l'autre participant, ou le groupe (sinon les noms de ses autres membres).
+    func title(ownID: String?) -> String {
+        guard let group else { return participant.displayName }
+        return group.name ?? GroupRules.names(group.members.filter { $0.id != ownID }.map(\.displayName))
+    }
+
+    static func == (lhs: MessageSearchResult, rhs: MessageSearchResult) -> Bool {
+        lhs.messageID == rhs.messageID && lhs.content == rhs.content && lhs.participant == rhs.participant && lhs.sender == rhs.sender
+            && lhs.group?.name == rhs.group?.name && lhs.group?.members == rhs.group?.members
+    }
 }
 
 // Filtre « Activité ▾ » : les abonnements sont à part, dans « Nouveaux followers ».

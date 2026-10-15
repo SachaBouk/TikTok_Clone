@@ -67,6 +67,11 @@ struct ShareVideoByMessageUseCase: Sendable {
         let conversation = try await messaging.open(username: username)
         return try await messaging.send(conversationID: conversation.id, content: nil, videoID: videoID, clientMessageID: nil)
     }
+
+    // Dans une conversation déjà ouverte (un groupe, ADR-059).
+    func callAsFunction(videoID: String, inConversation conversationID: String) async throws -> DirectMessage {
+        try await messaging.send(conversationID: conversationID, content: nil, videoID: videoID, clientMessageID: nil)
+    }
 }
 
 struct MarkConversationReadUseCase: Sendable {
@@ -113,5 +118,67 @@ struct SendTypingUseCase: Sendable {
 
     func callAsFunction(conversationID: String) async {
         await channel.sendTyping(conversationID: conversationID)
+    }
+}
+
+// Chats de groupe (ADR-059) : création (au moins 2 amis, 31 au plus), nom nettoyé comme l'API (50 caractères).
+struct CreateGroupUseCase: Sendable {
+    let messaging: any MessagingRepository
+
+    func callAsFunction(userIDs: [String], name: String) async throws -> Conversation {
+        guard GroupRules.canCreate(selected: userIDs.count) else {
+            throw AppError.rejected("Choisis au moins \(GroupRules.minFriends) amis (\(GroupRules.maxMembers - 1) au plus).")
+        }
+        let name = GroupRules.cleanedName(name)
+        if let name, name.count > GroupRules.maxNameLength {
+            throw AppError.rejected("Le nom du groupe compte \(GroupRules.maxNameLength) caractères au plus.")
+        }
+        return try await messaging.createGroup(userIDs: userIDs, name: name)
+    }
+}
+
+// Réglages d'un groupe : nom, membres, départ, sourdine.
+struct ManageGroupUseCase: Sendable {
+    let messaging: any MessagingRepository
+
+    func rename(_ conversationID: String, to name: String) async throws -> Conversation {
+        let name = GroupRules.cleanedName(name)
+        if let name, name.count > GroupRules.maxNameLength {
+            throw AppError.rejected("Le nom du groupe compte \(GroupRules.maxNameLength) caractères au plus.")
+        }
+        return try await messaging.renameGroup(conversationID: conversationID, name: name)
+    }
+
+    func add(_ userIDs: [String], to conversationID: String) async throws -> Conversation {
+        try await messaging.addGroupMembers(conversationID: conversationID, userIDs: userIDs)
+    }
+
+    func remove(_ userID: String, from conversationID: String) async throws {
+        try await messaging.removeGroupMember(conversationID: conversationID, userID: userID)
+    }
+
+    func leave(_ conversationID: String) async throws {
+        try await messaging.leaveGroup(conversationID: conversationID)
+    }
+
+    func setMuted(_ muted: Bool, _ conversationID: String) async throws {
+        try await messaging.setGroupMuted(conversationID: conversationID, muted: muted)
+    }
+}
+
+// Amis (abonnés mutuels) qu'on peut ajouter à un groupe : ses abonnements qui le suivent en retour, page par page ;
+// avec un texte, la recherche de comptes (ADR-049) restreinte aux amis.
+struct LoadFriendsUseCase: Sendable {
+    let relationships: any RelationshipRepository
+    let search: any SearchRepository
+
+    func callAsFunction(username: String, cursor: String?) async throws -> (friends: [UserSummary], nextCursor: String?) {
+        let page = try await relationships.follows(.following, username: username, cursor: cursor)
+        return (page.entries.filter { $0.viewer?.followedBy == true }.map(\.user), page.nextCursor)
+    }
+
+    func search(_ query: String) async throws -> [UserSummary] {
+        let page = try await search.searchAccounts(query: query, cursor: nil)
+        return page.results.filter { $0.viewer?.following == true && $0.viewer?.followedBy == true }.map(\.user)
     }
 }

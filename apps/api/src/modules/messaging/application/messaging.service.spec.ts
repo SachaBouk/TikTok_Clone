@@ -18,13 +18,19 @@ import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memo
 import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory-video-cleanup-queue';
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
-import { MESSAGE_RATE_LIMITS, REQUEST_MESSAGE_LIMIT, REQUEST_RATE_LIMITS } from '../domain/messaging';
+import { GROUP_CREATE_RATE_LIMITS, MAX_GROUP_MEMBERS, MESSAGE_RATE_LIMITS, REQUEST_MESSAGE_LIMIT, REQUEST_RATE_LIMITS } from '../domain/messaging';
 import {
   BlockedConversationError,
   CannotMessageYourselfError,
   ClientMessageIdConflictError,
   ConversationNotFoundError,
   EmptyMessageError,
+  GroupFullError,
+  GroupMemberNotFoundError,
+  InvalidGroupError,
+  NotAFriendError,
+  NotAGroupError,
+  NotGroupAdminError,
   RepliedStoryNotFoundError,
   SharedLiveNotFoundError,
   MessageNotFoundError,
@@ -266,7 +272,7 @@ describe('MessagingService', () => {
       const id = await open('carol', 'alice');
       await send('carol', id, 'd1');
 
-      expect((await service.listRequests('alice', null, 10)).items.map((i) => [i.participant.id, i.status])).toEqual([['carol', 'requestReceived']]);
+      expect((await service.listRequests('alice', null, 10)).items.map((i) => [i.participant?.id, i.status])).toEqual([['carol', 'requestReceived']]);
       expect((await service.listConversations('alice', null, 10)).items).toEqual([]);
       expect((await service.listConversations('carol', null, 10)).items.map((i) => i.status)).toEqual(['requestSent']);
       await expect(service.badges('alice')).resolves.toEqual({ unreadConversations: 0, pendingRequests: 1 });
@@ -295,7 +301,7 @@ describe('MessagingService', () => {
         ['carol', id],
       ]);
       await expect(send('carol', id, 'd4')).resolves.toBeDefined();
-      expect((await service.listConversations('alice', null, 10)).items.map((i) => i.participant.id)).toEqual(['carol']);
+      expect((await service.listConversations('alice', null, 10)).items.map((i) => i.participant?.id)).toEqual(['carol']);
       await expect(service.acceptRequest('alice', id)).rejects.toBeInstanceOf(NotAPendingRequestError);
       await expect(service.acceptRequest('carol', id)).rejects.toBeInstanceOf(NotAPendingRequestError);
     });
@@ -628,8 +634,8 @@ describe('MessagingService', () => {
 
       const first = await service.listConversations('alice', null, 1);
       const second = await service.listConversations('alice', first.nextCursor, 1);
-      expect(first.items.map((i) => [i.participant.id, i.lastMessage?.message.content])).toEqual([['bob', 'b2']]);
-      expect(second.items.map((i) => [i.participant.id, i.lastMessage?.message.content])).toEqual([['carol', 'c1']]);
+      expect(first.items.map((i) => [i.participant?.id, i.lastMessage?.message.content])).toEqual([['bob', 'b2']]);
+      expect(second.items.map((i) => [i.participant?.id, i.lastMessage?.message.content])).toEqual([['carol', 'c1']]);
       expect(second.nextCursor).toBeNull();
       await expect(service.badges('alice')).resolves.toEqual({ unreadConversations: 2, pendingRequests: 0 });
     });
@@ -662,5 +668,230 @@ describe('MessagingService', () => {
     expect(conversations.conversations.size).toBe(0);
     expect((await service.listConversations('alice', null, 10)).items).toEqual([]);
     await expect(service.getConversation('alice', id)).rejects.toBeInstanceOf(ConversationNotFoundError);
+  });
+
+  describe('chats de groupe (ADR-059)', () => {
+    // alice est amie de bob (beforeEach), de carol et de u1.
+    beforeEach(async () => {
+      await befriend('alice', 'carol');
+      await befriend('alice', 'u1');
+    });
+    const createGroup = async (name?: string) => (await service.createGroup('alice', { userIds: ['bob', 'carol'], name })).conversation.id;
+    const contents = async (userId: string, id: string) =>
+      (await service.listMessages(userId, id, null, 50)).items.map((i) => i.message.event ?? i.message.content).reverse();
+
+    it('crée un groupe d’amis, le créateur administrateur, avec la ligne « a créé le groupe » annoncée à tous', async () => {
+      const created = await service.createGroup('alice', { userIds: ['bob', 'carol', 'bob'], name: '  Les amis  ' });
+      expect(created.participant).toBeNull();
+      expect(created.group).toMatchObject({ name: 'Les amis', adminId: 'alice', muted: false });
+      expect(created.group!.members.map((m) => m.user.id)).toEqual(['alice', 'bob', 'carol']);
+      expect(await contents('bob', created.conversation.id)).toEqual(['created']);
+      expect(
+        eventsOf('messageCreated')
+          .map(([r]) => r)
+          .sort(),
+      ).toEqual(['alice', 'bob', 'carol']);
+      expect(events.pushes).toEqual([]);
+      // Une ligne d'événement n'est jamais non lue.
+      expect((await service.badges('bob')).unreadConversations).toBe(0);
+      // Le groupe est dans la boîte de réception de chacun.
+      expect((await service.listConversations('carol', null, 20)).items.map((i) => i.conversation.kind)).toEqual(['group']);
+    });
+
+    it('refuse moins de 2 amis, plus de 32 membres, un nom trop long et un compte qui n’est pas un ami', async () => {
+      await expect(service.createGroup('alice', { userIds: ['bob'] })).rejects.toBeInstanceOf(InvalidGroupError);
+      await expect(service.createGroup('alice', { userIds: ['bob', 'carol'], name: 'x'.repeat(51) })).rejects.toBeInstanceOf(InvalidGroupError);
+      const many = Array.from({ length: MAX_GROUP_MEMBERS }, (_, i) => `x${i}`);
+      await expect(service.createGroup('alice', { userIds: many })).rejects.toBeInstanceOf(InvalidGroupError);
+      // u2 suit alice sans être suivi en retour : pas un ami.
+      await interactions.setFollow('u2', 'alice', true);
+      await expect(service.createGroup('alice', { userIds: ['bob', 'u2'] })).rejects.toBeInstanceOf(NotAFriendError);
+      // Ami suspendu, ou bloqué : pas un ami non plus.
+      await suspended.add('carol');
+      await expect(service.createGroup('alice', { userIds: ['bob', 'carol'] })).rejects.toBeInstanceOf(NotAFriendError);
+    });
+
+    it('limite les créations de groupes par jour', async () => {
+      const { limit } = GROUP_CREATE_RATE_LIMITS[0];
+      for (let i = 0; i < limit; i++) await createGroup();
+      await expect(createGroup()).rejects.toBeInstanceOf(RateLimitedError);
+    });
+
+    it('remet un message à tous les membres, avec son expéditeur, et envoie un push sauf à ceux qui ont mis le groupe en sourdine', async () => {
+      const id = await createGroup('Sortie');
+      await service.setGroupMuted('carol', id, true);
+      events.events.length = 0;
+      const sent = await send('bob', id, 'Salut tout le monde');
+      expect(sent.sender?.id).toBe('bob');
+      expect(
+        eventsOf('messageCreated')
+          .map(([r]) => r)
+          .sort(),
+      ).toEqual(['alice', 'bob', 'carol']);
+      expect(events.pushes).toEqual([
+        { recipientId: 'alice', senderId: 'bob', content: 'Salut tout le monde', asRequest: false, groupTitle: 'Sortie' },
+      ]);
+      expect((await service.getConversation('carol', id)).group!.muted).toBe(true);
+      expect((await service.getConversation('carol', id)).conversation.unreadCount).toBe(1);
+      expect((await service.badges('carol')).unreadConversations).toBe(1);
+      // Sans nom : les noms des autres membres en titre.
+      await service.renameGroup('alice', id, '');
+      events.pushes.length = 0;
+      await send('carol', id, 'Coucou');
+      expect(events.pushes.map((p) => [p.recipientId, p.groupTitle])).toEqual([
+        ['alice', 'bob, carol'],
+        ['bob', 'alice, carol'],
+      ]);
+    });
+
+    it('« Vu par » : chaque membre garde son repère, annoncé à tous les membres', async () => {
+      const id = await createGroup();
+      const message = await send('alice', id, 'Ça va ?');
+      events.events.length = 0;
+      await service.markRead('bob', id, message.message.id);
+      expect(
+        eventsOf('conversationRead')
+          .map(([r]) => r)
+          .sort(),
+      ).toEqual(['alice', 'bob', 'carol']);
+      const members = (await service.getConversation('alice', id)).group!.members;
+      expect(members.find((m) => m.user.id === 'bob')?.lastReadMessageId).toBe(message.message.id);
+    });
+
+    it('« en train d’écrire » est relayé à tous les autres membres, sauf en cas de blocage', async () => {
+      const id = await createGroup();
+      await interactions.setBlock('carol', 'bob', true);
+      clock += 10_000;
+      await service.typing('bob', id);
+      expect(eventsOf('typing')).toEqual([['alice', 'bob']]);
+    });
+
+    it('un nouveau membre voit les messages à partir de son ajout ; un compte déjà membre est ignoré', async () => {
+      const id = await createGroup();
+      await send('bob', id, 'Avant');
+      const after = await service.addGroupMembers('carol', id, []).catch(() => null);
+      expect(after).not.toBeNull();
+      // carol n'est pas amie de u1 : seul un ami de celui qui ajoute peut entrer.
+      await expect(service.addGroupMembers('carol', id, ['u1'])).rejects.toBeInstanceOf(NotAFriendError);
+      const added = await service.addGroupMembers('alice', id, ['u1', 'bob']);
+      expect(added.group!.members.map((m) => m.user.id)).toEqual(['alice', 'bob', 'carol', 'u1']);
+      expect(await contents('u1', id)).toEqual(['added']);
+      expect(await contents('bob', id)).toEqual(['created', 'Avant', 'added']);
+      const [line] = (await service.listMessages('bob', id, null, 1)).items;
+      expect([line.sender?.id, line.eventUser?.id]).toEqual(['alice', 'u1']);
+      expect((await service.getConversation('u1', id)).conversation.unreadCount).toBe(0);
+    });
+
+    it('refuse un ajout au-delà de 32 membres', async () => {
+      const id = await createGroup();
+      // Membres fictifs jusqu'à la limite (comptes absents du dépôt des comptes).
+      const members = conversations.conversations.get(id)!.members;
+      for (let i = members.size; i < MAX_GROUP_MEMBERS; i++) {
+        members.set(`f${i}`, { userId: `f${i}`, lastReadMessageId: null, clearedUpToMessageId: null, joinedAt: new Date(clock + i), mutedAt: null });
+      }
+      await expect(service.addGroupMembers('alice', id, ['u1'])).rejects.toBeInstanceOf(GroupFullError);
+    });
+
+    it('seul l’administrateur retire un membre, qui perd la conversation', async () => {
+      const id = await createGroup();
+      await expect(service.removeGroupMember('bob', id, 'carol')).rejects.toBeInstanceOf(NotGroupAdminError);
+      await expect(service.removeGroupMember('alice', id, 'alice')).rejects.toBeInstanceOf(InvalidGroupError);
+      await expect(service.removeGroupMember('alice', id, 'u1')).rejects.toBeInstanceOf(GroupMemberNotFoundError);
+      events.events.length = 0;
+      await service.removeGroupMember('alice', id, 'carol');
+      expect(eventsOf('conversationDeleted')).toEqual([['carol', id]]);
+      expect(
+        eventsOf('messageCreated')
+          .map(([r]) => r)
+          .sort(),
+      ).toEqual(['alice', 'bob']);
+      await expect(service.getConversation('carol', id)).rejects.toBeInstanceOf(ConversationNotFoundError);
+      await expect(send('carol', id, 'Encore là ?')).rejects.toBeInstanceOf(ConversationNotFoundError);
+      expect(await contents('bob', id)).toEqual(['created', 'removed']);
+    });
+
+    it('quitter : ses messages restent, le plus ancien membre restant devient administrateur, le dernier départ supprime le groupe', async () => {
+      const id = await createGroup();
+      await send('alice', id, 'Je pars');
+      await service.leaveGroup('alice', id);
+      const seen = await service.getConversation('bob', id);
+      expect(seen.group!.adminId).toBe('bob');
+      expect(await contents('bob', id)).toEqual(['created', 'Je pars', 'left']);
+      await service.leaveGroup('bob', id);
+      expect((await service.getConversation('carol', id)).group!.members.map((m) => m.user.id)).toEqual(['carol']);
+      await service.leaveGroup('carol', id);
+      expect(conversations.conversations.has(id)).toBe(false);
+    });
+
+    it('renommer : tout membre, ligne « renamed », nom vide retiré', async () => {
+      const id = await createGroup();
+      const renamed = await service.renameGroup('carol', id, ' Vacances ');
+      expect(renamed.group!.name).toBe('Vacances');
+      const [line] = (await service.listMessages('alice', id, null, 1)).items;
+      expect([line.message.event, line.message.content]).toEqual(['renamed', 'Vacances']);
+      // Même nom : rien n'est annoncé.
+      events.events.length = 0;
+      await service.renameGroup('alice', id, 'Vacances');
+      expect(events.events).toEqual([]);
+      expect((await service.renameGroup('alice', id, '')).group!.name).toBeNull();
+    });
+
+    it('masque à chacun les messages d’un membre avec qui il a un blocage, et ceux d’un compte suspendu à tous', async () => {
+      const id = await createGroup();
+      await interactions.setBlock('bob', 'carol', true);
+      events.events.length = 0;
+      await send('carol', id, 'De carol');
+      expect(
+        eventsOf('messageCreated')
+          .map(([r]) => r)
+          .sort(),
+      ).toEqual(['alice', 'carol']);
+      expect(await contents('bob', id)).toEqual(['created']);
+      expect((await service.getConversation('bob', id)).lastMessage?.message.event).toBe('created');
+      expect((await service.badges('bob')).unreadConversations).toBe(0);
+      expect(await service.searchMessages('bob', 'carol', 10)).toEqual([]);
+      const carolMessage = (await service.listMessages('alice', id, null, 1)).items[0].message;
+      await expect(service.getVisibleMessage('bob', carolMessage.id)).rejects.toBeInstanceOf(MessageNotFoundError);
+      // Toujours membres tous les deux.
+      expect((await service.getConversation('bob', id)).group!.members).toHaveLength(3);
+      await suspended.add('carol');
+      expect(await contents('alice', id)).toEqual(['created']);
+    });
+
+    it('recherche : un message de groupe porte le groupe et son expéditeur', async () => {
+      const id = await createGroup('Ciné');
+      await send('bob', id, 'On va au cinéma ?');
+      const [result] = await service.searchMessages('alice', 'cinéma', 10);
+      expect(result.message.conversationId).toBe(id);
+      expect(result.sender.id).toBe('bob');
+      expect(result.group).toMatchObject({ name: 'Ciné' });
+      expect(result.group!.members.map((u) => u.id)).toEqual(['alice', 'bob', 'carol']);
+    });
+
+    it('les actions de groupe sont refusées sur une conversation à deux, et un groupe n’est jamais pris pour elle', async () => {
+      const direct = await open('alice', 'bob');
+      await expect(service.leaveGroup('alice', direct)).rejects.toBeInstanceOf(NotAGroupError);
+      await expect(service.renameGroup('alice', direct, 'x')).rejects.toBeInstanceOf(NotAGroupError);
+      const id = await createGroup();
+      await service.leaveGroup('carol', id);
+      expect(await open('alice', 'bob')).toBe(direct);
+      expect(await open('bob', 'alice')).not.toBe(id);
+    });
+
+    it('une réponse à une story n’est pas possible dans un groupe', async () => {
+      const id = await createGroup();
+      await expect(
+        service.sendMessage('alice', id, { content: 'Belle story', storyId: '00000000-0000-0000-0000-000000000001' }),
+      ).rejects.toBeInstanceOf(RepliedStoryNotFoundError);
+    });
+
+    it('suppression d’un compte : le groupe reste tant qu’il a un membre', async () => {
+      const id = await createGroup();
+      conversations.removeUser('alice');
+      conversations.removeUser('bob');
+      expect((await service.getConversation('carol', id)).group!.adminId).toBe('carol');
+      conversations.removeUser('carol');
+      expect(conversations.conversations.has(id)).toBe(false);
+    });
   });
 });

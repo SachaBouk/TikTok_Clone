@@ -3,7 +3,8 @@ import SwiftUI
 // Onglet « Messages », comme TikTok (ADR-058) : titre « Messages » et loupe (recherche « Compte et messages »), la rangée
 // de stories (ADR-051, « Créer » d'abord), la ligne « Activité et nouveaux abonnés » (dernière activité, badge), la ligne
 // « Demandes de message » (s'il y en a), puis les conversations, de la plus récemment active à la plus ancienne. On
-// écrit à quelqu'un depuis la recherche ou le bouton « Message » de son profil. Chats de groupe : étape suivante.
+// écrit à quelqu'un depuis la recherche ou le bouton « Message » de son profil ; le bouton en haut à gauche crée un chat
+// de groupe (ADR-059).
 struct InboxView: View {
     enum Route: Hashable {
         case activity
@@ -16,6 +17,7 @@ struct InboxView: View {
     @State private var openedConversation: ConversationRoute?
     @State private var deleting: Conversation?
     @State private var alertMessage: String?
+    @State private var isCreatingGroup = false
 
     private var messaging: MessagingModel { container.messaging }
     private var activity: ActivityModel { container.activity }
@@ -86,6 +88,10 @@ struct InboxView: View {
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Créer un chat de groupe", systemImage: "person.2.badge.plus") { isCreatingGroup = true }
+                    .accessibilityIdentifier("inbox.createGroup")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: Route.search) {
                     Label("Rechercher", systemImage: "magnifyingglass")
@@ -114,7 +120,17 @@ struct InboxView: View {
                 Task { alertMessage = await messaging.delete(conversation) }
             }
         } message: { conversation in
-            Text("Elle disparaît pour toi seulement : @\(conversation.participant.username) garde vos messages.")
+            if let participant = conversation.participant {
+                Text("Elle disparaît pour toi seulement : @\(participant.username) garde vos messages.")
+            } else {
+                Text("Les messages disparaissent pour toi seulement ; tu restes dans le groupe.")
+            }
+        }
+        .sheet(isPresented: $isCreatingGroup) {
+            CreateGroupView(model: container.makeFriendPicker(.create)) { conversation in
+                messaging.groupChanged(conversation)
+                openedConversation = ConversationRoute(conversation)
+            }
         }
         .alert(
             "Messages",
@@ -203,9 +219,9 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            AvatarView(url: conversation.participant.avatarURL, name: conversation.participant.displayName, size: 56)
+            ConversationAvatar(users: conversation.avatars(ownID: ownID), size: 56)
             VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.participant.displayName)
+                Text(conversation.title(ownID: ownID))
                     .font(.body.weight(isUnread ? .semibold : .regular))
                     .lineLimit(1)
                 HStack(spacing: 4) {
@@ -238,7 +254,8 @@ struct ConversationRow: View {
     private var subtitle: String {
         if isTyping { return "En train d’écrire…" }
         guard let message = conversation.lastMessage else { return "" }
-        let preview = message.preview(ownID: ownID)
+        let preview = message.preview(ownID: ownID, inGroup: conversation.isGroup)
+        if conversation.isGroup { return preview }
         if message.senderID == ownID, conversation.participantLastReadMessageID.map({ MessageRules.isAtOrBefore(message.id, $0) }) == true {
             return "\(preview) · Vu"
         }

@@ -57,8 +57,17 @@ struct SendVideoView: View {
 
     private func row(_ recipient: SendVideoViewModel.Recipient) -> some View {
         HStack(spacing: 12) {
-            UserRow(user: recipient.user)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                ConversationAvatar(users: recipient.avatars, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(recipient.title).font(.body.weight(.semibold)).lineLimit(1)
+                    if case .user(let user) = recipient.target {
+                        Text("@\(user.username)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .frame(maxWidth: .infinity, alignment: .leading)
             switch viewModel.deliveries[recipient.id] {
             case .sending:
                 ProgressView()

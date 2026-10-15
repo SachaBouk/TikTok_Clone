@@ -174,7 +174,7 @@ struct VideoShareSheet: View {
             Task { await model.send(to: recipient) }
         } label: {
             VStack(spacing: 6) {
-                AvatarView(url: recipient.user.avatarURL, name: recipient.user.displayName, size: 64)
+                ConversationAvatar(users: recipient.avatars, size: 64)
                     .overlay(alignment: .bottomTrailing) {
                         switch model.deliveries[recipient.id] {
                         case .sending:
@@ -188,7 +188,7 @@ struct VideoShareSheet: View {
                             EmptyView()
                         }
                     }
-                Text(model.deliveries[recipient.id] == .sent ? "Envoyé" : recipient.user.displayName)
+                Text(model.deliveries[recipient.id] == .sent ? "Envoyé" : recipient.title)
                     .font(.footnote)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -197,7 +197,7 @@ struct VideoShareSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(model.deliveries[recipient.id] != nil)
-        .accessibilityLabel("Envoyer à @\(recipient.user.username)")
+        .accessibilityLabel("Envoyer à \(recipient.label)")
         .accessibilityIdentifier("share.recipient")
     }
 

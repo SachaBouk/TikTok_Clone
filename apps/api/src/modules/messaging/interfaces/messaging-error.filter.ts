@@ -15,7 +15,12 @@ import {
   CannotMessageYourselfError,
   ClientMessageIdConflictError,
   EmptyMessageError,
+  GroupFullError,
+  InvalidGroupError,
   MessagingError,
+  NotAFriendError,
+  NotAGroupError,
+  NotGroupAdminError,
   NotAPendingRequestError,
   NotMessageSenderError,
   RateLimitedError,
@@ -34,11 +39,26 @@ export class MessagingErrorFilter implements ExceptionFilter {
 }
 
 function toHttpException(error: MessagingError): HttpException {
-  if (error instanceof CannotMessageYourselfError || error instanceof EmptyMessageError) return new BadRequestException(error.message);
-  if (error instanceof BlockedConversationError || error instanceof RequestLimitReachedError || error instanceof NotMessageSenderError) {
+  if (error instanceof CannotMessageYourselfError || error instanceof EmptyMessageError || error instanceof InvalidGroupError) {
+    return new BadRequestException(error.message);
+  }
+  if (
+    error instanceof BlockedConversationError ||
+    error instanceof RequestLimitReachedError ||
+    error instanceof NotMessageSenderError ||
+    error instanceof NotAFriendError ||
+    error instanceof NotGroupAdminError
+  ) {
     return new ForbiddenException(error.message);
   }
-  if (error instanceof NotAPendingRequestError || error instanceof ClientMessageIdConflictError) return new ConflictException(error.message);
+  if (
+    error instanceof NotAPendingRequestError ||
+    error instanceof ClientMessageIdConflictError ||
+    error instanceof GroupFullError ||
+    error instanceof NotAGroupError
+  ) {
+    return new ConflictException(error.message);
+  }
   if (error instanceof RateLimitedError) {
     return new HttpException(
       { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: error.message, error: 'Too Many Requests' },
@@ -46,6 +66,6 @@ function toHttpException(error: MessagingError): HttpException {
     );
   }
   // ConversationNotFoundError, MessageNotFoundError, RecipientNotFoundError, SharedVideoNotFoundError, RepliedStoryNotFoundError,
-  // SharedLiveNotFoundError
+  // SharedLiveNotFoundError, GroupMemberNotFoundError
   return new NotFoundException(error.message);
 }

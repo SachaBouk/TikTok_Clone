@@ -1,7 +1,7 @@
 import Foundation
 
-// Messagerie directe (ADR-016, module messaging de l'API) : conversations à deux, messages texte ou vidéo
-// partagée, demandes de message, « Vu » et « en train d'écrire ».
+// Messagerie directe (ADR-016, module messaging de l'API) : conversations à deux et chats de groupe (ADR-059), messages
+// texte ou vidéo partagée, demandes de message, « Vu » et « en train d'écrire ».
 
 // Statut de la conversation pour le compte connecté.
 enum ConversationStatus: Equatable, Sendable {
@@ -45,17 +45,26 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     var story: RepliedStory? = nil
     // Live partagé (ADR-053).
     var live: SharedLive? = nil
+    // Dans un groupe (ADR-059) : l'expéditeur (nil si son compte n'existe plus) et la ligne d'événement.
+    var sender: UserSummary? = nil
+    var event: GroupEvent? = nil
 
-    // Aperçu d'une ligne de la boîte de réception.
-    func preview(ownID: String?) -> String {
+    // Aperçu d'une ligne de la boîte de réception ; dans un groupe, le nom de l'expéditeur (« Inès : salut »).
+    func preview(ownID: String?, inGroup: Bool = false) -> String {
+        if let event { return event.text(actor: sender, ownID: ownID) }
         let text = content.isEmpty ? (live != nil ? "Live partagé" : "Vidéo partagée") : content
-        return senderID == ownID ? "Toi : \(text)" : text
+        if senderID == ownID { return "Toi : \(text)" }
+        if inGroup, let sender { return "\(sender.displayName) : \(text)" }
+        return text
     }
 }
 
 struct Conversation: Identifiable, Equatable, Sendable {
     let id: String
-    let participant: UserSummary
+    // L'autre participant ; nil pour un groupe.
+    let participant: UserSummary?
+    // Chat de groupe (ADR-059) ; nil pour une conversation à deux.
+    var group: GroupChat? = nil
     var status: ConversationStatus
     var lastMessage: DirectMessage?
     // Messages de l'autre participant non lus.
@@ -70,11 +79,39 @@ struct Conversation: Identifiable, Equatable, Sendable {
     var blockedByMe: Bool
     let createdAt: Date
 
-    // « En train d'écrire » n'est relayé que dans une conversation libre, sans blocage (règle de l'API).
+    var isGroup: Bool { group != nil }
+
+    // Nom de l'autre participant, ou du groupe (sinon les noms de ses membres).
+    func title(ownID: String?) -> String {
+        group?.title(ownID: ownID) ?? participant?.displayName ?? ""
+    }
+
+    // Photos de la ligne : l'autre participant, ou deux membres du groupe (les plus anciens, sauf soi).
+    func avatars(ownID: String?) -> [UserSummary] {
+        if let group { return Array(group.others(ownID: ownID).prefix(2)) }
+        return participant.map { [$0] } ?? []
+    }
+
+    // Lecture d'un autre participant (événement temps réel) : « Vu » à deux, repère du membre dans un groupe.
+    mutating func read(by readerID: String, upTo messageID: String) {
+        if var group {
+            guard let index = group.members.firstIndex(where: { $0.user.id == readerID }) else { return }
+            if group.members[index].lastReadMessageID.map({ MessageRules.isAtOrBefore($0, messageID) }) ?? true {
+                group.members[index].lastReadMessageID = messageID
+                self.group = group
+            }
+        } else if participantLastReadMessageID.map({ MessageRules.isAtOrBefore($0, messageID) }) ?? true {
+            participantLastReadMessageID = messageID
+        }
+    }
+
+    // « En train d'écrire » n'est relayé que dans une conversation libre, sans blocage (règle de l'API) ; dans un groupe,
+    // toujours.
     var allowsTyping: Bool { status == .direct && canSend }
 
     // Pourquoi on ne peut pas (ou plus) écrire, ou ce qu'il faut savoir avant d'écrire.
     var composerNotice: String? {
+        guard let participant else { return nil }
         let name = "@\(participant.username)"
         if !canSend {
             if blockedByMe { return "Tu as bloqué \(name). Débloque ce compte depuis son profil pour lui écrire." }

@@ -13,7 +13,7 @@ private let messageJSON = """
     """
 
 private let conversationJSON = """
-    {"id":"c1","participant":\(bobJSON),"status":"requestSent","lastMessage":\(messageJSON),"unreadCount":2,\
+    {"id":"c1","kind":"direct","participant":\(bobJSON),"status":"requestSent","lastMessage":\(messageJSON),"unreadCount":2,\
     "participantLastReadMessageId":null,"canSend":true,"remainingRequestMessages":2,"blockedByMe":false,"createdAt":"2026-09-26T07:00:00.000Z"}
     """
 
@@ -28,7 +28,8 @@ struct MessagingDataTests {
                 }))
         let page = try await repository.conversations(cursor: nil)
         let conversation = try #require(page.conversations.first)
-        #expect(conversation.participant.username == "bob")
+        #expect(conversation.participant?.username == "bob")
+        #expect(!conversation.isGroup)
         #expect(conversation.status == .requestSent)
         #expect(conversation.unreadCount == 2)
         #expect(conversation.remainingRequestMessages == 2)
@@ -36,6 +37,33 @@ struct MessagingDataTests {
         #expect(conversation.lastMessage?.sharedVideo?.author?.username == "bob")
         #expect(conversation.lastMessage?.preview(ownID: "alice-id") == "Vidéo partagée")
         #expect(page.nextCursor == "m1")
+    }
+
+    @Test("groupe (ADR-059) : sans participant, nom, administrateur, membres, sourdine ; ligne d'événement avec son auteur")
+    func groupMapping() async throws {
+        let inesJSON = #"{"id":"ines-id","username":"ines","displayName":"Inès","avatarUrl":null}"#
+        let body = """
+            {"id":"g1","kind":"group","group":{"name":null,"adminId":"bob-id","muted":true,"members":[\
+            {"user":\(bobJSON),"joinedAt":"2026-09-26T07:00:00.000Z","lastReadMessageId":"m2"},\
+            {"user":\(inesJSON),"joinedAt":"2026-09-26T07:00:00.001Z","lastReadMessageId":null}]},\
+            "status":"direct","lastMessage":{"id":"m2","conversationId":"g1","senderId":"bob-id","content":"","sender":\(bobJSON),\
+            "event":{"type":"added","user":\(inesJSON)},"createdAt":"2026-09-26T08:00:00.000Z"},"unreadCount":0,\
+            "participantLastReadMessageId":null,"canSend":true,"remainingRequestMessages":null,"blockedByMe":false,\
+            "createdAt":"2026-09-26T07:00:00.000Z"}
+            """
+        let repository = RemoteMessagingRepository(client: makeClient(transport: MockTransport { _, _ in json(.ok, body) }))
+        let conversation = try await repository.conversation(id: "g1")
+        #expect(conversation.participant == nil)
+        let group = try #require(conversation.group)
+        #expect(group.adminID == "bob-id" && group.muted && group.name == nil)
+        #expect(group.members.map(\.user.username) == ["bob", "ines"])
+        #expect(group.members.first?.lastReadMessageID == "m2")
+        #expect(conversation.title(ownID: "alice-id") == "Bob et Inès")
+        #expect(
+            conversation.lastMessage?.event
+                == GroupEvent(kind: .added, user: UserSummary(id: "ines-id", username: "ines", displayName: "Inès", avatarURL: nil), name: nil))
+        #expect(conversation.lastMessage?.preview(ownID: "alice-id", inGroup: true) == "Bob a ajouté Inès")
+        #expect(conversation.lastMessage?.preview(ownID: "ines-id", inGroup: true) == "Bob t’a ajouté(e) au groupe")
     }
 
     @Test("vidéo partagée supprimée depuis : indisponible, sans miniature ni auteur")
@@ -114,7 +142,7 @@ struct MessagingDataTests {
         #expect(try await repository.badges() == MessagingBadges(unreadConversations: 1, pendingRequests: 3))
         #expect(try await repository.markRead(conversationID: "c1", upToID: "m1") == MessagingBadges(unreadConversations: 1, pendingRequests: 3))
         #expect(try await repository.accept(conversationID: "c1").id == "c1")
-        #expect(try await repository.open(username: "bob").participant.username == "bob")
+        #expect(try await repository.open(username: "bob").participant?.username == "bob")
         try await repository.decline(conversationID: "c1")
         try await repository.deleteConversation(id: "c1")
         try await repository.deleteMessage(id: "m1")

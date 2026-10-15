@@ -76,7 +76,7 @@ final class FakeMessagingRepository: MessagingRepository {
         try state.withLock { state in
             state.calls.append("open:\(username)")
             if let error = state.error { throw error }
-            if let existing = state.conversations.values.first(where: { $0.participant.username == username }) { return existing }
+            if let existing = state.conversations.values.first(where: { $0.participant?.username == username }) { return existing }
             let conversation = Conversation.sample(
                 "c-\(username)", with: UserSummary(id: "\(username)-id", username: username, displayName: username.capitalized, avatarURL: nil))
             state.conversations[conversation.id] = conversation
@@ -193,6 +193,65 @@ final class FakeMessagingRepository: MessagingRepository {
         }
     }
 
+    // MARK: - Chats de groupe (ADR-059)
+
+    func createGroup(userIDs: [String], name: String?) async throws -> Conversation {
+        try state.withLock { state in
+            state.calls.append("createGroup:\(userIDs.joined(separator: ","))")
+            if let error = state.error { throw error }
+            state.nextID += 1
+            let id = "g\(state.nextID)"
+            let members = [UserSummary.alice] + userIDs.map { UserSummary(id: $0, username: $0, displayName: $0.capitalized, avatarURL: nil) }
+            var created = DirectMessage.sample("n\(state.nextID)", in: id, from: UserSummary.alice.id, content: "")
+            created.sender = .alice
+            created.event = GroupEvent(kind: .created, user: nil, name: nil)
+            let conversation = Conversation.group(id, name: name, members: members, lastMessage: created)
+            state.conversations[id] = conversation
+            state.messages[id] = [created]
+            return conversation
+        }
+    }
+
+    func renameGroup(conversationID: String, name: String?) async throws -> Conversation {
+        try changeGroup(conversationID, call: "rename:\(name ?? "-")") { $0.name = name }
+    }
+
+    func addGroupMembers(conversationID: String, userIDs: [String]) async throws -> Conversation {
+        try changeGroup(conversationID, call: "add:\(userIDs.joined(separator: ","))") { group in
+            group.members += userIDs.map {
+                GroupMember(user: UserSummary(id: $0, username: $0, displayName: $0.capitalized, avatarURL: nil), joinedAt: .now)
+            }
+        }
+    }
+
+    func removeGroupMember(conversationID: String, userID: String) async throws {
+        _ = try changeGroup(conversationID, call: "remove:\(userID)") { $0.members.removeAll { $0.user.id == userID } }
+    }
+
+    func leaveGroup(conversationID: String) async throws {
+        try state.withLock { state in
+            state.calls.append("leave")
+            if let error = state.error { throw error }
+            state.conversations[conversationID] = nil
+        }
+    }
+
+    func setGroupMuted(conversationID: String, muted: Bool) async throws {
+        _ = try changeGroup(conversationID, call: muted ? "mute" : "unmute") { $0.muted = muted }
+    }
+
+    private func changeGroup(_ id: String, call: String, _ change: (inout GroupChat) -> Void) throws -> Conversation {
+        try state.withLock { state in
+            state.calls.append(call)
+            if let error = state.error { throw error }
+            guard var conversation = state.conversations[id], var group = conversation.group else { throw AppError.notFound }
+            change(&group)
+            conversation.group = group
+            state.conversations[id] = conversation
+            return conversation
+        }
+    }
+
     // Conversations triées par dernier message, du plus récent au plus ancien, sans les vides.
     private func page(cursor: String?, call: String, _ include: (Conversation) -> Bool) throws -> ConversationPage {
         try state.withLock { state in
@@ -246,6 +305,27 @@ extension DirectMessage {
 }
 
 extension Conversation {
+    // Groupe (ADR-059) : Alice (le compte connecté) et les membres donnés, le premier administrateur.
+    static func group(
+        _ id: String, name: String? = nil, members: [UserSummary], lastMessage: DirectMessage? = nil, unreadCount: Int = 0
+    ) -> Conversation {
+        Conversation(
+            id: id,
+            participant: nil,
+            group: GroupChat(
+                name: name, adminID: members.first?.id ?? UserSummary.alice.id, muted: false,
+                members: members.enumerated().map { GroupMember(user: $1, joinedAt: Date(timeIntervalSince1970: 1_799_999_000 + Double($0))) }),
+            status: .direct,
+            lastMessage: lastMessage,
+            unreadCount: unreadCount,
+            participantLastReadMessageID: nil,
+            canSend: true,
+            remainingRequestMessages: nil,
+            blockedByMe: false,
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+    }
+
     static func sample(
         _ id: String,
         with participant: UserSummary = .bob,

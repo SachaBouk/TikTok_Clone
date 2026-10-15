@@ -18,4 +18,6 @@ export abstract class MessagingEventPublisher {
   abstract typing(recipientId: string, typing: { conversationId: string; userId: string }): Promise<void>;
   // Notification push d'un nouveau message (ou d'une nouvelle demande) au destinataire.
   abstract pushNewMessage(recipientId: string, sender: User, item: MessageItem, asRequest: boolean): Promise<void>;
+  // Notification push d'un message de groupe (ADR-059) : titre = nom du groupe (ou noms des membres).
+  abstract pushGroupMessage(recipientId: string, sender: User, groupTitle: string, item: MessageItem): Promise<void>;
 }

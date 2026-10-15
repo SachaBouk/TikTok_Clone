@@ -3,7 +3,7 @@ import { Prisma } from '../../../generated/prisma/client';
 import { violatedUniqueConstraint } from '../../../database/prisma-errors';
 import { PrismaService } from '../../../database/prisma.service';
 import { ConversationRepository } from '../domain/conversation.repository';
-import type { Conversation, ConversationView, Message } from '../domain/messaging';
+import type { Conversation, ConversationKind, ConversationMember, ConversationView, GroupEvent, Message } from '../domain/messaging';
 
 const messageSelect = {
   id: true,
@@ -13,20 +13,33 @@ const messageSelect = {
   sharedVideoId: true,
   storyId: true,
   liveId: true,
+  event: true,
+  eventUserId: true,
   createdAt: true,
 } as const;
+const memberSelect = { userId: true, lastReadMessageId: true, clearedUpToMessageId: true, joinedAt: true, mutedAt: true } as const;
 // Plus petit UUID : repère « rien de lu / rien de supprimé ».
 const ZERO = Prisma.sql`'00000000-0000-0000-0000-000000000000'::uuid`;
+// Message non lu par `me` : d'un autre, après ses repères de lecture et de suppression ; jamais une ligne d'événement ni,
+// dans un groupe, un message d'un compte masqué au lecteur (ADR-059). `m` : alias de la table des messages.
+function unread(hidden: string[], m: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`${m}.sender_id <> me.user_id AND ${m}.event IS NULL
+    AND (c.kind = 'direct' OR ${m}.sender_id <> ALL(${hidden}::uuid[]))
+    AND ${m}.message_id > GREATEST(COALESCE(me.last_read_message_id, ${ZERO}), COALESCE(me.cleared_up_to_message_id, ${ZERO}))`;
+}
+
 // Demande reçue en attente : ni acceptée ni refusée, ouverte par l'autre participant.
 const REQUEST_RECEIVED = Prisma.sql`c.accepted_at IS NULL AND c.declined_at IS NULL AND c.request_sender_id = other.user_id`;
 
 interface ViewRow {
   id: string;
   created_at: Date;
+  kind: ConversationKind;
+  name: string | null;
   request_sender_id: string | null;
   accepted_at: Date | null;
   declined_at: Date | null;
-  participant_id: string;
+  participant_id: string | null;
   participant_last_read: string | null;
   last_id: string | null;
   last_sender_id: string | null;
@@ -34,6 +47,8 @@ interface ViewRow {
   last_shared_video_id: string | null;
   last_story_id: string | null;
   last_live_id: string | null;
+  last_event: GroupEvent | null;
+  last_event_user_id: string | null;
   last_created_at: Date | null;
   unread_count: number;
   own_count: number;
@@ -56,6 +71,7 @@ export class PrismaConversationRepository extends ConversationRepository {
       const [existing] = await tx.$queryRaw<{ conversation_id: string }[]>`
         SELECT p.conversation_id FROM conversation_participants p
         JOIN conversation_participants q ON q.conversation_id = p.conversation_id AND q.user_id = ${b}::uuid
+        JOIN conversations c ON c.conversation_id = p.conversation_id AND c.kind = 'direct'
         WHERE p.user_id = ${a}::uuid
           AND (SELECT count(*) FROM conversation_participants r WHERE r.conversation_id = p.conversation_id) = 2
         LIMIT 1`;
@@ -74,10 +90,12 @@ export class PrismaConversationRepository extends ConversationRepository {
       select: {
         id: true,
         createdAt: true,
+        kind: true,
+        name: true,
         requestSenderId: true,
         acceptedAt: true,
         declinedAt: true,
-        participants: { select: { userId: true, lastReadMessageId: true, clearedUpToMessageId: true } },
+        participants: { select: memberSelect },
       },
     });
     if (!row) return null;
@@ -85,22 +103,125 @@ export class PrismaConversationRepository extends ConversationRepository {
     return { ...conversation, members: participants };
   }
 
-  async findView(conversationId: string, userId: string): Promise<ConversationView | null> {
-    const [view] = await this.views(userId, Prisma.sql`c.conversation_id = ${conversationId}::uuid`, { listed: false, before: null }, 1);
+  async findMembers(conversationIds: string[]): Promise<Map<string, ConversationMember[]>> {
+    const result = new Map<string, ConversationMember[]>(conversationIds.map((id) => [id, []]));
+    if (conversationIds.length === 0) return result;
+    const rows = await this.prisma.conversationParticipant.findMany({
+      where: { conversationId: { in: conversationIds } },
+      select: { conversationId: true, ...memberSelect },
+    });
+    for (const { conversationId, ...member } of rows) result.get(conversationId)?.push(member);
+    return result;
+  }
+
+  // Créateur entré une milliseconde avant les autres : il est l'administrateur (le plus ancien membre).
+  createGroup(creatorId: string, memberIds: string[], name: string | null): Promise<string> {
+    const now = Date.now();
+    return this.prisma.$transaction(async (tx) => {
+      const { id } = await tx.conversation.create({
+        data: {
+          kind: 'group',
+          name,
+          acceptedAt: new Date(now),
+          participants: {
+            create: [{ userId: creatorId, joinedAt: new Date(now) }, ...memberIds.map((userId) => ({ userId, joinedAt: new Date(now + 1) }))],
+          },
+        },
+        select: { id: true },
+      });
+      const created = await tx.message.create({
+        data: { conversationId: id, senderId: creatorId, content: '', event: 'created' },
+        select: { id: true },
+      });
+      await tx.conversationParticipant.update({
+        where: { conversationId_userId: { conversationId: id, userId: creatorId } },
+        data: { lastReadMessageId: created.id },
+      });
+      return id;
+    });
+  }
+
+  // Verrou sur la ligne du groupe : deux ajouts simultanés ne dépassent pas la limite.
+  addMembers(conversationId: string, adderId: string, userIds: string[], maxMembers: number): Promise<Message[] | null> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT 1 FROM conversations WHERE conversation_id = ${conversationId}::uuid FOR UPDATE`;
+      const existing = await tx.conversationParticipant.findMany({ where: { conversationId }, select: { userId: true } });
+      const added = userIds.filter((id) => !existing.some((m) => m.userId === id));
+      if (existing.length + added.length > maxMembers) return null;
+      const last = await tx.message.findFirst({ where: { conversationId }, orderBy: { id: 'desc' }, select: { id: true } });
+      await tx.conversationParticipant.createMany({
+        data: added.map((userId) => ({ conversationId, userId, lastReadMessageId: last?.id ?? null, clearedUpToMessageId: last?.id ?? null })),
+      });
+      const events: Message[] = [];
+      for (const userId of added) {
+        events.push(
+          await tx.message.create({
+            data: { conversationId, senderId: adderId, content: '', event: 'added', eventUserId: userId },
+            select: messageSelect,
+          }),
+        );
+      }
+      if (events.length > 0) {
+        await tx.conversationParticipant.updateMany({ where: { conversationId, userId: adderId }, data: { lastReadMessageId: events.at(-1)!.id } });
+      }
+      return events;
+    });
+  }
+
+  // La ligne d'événement d'abord : le dernier départ supprime le groupe (trigger), et la ligne avec lui.
+  removeMember(conversationId: string, actorId: string, memberId: string): Promise<Message> {
+    return this.prisma.$transaction(async (tx) => {
+      const left = actorId === memberId;
+      const event = await tx.message.create({
+        data: { conversationId, senderId: actorId, content: '', event: left ? 'left' : 'removed', eventUserId: left ? null : memberId },
+        select: messageSelect,
+      });
+      if (!left) await tx.conversationParticipant.updateMany({ where: { conversationId, userId: actorId }, data: { lastReadMessageId: event.id } });
+      await tx.conversationParticipant.deleteMany({ where: { conversationId, userId: memberId } });
+      return event;
+    });
+  }
+
+  rename(conversationId: string, userId: string, name: string | null): Promise<Message> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.conversation.update({ where: { id: conversationId }, data: { name } });
+      const event = await tx.message.create({
+        data: { conversationId, senderId: userId, content: name ?? '', event: 'renamed' },
+        select: messageSelect,
+      });
+      await tx.conversationParticipant.updateMany({ where: { conversationId, userId }, data: { lastReadMessageId: event.id } });
+      return event;
+    });
+  }
+
+  async setMuted(conversationId: string, userId: string, muted: boolean): Promise<void> {
+    await this.prisma.conversationParticipant.updateMany({
+      where: { conversationId, userId, ...(muted ? { mutedAt: null } : {}) },
+      data: { mutedAt: muted ? new Date() : null },
+    });
+  }
+
+  async findView(conversationId: string, userId: string, hiddenSenderIds: string[] = []): Promise<ConversationView | null> {
+    const [view] = await this.views(
+      userId,
+      Prisma.sql`c.conversation_id = ${conversationId}::uuid`,
+      { listed: false, before: null, hidden: hiddenSenderIds },
+      1,
+    );
     return view ?? null;
   }
 
-  listInbox(userId: string, beforeMessageId: string | null, limit: number): Promise<ConversationView[]> {
+  listInbox(userId: string, beforeMessageId: string | null, limit: number, hiddenSenderIds: string[] = []): Promise<ConversationView[]> {
     return this.views(
       userId,
       Prisma.sql`(c.accepted_at IS NOT NULL OR c.request_sender_id = me.user_id)`,
-      { listed: true, before: beforeMessageId },
+      { listed: true, before: beforeMessageId, hidden: hiddenSenderIds },
       limit,
     );
   }
 
   listRequests(userId: string, beforeMessageId: string | null, limit: number): Promise<ConversationView[]> {
-    return this.views(userId, REQUEST_RECEIVED, { listed: true, before: beforeMessageId }, limit);
+    return this.views(userId, REQUEST_RECEIVED, { listed: true, before: beforeMessageId, hidden: [] }, limit);
   }
 
   async listPendingRequestSenders(userId: string): Promise<string[]> {
@@ -109,7 +230,7 @@ export class PrismaConversationRepository extends ConversationRepository {
       FROM conversation_participants me
       JOIN conversations c ON c.conversation_id = me.conversation_id
       JOIN conversation_participants other ON other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
-      WHERE me.user_id = ${userId}::uuid AND ${REQUEST_RECEIVED}
+      WHERE me.user_id = ${userId}::uuid AND c.kind = 'direct' AND ${REQUEST_RECEIVED}
         AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.conversation_id
                     AND m.message_id > COALESCE(me.cleared_up_to_message_id, ${ZERO}))`;
     return rows.map((r) => r.participant_id);
@@ -141,14 +262,15 @@ export class PrismaConversationRepository extends ConversationRepository {
   }
 
   // `ILIKE` avec `%`, `_` et `\` échappés ; demandes refusées par `userId` exclues (jamais remises).
-  async searchMessages(userId: string, query: string, limit: number): Promise<Message[]> {
+  async searchMessages(userId: string, query: string, limit: number, hiddenSenderIds: string[] = []): Promise<Message[]> {
     const pattern = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const rows = await this.prisma.$queryRaw<{ message_id: string }[]>`
       SELECT m.message_id::text AS message_id
       FROM messages m
       JOIN conversation_participants p ON p.conversation_id = m.conversation_id AND p.user_id = ${userId}::uuid
       JOIN conversations c ON c.conversation_id = m.conversation_id
-      WHERE m.content ILIKE ${pattern}
+      WHERE m.content ILIKE ${pattern} AND m.event IS NULL
+        AND (c.kind = 'direct' OR m.sender_id <> ALL(${hiddenSenderIds}::uuid[]))
         AND m.message_id > COALESCE(p.cleared_up_to_message_id, ${ZERO})
         AND NOT (c.declined_at IS NOT NULL AND c.request_sender_id IS DISTINCT FROM ${userId}::uuid)
       ORDER BY m.message_id DESC
@@ -255,14 +377,13 @@ export class PrismaConversationRepository extends ConversationRepository {
     await this.prisma.conversation.update({ where: { id: conversationId }, data: { declinedAt: new Date() } });
   }
 
-  async countUnreadConversations(userId: string): Promise<number> {
+  async countUnreadConversations(userId: string, hiddenSenderIds: string[] = []): Promise<number> {
     const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
       SELECT count(*)::int AS count FROM conversation_participants me
       JOIN conversations c ON c.conversation_id = me.conversation_id
       WHERE me.user_id = ${userId}::uuid AND c.accepted_at IS NOT NULL AND EXISTS (
         SELECT 1 FROM messages m
-        WHERE m.conversation_id = me.conversation_id AND m.sender_id <> me.user_id
-          AND m.message_id > GREATEST(COALESCE(me.last_read_message_id, ${ZERO}), COALESCE(me.cleared_up_to_message_id, ${ZERO})))`;
+        WHERE m.conversation_id = me.conversation_id AND ${unread(hiddenSenderIds, Prisma.sql`m`)})`;
     return row?.count ?? 0;
   }
 
@@ -281,7 +402,7 @@ export class PrismaConversationRepository extends ConversationRepository {
   private async views(
     userId: string,
     filter: Prisma.Sql,
-    { listed, before }: { listed: boolean; before: string | null },
+    { listed, before, hidden }: { listed: boolean; before: string | null; hidden: string[] },
     limit: number,
   ): Promise<ConversationView[]> {
     const list = !listed
@@ -290,32 +411,34 @@ export class PrismaConversationRepository extends ConversationRepository {
         ? Prisma.sql`AND last.message_id IS NOT NULL AND last.message_id < ${before}::uuid`
         : Prisma.sql`AND last.message_id IS NOT NULL`;
     const rows = await this.prisma.$queryRaw<ViewRow[]>`
-      SELECT c.conversation_id AS id, c.created_at, c.request_sender_id, c.accepted_at, c.declined_at,
+      SELECT c.conversation_id AS id, c.created_at, c.kind, c.name, c.request_sender_id, c.accepted_at, c.declined_at,
              other.user_id AS participant_id, other.last_read_message_id AS participant_last_read,
              last.message_id AS last_id, last.sender_id AS last_sender_id, last.content AS last_content,
              last.shared_video_id AS last_shared_video_id, last.story_id AS last_story_id, last.live_id AS last_live_id,
-             last.created_at AS last_created_at,
-             (SELECT count(*)::int FROM messages u
-               WHERE u.conversation_id = c.conversation_id AND u.sender_id <> me.user_id
-                 AND u.message_id > GREATEST(COALESCE(me.last_read_message_id, ${ZERO}), COALESCE(me.cleared_up_to_message_id, ${ZERO}))
-             ) AS unread_count,
+             last.event AS last_event, last.event_user_id AS last_event_user_id, last.created_at AS last_created_at,
+             (SELECT count(*)::int FROM messages u WHERE u.conversation_id = c.conversation_id AND ${unread(hidden, Prisma.sql`u`)}) AS unread_count,
              CASE WHEN c.accepted_at IS NULL
                THEN (SELECT count(*)::int FROM messages o WHERE o.conversation_id = c.conversation_id AND o.sender_id = me.user_id)
                ELSE 0 END AS own_count
       FROM conversation_participants me
       JOIN conversations c ON c.conversation_id = me.conversation_id
-      JOIN conversation_participants other ON other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
+      LEFT JOIN conversation_participants other
+        ON c.kind = 'direct' AND other.conversation_id = me.conversation_id AND other.user_id <> me.user_id
       LEFT JOIN LATERAL (
-        SELECT m.message_id, m.sender_id, m.content, m.shared_video_id, m.story_id, m.live_id, m.created_at FROM messages m
+        SELECT m.message_id, m.sender_id, m.content, m.shared_video_id, m.story_id, m.live_id, m.event, m.event_user_id, m.created_at
+        FROM messages m
         WHERE m.conversation_id = c.conversation_id AND m.message_id > COALESCE(me.cleared_up_to_message_id, ${ZERO})
+          AND (c.kind = 'direct' OR m.sender_id <> ALL(${hidden}::uuid[]))
         ORDER BY m.message_id DESC LIMIT 1
       ) last ON true
-      WHERE me.user_id = ${userId}::uuid AND ${filter} ${list}
+      WHERE me.user_id = ${userId}::uuid AND (c.kind = 'group' OR other.user_id IS NOT NULL) AND ${filter} ${list}
       ORDER BY last.message_id DESC NULLS LAST
       LIMIT ${limit}`;
     return rows.map((row) => ({
       id: row.id,
       createdAt: row.created_at,
+      kind: row.kind,
+      name: row.name,
       requestSenderId: row.request_sender_id,
       accepted: row.accepted_at !== null,
       declined: row.declined_at !== null,
@@ -329,6 +452,8 @@ export class PrismaConversationRepository extends ConversationRepository {
             sharedVideoId: row.last_shared_video_id,
             storyId: row.last_story_id,
             liveId: row.last_live_id,
+            event: row.last_event,
+            eventUserId: row.last_event_user_id,
             createdAt: row.last_created_at!,
           }
         : null,

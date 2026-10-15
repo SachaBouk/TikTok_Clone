@@ -4,7 +4,7 @@ import { PushService } from '../../push/application/push.service';
 import { PUSH_BODY_MAX_LENGTH } from '../../push/domain/push';
 import { RealtimeService } from '../../realtime/application/realtime.service';
 import type { User } from '../../users/domain/user';
-import type { MessageItem, MessagingBadges } from '../domain/messaging';
+import type { Message, MessageItem, MessagingBadges } from '../domain/messaging';
 import { MessagingEventPublisher } from '../domain/messaging-event-publisher';
 import { toMessageDto } from '../interfaces/messaging.responses';
 
@@ -48,9 +48,7 @@ export class AppMessagingEventPublisher extends MessagingEventPublisher {
   }
 
   pushNewMessage(recipientId: string, sender: User, { message }: MessageItem, asRequest: boolean): Promise<void> {
-    const text = message.storyId
-      ? `Réponse à ta story : ${message.content}`
-      : message.content || (message.liveId ? 'a partagé un live' : 'a partagé une vidéo');
+    const text = pushText(message);
     return this.push.notify(recipientId, {
       title: asRequest ? 'Demande de message' : sender.displayName,
       body: (asRequest ? `${sender.displayName} : ${text}` : text).slice(0, PUSH_BODY_MAX_LENGTH),
@@ -58,6 +56,21 @@ export class AppMessagingEventPublisher extends MessagingEventPublisher {
       data: { type: asRequest ? 'messageRequest' : 'message', conversationId: message.conversationId, messageId: message.id },
     });
   }
+
+  pushGroupMessage(recipientId: string, sender: User, groupTitle: string, { message }: MessageItem): Promise<void> {
+    return this.push.notify(recipientId, {
+      title: groupTitle || 'Groupe',
+      body: `${sender.displayName} : ${pushText(message)}`.slice(0, PUSH_BODY_MAX_LENGTH),
+      threadId: `conversation:${message.conversationId}`,
+      data: { type: 'message', conversationId: message.conversationId, messageId: message.id },
+    });
+  }
+}
+
+function pushText(message: Message): string {
+  return message.storyId
+    ? `Réponse à ta story : ${message.content}`
+    : message.content || (message.liveId ? 'a partagé un live' : 'a partagé une vidéo');
 }
 
 // Mapping explicite des badges (noms identiques, mais rien n'est exposé par accident).

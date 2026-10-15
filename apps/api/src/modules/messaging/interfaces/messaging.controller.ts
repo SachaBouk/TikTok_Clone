@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseFilters } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -20,10 +20,20 @@ import type {
   UnreadConversationsDto,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
+import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { MessagingService } from '../application/messaging.service';
 import { MessagingErrorFilter } from './messaging-error.filter';
-import { MarkConversationReadRequest, MessageSearchQuery, OpenConversationRequest, PageQuery, SendMessageRequest } from './messaging.requests';
+import {
+  AddGroupMembersRequest,
+  CreateGroupRequest,
+  MarkConversationReadRequest,
+  MessageSearchQuery,
+  OpenConversationRequest,
+  PageQuery,
+  RenameGroupRequest,
+  SendMessageRequest,
+} from './messaging.requests';
 import {
   ConversationPageResponse,
   ConversationResponse,
@@ -42,6 +52,7 @@ const INVALID_ID = { type: ErrorResponse, description: 'Identifiant invalide.' }
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 const NOT_FOUND = { type: ErrorResponse, description: 'Conversation inconnue, ou dont le compte n’est pas participant.' };
 const PAGE_INVALID = { type: ErrorResponse, description: 'Curseur ou taille de page invalide.' };
+const NOT_A_GROUP = { type: ErrorResponse, description: 'Conversation à deux : action réservée aux groupes.' };
 
 // Messagerie directe du compte connecté (ADR-016). Messages, lectures, demandes et suppressions sont aussi
 // poussés par WebSocket (ADR-011) ; un nouveau message, en notification push. Les routes fixes avant `:id`.
@@ -87,6 +98,17 @@ export class MessagingController {
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Pseudo inconnu.' })
   async openConversation(@CurrentUser() user: AuthenticatedUser, @Body() body: OpenConversationRequest): Promise<ConversationDto> {
     return toConversationDto(await this.messaging.openConversation(user.userId, body.username));
+  }
+
+  // Chat de groupe (ADR-059). Déclarée avant `conversations/:id`.
+  @Post('conversations/groups')
+  @ApiCreatedResponse({ type: ConversationResponse, description: 'Le groupe créé ; le créateur en est l’administrateur.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Moins de 2 amis, trop de membres, ou nom trop long.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Un des comptes n’est pas un ami (abonné mutuel).' })
+  @ApiTooManyRequests('Trop de groupes créés')
+  async createGroup(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateGroupRequest): Promise<ConversationDto> {
+    return toConversationDto(await this.messaging.createGroup(user.userId, { userIds: body.userIds, name: body.name ?? null }));
   }
 
   @Get('conversations/unread-count')
@@ -138,6 +160,80 @@ export class MessagingController {
   @ApiConflictResponse({ type: ErrorResponse, description: 'Pas une demande reçue en attente.' })
   async declineMessageRequest(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string): Promise<void> {
     await this.messaging.declineRequest(user.userId, id);
+  }
+
+  // Renommer un groupe (tout membre) ; un nom vide le retire.
+  @Patch('conversations/:id')
+  @ApiOkResponse({ type: ConversationResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Nom trop long, ou identifiant invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse(NOT_A_GROUP)
+  @ApiTooManyRequests('Trop de messages envoyés')
+  async renameGroup(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string, @Body() body: RenameGroupRequest): Promise<ConversationDto> {
+    return toConversationDto(await this.messaging.renameGroup(user.userId, id, body.name));
+  }
+
+  @Post('conversations/:id/members')
+  @HttpCode(200)
+  @ApiOkResponse({ type: ConversationResponse, description: 'Le groupe avec ses nouveaux membres (un compte déjà membre est ignoré).' })
+  @ApiBadRequestResponse(INVALID_ID)
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Un des comptes n’est pas un ami (abonné mutuel).' })
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse({ type: ErrorResponse, description: 'Pas un groupe, ou groupe plein (32 membres).' })
+  @ApiTooManyRequests('Trop de messages envoyés')
+  async addGroupMembers(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ID) id: string,
+    @Body() body: AddGroupMembersRequest,
+  ): Promise<ConversationDto> {
+    return toConversationDto(await this.messaging.addGroupMembers(user.userId, id, body.userIds));
+  }
+
+  @Delete('conversations/:id/members/:userId')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Membre retiré par l’administrateur ; il perd la conversation.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Identifiant invalide, ou soi-même (quitter le groupe).' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Le compte connecté n’est pas l’administrateur du groupe.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Groupe inconnu (ou non membre), ou compte qui n’en est pas membre.' })
+  @ApiConflictResponse(NOT_A_GROUP)
+  async removeGroupMember(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string, @Param('userId', ID) memberId: string): Promise<void> {
+    await this.messaging.removeGroupMember(user.userId, id, memberId);
+  }
+
+  @Post('conversations/:id/leave')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Groupe quitté ; ses messages restent. Le dernier membre parti, le groupe est supprimé.' })
+  @ApiBadRequestResponse(INVALID_ID)
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse(NOT_A_GROUP)
+  async leaveGroup(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string): Promise<void> {
+    await this.messaging.leaveGroup(user.userId, id);
+  }
+
+  @Put('conversations/:id/mute')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Groupe en sourdine : plus de notification push pour le compte connecté.' })
+  @ApiBadRequestResponse(INVALID_ID)
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse(NOT_A_GROUP)
+  async muteGroup(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string): Promise<void> {
+    await this.messaging.setGroupMuted(user.userId, id, true);
+  }
+
+  @Delete('conversations/:id/mute')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Sourdine levée.' })
+  @ApiBadRequestResponse(INVALID_ID)
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse(NOT_A_GROUP)
+  async unmuteGroup(@CurrentUser() user: AuthenticatedUser, @Param('id', ID) id: string): Promise<void> {
+    await this.messaging.setGroupMuted(user.userId, id, false);
   }
 
   @Get('conversations/:id/messages')

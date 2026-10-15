@@ -214,9 +214,10 @@ struct ConversationViewModelTests {
         #expect(viewModel.pending.isEmpty)
         #expect(viewModel.draft.isEmpty)
         let sent = viewModel.messages.last!.id
-        #expect(viewModel.seenMessageID == nil)
+        #expect(viewModel.seen == nil)
         viewModel.read(by: UserSummary.bob.id, upTo: sent)
-        #expect(viewModel.seenMessageID == sent)
+        #expect(viewModel.seen?.messageID == sent)
+        #expect(viewModel.seen?.label == "Vu")
     }
 
     @Test("limite d'envoi : message « Non envoyé », envoi et renvoi bloqués pendant le délai de l'API")
@@ -445,8 +446,8 @@ struct SendVideoTests {
             session: session
         )
         await viewModel.load()
-        #expect(viewModel.recent.map(\.user.username) == ["bob"])
-        #expect(viewModel.others.map(\.user.username) == ["carla"])
+        #expect(viewModel.recent.map(\.label) == ["@bob"])
+        #expect(viewModel.others.map(\.label) == ["@carla"])
 
         await viewModel.send(to: viewModel.others[0])
         #expect(viewModel.deliveries["carla-id"] == .sent)

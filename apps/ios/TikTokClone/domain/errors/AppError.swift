@@ -61,6 +61,8 @@ enum LimitedAction: Sendable {
     case signup, reactions, comments, follows, uploads, gifts, stories, storyLikes
     // Live (ADR-053) : lancements, messages du chat, cœurs.
     case lives, liveMessages, hearts
+    // Chats de groupe créés (ADR-059).
+    case groups
 
     var tooMany: String {
         switch self {
@@ -75,6 +77,7 @@ enum LimitedAction: Sendable {
         case .lives: "Trop de lives lancés aujourd’hui."
         case .liveMessages: "Trop de messages en peu de temps."
         case .hearts: "Trop de cœurs en peu de temps."
+        case .groups: "Trop de groupes créés aujourd’hui."
         }
     }
 }

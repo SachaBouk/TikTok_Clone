@@ -4959,6 +4959,86 @@
         ]
       }
     },
+    "/conversations/groups": {
+      "post": {
+        "operationId": "createGroup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Le groupe créé ; le créateur en est l’administrateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Moins de 2 amis, trop de membres, ou nom trop long.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Un des comptes n’est pas un ami (abonné mutuel).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de groupes créés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
     "/conversations/unread-count": {
       "get": {
         "operationId": "countUnreadConversations",
@@ -5099,6 +5179,103 @@
         "tags": [
           "messaging"
         ]
+      },
+      "patch": {
+        "operationId": "renameGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nom trop long, ou identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conversation à deux : action réservée aux groupes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
       }
     },
     "/conversations/{id}/accept": {
@@ -5220,6 +5397,383 @@
           },
           "409": {
             "description": "Pas une demande reçue en attente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/members": {
+      "post": {
+        "operationId": "addGroupMembers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGroupMembersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Le groupe avec ses nouveaux membres (un compte déjà membre est ignoré).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Un des comptes n’est pas un ami (abonné mutuel).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pas un groupe, ou groupe plein (32 membres).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de messages envoyés : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/members/{userId}": {
+      "delete": {
+        "operationId": "removeGroupMember",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Membre retiré par l’administrateur ; il perd la conversation."
+          },
+          "400": {
+            "description": "Identifiant invalide, ou soi-même (quitter le groupe).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Le compte connecté n’est pas l’administrateur du groupe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Groupe inconnu (ou non membre), ou compte qui n’en est pas membre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conversation à deux : action réservée aux groupes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/leave": {
+      "post": {
+        "operationId": "leaveGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Groupe quitté ; ses messages restent. Le dernier membre parti, le groupe est supprimé."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conversation à deux : action réservée aux groupes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      }
+    },
+    "/conversations/{id}/mute": {
+      "put": {
+        "operationId": "muteGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Groupe en sourdine : plus de notification push pour le compte connecté."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conversation à deux : action réservée aux groupes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "messaging"
+        ]
+      },
+      "delete": {
+        "operationId": "unmuteGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sourdine levée."
+          },
+          "400": {
+            "description": "Identifiant invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation inconnue, ou dont le compte n’est pas participant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conversation à deux : action réservée aux groupes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9657,6 +10211,69 @@
           "items"
         ]
       },
+      "ConversationKind": {
+        "type": "string",
+        "enum": [
+          "direct",
+          "group"
+        ]
+      },
+      "GroupMemberResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastReadMessageId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Dernier message lu (« Vu par »)."
+          }
+        },
+        "required": [
+          "user",
+          "joinedAt",
+          "lastReadMessageId"
+        ]
+      },
+      "GroupResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Nom du groupe ; null : l’app affiche les noms des membres."
+          },
+          "adminId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Administrateur : le membre le plus ancien."
+          },
+          "muted": {
+            "type": "boolean",
+            "description": "Groupe en sourdine pour le compte connecté (pas de notification push)."
+          },
+          "members": {
+            "description": "Du plus ancien au plus récent, compte connecté compris.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberResponse"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "adminId",
+          "muted",
+          "members"
+        ]
+      },
       "ConversationStatus": {
         "type": "string",
         "enum": [
@@ -9752,6 +10369,36 @@
           "available"
         ]
       },
+      "GroupEventType": {
+        "type": "string",
+        "enum": [
+          "created",
+          "added",
+          "removed",
+          "left",
+          "renamed"
+        ]
+      },
+      "GroupEventResponse": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/GroupEventType"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Nouveau nom d’un renommage (null : nom retiré)."
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
       "MessageResponse": {
         "type": "object",
         "properties": {
@@ -9785,6 +10432,12 @@
             "format": "uuid",
             "description": "Identifiant d’envoi choisi par l’app (ADR-044) : seulement dans la réponse à l’envoi et l’écho temps réel adressé à l’expéditeur."
           },
+          "sender": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "event": {
+            "$ref": "#/components/schemas/GroupEventResponse"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -9805,8 +10458,14 @@
             "type": "string",
             "format": "uuid"
           },
+          "kind": {
+            "$ref": "#/components/schemas/ConversationKind"
+          },
           "participant": {
             "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "group": {
+            "$ref": "#/components/schemas/GroupResponse"
           },
           "status": {
             "$ref": "#/components/schemas/ConversationStatus"
@@ -9845,7 +10504,7 @@
         },
         "required": [
           "id",
-          "participant",
+          "kind",
           "status",
           "unreadCount",
           "participantLastReadMessageId",
@@ -9877,6 +10536,26 @@
           "nextCursor"
         ]
       },
+      "MessageSearchGroupResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "members": {
+            "description": "Membres, du plus ancien au plus récent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSummaryResponse"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "members"
+        ]
+      },
       "MessageSearchResultResponse": {
         "type": "object",
         "properties": {
@@ -9900,6 +10579,9 @@
           },
           "sender": {
             "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "group": {
+            "$ref": "#/components/schemas/MessageSearchGroupResponse"
           }
         },
         "required": [
@@ -9939,6 +10621,29 @@
           "username"
         ]
       },
+      "CreateGroupRequest": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "minItems": 1,
+            "maxItems": 31,
+            "description": "Amis à ajouter (abonnés mutuels), au moins 2, créateur non compris.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Nom du groupe ; absent ou vide : les noms des membres."
+          }
+        },
+        "required": [
+          "userIds"
+        ]
+      },
       "UnreadConversationsResponse": {
         "type": "object",
         "properties": {
@@ -9956,6 +10661,37 @@
         "required": [
           "unreadCount",
           "requestCount"
+        ]
+      },
+      "RenameGroupRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Nouveau nom ; vide : nom retiré."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "AddGroupMembersRequest": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "minItems": 1,
+            "maxItems": 31,
+            "description": "Amis à ajouter.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "userIds"
         ]
       },
       "MessagePageResponse": {

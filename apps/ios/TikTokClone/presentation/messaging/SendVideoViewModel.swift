@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 // « Envoyer par message » (action de la feuille de partage, choix du développeur) : la vidéo (ou le live en cours,
-// ADR-053) est envoyée à un ou plusieurs comptes, choisis parmi les conversations récentes puis les abonnements. L'API
+// ADR-053) est envoyée à un ou plusieurs comptes ou groupes (ADR-059), choisis parmi les conversations récentes puis les
+// abonnements. L'API
 // compte chaque envoi d'une vidéo comme un partage ; le compteur affiché suit.
 @MainActor
 @Observable
@@ -12,10 +13,45 @@ final class SendVideoViewModel {
         case sent
     }
 
-    // Destinataire possible : un compte, avec sa conversation s'il y en a une.
+    // Destinataire possible : un compte (sa conversation, ouverte au besoin), ou un groupe (ADR-059).
     struct Recipient: Identifiable, Equatable {
-        let user: UserSummary
-        var id: String { user.id }
+        enum Target: Equatable {
+            case user(UserSummary)
+            case group(conversationID: String)
+        }
+
+        let target: Target
+        // Nom affiché : le compte, ou le groupe (sinon les noms de ses membres).
+        let title: String
+        // Une photo, ou deux pour un groupe.
+        let avatars: [UserSummary]
+
+        init(user: UserSummary) {
+            target = .user(user)
+            title = user.displayName
+            avatars = [user]
+        }
+
+        init(group conversation: Conversation, ownID: String?) {
+            target = .group(conversationID: conversation.id)
+            title = conversation.title(ownID: ownID)
+            avatars = conversation.avatars(ownID: ownID)
+        }
+
+        var id: String {
+            switch target {
+            case .user(let user): user.id
+            case .group(let conversationID): conversationID
+            }
+        }
+
+        // Libellé d'accessibilité : « @bob », ou le nom du groupe.
+        var label: String {
+            switch target {
+            case .user(let user): "@\(user.username)"
+            case .group: title
+            }
+        }
     }
 
     // Ce qui est envoyé.
@@ -71,9 +107,13 @@ final class SendVideoViewModel {
         }
     }
 
-    // Conversations récentes où l'on peut écrire.
+    // Conversations récentes où l'on peut écrire, groupes compris.
     var recent: [Recipient] {
-        messaging.inbox.items.filter(\.canSend).map { Recipient(user: $0.participant) }
+        let ownID = session.profile?.id
+        return messaging.inbox.items.filter(\.canSend).compactMap { conversation in
+            if conversation.isGroup { return Recipient(group: conversation, ownID: ownID) }
+            return conversation.participant.map { Recipient(user: $0) }
+        }
     }
 
     // Abonnements, sans ceux déjà proposés parmi les conversations récentes.
@@ -91,13 +131,19 @@ final class SendVideoViewModel {
         guard deliveries[recipient.id] == nil else { return }
         deliveries[recipient.id] = .sending
         do {
-            switch item {
-            case .video(let video):
-                _ = try await share(videoID: video.id, to: recipient.user.username)
+            switch (item, recipient.target) {
+            case (.video(let video), .user(let user)):
+                _ = try await share(videoID: video.id, to: user.username)
                 interactions.sharedByMessage(video)
-            case .live(let live):
+            case (.video(let video), .group(let conversationID)):
+                _ = try await share(videoID: video.id, inConversation: conversationID)
+                interactions.sharedByMessage(video)
+            case (.live(let live), .user(let user)):
                 guard let shareLive else { throw AppError.unexpected }
-                _ = try await shareLive(liveID: live.id, to: recipient.user.username)
+                _ = try await shareLive(liveID: live.id, to: user.username)
+            case (.live(let live), .group(let conversationID)):
+                guard let shareLive else { throw AppError.unexpected }
+                _ = try await shareLive(liveID: live.id, inConversation: conversationID)
             }
             deliveries[recipient.id] = .sent
         } catch {

@@ -10,6 +10,7 @@ import Observation
 //   Une limite d'envoi (429) bloque l'envoi et le renvoi pendant le délai indiqué.
 // - Tant que l'écran est affiché, ce qui y arrive est marqué lu (« Vu » chez l'autre, badges à jour).
 // - « En train d'écrire » : envoyé au plus toutes les 3 s pendant la saisie, dans une conversation libre.
+// - Groupe (ADR-059) : « Vu par … », « Inès écrit… », lignes d'événement ; réglages (nom, membres, sourdine, départ).
 @MainActor
 @Observable
 final class ConversationViewModel: ConversationObserver {
@@ -19,7 +20,9 @@ final class ConversationViewModel: ConversationObserver {
         case failed(String)
     }
 
-    let username: String
+    // Pseudo de l'autre participant quand la conversation est ouverte par lui (bouton « Message ») ; nil pour un groupe.
+    let routeUsername: String?
+    private let routeConversationID: String?
     private(set) var conversation: Conversation?
     // Du plus ancien au plus récent.
     private(set) var messages: [DirectMessage] = []
@@ -48,6 +51,7 @@ final class ConversationViewModel: ConversationObserver {
     private let answerRequest: AnswerMessageRequestUseCase
     private let deleteConversation: DeleteConversationUseCase
     private let deleteMessage: DeleteMessageUseCase
+    private let manageGroup: ManageGroupUseCase?
     private let messaging: MessagingModel
     private let session: SessionStore
     private let analytics: AnalyticsModel
@@ -62,13 +66,16 @@ final class ConversationViewModel: ConversationObserver {
         answerRequest: AnswerMessageRequestUseCase,
         deleteConversation: DeleteConversationUseCase,
         deleteMessage: DeleteMessageUseCase,
+        manageGroup: ManageGroupUseCase? = nil,
         messaging: MessagingModel,
         session: SessionStore,
         analytics: AnalyticsModel,
         now: @escaping () -> Date = Date.init
     ) {
-        username = route.username
+        routeUsername = route.username
+        routeConversationID = route.conversationID
         conversation = route.conversation
+        self.manageGroup = manageGroup
         self.loadConversation = loadConversation
         self.loadMessages = loadMessages
         self.sendMessage = sendMessage
@@ -88,14 +95,39 @@ final class ConversationViewModel: ConversationObserver {
     var ownID: String? { session.profile?.id }
     var isOtherTyping: Bool { conversationID.map(messaging.isTyping(in:)) ?? false }
 
-    // Titre : le nom de l'autre participant (le pseudo tant que la conversation n'est pas chargée).
-    var title: String { conversation?.participant.displayName ?? "@\(username)" }
+    // Pseudo de l'autre participant (conversation à deux).
+    var username: String { conversation?.participant?.username ?? routeUsername ?? "" }
 
-    // « Vu » sous son dernier message, s'il a été lu par l'autre.
-    var seenMessageID: String? {
-        guard let ownID, let conversation else { return nil }
-        return MessageRules.seenMessageID(in: messages, ownID: ownID, participantLastRead: conversation.participantLastReadMessageID)
+    var group: GroupChat? { conversation?.group }
+
+    // Titre : le nom de l'autre participant ou du groupe (le pseudo tant que la conversation n'est pas chargée).
+    var title: String {
+        if let conversation { return conversation.title(ownID: ownID) }
+        return routeUsername.map { "@\($0)" } ?? ""
     }
+
+    // « Vu » (à deux) ou « Vu par Inès, Nathan » (groupe) sous son dernier message, s'il a été lu.
+    var seen: (messageID: String, label: String)? {
+        guard let ownID, let conversation else { return nil }
+        if let group = conversation.group {
+            guard let lastOwn = messages.last(where: { $0.senderID == ownID && $0.event == nil }),
+                let label = GroupRules.seenLabel(group.seenBy(lastOwn, ownID: ownID))
+            else { return nil }
+            return (lastOwn.id, label)
+        }
+        return MessageRules.seenMessageID(in: messages, ownID: ownID, participantLastRead: conversation.participantLastReadMessageID).map {
+            ($0, "Vu")
+        }
+    }
+
+    // Groupe : « Inès écrit… », « 2 personnes écrivent… ».
+    var typingLabel: String? {
+        guard let conversationID, let group else { return nil }
+        let names = messaging.typingUserIDs(in: conversationID).compactMap { id in group.members.first { $0.user.id == id }?.user.displayName }
+        return GroupRules.typingLabel(names)
+    }
+
+    var isAdmin: Bool { group?.isAdmin(ownID) == true }
 
     var timestampedIDs: Set<String> { MessageRules.timestampedIDs(in: messages) }
 
@@ -121,6 +153,8 @@ final class ConversationViewModel: ConversationObserver {
     // MARK: - Chargement
 
     func load() async {
+        // Groupe quitté, conversation supprimée : plus rien à relire (l'écran se ferme).
+        guard !isClosed else { return }
         if messages.isEmpty { state = .loading }
         do {
             let conversation = try await currentConversation()
@@ -137,6 +171,7 @@ final class ConversationViewModel: ConversationObserver {
         } catch AppError.sessionExpired {
             session.sessionExpired()
         } catch {
+            guard !isClosed else { return }
             let message = AppError.from(error).message
             if messages.isEmpty { state = .failed(message) } else { errorMessage = message }
         }
@@ -235,6 +270,67 @@ final class ConversationViewModel: ConversationObserver {
         await close { try await self.deleteConversation($0) }
     }
 
+    // MARK: - Groupe (ADR-059)
+
+    // Renommer (vide : nom retiré) ; renvoie vrai si c'est fait.
+    @discardableResult
+    func rename(to name: String) async -> Bool {
+        await updateGroup { try await $0.rename($1, to: name) }
+    }
+
+    func addMembers(_ users: [UserSummary]) async -> Bool {
+        await updateGroup { try await $0.add(users.map(\.id), to: $1) }
+    }
+
+    // L'administrateur retire un membre ; il disparaît aussitôt de la liste (la ligne d'événement suivra).
+    func removeMember(_ user: UserSummary) async {
+        guard let manageGroup, let conversationID else { return }
+        do {
+            try await manageGroup.remove(user.id, from: conversationID)
+            conversation?.group?.members.removeAll { $0.user.id == user.id }
+            if let conversation { messaging.groupChanged(conversation) }
+        } catch AppError.sessionExpired {
+            session.sessionExpired()
+        } catch {
+            errorMessage = AppError.from(error).message
+        }
+    }
+
+    // Sourdine : affichée tout de suite, rétablie en cas d'échec.
+    func setMuted(_ muted: Bool) async {
+        guard let manageGroup, let conversationID, group != nil else { return }
+        conversation?.group?.muted = muted
+        do {
+            try await manageGroup.setMuted(muted, conversationID)
+        } catch AppError.sessionExpired {
+            session.sessionExpired()
+        } catch {
+            conversation?.group?.muted = !muted
+            errorMessage = AppError.from(error).message
+        }
+    }
+
+    // Quitter le groupe : l'écran se ferme.
+    func leave() async {
+        guard let manageGroup else { return }
+        await close { try await manageGroup.leave($0) }
+    }
+
+    private func updateGroup(_ action: (ManageGroupUseCase, String) async throws -> Conversation) async -> Bool {
+        guard let manageGroup, let conversationID else { return false }
+        do {
+            let updated = try await action(manageGroup, conversationID)
+            conversation = updated
+            messaging.groupChanged(updated)
+            return true
+        } catch AppError.sessionExpired {
+            session.sessionExpired()
+        } catch {
+            errorMessage = AppError.from(error).message
+        }
+        return false
+    }
+
     // MARK: - ConversationObserver
 
     func received(_ message: DirectMessage) {
@@ -252,10 +348,8 @@ final class ConversationViewModel: ConversationObserver {
 
     func read(by readerID: String, upTo messageID: String) {
         guard readerID != ownID, var conversation else { return }
-        if conversation.participantLastReadMessageID.map({ MessageRules.isAtOrBefore($0, messageID) }) ?? true {
-            conversation.participantLastReadMessageID = messageID
-            self.conversation = conversation
-        }
+        conversation.read(by: readerID, upTo: messageID)
+        self.conversation = conversation
     }
 
     func updated(_ conversation: Conversation) {
@@ -275,8 +369,8 @@ final class ConversationViewModel: ConversationObserver {
     // MARK: - Privé
 
     private func currentConversation() async throws -> Conversation {
-        if let id = conversation?.id { return try await loadConversation(id: id) }
-        return try await loadConversation(username: username)
+        if let id = conversation?.id ?? routeConversationID { return try await loadConversation(id: id) }
+        return try await loadConversation(username: routeUsername ?? "")
     }
 
     // Page la plus récente (du plus ancien au plus récent) fusionnée avec les messages déjà affichés : les plus
@@ -367,23 +461,36 @@ final class ConversationViewModel: ConversationObserver {
     }
 }
 
-// Conversation à ouvrir : par son pseudo (bouton « Message », nouveau message), ou déjà chargée (listes).
+// Conversation à ouvrir : par son pseudo (bouton « Message »), par son identifiant (message de groupe trouvé, ADR-059),
+// ou déjà chargée (listes).
 struct ConversationRoute: Hashable {
-    let username: String
+    let username: String?
+    let conversationID: String?
     let conversation: Conversation?
 
     init(username: String) {
         self.username = username
+        conversationID = nil
+        conversation = nil
+    }
+
+    init(id: String) {
+        username = nil
+        conversationID = id
         conversation = nil
     }
 
     init(_ conversation: Conversation) {
-        username = conversation.participant.username
+        username = conversation.participant?.username
+        conversationID = conversation.id
         self.conversation = conversation
     }
 
-    static func == (lhs: ConversationRoute, rhs: ConversationRoute) -> Bool { lhs.username == rhs.username }
-    func hash(into hasher: inout Hasher) { hasher.combine(username) }
+    // Une conversation à deux s'identifie par l'autre participant, un groupe par son identifiant.
+    private var key: String { username.map { "@\($0)" } ?? conversationID ?? "" }
+
+    static func == (lhs: ConversationRoute, rhs: ConversationRoute) -> Bool { lhs.key == rhs.key }
+    func hash(into hasher: inout Hasher) { hasher.combine(key) }
 }
 
 extension Duration {

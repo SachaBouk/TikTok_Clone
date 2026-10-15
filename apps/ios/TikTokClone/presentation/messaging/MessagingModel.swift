@@ -30,8 +30,8 @@ final class MessagingModel {
     let inbox: PagedList<Conversation>
     // Demandes reçues en attente.
     let requests: PagedList<Conversation>
-    // Conversations dont l'autre participant est en train d'écrire.
-    private(set) var typingConversationIDs: Set<String> = []
+    // Comptes en train d'écrire, par conversation (plusieurs dans un groupe), du premier au dernier arrivé.
+    private(set) var typingUsers: [String: [String]] = [:]
     // Messages sortants par conversation, du plus ancien au plus récent.
     private(set) var outgoing: [String: [OutgoingMessage]] = [:]
 
@@ -77,7 +77,11 @@ final class MessagingModel {
     var badgeCount: Int { badges.unreadConversations + badges.pendingRequests }
 
     func isTyping(in conversationID: String) -> Bool {
-        typingConversationIDs.contains(conversationID)
+        !(typingUsers[conversationID] ?? []).isEmpty
+    }
+
+    func typingUserIDs(in conversationID: String) -> [String] {
+        typingUsers[conversationID] ?? []
     }
 
     // MARK: - Écrans
@@ -104,7 +108,7 @@ final class MessagingModel {
         requests.reset()
         for task in typingTasks.values { task.cancel() }
         typingTasks = [:]
-        typingConversationIDs = []
+        typingUsers = [:]
         outgoing = [:]
         observers = []
     }
@@ -149,6 +153,15 @@ final class MessagingModel {
     func markedRead(_ conversationID: String, badges: MessagingBadges) {
         self.badges = badges
         updateRows(conversationID) { $0.unreadCount = 0 }
+    }
+
+    // Groupe créé, renommé ou dont les membres ont changé depuis cet appareil (ADR-059) : sa ligne, en tête si nouvelle.
+    func groupChanged(_ conversation: Conversation) {
+        if inbox.items.contains(where: { $0.id == conversation.id }) {
+            inbox.replace(conversation)
+        } else if conversation.lastMessage != nil {
+            moveToTop(conversation, in: inbox)
+        }
     }
 
     // Demande acceptée depuis son écran : elle passe dans la boîte de réception.
@@ -199,7 +212,7 @@ final class MessagingModel {
                 // Lue sur un autre appareil.
                 updateRows(conversationID) { $0.unreadCount = 0 }
             } else {
-                updateRows(conversationID) { $0.participantLastReadMessageID = lastReadMessageID }
+                updateRows(conversationID) { $0.read(by: readerID, upTo: lastReadMessageID) }
                 for observer in liveObservers(of: conversationID) { observer.read(by: readerID, upTo: lastReadMessageID) }
             }
         case .conversationAccepted(let conversationID, let badges):
@@ -211,7 +224,7 @@ final class MessagingModel {
             for observer in liveObservers(of: conversationID) { observer.conversationDeleted() }
         case .typing(let conversationID, let userID):
             guard userID != session.profile?.id else { return }
-            showTyping(in: conversationID)
+            showTyping(userID, in: conversationID)
         case .connected, .videoProcessed, .storyProcessed, .notificationCreated, .unreadNotificationsChanged, .notificationsRemoved,
             .profileCountersChanged,
             .walletUpdated:
@@ -221,7 +234,7 @@ final class MessagingModel {
 
     private func messageCreated(_ message: DirectMessage) {
         let fromOther = message.senderID != session.profile?.id
-        if fromOther { hideTyping(in: message.conversationID) }
+        if fromOther { hideTyping(message.senderID, in: message.conversationID) }
         // Écho de son propre envoi (il précède parfois la réponse, ou la remplace si elle s'est perdue).
         if let clientMessageID = message.clientMessageID { removeOutgoing(clientMessageID, in: message.conversationID) }
         for observer in liveObservers(of: message.conversationID) { observer.received(message) }
@@ -233,23 +246,27 @@ final class MessagingModel {
             return
         }
         conversation.lastMessage = message
-        conversation.unreadCount = fromOther ? conversation.unreadCount + 1 : 0
+        // Une ligne d'événement de groupe (ADR-059) n'est jamais non lue ; nom et membres relus par l'API.
+        if message.event == nil { conversation.unreadCount = fromOther ? conversation.unreadCount + 1 : 0 }
         moveToTop(conversation, in: list)
+        if message.event != nil { reloadRow(message.conversationID, notify: true) }
     }
 
-    private func showTyping(in conversationID: String) {
-        typingConversationIDs.insert(conversationID)
-        typingTasks[conversationID]?.cancel()
-        typingTasks[conversationID] = Task { [typingDisplay] in
+    private func showTyping(_ userID: String, in conversationID: String) {
+        if !(typingUsers[conversationID] ?? []).contains(userID) { typingUsers[conversationID, default: []].append(userID) }
+        let key = "\(conversationID)|\(userID)"
+        typingTasks[key]?.cancel()
+        typingTasks[key] = Task { [typingDisplay] in
             try? await Task.sleep(for: typingDisplay)
             guard !Task.isCancelled else { return }
-            hideTyping(in: conversationID)
+            hideTyping(userID, in: conversationID)
         }
     }
 
-    private func hideTyping(in conversationID: String) {
-        typingTasks.removeValue(forKey: conversationID)?.cancel()
-        typingConversationIDs.remove(conversationID)
+    private func hideTyping(_ userID: String, in conversationID: String) {
+        typingTasks.removeValue(forKey: "\(conversationID)|\(userID)")?.cancel()
+        typingUsers[conversationID]?.removeAll { $0 == userID }
+        if typingUsers[conversationID]?.isEmpty == true { typingUsers[conversationID] = nil }
     }
 
     // MARK: - Lignes des listes

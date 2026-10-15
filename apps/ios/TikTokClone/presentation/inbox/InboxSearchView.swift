@@ -153,7 +153,10 @@ struct InboxSearchView: View {
             Section {
                 ForEach(viewModel.messages) { result in
                     Button {
-                        openedConversation = ConversationRoute(username: result.participant.username)
+                        // Message d'un groupe (ADR-059) : le groupe, par son identifiant.
+                        openedConversation =
+                            result.group != nil
+                            ? ConversationRoute(id: result.conversationID) : ConversationRoute(username: result.participant.username)
                     } label: {
                         MessageResultRow(result: result, ownID: ownID)
                     }
@@ -201,21 +204,23 @@ struct InboxSearchView: View {
     // Comptes des conversations, dans l'ordre de la boîte de réception, sans doublon.
     static func uniqueParticipants(_ conversations: [Conversation]) -> [UserSummary] {
         var seen = Set<String>()
-        return conversations.map(\.participant).filter { seen.insert($0.id).inserted }
+        return conversations.compactMap(\.participant).filter { seen.insert($0.id).inserted }
     }
 }
 
-// Message trouvé : photo et nom de l'autre participant, texte (« Toi : … » pour les siens), date.
+// Message trouvé : photo et nom de l'autre participant (ou du groupe), texte (« Toi : … » pour les siens, « Inès : … » dans
+// un groupe), date.
 private struct MessageResultRow: View {
     let result: MessageSearchResult
     let ownID: String?
 
     var body: some View {
         HStack(spacing: 14) {
-            AvatarView(url: result.participant.avatarURL, name: result.participant.displayName, size: 48)
+            ConversationAvatar(
+                users: result.group.map { Array($0.members.filter { $0.id != ownID }.prefix(2)) } ?? [result.participant], size: 48)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.participant.displayName).font(.body.weight(.semibold)).lineLimit(1)
-                (Text(result.sender.id == ownID ? "Toi : " : "") + Text(result.content) + Text(" · ") + Text.relative(result.createdAt))
+                Text(result.title(ownID: ownID)).font(.body.weight(.semibold)).lineLimit(1)
+                (Text(senderPrefix) + Text(result.content) + Text(" · ") + Text.relative(result.createdAt))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -223,5 +228,10 @@ private struct MessageResultRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
+    }
+
+    private var senderPrefix: String {
+        if result.sender.id == ownID { return "Toi : " }
+        return result.group != nil ? "\(result.sender.displayName) : " : ""
     }
 }

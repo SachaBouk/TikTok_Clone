@@ -4,8 +4,8 @@ import type { LiveItem } from '../../live/application/live.service';
 import type { ActiveStory } from '../../stories/domain/story';
 import type { PublishedVideo } from '../../videos/domain/video';
 
-// Messagerie directe (ADR-016) : conversations à deux (le modèle ADR-006 permet plus, pas l'API),
-// messages texte ou partage de vidéo, poussés par WebSocket (ADR-011) et notifications push.
+// Messagerie directe (ADR-016) : conversations à deux et chats de groupe (ADR-059), messages texte ou partage de
+// vidéo, poussés par WebSocket (ADR-011) et notifications push.
 // - Abonnés mutuels, ou conversation acceptée : on s'écrit librement.
 // - Sinon, le premier message ouvre une demande : REQUEST_MESSAGE_LIMIT messages au plus tant que le
 //   destinataire ne l'a pas acceptée (ou n'a pas répondu). Pas de « Vu » ni de « en train d'écrire » d'ici là.
@@ -22,8 +22,15 @@ export interface Message {
   storyId: string | null;
   // Live partagé (ADR-053).
   liveId: string | null;
+  // Ligne d'événement d'un groupe (ADR-059) : l'expéditeur en est l'auteur ; `content` = nouveau nom d'un renommage.
+  event: GroupEvent | null;
+  // Membre ajouté ou retiré.
+  eventUserId: string | null;
   createdAt: Date;
 }
+
+export type ConversationKind = 'direct' | 'group';
+export type GroupEvent = 'created' | 'added' | 'removed' | 'left' | 'renamed';
 
 // Vidéo partagée, résolue à la lecture : null si elle a été supprimée depuis (message « indisponible »).
 export interface SharedVideo {
@@ -54,6 +61,9 @@ export interface MessageItem {
   // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
   // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
   clientMessageId?: string;
+  // Dans un groupe (ADR-059) : l'expéditeur (absent si son compte n'existe plus) et le membre visé par un événement.
+  sender?: User | null;
+  eventUser?: User | null;
 }
 
 export interface ConversationMember {
@@ -62,11 +72,18 @@ export interface ConversationMember {
   lastReadMessageId: string | null;
   // Conversation supprimée pour ce participant jusqu'à ce message (repère, même principe).
   clearedUpToMessageId: string | null;
+  // Entrée dans la conversation : l'administrateur d'un groupe est le membre le plus ancien (ADR-059).
+  joinedAt: Date;
+  // Groupe en sourdine pour ce membre : pas de notification push.
+  mutedAt: Date | null;
 }
 
 export interface Conversation {
   id: string;
   createdAt: Date;
+  kind: ConversationKind;
+  // Nom d'un groupe ; toujours null pour une conversation à deux.
+  name: string | null;
   requestSenderId: string | null;
   acceptedAt: Date | null;
   declinedAt: Date | null;
@@ -77,15 +94,18 @@ export interface Conversation {
 export interface ConversationView {
   id: string;
   createdAt: Date;
+  kind: ConversationKind;
+  name: string | null;
   requestSenderId: string | null;
   accepted: boolean;
   declined: boolean;
-  // L'autre participant.
-  participantId: string;
+  // L'autre participant ; null pour un groupe (membres lus à part).
+  participantId: string | null;
+  // Dernier message visible (dans un groupe : sans ceux des comptes masqués au lecteur).
   lastMessage: Message | null;
-  // Messages de l'autre participant non lus par ce participant.
+  // Messages des autres participants non lus par ce participant (ni lignes d'événement, ni messages masqués).
   unreadCount: number;
-  // Dernier message lu par l'autre participant (« Vu »).
+  // Dernier message lu par l'autre participant (« Vu ») ; null pour un groupe.
   participantLastReadMessageId: string | null;
   // Messages envoyés par ce participant (compté seulement tant que la conversation n'est pas acceptée).
   ownMessageCount: number;
@@ -101,6 +121,18 @@ export interface MessagingBadges {
   // Demandes reçues en attente.
   pendingRequests: number;
 }
+
+// Administrateur d'un groupe : le membre le plus ancien (ADR-059), départagé par l'identifiant.
+export function groupAdminId(members: ConversationMember[]): string | null {
+  const [admin] = [...members].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime() || (a.userId < b.userId ? -1 : 1));
+  return admin?.userId ?? null;
+}
+
+// Chats de groupe (ADR-059) : 32 membres au plus, créateur compris ; au moins 2 amis à la création ; nom de 50 caractères.
+export const MAX_GROUP_MEMBERS = 32;
+export const MIN_GROUP_FRIENDS = 2;
+export const MAX_GROUP_NAME_LENGTH = 50;
+export const GROUP_CREATE_RATE_LIMITS: RateLimitRule[] = [{ limit: 20, windowSeconds: 24 * 3600 }];
 
 export const MAX_MESSAGE_LENGTH = 1000;
 export const DEFAULT_PAGE_SIZE = 20;

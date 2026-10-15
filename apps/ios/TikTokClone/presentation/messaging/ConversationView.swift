@@ -3,7 +3,8 @@ import SwiftUI
 // Fil d'une conversation : messages (texte, vidéo partagée), « Vu », « en train d'écrire », champ de saisie.
 // Demande reçue : accepter ou refuser (ou répondre, ce qui l'accepte). Appui long sur un message : copier,
 // retirer le sien (pour les deux), signaler celui de l'autre (ADR-038). Message non envoyé : toucher pour réessayer,
-// copier ou supprimer (ADR-044).
+// copier ou supprimer (ADR-044). Groupe (ADR-059) : nom de l'expéditeur au-dessus de ses messages, lignes d'événement,
+// « Vu par … », « Inès écrit… », réglages du groupe.
 struct ConversationView: View {
     @State private var viewModel: ConversationViewModel
     let container: AppContainer
@@ -15,6 +16,7 @@ struct ConversationView: View {
     // Ouvert par un bouton : un lien de navigation par valeur ne fonctionne pas dans un écran lui-même poussé
     // par `navigationDestination(item:)` (boîte de réception, demandes).
     @State private var openedProfile: ProfileRoute?
+    @State private var showsGroupSettings = false
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isTabActive) private var isTabActive
@@ -34,12 +36,25 @@ struct ConversationView: View {
             .navigationDestination(item: $openedProfile) { route in
                 ProfileView(viewModel: container.makeProfileViewModel(username: route.username), container: container)
             }
+            .navigationDestination(isPresented: $showsGroupSettings) {
+                GroupSettingsView(viewModel: viewModel, container: container)
+            }
             .safeAreaInset(edge: .bottom) {
                 if viewModel.state == .loaded { bottomBar }
             }
             .task { await viewModel.load() }
-            // Marquer lu seulement ce qui est réellement affiché.
-            .onAppear { isOnScreen = true }
+            // Marquer lu seulement ce qui est réellement affiché. Quitté ou supprimé depuis les réglages du groupe (ADR-059) :
+            // cachée sous eux, la conversation n'a pas vu le changement ; elle se ferme en réapparaissant.
+            .onAppear {
+                isOnScreen = true
+                // Pendant l'animation de retour, `dismiss` serait ignoré : un instant après.
+                if viewModel.isClosed {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(400))
+                        dismiss()
+                    }
+                }
+            }
             .onDisappear { isOnScreen = false }
             .onChange(of: isOnScreen && isTabActive && scenePhase == .active, initial: true) { _, visible in
                 viewModel.setVisible(visible)
@@ -51,7 +66,10 @@ struct ConversationView: View {
             .confirmationDialog("Supprimer la conversation ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
                 Button("Supprimer", role: .destructive) { Task { await viewModel.delete() } }
             } message: {
-                Text("Elle disparaît pour toi seulement : @\(viewModel.username) garde vos messages.")
+                Text(
+                    viewModel.group != nil
+                        ? "Les messages disparaissent pour toi seulement ; tu restes dans le groupe."
+                        : "Elle disparaît pour toi seulement : @\(viewModel.username) garde vos messages.")
             }
             .confirmationDialog("Refuser la demande ?", isPresented: $isConfirmingDecline, titleVisibility: .visible) {
                 Button("Refuser", role: .destructive) { Task { await viewModel.decline() } }
@@ -67,7 +85,7 @@ struct ConversationView: View {
             ) { message in
                 Button("Retirer", role: .destructive) { Task { await viewModel.retract(message) } }
             } message: { _ in
-                Text("Il sera retiré pour vous deux.")
+                Text(viewModel.group != nil ? "Il sera retiré pour tous les membres." : "Il sera retiré pour vous deux.")
             }
             .alert(
                 "Messages",
@@ -115,15 +133,18 @@ struct ConversationView: View {
                                     if let anchor = await viewModel.loadOlder() { proxy.scrollTo(anchor, anchor: .top) }
                                 }
                             }
-                    } else if let conversation = viewModel.conversation {
-                        ConversationHeader(user: conversation.participant) {
-                            openedProfile = ProfileRoute(username: conversation.participant.username)
+                    } else if let group = viewModel.group {
+                        GroupHeader(group: group, ownID: viewModel.ownID) { showsGroupSettings = true }
+                    } else if let participant = viewModel.conversation?.participant {
+                        ConversationHeader(user: participant) {
+                            openedProfile = ProfileRoute(username: participant.username)
                         }
                     }
                     let ownID = viewModel.ownID
                     let timestamped = viewModel.timestampedIDs
-                    let seenID = viewModel.seenMessageID
-                    ForEach(viewModel.messages) { message in
+                    let seen = viewModel.seen
+                    let inGroup = viewModel.group != nil
+                    ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
                         let isOwn = message.senderID == ownID
                         if timestamped.contains(message.id) {
                             Text(message.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))
@@ -131,24 +152,42 @@ struct ConversationView: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 8)
                         }
-                        MessageBubble(message: message, isOwn: isOwn) { videoID in
-                            container.router.presentedVideo = AppRouter.VideoRoute(id: videoID)
-                        } openLive: { liveID in
-                            container.router.openLive(liveID, source: .message)
-                        }
-                        .contextMenu {
-                            if !message.content.isEmpty {
-                                Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                        if let event = message.event {
+                            Text(event.text(actor: message.sender, ownID: ownID))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                                .id(message.id)
+                                .accessibilityIdentifier("conversation.groupEvent")
+                        } else {
+                            // Groupe : photo et nom de l'expéditeur au premier message d'une suite.
+                            let previous = index > 0 ? viewModel.messages[index - 1] : nil
+                            let showsSender = inGroup && !isOwn && (previous?.senderID != message.senderID || previous?.event != nil)
+                            MessageBubble(message: message, isOwn: isOwn, sender: inGroup && !isOwn ? message.sender : nil, showsSender: showsSender)
+                            {
+                                videoID in
+                                container.router.presentedVideo = AppRouter.VideoRoute(id: videoID)
+                            } openLive: { liveID in
+                                container.router.openLive(liveID, source: .message)
+                            } openProfile: { username in
+                                openedProfile = ProfileRoute(username: username)
                             }
-                            if isOwn {
-                                Button("Retirer", systemImage: "trash", role: .destructive) { retracting = message }
-                            } else {
-                                Button("Signaler", systemImage: "flag") { reportTarget = .message(id: message.id) }
+                            .contextMenu {
+                                if !message.content.isEmpty {
+                                    Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                                }
+                                if isOwn {
+                                    Button("Retirer", systemImage: "trash", role: .destructive) { retracting = message }
+                                } else {
+                                    Button("Signaler", systemImage: "flag") { reportTarget = .message(id: message.id) }
+                                }
                             }
+                            .id(message.id)
                         }
-                        .id(message.id)
-                        if message.id == seenID {
-                            Text("Vu")
+                        if message.id == seen?.messageID, let label = seen?.label {
+                            Text(label)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -165,9 +204,14 @@ struct ConversationView: View {
                         )
                     }
                     if viewModel.isOtherTyping {
-                        TypingBubble()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .transition(.opacity)
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let label = viewModel.typingLabel {
+                                Text(label).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("conversation.typingLabel")
+                            }
+                            TypingBubble()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomID)
                 }
@@ -258,7 +302,11 @@ struct ConversationView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                Button("Voir le profil", systemImage: "person.crop.circle") { openedProfile = ProfileRoute(username: viewModel.username) }
+                if viewModel.group != nil {
+                    Button("Réglages du groupe", systemImage: "person.2") { showsGroupSettings = true }
+                } else {
+                    Button("Voir le profil", systemImage: "person.crop.circle") { openedProfile = ProfileRoute(username: viewModel.username) }
+                }
                 if viewModel.conversation != nil, !viewModel.isRequestReceived {
                     Button("Supprimer la conversation", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
                 }
@@ -285,6 +333,26 @@ private struct ConversationHeader: View {
             .padding(.vertical, 16)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// En tête d'un groupe dont tout l'historique est chargé : photos, nom, membres ; toucher ouvre les réglages.
+private struct GroupHeader: View {
+    let group: GroupChat
+    let ownID: String?
+    let openSettings: () -> Void
+
+    var body: some View {
+        Button(action: openSettings) {
+            VStack(spacing: 6) {
+                ConversationAvatar(users: Array(group.others(ownID: ownID).prefix(2)), size: 72)
+                Text(group.title(ownID: ownID)).font(.headline).multilineTextAlignment(.center)
+                Text("\(group.members.count) membres · Groupe privé").font(.subheadline).foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("conversation.groupHeader")
     }
 }
 
@@ -320,10 +388,38 @@ private struct RequestBar: View {
 private struct MessageBubble: View {
     let message: DirectMessage
     let isOwn: Bool
+    // Groupe : l'expéditeur d'un message d'un autre (photo à gauche, nom au premier message d'une suite).
+    var sender: UserSummary? = nil
+    var showsSender = false
     let openVideo: (String) -> Void
     let openLive: (String) -> Void
+    var openProfile: (String) -> Void = { _ in }
 
     var body: some View {
+        if let sender {
+            HStack(alignment: .bottom, spacing: 8) {
+                Button {
+                    openProfile(sender.username)
+                } label: {
+                    AvatarView(url: sender.avatarURL, name: sender.displayName, size: 28)
+                }
+                .buttonStyle(.plain)
+                .opacity(showsSender ? 1 : 0)
+                .accessibilityHidden(!showsSender)
+                VStack(alignment: .leading, spacing: 2) {
+                    if showsSender {
+                        Text(sender.displayName).font(.caption).foregroundStyle(.secondary)
+                    }
+                    bubbles
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            bubbles
+        }
+    }
+
+    private var bubbles: some View {
         VStack(alignment: isOwn ? .trailing : .leading, spacing: 4) {
             if let story = message.story {
                 RepliedStoryCard(story: story, isOwn: isOwn)

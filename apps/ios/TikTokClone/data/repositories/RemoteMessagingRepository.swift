@@ -31,7 +31,8 @@ struct RemoteMessagingRepository: MessagingRepository {
             return try ok.body.json.items.map {
                 MessageSearchResult(
                     conversationID: $0.conversationId, messageID: $0.messageId, content: $0.content, createdAt: $0.createdAt,
-                    participant: UserSummary($0.participant), sender: UserSummary($0.sender))
+                    participant: UserSummary($0.participant), sender: UserSummary($0.sender),
+                    group: $0.group.map { (name: $0.name, members: $0.members.map(UserSummary.init)) })
             }
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .unauthorized: throw AppError.sessionExpired
@@ -183,6 +184,99 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
+    // MARK: - Chats de groupe (ADR-059)
+
+    func createGroup(userIDs: [String], name: String?) async throws -> Conversation {
+        switch try await mappingErrors({ try await client.createGroup(body: .json(.init(userIds: userIDs, name: name))) }) {
+        case .created(let created): return Conversation(try created.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        // Un des comptes n'est plus un ami (désabonnement, blocage) : le message de l'API le dit.
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        case .tooManyRequests(let error): throw AppError.tooManyActions(.groups, retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func renameGroup(conversationID: String, name: String?) async throws -> Conversation {
+        let output = try await mappingErrors {
+            try await client.renameGroup(path: .init(id: conversationID), body: .json(.init(name: name ?? "")))
+        }
+        switch output {
+        case .ok(let ok): return Conversation(try ok.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func addGroupMembers(conversationID: String, userIDs: [String]) async throws -> Conversation {
+        let output = try await mappingErrors {
+            try await client.addGroupMembers(path: .init(id: conversationID), body: .json(.init(userIds: userIDs)))
+        }
+        switch output {
+        case .ok(let ok): return Conversation(try ok.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        case .notFound: throw AppError.notFound
+        // Groupe plein (32 membres).
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func removeGroupMember(conversationID: String, userID: String) async throws {
+        switch try await mappingErrors({ try await client.removeGroupMember(path: .init(id: conversationID, userId: userID)) }) {
+        case .noContent: return
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        // Déjà retiré (sur un autre appareil, ou parti de lui-même) : le résultat attendu est atteint.
+        case .notFound: return
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func leaveGroup(conversationID: String) async throws {
+        switch try await mappingErrors({ try await client.leaveGroup(path: .init(id: conversationID)) }) {
+        case .noContent: return
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        // Déjà parti (autre appareil, ou retiré entre-temps).
+        case .notFound: return
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func setGroupMuted(conversationID: String, muted: Bool) async throws {
+        if muted {
+            switch try await mappingErrors({ try await client.muteGroup(path: .init(id: conversationID)) }) {
+            case .noContent: return
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            case .unauthorized: throw AppError.sessionExpired
+            case .notFound: throw AppError.notFound
+            case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+            case .undocumented: throw AppError.unexpected
+            }
+        } else {
+            switch try await mappingErrors({ try await client.unmuteGroup(path: .init(id: conversationID)) }) {
+            case .noContent: return
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            case .unauthorized: throw AppError.sessionExpired
+            case .notFound: throw AppError.notFound
+            case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+            case .undocumented: throw AppError.unexpected
+            }
+        }
+    }
+
     func deleteMessage(id: String) async throws {
         switch try await mappingErrors({ try await client.deleteMessage(path: .init(id: id)) }) {
         case .noContent: return
@@ -208,7 +302,34 @@ extension DirectMessage {
             createdAt: dto.createdAt,
             clientMessageID: dto.clientMessageId,
             story: dto.story.map(RepliedStory.init),
-            live: dto.live.map { SharedLive(id: $0.id, available: $0.available, title: $0.title ?? nil, host: $0.host.map(UserSummary.init)) }
+            live: dto.live.map { SharedLive(id: $0.id, available: $0.available, title: $0.title ?? nil, host: $0.host.map(UserSummary.init)) },
+            sender: dto.sender.map(UserSummary.init),
+            event: dto.event.map(GroupEvent.init)
+        )
+    }
+}
+
+extension GroupEvent {
+    init(_ dto: Components.Schemas.GroupEventResponse) {
+        let kind: Kind =
+            switch dto._type {
+            case .created: .created
+            case .added: .added
+            case .removed: .removed
+            case .left: .left
+            case .renamed: .renamed
+            }
+        self.init(kind: kind, user: dto.user.map(UserSummary.init), name: dto.name ?? nil)
+    }
+}
+
+extension GroupChat {
+    init(_ dto: Components.Schemas.GroupResponse) {
+        self.init(
+            name: dto.name,
+            adminID: dto.adminId,
+            muted: dto.muted,
+            members: dto.members.map { GroupMember(user: UserSummary($0.user), joinedAt: $0.joinedAt, lastReadMessageID: $0.lastReadMessageId) }
         )
     }
 }
@@ -240,7 +361,8 @@ extension Conversation {
     init(_ dto: Components.Schemas.ConversationResponse) {
         self.init(
             id: dto.id,
-            participant: UserSummary(dto.participant),
+            participant: dto.participant.map(UserSummary.init),
+            group: dto.group.map(GroupChat.init),
             status: ConversationStatus(dto.status),
             lastMessage: dto.lastMessage.map(DirectMessage.init),
             unreadCount: dto.unreadCount,
