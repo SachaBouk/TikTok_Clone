@@ -67,6 +67,11 @@ final class PagedList<Item: Identifiable & Equatable> {
             state = .loaded
         } catch {
             guard generation == self.generation else { return }
+            // Tâche de la vue annulée (vue recréée, changement de compte) : pas une erreur, le prochain affichage relit.
+            if Self.isCancellation(error) {
+                state = items.isEmpty ? .idle : .loaded
+                return
+            }
             if let message = handle(error) { state = items.isEmpty ? .failed(message) : .loaded }
         }
     }
@@ -130,6 +135,12 @@ final class PagedList<Item: Identifiable & Equatable> {
     func replace(_ item: Item) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index] = item
+    }
+
+    private static func isCancellation(_ error: any Error) -> Bool {
+        if Task.isCancelled || error is CancellationError { return true }
+        if let error = error as? URLError { return error.code == .cancelled }
+        return false
     }
 
     private func handle(_ error: any Error) -> String? {
