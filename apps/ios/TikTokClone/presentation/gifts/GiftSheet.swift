@@ -18,13 +18,21 @@ struct GiftSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                balanceBar
-                content
-                Spacer(minLength: 0)
-                sendButton
+            // Défilant : en demi-hauteur, l'avertissement « Solde insuffisant » faisait remonter le solde contre le titre.
+            ScrollView {
+                VStack(spacing: 16) {
+                    balanceBar
+                    content
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
             }
-            .padding()
+            .safeAreaInset(edge: .bottom) {
+                sendButton
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+            }
             .navigationTitle("Offrir un cadeau à @\(viewModel.target.recipient.username)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

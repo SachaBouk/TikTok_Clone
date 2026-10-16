@@ -302,32 +302,18 @@ struct FeedPageView: View {
             }
             .overlay(alignment: .bottom) {
                 HStack(alignment: .bottom, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Pastille sans ombre (fond blanc plein) : seul le texte en dessous en a une.
                         if let badge = RepostBadge.of(video, isOwn: !showsFollowButton) {
                             RepostPill(badge: badge, toggle: { actions.toggle(.repost) })
-                                .padding(.bottom, 4)
                         }
-                        NavigationLink(value: ProfileRoute(username: video.author.username)) {
-                            Text("@\(video.author.username)").font(.headline)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("video.author")
-                        if let description = video.description, !description.isEmpty {
-                            // Hashtags cliquables (ADR-049) ; sans hashtag, le texte laisse passer les touchers.
-                            HashtagText(text: description, onHashtag: actions.openHashtag)
-                                .font(.subheadline).lineLimit(3)
-                                .tint(.white)
-                                .allowsHitTesting(!HashtagRules.occurrences(in: description).isEmpty)
-                                .accessibilityIdentifier("video.description")
-                        }
+                        authorAndDescription
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // Lisible sur une vidéo claire.
-                    .shadow(color: .black.opacity(0.6), radius: 3)
                     FeedActionColumn(video: video, showsFollowButton: showsFollowButton, actions: actions)
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, bottomInset + 14)
+                .padding(.bottom, bottomInset + Self.progressBarGap + 14)
                 .background(alignment: .bottom) {
                     LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 280 + bottomInset)
@@ -336,13 +322,37 @@ struct FeedPageView: View {
             }
             .overlay(alignment: .bottom) {
                 if let progress {
+                    // Un peu au-dessus de la barre d'onglets, qui la touchait.
                     PlaybackProgressBar(progress: progress, isPaused: showsPauseIndicator)
-                        .padding(.bottom, bottomInset)
+                        .padding(.bottom, bottomInset + Self.progressBarGap)
                         .allowsHitTesting(false)
                 }
             }
             .foregroundStyle(.white)
             .animation(.easeOut(duration: 0.15), value: showsPauseIndicator)
+    }
+
+    // Espace entre la barre de progression et la barre d'onglets.
+    static let progressBarGap: CGFloat = 8
+
+    // Pseudo et description, avec une ombre pour rester lisibles sur une vidéo claire.
+    private var authorAndDescription: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            NavigationLink(value: ProfileRoute(username: video.author.username)) {
+                Text("@\(video.author.username)").font(.headline)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("video.author")
+            if let description = video.description, !description.isEmpty {
+                // Hashtags cliquables (ADR-049) ; sans hashtag, le texte laisse passer les touchers.
+                HashtagText(text: description, onHashtag: actions.openHashtag)
+                    .font(.subheadline).lineLimit(3)
+                    .tint(.white)
+                    .allowsHitTesting(!HashtagRules.occurrences(in: description).isEmpty)
+                    .accessibilityIdentifier("video.description")
+            }
+        }
+        .shadow(color: .black.opacity(0.6), radius: 3)
     }
 }
 
