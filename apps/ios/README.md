@@ -176,7 +176,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 
 ## Onglet « Messages » et messagerie
 
-- Onglet « Messages » (ADR-058, ex-« Boîte de réception »), comme TikTok : rangée de stories (« Créer »), ligne « Activité et nouveaux abonnés » (dernière activité, badge), « Demandes de message » (s'il y en a), puis les conversations, de la plus récemment active à la plus ancienne (aperçu et date sur une ligne, non lus en rouge). Glisser une conversation : la supprimer pour soi.
+- Onglet « Messages » (ADR-058, ex-« Boîte de réception »), comme TikTok : rangée de stories (« Créer »), ligne « Activité et nouveaux abonnés » (dernière activité, badge), « Demandes de message » (s'il y en a), puis les conversations, de la plus récemment active à la plus ancienne (aperçu et date sur une ligne, non lus en rouge). Glisser une conversation : la supprimer pour soi. Tirer vers le bas actualise, avec les deux points rose et cyan comme TikTok (aussi sur les profils).
 - Loupe : recherche « Compte et messages » (`searchAccounts`, `searchMessages`) ; avant la saisie, les comptes des conversations récentes ; toucher un compte ou un message ouvre la conversation. Sensible aux accents.
 - Badge de l'onglet : notifications non lues, conversations non lues et demandes reçues, suivis en direct.
 - Conversation : messages texte et vidéos partagées (toucher : la vidéo en plein écran), « Vu » sous son dernier message lu, « … » quand l'autre écrit. Appui long : copier, retirer son message (pour les deux). Menu « … » : profil, supprimer la conversation.

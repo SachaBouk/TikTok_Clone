@@ -153,7 +153,8 @@ struct InboxView: View {
         // Lives des abonnements (ADR-053) aussi : un live terminé disparaît.
         .task { await container.stories.refresh() }
         .task { await container.lives.refresh() }
-        .refreshable {
+        // Tirer pour actualiser avec les deux points, comme TikTok.
+        .dotsRefreshable {
             await messaging.refresh()
             await activity.reload()
             await container.stories.refresh()

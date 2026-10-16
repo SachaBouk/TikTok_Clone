@@ -147,7 +147,8 @@ struct ProfileView: View {
                 }
                 .padding(.top, 8)
             }
-            .refreshable { await viewModel.refresh() }
+            // Tirer pour actualiser avec les deux points, comme TikTok.
+            .dotsRefreshable { await viewModel.refresh() }
         }
     }
 
