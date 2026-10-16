@@ -68,6 +68,8 @@ struct FeedView: View {
         .onChange(of: session.isSignedIn) { Task { await reload() } }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
         .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
+        // Vidéo signalée : voile par-dessus, lecture arrêtée jusqu'à « Afficher la vidéo ».
+        .onChange(of: interactions.reportedVideoIDs, initial: true) { _, ids in viewModel.setMasked(ids) }
         .videoInteractionSheets(
             comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
             container: container
@@ -130,7 +132,8 @@ struct FeedView: View {
                     FeedPageView(
                         video: interactions.display(entry.video),
                         player: pool.player(for: entry.video.id),
-                        showsPauseIndicator: entry.id == viewModel.currentEntryID && viewModel.isPaused,
+                        showsPauseIndicator: entry.id == viewModel.currentEntryID && viewModel.isPaused
+                            && !interactions.reportedVideoIDs.contains(entry.video.id),
                         bottomInset: bottomInset,
                         showsFollowButton: !interactions.isOwn(entry.video),
                         actions: .init(
@@ -152,7 +155,9 @@ struct FeedView: View {
                             openStories: { container.router.openStories([entry.video.author], source: .feed) }
                         ),
                         // Barre de progression : la vidéo courante seulement.
-                        progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil
+                        progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
+                        revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
+                            ? { interactions.showReported(videoID: entry.video.id) } : nil
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
                     .id(entry.id)
@@ -249,6 +254,9 @@ struct FeedPageView: View {
     let actions: VideoPageActions
     // Position de lecture, lue à chaque image tant que la vidéo joue ; nil : pas de barre (page qui n'est pas la courante).
     var progress: (() -> PlaybackProgress?)? = nil
+    // Vidéo signalée (ADR-038) : voile « Merci pour ton signalement » par-dessus toute la page ; l'action l'enlève
+    // (« Afficher la vidéo »). Nil : pas de voile.
+    var revealReported: (() -> Void)? = nil
     @State private var burst: HeartBurst?
 
     private struct HeartBurst: Identifiable, Equatable {
@@ -328,8 +336,15 @@ struct FeedPageView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .overlay {
+                if let revealReported {
+                    ReportedVideoMask(thumbnailURL: video.thumbnailURL, bottomInset: bottomInset, reveal: revealReported)
+                        .transition(.opacity)
+                }
+            }
             .foregroundStyle(.white)
             .animation(.easeOut(duration: 0.15), value: showsPauseIndicator)
+            .animation(.easeInOut(duration: 0.25), value: revealReported == nil)
     }
 
     // Espace entre la barre de progression et la barre d'onglets.
@@ -353,6 +368,64 @@ struct FeedPageView: View {
             }
         }
         .shadow(color: .black.opacity(0.6), radius: 3)
+    }
+}
+
+// Voile d'une vidéo signalée, comme TikTok : miniature floutée et assombrie, coche verte dans un rond gris, « Merci pour
+// ton signalement », puis « Afficher la vidéo ». Il recouvre auteur, description et boutons, et retient les touchers
+// (pas de pause ni de like) ; le défilement vers la vidéo suivante reste possible.
+struct ReportedVideoMask: View {
+    let thumbnailURL: URL?
+    let bottomInset: CGFloat
+    let reveal: () -> Void
+
+    var body: some View {
+        Color.black
+            .overlay {
+                AsyncImage(url: thumbnailURL) { image in
+                    image.resizable().scaledToFill().blur(radius: 40, opaque: true)
+                } placeholder: {
+                    Color.black
+                }
+            }
+            .overlay { Color.black.opacity(0.35) }
+            .clipped()
+            .overlay {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(Color(red: 0.13, green: 0.85, blue: 0.6))
+                        .frame(width: 78, height: 78)
+                        .background(.white.opacity(0.15), in: Circle())
+                    Text("Merci pour ton signalement")
+                        .font(.title3.bold())
+                        .padding(.top, 22)
+                    Text("Pour améliorer ton expérience, cette vidéo a été masquée.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 10)
+                    Button(action: reveal) {
+                        Text("Afficher la vidéo")
+                            .font(.body.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 96)
+                    .accessibilityIdentifier("video.showReported")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 36)
+                .padding(.bottom, bottomInset)
+            }
+            .contentShape(Rectangle())
+            // Retient les touchers de la page dessous (pause, double toucher).
+            .onTapGesture {}
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("video.reportedMask")
     }
 }
 

@@ -2,8 +2,9 @@ import Foundation
 import Observation
 
 // Feuille de signalement (ADR-038), en étapes comme TikTok : un motif de la liste, sa page (explication, précision
-// facultative, « Envoyer »), puis « Merci pour ton signalement ». Rien n'est masqué ensuite (décision d'un administrateur),
-// mais l'écran de remerciement propose de bloquer l'auteur d'une vidéo ou d'un commentaire (`author`).
+// facultative, « Envoyer »), puis « Merci pour ton signalement ». L'API ne masque rien avant la décision d'un administrateur ;
+// une vidéo signalée est masquée sur l'appareil par un voile dans les lecteurs (`VideoInteractionsModel.reportedVideoIDs`),
+// et l'écran de remerciement propose de bloquer l'auteur d'une vidéo ou d'un commentaire (`author`).
 @MainActor
 @Observable
 final class ReportViewModel {
@@ -81,6 +82,7 @@ final class ReportViewModel {
         do {
             try await sendReport(target, reason: reason, details: details)
             state = .sent
+            if case .video(let id) = target { interactions?.reported(videoID: id) }
             analytics.track(.reportSubmitted(target: target, reason: reason))
         } catch {
             state = .editing

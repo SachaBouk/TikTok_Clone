@@ -200,6 +200,7 @@ final class AppContainer {
             wallet.reset()
             stories.reset()
             lives.reset()
+            videoInteractions.forgetReportedVideos()
         }
     }
 

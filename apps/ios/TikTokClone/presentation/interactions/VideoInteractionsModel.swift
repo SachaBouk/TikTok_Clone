@@ -36,6 +36,10 @@ final class VideoInteractionsModel {
     // Comptes bloqués depuis le chargement des écrans : ceux-ci retirent leurs vidéos, commentaires et lignes,
     // que l'API ne renvoie plus (blocage dans les deux sens). Débloquer retire le compte de l'ensemble.
     private(set) var blockedUserIDs: Set<String> = []
+    // Vidéos signalées depuis l'app (ADR-038) : masquées par un voile « Merci pour ton signalement » dans les lecteurs,
+    // comme TikTok, jusqu'à « Afficher la vidéo ». Sur l'appareil seulement, pendant la session de l'app (oubliées à
+    // la déconnexion et à la relance) ; l'API ne masque rien avant la décision d'un administrateur.
+    private(set) var reportedVideoIDs: Set<String> = []
     // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
     // (ADR-048) se recharge quand on y revient.
     private(set) var followsVersion = 0
@@ -150,6 +154,21 @@ final class VideoInteractionsModel {
     // Compte débloqué (profil ou réglages) : ses contenus reviendront au prochain chargement.
     func unblocked(_ userID: String) {
         blockedUserIDs.remove(userID)
+    }
+
+    // Vidéo signalée : masquée dans les lecteurs.
+    func reported(videoID: String) {
+        reportedVideoIDs.insert(videoID)
+    }
+
+    // « Afficher la vidéo » sur le voile : la vidéo redevient visible (le signalement reste envoyé).
+    func showReported(videoID: String) {
+        reportedVideoIDs.remove(videoID)
+    }
+
+    // Déconnexion : un autre compte ne doit pas hériter des vidéos masquées.
+    func forgetReportedVideos() {
+        reportedVideoIDs.removeAll()
     }
 
     // Suppression d'une de ses vidéos, quel que soit l'écran (feed, lecteur d'une grille, vidéo seule).

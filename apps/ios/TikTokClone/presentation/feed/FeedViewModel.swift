@@ -55,6 +55,8 @@ final class FeedViewModel {
     private var isLoadingMore = false
     // Onglet affiché et app au premier plan.
     private var isActive = true
+    // Vidéos masquées par le voile d'un signalement : jamais lues tant qu'il est là.
+    private var maskedVideoIDs: Set<String> = []
     private var viewTracker = ViewTracker()
     private var viewTask: Task<Void, Never>?
     private var guestWatches = GuestWatchCounter()
@@ -155,7 +157,7 @@ final class FeedViewModel {
         // Avant de changer de lecteur : la position de la vidéo quittée est lue ici (moment du swipe).
         watch.finish(.swipe)
         playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
-        if isActive {
+        if isActive && !maskedVideoIDs.contains(video.id) {
             playback.play(video.id)
             watch.play(video)
             scheduleView(of: video)
@@ -167,13 +169,31 @@ final class FeedViewModel {
 
     // Toucher la vidéo : pause ou reprise.
     func togglePause() {
-        guard let video = currentVideo else { return }
+        guard let video = currentVideo, !maskedVideoIDs.contains(video.id) else { return }
         isPaused.toggle()
         if isPaused {
             viewTask?.cancel()
             watch.pause()
             playback.pauseAll()
         } else if isActive {
+            playback.play(video.id)
+            watch.play(video)
+            scheduleView(of: video)
+        }
+    }
+
+    // Vidéos signalées (voile « Merci pour ton signalement ») : la courante s'arrête quand elle est masquée, et reprend
+    // quand le voile est retiré (« Afficher la vidéo »), sauf si elle était en pause.
+    func setMasked(_ ids: Set<String>) {
+        let wasMasked = currentVideo.map { maskedVideoIDs.contains($0.id) } ?? false
+        maskedVideoIDs = ids
+        guard let video = currentVideo else { return }
+        let isMasked = ids.contains(video.id)
+        if isMasked && !wasMasked {
+            viewTask?.cancel()
+            watch.pause()
+            playback.pauseAll()
+        } else if !isMasked && wasMasked && isActive && !isPaused {
             playback.play(video.id)
             watch.play(video)
             scheduleView(of: video)
@@ -188,7 +208,7 @@ final class FeedViewModel {
             viewTask?.cancel()
             watch.finish(.leave)
             playback.pauseAll()
-        } else if let video = currentVideo, !isPaused {
+        } else if let video = currentVideo, !isPaused, !maskedVideoIDs.contains(video.id) {
             // Une vidéo seule a pu occuper les lecteurs entre-temps : on recharge la fenêtre.
             if let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
                 playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })

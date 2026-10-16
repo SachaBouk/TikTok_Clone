@@ -147,6 +147,28 @@ struct FeedViewModelTests {
         #expect(playback.played == ["a", "a", "a"])
     }
 
+    @Test("vidéo signalée : arrêtée sous le voile, ni lue ni mise en pause au toucher, reprise une fois affichée")
+    func maskedAfterReport() async {
+        let (viewModel, _) = await makeViewModel([.success(page(["a", "b", "c"], next: nil))])
+        await viewModel.start()
+        #expect(playback.played == ["a"])
+        viewModel.setMasked(["a"])
+        #expect(playback.pauseCount == 1)
+        viewModel.togglePause()
+        #expect(!viewModel.isPaused)
+        viewModel.setActive(false)
+        viewModel.setActive(true)
+        #expect(playback.played == ["a"])
+
+        viewModel.show(viewModel.entries[1].id)
+        #expect(playback.played == ["a", "b"])
+        viewModel.show(viewModel.entries[0].id)
+        #expect(playback.played == ["a", "b"])
+
+        viewModel.setMasked([])
+        #expect(playback.played == ["a", "b", "a"])
+    }
+
     @Test("échec du premier chargement, puis réessai")
     func failureThenRetry() async {
         let (viewModel, _) = await makeViewModel([.failure(.network), .success(page(["a"], next: nil))])

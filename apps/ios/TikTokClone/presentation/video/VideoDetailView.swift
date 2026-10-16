@@ -55,6 +55,10 @@ struct VideoDetailView: View {
         .onChange(of: interactions.blockedUserIDs) { _, ids in
             if case .loaded(let video) = viewModel.state, ids.contains(video.author.id) { dismiss() }
         }
+        // Vidéo signalée : voile par-dessus, lecture arrêtée jusqu'à « Afficher la vidéo ».
+        .onChange(of: interactions.reportedVideoIDs.contains(viewModel.videoID), initial: true) { _, masked in
+            viewModel.setMasked(masked)
+        }
         .videoInteractionSheets(
             comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
             container: container
@@ -78,7 +82,7 @@ struct VideoDetailView: View {
             FeedPageView(
                 video: interactions.display(video),
                 player: pool.player(for: video.id),
-                showsPauseIndicator: viewModel.isPaused,
+                showsPauseIndicator: viewModel.isPaused && !viewModel.isMasked,
                 bottomInset: bottomInset,
                 showsFollowButton: !interactions.isOwn(video),
                 actions: .init(
@@ -92,7 +96,8 @@ struct VideoDetailView: View {
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
                     openStories: { container.router.openStories([video.author], source: .feed) }
                 ),
-                progress: { pool.progress(of: video.id) }
+                progress: { pool.progress(of: video.id) },
+                revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil
             )
         }
     }

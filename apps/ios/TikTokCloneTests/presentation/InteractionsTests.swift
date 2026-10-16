@@ -259,6 +259,15 @@ struct InteractionsTests {
         try await Task.sleep(for: .milliseconds(120))
         #expect(history.recorded == ["v1"])
 
+        // Vidéo signalée : arrêtée sous le voile, reprise une fois affichée.
+        viewModel.setMasked(true)
+        viewModel.togglePause()
+        #expect(!viewModel.isPaused)
+        viewModel.resume()
+        #expect(playback.played == ["v1"])
+        viewModel.setMasked(false)
+        #expect(playback.played == ["v1", "v1"])
+
         let missing = VideoDetailViewModel(
             videoID: "absente", loadVideo: LoadVideoUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
             playback: playback, session: session, analytics: analytics)

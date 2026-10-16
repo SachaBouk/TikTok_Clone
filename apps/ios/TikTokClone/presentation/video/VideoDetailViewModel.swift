@@ -25,6 +25,8 @@ final class VideoDetailViewModel {
     private let watch: WatchReporter
     private var viewTask: Task<Void, Never>?
     private var viewRecorded = false
+    // Voile d'un signalement (« Merci pour ton signalement ») : la vidéo n'est pas lue tant qu'il est là.
+    private(set) var isMasked = false
 
     init(
         videoID: String,
@@ -56,6 +58,7 @@ final class VideoDetailViewModel {
             let video = try await loadVideo(id: videoID)
             state = .loaded(video)
             playback.keepLoaded([video])
+            guard !isMasked else { return }
             playback.play(video.id)
             watch.play(video)
             scheduleView()
@@ -65,7 +68,7 @@ final class VideoDetailViewModel {
     }
 
     func togglePause() {
-        guard let video else { return }
+        guard let video, !isMasked else { return }
         isPaused.toggle()
         if isPaused {
             viewTask?.cancel()
@@ -80,11 +83,22 @@ final class VideoDetailViewModel {
 
     // Retour sur la vidéo (après un profil ouvert par-dessus) : les lecteurs ont pu servir ailleurs.
     func resume() {
-        guard let video, !isPaused else { return }
+        guard let video, !isPaused, !isMasked else { return }
         playback.keepLoaded([video])
         playback.play(video.id)
         watch.play(video)
         scheduleView()
+    }
+
+    // Vidéo signalée masquée, puis affichée (« Afficher la vidéo ») : arrêtée, puis reprise sauf si elle était en pause.
+    func setMasked(_ masked: Bool) {
+        guard masked != isMasked else { return }
+        isMasked = masked
+        if masked {
+            stop()
+        } else {
+            resume()
+        }
     }
 
     // Écran fermé, ou recouvert : le feed reprend la main sur les lecteurs.

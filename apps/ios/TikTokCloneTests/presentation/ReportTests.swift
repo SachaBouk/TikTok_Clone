@@ -109,6 +109,31 @@ struct ReportViewModelTests {
         #expect(interactions.blockedUserIDs == ["bob-id"])
     }
 
+    @Test("vidéo signalée : masquée par le voile jusqu'à « Afficher la vidéo » ; oubliée à la déconnexion")
+    func reportedVideoMasked() async {
+        let (viewModel, interactions) = await makeBlockingViewModel(relationships: FakeRelationshipRepository())
+        #expect(interactions.reportedVideoIDs.isEmpty)
+        viewModel.reason = .spam
+        await viewModel.send()
+        #expect(interactions.reportedVideoIDs == ["v1"])
+        interactions.reset()
+        #expect(interactions.reportedVideoIDs == ["v1"])
+        interactions.showReported(videoID: "v1")
+        #expect(interactions.reportedVideoIDs.isEmpty)
+        interactions.reported(videoID: "v2")
+        interactions.forgetReportedVideos()
+        #expect(interactions.reportedVideoIDs.isEmpty)
+    }
+
+    @Test("signalement refusé : la vidéo n'est pas masquée")
+    func failedReportNotMasked() async {
+        reports.fail(with: .rejected("Impossible"))
+        let (viewModel, interactions) = await makeBlockingViewModel(relationships: FakeRelationshipRepository())
+        viewModel.reason = .spam
+        await viewModel.send()
+        #expect(interactions.reportedVideoIDs.isEmpty)
+    }
+
     @Test("blocage refusé : rien ne change, message affiché")
     func blockAuthorFails() async {
         let relationships = FakeRelationshipRepository()
