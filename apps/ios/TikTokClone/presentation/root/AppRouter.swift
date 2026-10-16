@@ -27,6 +27,9 @@ final class AppRouter {
     // deux points à la place de la loupe).
     var homeRefreshRequests = 0
     var isHomeRefreshing = false
+    // Pareil pour l'onglet Amis (ADR-054) : flèche dans la barre, deux points en haut à droite.
+    var friendsRefreshRequests = 0
+    var isFriendsRefreshing = false
 
     // Visionneuse de stories (ADR-051) : les stories d'un compte, puis celles des suivants (rangée).
     struct StoriesRoute: Identifiable, Equatable {

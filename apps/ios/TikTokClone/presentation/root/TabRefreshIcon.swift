@@ -1,12 +1,13 @@
 import SwiftUI
 import UIKit
 
-// Icône de l'onglet Accueil pendant le rechargement demandé par un toucher sur l'onglet (comme TikTok, d'après une
-// vidéo) : la maison rétrécit, une flèche circulaire grandit à sa place et tourne (un tour en 0,8 s) tant que le feed
-// se recharge, puis rétrécit et la maison revient. La barre d'onglets native n'anime pas les symboles
-// (`symbolEffect` y est ignoré) : chaque étape est dessinée en image (`HomeTabIcon.image`), ~30 fois par seconde.
-enum HomeTabIcon: Equatable {
-    // Le symbole « house » de l'onglet, géré par la barre (plein une fois sélectionné).
+// Icône d'un onglet de feed (Accueil, Amis) pendant le rechargement demandé par un toucher sur l'onglet déjà affiché
+// (comme TikTok, d'après une vidéo) : l'icône de l'onglet rétrécit, une flèche circulaire grandit à sa place et tourne
+// (un tour en 0,8 s) tant que le feed se recharge, puis rétrécit et l'icône revient. La barre d'onglets native n'anime
+// pas les symboles (`symbolEffect` y est ignoré) : chaque étape est dessinée en image (`TabRefreshIcon.image`), ~30 fois
+// par seconde.
+enum TabRefreshIcon: Equatable {
+    // Le symbole de l'onglet, géré par la barre (plein une fois sélectionné).
     case standard
     // Une étape dessinée : symbole, rotation en degrés, échelle de 0 à 1.
     case frame(symbol: String, angle: Double, scale: Double)
@@ -16,18 +17,19 @@ enum HomeTabIcon: Equatable {
     static let frameInterval: Duration = .milliseconds(33)
 
     // Étape à `elapsed` secondes du début ; `endedFor` : secondes depuis la fin du rechargement (nil s'il dure encore).
-    static func at(elapsed: TimeInterval, endedFor: TimeInterval?) -> HomeTabIcon {
+    // `symbol` : l'icône pleine de l'onglet (« house.fill », « person.2.fill »).
+    static func at(elapsed: TimeInterval, endedFor: TimeInterval?, symbol: String) -> TabRefreshIcon {
         if let ended = endedFor {
             if ended >= 2 * shrink { return .standard }
             return ended < shrink
                 ? .frame(symbol: "arrow.clockwise", angle: angle(elapsed), scale: 1 - ended / shrink)
-                : .frame(symbol: "house.fill", angle: 0, scale: (ended - shrink) / shrink)
+                : .frame(symbol: symbol, angle: 0, scale: (ended - shrink) / shrink)
         }
-        if elapsed < shrink { return .frame(symbol: "house.fill", angle: 0, scale: 1 - elapsed / shrink) }
+        if elapsed < shrink { return .frame(symbol: symbol, angle: 0, scale: 1 - elapsed / shrink) }
         return .frame(symbol: "arrow.clockwise", angle: angle(elapsed), scale: min(1, (elapsed - shrink) / shrink))
     }
 
-    // La fin attend que la flèche ait grandi : la maison ne revient pas avant que la flèche se soit montrée.
+    // La fin attend que la flèche ait grandi : l'icône ne revient pas avant que la flèche se soit montrée.
     static func canEnd(elapsed: TimeInterval) -> Bool {
         elapsed >= 2 * shrink
     }

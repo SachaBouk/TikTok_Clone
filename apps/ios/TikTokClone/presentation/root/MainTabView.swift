@@ -15,13 +15,14 @@ struct MainTabView: View {
     @State private var friendsPath = NavigationPath()
     @State private var inboxPath = NavigationPath()
     @State private var profilePath = NavigationPath()
-    // Icône de l'onglet Accueil pendant un rechargement (flèche qui tourne, `HomeTabIcon`).
-    @State private var homeIcon = HomeTabIcon.standard
-    @State private var homeIconTask: Task<Void, Never>?
+    // Icônes des onglets Accueil et Amis pendant un rechargement (flèche qui tourne, `TabRefreshIcon`).
+    @State private var homeIcon = TabRefreshIcon.standard
+    @State private var friendsIcon = TabRefreshIcon.standard
+    @State private var iconTasks: [Destination: Task<Void, Never>] = [:]
     private var router: AppRouter { container.router }
 
-    // Toucher l'onglet déjà sélectionné : Accueil revient au feed s'il y a des écrans par-dessus, sinon le recharge
-    // (comme TikTok).
+    // Toucher l'onglet déjà sélectionné : Accueil et Amis reviennent au feed s'il y a des écrans par-dessus, sinon le
+    // rechargent (comme TikTok).
     private var tabSelection: Binding<Destination> {
         Binding(
             get: { selection },
@@ -29,22 +30,41 @@ struct MainTabView: View {
                 if new == .home, selection == .home {
                     if feedPath.isEmpty { container.router.homeRefreshRequests += 1 } else { feedPath = NavigationPath() }
                 }
+                if new == .friends, selection == .friends, session.isSignedIn {
+                    if friendsPath.isEmpty { container.router.friendsRefreshRequests += 1 } else { friendsPath = NavigationPath() }
+                }
                 selection = new
             }
         )
     }
 
-    // Étapes de l'icône d'Accueil, ~30 par seconde, jusqu'au retour de la maison après le rechargement.
-    private func animateHomeIcon() async {
+    // Étapes de l'icône d'un onglet, ~30 par seconde, jusqu'au retour de son icône après le rechargement.
+    private func animateIcon(of tab: Destination) async {
         let start = Date.now
         var end: Date?
         while !Task.isCancelled {
             let elapsed = Date.now.timeIntervalSince(start)
-            if end == nil, !container.router.isHomeRefreshing, HomeTabIcon.canEnd(elapsed: elapsed) { end = .now }
-            let icon = HomeTabIcon.at(elapsed: elapsed, endedFor: end.map { Date.now.timeIntervalSince($0) })
-            homeIcon = icon
+            let refreshing = tab == .home ? container.router.isHomeRefreshing : container.router.isFriendsRefreshing
+            if end == nil, !refreshing, TabRefreshIcon.canEnd(elapsed: elapsed) { end = .now }
+            let icon = TabRefreshIcon.at(
+                elapsed: elapsed, endedFor: end.map { Date.now.timeIntervalSince($0) }, symbol: tab == .home ? "house.fill" : "person.2.fill")
+            if tab == .home { homeIcon = icon } else { friendsIcon = icon }
             if icon == .standard { return }
-            try? await Task.sleep(for: HomeTabIcon.frameInterval)
+            try? await Task.sleep(for: TabRefreshIcon.frameInterval)
+        }
+    }
+
+    private func startIconAnimation(_ tab: Destination) {
+        iconTasks[tab]?.cancel()
+        iconTasks[tab] = Task { await animateIcon(of: tab) }
+    }
+
+    // Icône d'un onglet de feed : la sienne, ou l'étape dessinée du rechargement.
+    @ViewBuilder
+    private func tabIcon(_ icon: TabRefreshIcon, systemImage: String) -> some View {
+        switch icon {
+        case .standard: Image(systemName: systemImage)
+        case .frame(let symbol, let angle, let scale): Image(uiImage: TabRefreshIcon.image(symbol: symbol, angle: angle, scale: scale))
         }
     }
 
@@ -70,14 +90,11 @@ struct MainTabView: View {
                 Label {
                     Text("Accueil")
                 } icon: {
-                    switch homeIcon {
-                    case .standard: Image(systemName: "house")
-                    case .frame(let symbol, let angle, let scale): Image(uiImage: HomeTabIcon.image(symbol: symbol, angle: angle, scale: scale))
-                    }
+                    tabIcon(homeIcon, systemImage: "house")
                 }
             }
             // Feed des amis (ADR-054), entre l'accueil et la publication.
-            Tab("Amis", systemImage: "person.2", value: .friends) {
+            Tab(value: .friends) {
                 SignedInOnly(title: "Amis", systemImage: "person.2", reason: "Connecte-toi pour voir les vidéos de tes amis.") {
                     NavigationStack(path: $friendsPath) {
                         FriendsFeedView(container: container, isTabActive: selection == .friends && !router.coversTabs) {
@@ -88,6 +105,12 @@ struct MainTabView: View {
                     }
                     .providesNavigationPath($friendsPath)
                     .environment(\.isTabActive, selection == .friends && !router.coversTabs)
+                }
+            } label: {
+                Label {
+                    Text("Amis")
+                } icon: {
+                    tabIcon(friendsIcon, systemImage: "person.2")
                 }
             }
             Tab("Publier", systemImage: "plus.app", value: .publish) {
@@ -132,9 +155,10 @@ struct MainTabView: View {
         }
         .onChange(of: selection) { router.isProfileMenuOpen = false }
         .onChange(of: router.isHomeRefreshing) { _, refreshing in
-            guard refreshing else { return }
-            homeIconTask?.cancel()
-            homeIconTask = Task { await animateHomeIcon() }
+            if refreshing { startIconAnimation(.home) }
+        }
+        .onChange(of: router.isFriendsRefreshing) { _, refreshing in
+            if refreshing { startIconAnimation(.friends) }
         }
         .onChange(of: session.isSignedIn) { router.isProfileMenuOpen = false }
         .sheet(isPresented: $session.isPresentingSignIn) {

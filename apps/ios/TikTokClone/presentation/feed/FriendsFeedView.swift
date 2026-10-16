@@ -5,6 +5,8 @@ import SwiftUI
 // - Chargé à la première ouverture de l'onglet (la vue n'existe que pour un compte connecté).
 // - Rechargé quand on revient sur l'onglet après un abonnement, un désabonnement ou un blocage fait dans l'app
 //   (`VideoInteractionsModel.followsVersion`), ou quand l'un d'eux aboutit pendant qu'il est affiché.
+// - Toucher l'onglet alors qu'il est affiché le recharge (comme l'accueil) : les deux points rose et cyan apparaissent en
+//   haut à droite le temps du rechargement (0,8 s au moins), la flèche tourne dans la barre d'onglets.
 struct FriendsFeedView: View {
     let container: AppContainer
     // Onglet « Amis » sélectionné, sans plein écran par-dessus.
@@ -40,8 +42,29 @@ struct FriendsFeedView: View {
                 .padding(.top, 6)
                 .accessibilityAddTraits(.isHeader)
         }
+        .overlay(alignment: .topTrailing) {
+            if container.router.isFriendsRefreshing {
+                DotsLoader(size: 10)
+                    .frame(width: 44, height: 36)
+                    .padding(.trailing, 8)
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityIdentifier("friends.refreshing")
+            }
+        }
+        .onChange(of: container.router.friendsRefreshRequests) { Task { await refreshFromTab() } }
         .onChange(of: isTabActive) { reloadIfFollowsChanged() }
         .onChange(of: container.videoInteractions.followsVersion) { reloadIfFollowsChanged() }
+    }
+
+    private func refreshFromTab() async {
+        let router = container.router
+        guard !router.isFriendsRefreshing else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { router.isFriendsRefreshing = true }
+        async let minimum: Void = { try? await Task.sleep(for: HomeFeedView.refreshMinimumDuration) }()
+        loadedVersion = container.videoInteractions.followsVersion
+        await viewModel.reload()
+        await minimum
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { router.isFriendsRefreshing = false }
     }
 
     private func reloadIfFollowsChanged() {
