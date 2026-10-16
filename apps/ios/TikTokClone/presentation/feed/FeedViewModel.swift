@@ -58,6 +58,8 @@ final class FeedViewModel {
     private var viewTracker = ViewTracker()
     private var viewTask: Task<Void, Never>?
     private var guestWatches = GuestWatchCounter()
+    // Vidéos comptées pour l'invitation invité (lu par les tests : ils attendent qu'une vidéo soit comptée avant la suivante).
+    var guestWatchedCount: Int { guestWatches.watched.count }
 
     init(
         loadPage: any VideoPageSource,

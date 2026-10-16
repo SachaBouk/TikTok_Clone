@@ -109,7 +109,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 ## Interactions
 
-- Colonne de droite, comme TikTok : avatar avec « + » rouge pour suivre l'auteur, cœur (rouge une fois aimée), commentaires, favori (signet jaune une fois enregistrée), partage, chacun avec son compteur. Double toucher sur la vidéo : like.
+- Colonne de droite, comme TikTok : avatar avec « + » rouge pour suivre l'auteur (au toucher, comme TikTok, il se change en coche blanche puis disparaît), cœur (rouge une fois aimée), commentaires, favori (signet jaune une fois enregistrée), partage, chacun avec son compteur. Double toucher sur la vidéo : like.
 - Republication : pastille en bas à gauche, au-dessus du pseudo : « Republier », puis « Tu as republié » (toucher : retirer, après confirmation). Absente sur ses propres vidéos.
 - Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
 - En invité, toute action ouvre la connexion.

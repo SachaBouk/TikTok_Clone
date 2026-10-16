@@ -104,10 +104,10 @@ struct FeedViewModelTests {
     func recordsView() async throws {
         let (viewModel, _) = await makeViewModel([.success(page(["a", "b"], next: nil))])
         await viewModel.start()
-        try await waitForViewDelay()
-        #expect(history.recorded == ["a"])
+        // Attendre l'état attendu plutôt qu'un délai fixe : sous charge, le minuteur peut tarder.
+        #expect(await eventually { history.recorded == ["a"] })
         viewModel.show(viewModel.entries[1].id)
-        try await waitForViewDelay()
+        #expect(await eventually { history.recorded == ["a", "b"] })
         viewModel.show(viewModel.entries[0].id)
         try await waitForViewDelay()
         #expect(history.recorded == ["a", "b"])
@@ -170,8 +170,7 @@ struct FeedViewModelTests {
             loadPage: LoadFeedPageUseCase(feed: feed), recordView: RecordViewUseCase(history: history),
             playback: playback, session: session, analytics: makeAnalytics(), viewDelay: .milliseconds(20))
         await viewModel.start()
-        try await waitForViewDelay()
-        #expect(!session.isSignedIn)
+        #expect(await eventually { !session.isSignedIn })
         #expect(session.notice != nil)
     }
 }

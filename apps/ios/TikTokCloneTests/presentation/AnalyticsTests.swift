@@ -245,9 +245,10 @@ struct AnalyticsInstrumentationTests {
         for (index, entry) in viewModel.entries.enumerated() where index < 5 {
             if index > 0 { viewModel.show(entry.id) }
             #expect(!session.isPresentingSignIn)
-            try await Task.sleep(for: .milliseconds(40))
+            // Attendre que la vidéo soit comptée (délai de lecture), quelle que soit la charge de la machine.
+            #expect(await eventually { viewModel.guestWatchedCount == index + 1 })
         }
-        #expect(session.isPresentingSignIn)
+        #expect(await eventually { session.isPresentingSignIn })
         #expect(session.signInMessage == GuestPromptExperiment.message)
         #expect(service.eventNames.contains("guest_prompt_shown"))
         // Fermée : l'invitation disparaît.
@@ -260,13 +261,12 @@ struct AnalyticsInstrumentationTests {
         service.flags[GuestPromptExperiment.flag] = "control"
         let (viewModel, session) = await makeFeed(["a", "b", "c", "d", "e"], signedIn: false)
         await viewModel.start()
-        for entry in viewModel.entries.dropFirst() {
-            try await Task.sleep(for: .milliseconds(40))
-            viewModel.show(entry.id)
+        for (index, entry) in viewModel.entries.enumerated() {
+            if index > 0 { viewModel.show(entry.id) }
+            #expect(await eventually { viewModel.guestWatchedCount == index + 1 })
         }
-        try await Task.sleep(for: .milliseconds(40))
+        #expect(await eventually { service.flagReads == [GuestPromptExperiment.flag] })
         #expect(!session.isPresentingSignIn)
-        #expect(service.flagReads == [GuestPromptExperiment.flag])
     }
 
     @Test("engagement : réaction au double toucher, follow, partage")

@@ -467,17 +467,9 @@ struct FeedActionColumn: View {
             }
             .buttonStyle(.plain)
             .overlay(alignment: .bottom) {
-                if showsFollowButton && !viewer.followingAuthor {
-                    Button(action: actions.follow) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 22, height: 22)
-                            .background(Color.brandPink, in: Circle())
-                    }
-                    .offset(y: 11)
-                    .accessibilityLabel("Suivre @\(video.author.username)")
-                    .accessibilityIdentifier("video.follow")
+                if showsFollowButton {
+                    FollowPlusButton(isFollowing: viewer.followingAuthor, username: video.author.username, follow: actions.follow)
+                        .offset(y: 11)
                 }
             }
             .padding(.bottom, 6)
@@ -510,6 +502,90 @@ struct FeedActionColumn: View {
                 .accessibilityIdentifier("video.gift")
             }
         }
+    }
+}
+
+// « + » rose sous l'avatar de l'auteur, comme TikTok : au toucher, il rétrécit, un rond blanc avec une coche rose grandit
+// à sa place, reste un instant, puis rétrécit jusqu'à disparaître (choix du développeur, d'après une vidéo de TikTok).
+// Un abonnement fait ailleurs (profil, liste) le retire sans animation ; un abonnement refusé (erreur, blocage) remet le
+// « + ». Avec « Réduire les animations » : fondus seulement.
+struct FollowPlusButton: View {
+    let isFollowing: Bool
+    let username: String
+    let follow: () -> Void
+
+    private enum Phase {
+        case idle
+        case confirming
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase = Phase.idle
+    @State private var plusScale: CGFloat = 1
+    @State private var checkScale: CGFloat = 0
+    @State private var showsCheck = false
+
+    // Durées relevées sur la vidéo de TikTok.
+    static let shrink: Duration = .milliseconds(80)
+    static let hold: Duration = .milliseconds(750)
+    static let vanish: Duration = .milliseconds(120)
+
+    var body: some View {
+        ZStack {
+            if showsCheck {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(Color.brandPink)
+                    .frame(width: 22, height: 22)
+                    .background(.white, in: Circle())
+                    .scaleEffect(checkScale)
+                    .opacity(reduceMotion ? checkScale : 1)
+                    // Même cadre que le « + » (et sa zone touchable) : la coche prend exactement sa place.
+                    .padding(6)
+                    .accessibilityLabel("Abonné(e) à @\(username)")
+            } else if !isFollowing || phase == .confirming {
+                Button {
+                    guard phase == .idle else { return }
+                    follow()
+                    Task { await confirm() }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Color.brandPink, in: Circle())
+                        .scaleEffect(plusScale)
+                        .opacity(reduceMotion ? plusScale : 1)
+                        // Zone touchable plus grande que la pastille de 22 pt.
+                        .padding(6)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Suivre @\(username)")
+                .accessibilityIdentifier("video.follow")
+            }
+        }
+        .padding(-6)
+        // Abonnement refusé pendant l'animation, ou désabonnement ailleurs : le « + » revient, entier.
+        .onChange(of: isFollowing) { _, following in
+            if !following, phase == .idle { plusScale = 1 }
+        }
+    }
+
+    private func confirm() async {
+        phase = .confirming
+        withAnimation(.easeIn(duration: Self.shrink.seconds)) { plusScale = 0 }
+        try? await Task.sleep(for: Self.shrink)
+        showsCheck = true
+        checkScale = 0
+        withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.22, dampingFraction: 0.6)) { checkScale = 1 }
+        try? await Task.sleep(for: Self.hold)
+        withAnimation(.easeIn(duration: Self.vanish.seconds)) { checkScale = 0 }
+        try? await Task.sleep(for: Self.vanish)
+        showsCheck = false
+        phase = .idle
+        // Abonnement refusé entre-temps : le « + » réapparaît.
+        plusScale = 1
     }
 }
 
