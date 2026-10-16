@@ -28,6 +28,8 @@ final class AppContainer {
     let searchHistory: SearchHistoryModel
     // Comptes suggérés de l'onglet Messages (ADR-058).
     let suggestions: SuggestionsModel
+    // « Je n'aime pas » sur les commentaires, sur l'appareil (ADR-060).
+    let commentDislikes = CommentDislikesModel(store: UserDefaultsPreferencesStore())
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
     let stories: StoriesModel
     // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
@@ -189,6 +191,7 @@ final class AppContainer {
             if let lastSignedIn, lastSignedIn != signedIn {
                 searchHistory.clear()
                 suggestions.reset()
+                commentDislikes.reset()
             }
             lastSignedIn = signedIn
         }
@@ -485,8 +488,12 @@ final class AppContainer {
         CommentsViewModel(
             video: video,
             loadComments: LoadCommentsUseCase(interactions: interactions),
+            loadReplies: LoadRepliesUseCase(interactions: interactions),
             addComment: AddCommentUseCase(interactions: interactions),
             deleteComment: DeleteCommentUseCase(interactions: interactions),
+            setCommentLike: SetCommentLikeUseCase(interactions: interactions),
+            mentionSuggestions: MentionSuggestionsUseCase(relationships: relationships, search: search),
+            dislikes: commentDislikes,
             session: session,
             analytics: analytics,
             onCountChange: onCountChange

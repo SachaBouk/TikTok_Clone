@@ -45,13 +45,25 @@ export abstract class InteractionRepository {
   // Parmi `otherIds`, ceux que `userId` suit et ceux qui le suivent.
   abstract findFollowRelations(userId: string, otherIds: string[]): Promise<FollowRelations>;
 
-  abstract createComment(comment: { videoId: string; userId: string; content: string }): Promise<Comment>;
+  // `parentId` : commentaire d'origine d'une réponse (ADR-060).
+  abstract createComment(comment: { videoId: string; userId: string; content: string; parentId: string | null }): Promise<Comment>;
   abstract findComment(id: string): Promise<Comment | null>;
   // Commentaires existants parmi `ids`, dans un ordre quelconque.
   abstract findCommentsByIds(ids: string[]): Promise<Comment[]>;
+  // Supprime aussi ses réponses et les j'aime (cascade).
   abstract deleteComment(id: string): Promise<void>;
-  // Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné (identifiants UUID v7, ordonnés).
+  // Commentaires d'origine (sans les réponses), du plus récent au plus ancien, strictement avant `beforeId` s'il est
+  // donné (identifiants UUID v7, ordonnés).
   abstract listComments(videoId: string, beforeId: string | null, limit: number): Promise<Comment[]>;
+  // Réponses d'un fil (ADR-060), de la plus ancienne à la plus récente, strictement après `afterId` s'il est donné.
+  abstract listReplies(parentId: string, afterId: string | null, limit: number): Promise<Comment[]>;
+  // Identifiants de toutes les réponses d'un fil (notifications retirées avant la suppression).
+  abstract listReplyIds(parentId: string): Promise<string[]>;
+  // J'aime d'un commentaire (ADR-060). Vrai si la ligne a réellement été ajoutée ou retirée.
+  abstract likeComment(userId: string, commentId: string): Promise<boolean>;
+  abstract unlikeComment(userId: string, commentId: string): Promise<boolean>;
+  // Parmi `commentIds`, ceux que `userId` a aimés.
+  abstract findLikedComments(userId: string, commentIds: string[]): Promise<Set<string>>;
   // Commentaires écrits par `userId`, même ordre et même curseur (historique du centre d'activités, ADR-006).
   abstract listUserComments(userId: string, beforeId: string | null, limit: number): Promise<Comment[]>;
   // Backoffice (ADR-004) : tous les commentaires, filtrés par vidéo et par auteur s'ils sont donnés, même ordre et même curseur.

@@ -181,12 +181,12 @@ describe('NotificationsService', () => {
         ['alice', ['follow'], [], 0],
       ]);
 
-      await service.retractComment('c1');
+      await service.retractComments(['c1']);
       const last = publisher.removed.at(-1)!;
       expect([last.recipientId, last.removed[0].key.startsWith('comment:'), last.groups, last.unreadCount]).toEqual(['bob', true, [], 0]);
       await expect(service.list('bob', null, 10)).resolves.toMatchObject({ items: [] });
       // Rien à retirer : rien n'est annoncé.
-      await service.retractComment('c1');
+      await service.retractComments(['c1']);
       expect(publisher.removed).toHaveLength(3);
     });
 
@@ -302,6 +302,29 @@ describe('NotificationsService', () => {
 
       await service.retractVideo(video);
       expect((await service.listGroups('bob', null, 20)).items).toEqual([]);
+    });
+
+    it('commentaires (ADR-060) : j’aime regroupés par commentaire et retirés à l’annulation ; réponses et mentions seules', async () => {
+      const commentLike = (actorId: string, commentId: string) =>
+        ({ type: 'commentLike', actorId, recipientId: 'bob', videoId: video, commentId, commentText: `Mon ${commentId}` }) as const;
+      await service.notify(commentLike('alice', 'c1'));
+      await service.notify(commentLike('carol', 'c1'));
+      await service.notify(commentLike('carol', 'c1'));
+      await service.notify(commentLike('alice', 'c2'));
+      await service.notify({ type: 'commentReply', actorId: 'dave', recipientId: 'bob', videoId: video, commentId: 'r1', commentText: 'Oui' });
+      await service.notify({ type: 'mention', actorId: 'dave', recipientId: 'bob', videoId: video, commentId: 'r1', commentText: 'Oui' });
+      await service.notify({ type: 'mention', actorId: 'dave', recipientId: 'bob', videoId: video, commentId: 'r1', commentText: 'Oui' });
+
+      const { items } = await service.listGroups('bob', null, 20);
+      expect(items.map((i) => `${i.group.latest.type}:${i.group.count}`)).toEqual(['mention:1', 'commentReply:1', 'commentLike:1', 'commentLike:2']);
+      expect(items[3].actors.map((a) => a.id)).toEqual(['carol', 'alice']);
+      expect((await service.list('bob', null, 20, { type: 'commentLike', commentId: 'c1' })).items).toHaveLength(2);
+
+      await service.retract({ type: 'commentLike', actorId: 'carol', recipientId: 'bob', commentId: 'c1' });
+      const removed = publisher.removed.at(-1)!;
+      expect([removed.removed[0].key, removed.groups.map((g) => g.group.count)]).toEqual(['commentLike:c1', [1]]);
+      await service.retractComments(['r1']);
+      expect((await service.listGroups('bob', null, 20)).items.map((i) => i.group.latest.type)).toEqual(['commentLike', 'commentLike']);
     });
 
     it('un groupe remonte en tête avec sa notification la plus récente ; non lu si l’une ne l’est pas', async () => {

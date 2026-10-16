@@ -103,8 +103,42 @@ struct RemoteInteractionRepository: InteractionRepository {
         }
     }
 
-    func addComment(videoID: String, content: String) async throws -> VideoComment {
-        switch try await call({ try await client.addComment(path: .init(id: videoID), body: .json(.init(content: content))) }) {
+    func replies(commentID: String, cursor: String?) async throws -> CommentPage {
+        let output = try await call {
+            try await client.listReplies(path: .init(id: commentID), query: .init(cursor: cursor, limit: Self.commentsPageSize))
+        }
+        switch output {
+        case .ok(let ok):
+            let page = try ok.body.json
+            return CommentPage(comments: page.items.map(VideoComment.init), nextCursor: page.nextCursor)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .notFound: throw AppError.notFound
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func setCommentLike(commentID: String, active: Bool) async throws -> InteractionState {
+        if active {
+            switch try await call({ try await client.likeComment(path: .init(id: commentID)) }) {
+            case .ok(let ok): return InteractionState(try ok.body.json)
+            case .tooManyRequests(let error): throw AppError.tooManyActions(.reactions, retryAfter: max(1, error.headers.retryAfter ?? 60))
+            case .unauthorized: throw AppError.sessionExpired
+            case .forbidden: throw AppError.blocked
+            case .notFound: throw AppError.notFound
+            case .undocumented: throw AppError.unexpected
+            }
+        }
+        switch try await call({ try await client.unlikeComment(path: .init(id: commentID)) }) {
+        case .ok(let ok): return InteractionState(try ok.body.json)
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func addComment(videoID: String, content: String, replyToID: String?) async throws -> VideoComment {
+        let body = Components.Schemas.CreateCommentRequest(content: content, replyToId: replyToID)
+        switch try await call({ try await client.addComment(path: .init(id: videoID), body: .json(body)) }) {
         case .created(let created): return VideoComment(try created.body.json)
         case .tooManyRequests(let error): throw AppError.tooManyActions(.comments, retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
@@ -150,7 +184,9 @@ extension InteractionState {
 
 extension VideoComment {
     init(_ dto: Components.Schemas.CommentResponse) {
-        self.init(id: dto.id, videoID: dto.videoId, content: dto.content, createdAt: dto.createdAt, author: UserSummary(dto.author))
+        self.init(
+            id: dto.id, videoID: dto.videoId, parentID: dto.parentId, content: dto.content, createdAt: dto.createdAt, author: UserSummary(dto.author),
+            repliesCount: dto.repliesCount, likesCount: dto.likesCount, likedByAuthor: dto.likedByAuthor, viewerLiked: dto.viewer?.liked)
     }
 }
 

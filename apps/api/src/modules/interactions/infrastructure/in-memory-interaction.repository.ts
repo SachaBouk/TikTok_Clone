@@ -31,6 +31,8 @@ export class InMemoryInteractionRepository extends InteractionRepository {
   // Clés `bloqueur:bloqué`, dans l'ordre des blocages.
   readonly blocks: string[] = [];
   readonly comments = new Map<string, Comment>();
+  // J'aime de commentaires : « userId:commentId » (ADR-060).
+  readonly commentLikes = new Set<string>();
   private sequence = 0;
 
   constructor(
@@ -141,13 +143,20 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     };
   }
 
-  async createComment(comment: { videoId: string; userId: string; content: string }): Promise<Comment> {
+  async createComment(comment: { videoId: string; userId: string; content: string; parentId: string | null }): Promise<Comment> {
     // Identifiants croissants, comme les UUID v7 de la base.
     const id = `${String(++this.sequence).padStart(8, '0')}-${randomUUID()}`;
-    const created = { ...comment, id, createdAt: new Date() };
+    const created: Comment = { ...comment, id, repliesCount: 0, likesCount: 0, createdAt: new Date() };
     this.comments.set(id, created);
     this.videos.adjustCounter(comment.videoId, 'commentsCount', 1);
+    if (comment.parentId) this.adjustComment(comment.parentId, 'repliesCount', 1);
     return created;
+  }
+
+  // Comme les triggers de la migration comment_threads.
+  private adjustComment(id: string, counter: 'repliesCount' | 'likesCount', delta: number): void {
+    const comment = this.comments.get(id);
+    if (comment) this.comments.set(id, { ...comment, [counter]: Math.max(0, comment[counter] + delta) });
   }
 
   async findComment(id: string): Promise<Comment | null> {
@@ -158,16 +167,50 @@ export class InMemoryInteractionRepository extends InteractionRepository {
     return ids.flatMap((id) => this.comments.get(id) ?? []);
   }
 
+  // Avec ses réponses et les j'aime (cascade).
   async deleteComment(id: string): Promise<void> {
     const comment = this.comments.get(id);
-    if (comment && this.comments.delete(id)) this.videos.adjustCounter(comment.videoId, 'commentsCount', -1);
+    if (!comment) return;
+    for (const reply of [...this.comments.values()].filter((c) => c.parentId === id)) await this.deleteComment(reply.id);
+    for (const key of [...this.commentLikes].filter((k) => k.endsWith(`:${id}`))) this.commentLikes.delete(key);
+    if (this.comments.delete(id)) this.videos.adjustCounter(comment.videoId, 'commentsCount', -1);
+    if (comment.parentId) this.adjustComment(comment.parentId, 'repliesCount', -1);
   }
 
   async listComments(videoId: string, beforeId: string | null, limit: number): Promise<Comment[]> {
     return [...this.comments.values()]
-      .filter((c) => c.videoId === videoId && (!beforeId || c.id < beforeId))
+      .filter((c) => c.videoId === videoId && c.parentId === null && (!beforeId || c.id < beforeId))
       .sort((a, b) => (a.id < b.id ? 1 : -1))
       .slice(0, limit);
+  }
+
+  async listReplies(parentId: string, afterId: string | null, limit: number): Promise<Comment[]> {
+    return [...this.comments.values()]
+      .filter((c) => c.parentId === parentId && (!afterId || c.id > afterId))
+      .sort((a, b) => (a.id < b.id ? -1 : 1))
+      .slice(0, limit);
+  }
+
+  async listReplyIds(parentId: string): Promise<string[]> {
+    return [...this.comments.values()].filter((c) => c.parentId === parentId).map((c) => c.id);
+  }
+
+  async likeComment(userId: string, commentId: string): Promise<boolean> {
+    const key = `${userId}:${commentId}`;
+    if (!this.comments.has(commentId) || this.commentLikes.has(key)) return false;
+    this.commentLikes.add(key);
+    this.adjustComment(commentId, 'likesCount', 1);
+    return true;
+  }
+
+  async unlikeComment(userId: string, commentId: string): Promise<boolean> {
+    if (!this.commentLikes.delete(`${userId}:${commentId}`)) return false;
+    this.adjustComment(commentId, 'likesCount', -1);
+    return true;
+  }
+
+  async findLikedComments(userId: string, commentIds: string[]): Promise<Set<string>> {
+    return new Set(commentIds.filter((id) => this.commentLikes.has(`${userId}:${id}`)));
   }
 
   async listUserComments(userId: string, beforeId: string | null, limit: number): Promise<Comment[]> {

@@ -101,7 +101,7 @@ export class NotificationResponse implements NotificationDto {
   @ApiPropertyOptional({ type: NotificationVideoResponse })
   video?: NotificationVideoResponse;
 
-  // Présent pour un commentaire seulement.
+  // Commentaire, réponse, mention, j’aime de commentaire (ADR-060).
   @ApiPropertyOptional({ type: NotificationCommentResponse })
   comment?: NotificationCommentResponse;
 
@@ -135,7 +135,7 @@ export class NotificationPageResponse implements NotificationPageDto {
 export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiProperty({
     description:
-      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `live:<liveId>`, `moderation:<notificationId>`.',
+      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`.',
   })
   key!: string;
 
@@ -152,7 +152,7 @@ export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiPropertyOptional({ type: NotificationVideoResponse })
   video?: NotificationVideoResponse;
 
-  // Groupe d'un commentaire (toujours seul).
+  // Commentaire, réponse ou mention (toujours seuls), j’aime d’un commentaire (ADR-060).
   @ApiPropertyOptional({ type: NotificationCommentResponse })
   comment?: NotificationCommentResponse;
 
@@ -225,7 +225,8 @@ export function toNotificationGroupDto({ group, actors, video }: NotificationGro
     createdAt: latest.createdAt.toISOString(),
   };
   if (video) dto.video = { id: video.id, thumbnailUrl: video.thumbnailUrl };
-  if (latest.type === 'comment' && latest.commentId && latest.commentText !== null) {
+  // Commentaire, réponse, mention (toujours seuls) et j'aime de commentaire (groupés par commentaire, ADR-060).
+  if (latest.commentId && latest.commentText !== null) {
     dto.comment = { id: latest.commentId, content: latest.commentText };
   }
   const moderation = toModerationDto(latest);

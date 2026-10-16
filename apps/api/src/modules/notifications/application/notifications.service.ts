@@ -79,9 +79,10 @@ export class NotificationsService {
 
   // Contenu ou compte sur le point d'être supprimé : ses notifications sont supprimées d'abord, pour être annoncées ; la
   // cascade de la base les emporterait sans prévenir. Si la suppression échoue ensuite, elles restent perdues.
-  // Commentaire (par son auteur, l'auteur de la vidéo ou un administrateur).
-  async retractComment(commentId: string): Promise<void> {
-    await this.announceRemoved(await this.notifications.removeForComment(commentId));
+  // Commentaire (par son auteur, l'auteur de la vidéo ou un administrateur), avec ses réponses (ADR-060) : commentaire,
+  // réponses, j'aime et mentions.
+  async retractComments(commentIds: string[]): Promise<void> {
+    await this.announceRemoved(await this.notifications.removeForComments(commentIds));
   }
 
   // Vidéo (par son auteur ou un administrateur) : ses likes, republications et commentaires, chez son auteur.

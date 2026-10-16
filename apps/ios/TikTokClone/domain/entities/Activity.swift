@@ -5,7 +5,8 @@ import Foundation
 // S'y ajoutent les décisions de modération (ADR-038), sans auteur : signalement examiné, contenu retiré.
 enum ActivityKind: String, CaseIterable, Equatable, Sendable {
     // `gift` : cadeau reçu sur une vidéo (ADR-050). `live` : un compte suivi lance un live (ADR-053).
-    case like, comment, follow, repost, reportResolved, contentRemoved, gift, live
+    // `commentReply`, `commentLike`, `mention` : réponse à son commentaire, j'aime sur son commentaire, mention (ADR-060).
+    case like, comment, follow, repost, reportResolved, contentRemoved, gift, live, commentReply, commentLike, mention
 
     var isModeration: Bool { self == .reportResolved || self == .contentRemoved }
 }
@@ -104,6 +105,9 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
         case .reportResolved, .contentRemoved: moderation?.text(kind) ?? ""
         case .gift: "t’a envoyé \(gift?.label ?? "un cadeau")."
         case .live: "est en direct."
+        case .commentReply: "a répondu à ton commentaire : \(comment?.content ?? "")"
+        case .commentLike: "a aimé ton commentaire : \(comment?.content ?? "")"
+        case .mention: "t’a mentionné(e) dans un commentaire : \(comment?.content ?? "")"
         }
     }
 }
@@ -159,7 +163,8 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         switch kind {
         case .like, .repost, .gift: video.map { ActivityFilter(kind: kind, videoID: $0.id) }
         case .follow: ActivityFilter(kind: .follow, videoID: nil)
-        case .comment, .reportResolved, .contentRemoved, .live: nil
+        case .commentLike: comment.map { ActivityFilter(kind: .commentLike, videoID: nil, commentID: $0.id) }
+        case .comment, .reportResolved, .contentRemoved, .live, .commentReply, .mention: nil
         }
     }
 
@@ -192,6 +197,9 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
             guard plural else { return "t’a envoyé \(gift?.label ?? "un cadeau")." }
             return actors.count > 1 ? "t’ont envoyé \(count) cadeaux." : "t’a envoyé \(count) cadeaux."
         case .live: return "est en direct."
+        case .commentReply: return "a répondu à ton commentaire : \(comment?.content ?? "")"
+        case .commentLike: return (plural ? "ont aimé ton commentaire : " : "a aimé ton commentaire : ") + (comment?.content ?? "")
+        case .mention: return "t’a mentionné(e) dans un commentaire : \(comment?.content ?? "")"
         }
     }
 
@@ -200,7 +208,8 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         switch notification.kind {
         case .like, .repost, .gift: "\(notification.kind.rawValue):\(notification.video?.id ?? "")"
         case .follow: "follow"
-        case .comment: "comment:\(notification.id)"
+        case .comment, .commentReply, .mention: "\(notification.kind.rawValue):\(notification.id)"
+        case .commentLike: "commentLike:\(notification.comment?.id ?? notification.id)"
         case .reportResolved, .contentRemoved: "moderation:\(notification.id)"
         case .live: "live:\(notification.liveID ?? notification.id)"
         }
@@ -231,10 +240,12 @@ struct ActivityGroupPage: Equatable, Sendable {
     let nextCursor: String?
 }
 
-// Liste complète d'un groupe : son type, et sa vidéo pour un like ou une republication.
+// Liste complète d'un groupe : son type, et sa vidéo pour un like ou une republication, son commentaire pour un j'aime
+// de commentaire (ADR-060).
 struct ActivityFilter: Hashable, Sendable {
     let kind: ActivityKind
     let videoID: String?
+    var commentID: String? = nil
 
     var title: String {
         switch kind {
@@ -245,6 +256,9 @@ struct ActivityFilter: Hashable, Sendable {
         case .reportResolved, .contentRemoved: "Modération"
         case .gift: "Cadeaux"
         case .live: "Lives"
+        case .commentReply: "Réponses"
+        case .commentLike: "J’aime du commentaire"
+        case .mention: "Mentions"
         }
     }
 }

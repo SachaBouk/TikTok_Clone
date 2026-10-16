@@ -27,7 +27,11 @@ export class NotificationsController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur, taille de page ou filtre invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   async listNotifications(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationListQuery): Promise<NotificationPageDto> {
-    const page = await this.notifications.list(user.userId, query.cursor ?? null, query.limit, { type: query.kind, videoId: query.videoId });
+    const page = await this.notifications.list(user.userId, query.cursor ?? null, query.limit, {
+      type: query.kind,
+      videoId: query.videoId,
+      commentId: query.commentId,
+    });
     return { items: page.items.map(toNotificationDto), nextCursor: page.nextCursor };
   }
 

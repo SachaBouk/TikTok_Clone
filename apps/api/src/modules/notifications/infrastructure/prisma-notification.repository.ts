@@ -53,8 +53,8 @@ export class PrismaNotificationRepository extends NotificationRepository {
           actorId: event.actorId,
           type: event.type,
           videoId: event.type === 'follow' || event.type === 'live' ? null : event.videoId,
-          commentId: event.type === 'comment' ? event.commentId : null,
-          commentText: event.type === 'comment' ? event.commentText : null,
+          commentId: 'commentId' in event ? event.commentId : null,
+          commentText: 'commentText' in event ? event.commentText : null,
           giftCode: event.type === 'gift' ? event.giftCode : null,
           giftAmount: event.type === 'gift' ? event.giftAmount : null,
           liveId: event.type === 'live' ? event.liveId : null,
@@ -82,11 +82,14 @@ export class PrismaNotificationRepository extends NotificationRepository {
   }
 
   remove(activity: RetractableActivity): Promise<Notification[]> {
-    return this.removeWhere(
-      activity.type === 'follow'
-        ? { type: 'follow', actorId: activity.actorId, userId: activity.recipientId }
-        : { type: activity.type, actorId: activity.actorId, videoId: activity.videoId },
-    );
+    switch (activity.type) {
+      case 'follow':
+        return this.removeWhere({ type: 'follow', actorId: activity.actorId, userId: activity.recipientId });
+      case 'commentLike':
+        return this.removeWhere({ type: 'commentLike', actorId: activity.actorId, commentId: activity.commentId });
+      default:
+        return this.removeWhere({ type: activity.type, actorId: activity.actorId, videoId: activity.videoId });
+    }
   }
 
   removeBetween(userId: string, otherId: string): Promise<Notification[]> {
@@ -98,8 +101,9 @@ export class PrismaNotificationRepository extends NotificationRepository {
     });
   }
 
-  removeForComment(commentId: string): Promise<Notification[]> {
-    return this.removeWhere({ commentId });
+  async removeForComments(commentIds: string[]): Promise<Notification[]> {
+    if (commentIds.length === 0) return [];
+    return this.removeWhere({ commentId: { in: commentIds } });
   }
 
   removeForVideo(videoId: string): Promise<Notification[]> {
@@ -132,6 +136,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
         ...(excludedActorIds.length ? { OR: [{ actorId: null }, { actorId: { notIn: excludedActorIds } }] } : {}),
         ...(filter.type ? { type: filter.type } : {}),
         ...(filter.videoId ? { videoId: filter.videoId } : {}),
+        ...(filter.commentId ? { commentId: filter.commentId } : {}),
         ...(beforeId ? { id: { lt: beforeId } } : {}),
       },
       orderBy: { id: 'desc' },
@@ -152,18 +157,20 @@ export class PrismaNotificationRepository extends NotificationRepository {
     types?: NotificationType[],
   ): Promise<NotificationGroup[]> {
     const before = beforeId ? Prisma.sql`WHERE latest_id < ${beforeId}::uuid` : Prisma.empty;
-    const only = types?.length ? Prisma.sql`AND type::text = ANY(${types}::text[])` : Prisma.empty;
+    const only = types?.length ? Prisma.sql`AND type::text = ANY(${types.map(dbType)}::text[])` : Prisma.empty;
     return this.groups(recipientId, only, before, limit, excludedActorIds);
   }
 
   // Mêmes groupes, restreints aux notifications de `filters` avant le regroupement.
   findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]> {
     if (filters.length === 0) return Promise.resolve([]);
-    const conditions = filters.map((filter) =>
-      filter.videoId
-        ? Prisma.sql`(type = ${filter.type}::notification_type AND video_id = ${filter.videoId}::uuid)`
-        : Prisma.sql`type = ${filter.type}::notification_type`,
-    );
+    // `type` en valeur de la base (`comment_like`), comme dans `groups`.
+    const conditions = filters.map((filter) => {
+      const type = Prisma.sql`type = ${dbType(filter.type)}::notification_type`;
+      if (filter.videoId) return Prisma.sql`(${type} AND video_id = ${filter.videoId}::uuid)`;
+      if (filter.commentId) return Prisma.sql`(${type} AND comment_id = ${filter.commentId}::uuid)`;
+      return type;
+    });
     return this.groups(recipientId, Prisma.sql`AND (${Prisma.join(conditions, ' OR ')})`, Prisma.empty, filters.length, excludedActorIds);
   }
 
@@ -176,7 +183,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
   ): Promise<NotificationGroup[]> {
     // Sans auteur (modération) : jamais exclue (`actor_id <> ALL(…)` vaudrait NULL).
     const excluded = excludedActorIds.length ? Prisma.sql`AND (actor_id IS NULL OR actor_id <> ALL(${excludedActorIds}::uuid[]))` : Prisma.empty;
-    // Clé de groupe : like, republication et cadeau par vidéo, tous les follows, le reste seul. Auteurs **distincts**, du
+    // Clé de groupe : like, republication et cadeau par vidéo, tous les follows, j'aime de commentaire par commentaire, le reste seul. Auteurs **distincts**, du
     // plus récent au plus ancien (un compte peut envoyer plusieurs cadeaux sur la même vidéo, ADR-050).
     const rows = await this.prisma.$queryRaw<{ latest_id: string; count: number; unread: boolean; actor_ids: string[] | null }[]>`
       WITH base AS (
@@ -184,6 +191,7 @@ export class PrismaNotificationRepository extends NotificationRepository {
                type::text || ':' || CASE WHEN type IN ('like', 'repost', 'gift') THEN video_id::text
                                          WHEN type = 'follow' THEN ''
                                          WHEN type = 'live' THEN live_id::text
+                                         WHEN type = 'comment_like' THEN comment_id::text
                                          ELSE notification_id::text END AS group_key
         FROM notifications
         WHERE user_id = ${recipientId}::uuid ${excluded} ${only}
@@ -253,4 +261,9 @@ function toNotification(row: NotificationRow): Notification {
     readAt: row.readAt,
     createdAt: row.createdAt,
   };
+}
+
+// Valeur de l'enum dans la base (`@map` du schéma) : `comment_like` pour `commentLike`. Les filtres SQL bruts la comparent.
+function dbType(type: NotificationType | undefined): string | undefined {
+  return type?.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }

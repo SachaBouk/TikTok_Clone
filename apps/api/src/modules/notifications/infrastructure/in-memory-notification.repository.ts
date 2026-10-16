@@ -19,11 +19,17 @@ export class InMemoryNotificationRepository extends NotificationRepository {
   private sequence = 0;
 
   async add(event: ActivityEvent): Promise<Notification | null> {
-    // Commentaires et cadeaux : une notification par action.
+    // Commentaires, réponses et cadeaux : une notification par action ; une mention par commentaire et par compte.
     if (event.type === 'live') {
       if ([...this.notifications.values()].some((n) => n.type === 'live' && n.liveId === event.liveId && n.recipientId === event.recipientId))
         return null;
-    } else if (event.type !== 'comment' && event.type !== 'gift' && this.find(event)) return null;
+    } else if (event.type === 'mention') {
+      if (
+        [...this.notifications.values()].some((n) => n.type === 'mention' && n.commentId === event.commentId && n.recipientId === event.recipientId)
+      )
+        return null;
+    } else if ((event.type === 'like' || event.type === 'repost' || event.type === 'follow' || event.type === 'commentLike') && this.find(event))
+      return null;
     // Identifiants croissants, comme les UUID v7 de la base.
     const id = `${String(++this.sequence).padStart(8, '0')}-${randomUUID()}`;
     const created: Notification = {
@@ -32,8 +38,8 @@ export class InMemoryNotificationRepository extends NotificationRepository {
       actorId: event.actorId,
       type: event.type,
       videoId: event.type === 'follow' || event.type === 'live' ? null : event.videoId,
-      commentId: event.type === 'comment' ? event.commentId : null,
-      commentText: event.type === 'comment' ? event.commentText : null,
+      commentId: 'commentId' in event ? event.commentId : null,
+      commentText: 'commentText' in event ? event.commentText : null,
       moderation: null,
       gift: event.type === 'gift' ? { code: event.giftCode, amount: event.giftAmount } : null,
       liveId: event.type === 'live' ? event.liveId : null,
@@ -80,8 +86,8 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     return this.removeWhere((n) => (n.recipientId === userId && n.actorId === otherId) || (n.recipientId === otherId && n.actorId === userId));
   }
 
-  async removeForComment(commentId: string): Promise<Notification[]> {
-    return this.removeWhere((n) => n.commentId === commentId);
+  async removeForComments(commentIds: string[]): Promise<Notification[]> {
+    return this.removeWhere((n) => n.commentId !== null && commentIds.includes(n.commentId));
   }
 
   async removeForVideo(videoId: string): Promise<Notification[]> {
@@ -106,7 +112,12 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     excludedActorIds: string[],
   ): Promise<Notification[]> {
     return this.newestFirst(recipientId, excludedActorIds)
-      .filter((n) => (!filter.type || n.type === filter.type) && (!filter.videoId || n.videoId === filter.videoId))
+      .filter(
+        (n) =>
+          (!filter.type || n.type === filter.type) &&
+          (!filter.videoId || n.videoId === filter.videoId) &&
+          (!filter.commentId || n.commentId === filter.commentId),
+      )
       .filter((n) => !beforeId || n.id < beforeId)
       .slice(0, limit);
   }
@@ -126,7 +137,7 @@ export class InMemoryNotificationRepository extends NotificationRepository {
   async findGroups(recipientId: string, filters: NotificationFilter[], excludedActorIds: string[]): Promise<NotificationGroup[]> {
     return this.groups(
       this.newestFirst(recipientId, excludedActorIds).filter((n) =>
-        filters.some((f) => n.type === f.type && (!f.videoId || n.videoId === f.videoId)),
+        filters.some((f) => n.type === f.type && (!f.videoId || n.videoId === f.videoId) && (!f.commentId || n.commentId === f.commentId)),
       ),
     );
   }
@@ -166,11 +177,16 @@ export class InMemoryNotificationRepository extends NotificationRepository {
   }
 
   private find(activity: RetractableActivity): Notification | undefined {
-    return [...this.notifications.values()].find(
-      (n) =>
-        n.type === activity.type &&
-        n.actorId === activity.actorId &&
-        (activity.type === 'follow' ? n.recipientId === activity.recipientId : n.videoId === activity.videoId),
-    );
+    return [...this.notifications.values()].find((n) => {
+      if (n.type !== activity.type || n.actorId !== activity.actorId) return false;
+      switch (activity.type) {
+        case 'follow':
+          return n.recipientId === activity.recipientId;
+        case 'commentLike':
+          return n.commentId === activity.commentId;
+        default:
+          return n.videoId === activity.videoId;
+      }
+    });
   }
 }

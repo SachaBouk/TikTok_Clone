@@ -14,6 +14,8 @@ final class FakeInteractionRepository: InteractionRepository {
         var followers = 10
         var delay: Duration = .zero
         var myComments: [CommentHistoryEntry] = []
+        // Réponses par commentaire d'origine, de la plus ancienne à la plus récente (ADR-060).
+        var replies: [String: [VideoComment]] = [:]
     }
 
     let state = Mutex(State())
@@ -64,13 +66,43 @@ final class FakeInteractionRepository: InteractionRepository {
         }
     }
 
-    func addComment(videoID: String, content: String) async throws -> VideoComment {
+    func replies(commentID: String, cursor: String?) async throws -> CommentPage {
         try state.withLock { state in
-            state.calls.append("comment-\(videoID)-\(content)")
+            state.calls.append("replies-\(commentID)-\(cursor ?? "")")
             if let error = state.error { throw error }
-            let comment = VideoComment.sample("new-\(state.calls.count)", videoID: videoID, content: content, author: .alice)
-            state.comments[videoID, default: []].insert(comment, at: 0)
+            let all = state.replies[commentID] ?? []
+            let start = cursor.flatMap { c in all.firstIndex { $0.id == c }.map { $0 + 1 } } ?? 0
+            let page = Array(all.dropFirst(start).prefix(2))
+            let next = start + 2 < all.count ? page.last?.id : nil
+            return CommentPage(comments: page, nextCursor: next)
+        }
+    }
+
+    // Une réponse est rangée sous le commentaire d'origine, comme l'API.
+    func addComment(videoID: String, content: String, replyToID: String?) async throws -> VideoComment {
+        try state.withLock { state in
+            state.calls.append("comment-\(videoID)-\(content)" + (replyToID.map { "-reply-\($0)" } ?? ""))
+            if let error = state.error { throw error }
+            var comment = VideoComment.sample("new-\(state.calls.count)", videoID: videoID, content: content, author: .alice)
+            if let replyToID {
+                let parent = state.replies.first { $0.value.contains { $0.id == replyToID } }?.key ?? replyToID
+                comment.parentID = parent
+                state.replies[parent, default: []].append(comment)
+            } else {
+                state.comments[videoID, default: []].insert(comment, at: 0)
+            }
             return comment
+        }
+    }
+
+    func setCommentLike(commentID: String, active: Bool) async throws -> InteractionState {
+        try state.withLock { state in
+            state.calls.append("\(active ? "like" : "unlike")-comment-\(commentID)")
+            if let error = state.error { throw error }
+            let key = "comment-\(commentID)"
+            let count = max(0, (state.counts[key] ?? 0) + (active ? 1 : -1))
+            state.counts[key] = count
+            return InteractionState(active: active, count: count)
         }
     }
 

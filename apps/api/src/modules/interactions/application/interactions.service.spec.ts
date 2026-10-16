@@ -310,6 +310,97 @@ describe('InteractionsService', () => {
     });
   });
 
+  describe('réponses, j’aime et mentions (ADR-060)', () => {
+    it('range une réponse sous le commentaire d’origine, même en répondant à une réponse ; fil du plus ancien au plus récent', async () => {
+      const { comment: root } = await service.addComment('alice', video, 'Premier');
+      const { comment: reply } = await service.addComment('carol', video, 'Réponse', root.id);
+      const { comment: second } = await service.addComment('alice', video, '@carol merci', reply.id);
+      expect([reply.parentId, second.parentId]).toEqual([root.id, root.id]);
+
+      // La liste de la vidéo ne montre que le commentaire d'origine, avec son nombre de réponses.
+      const page = await service.listComments(video, null, 10);
+      expect(page.items.map((i) => [i.comment.content, i.comment.repliesCount])).toEqual([['Premier', 2]]);
+      const first = await service.listReplies(root.id, null, 1);
+      const rest = await service.listReplies(root.id, first.nextCursor, 1);
+      expect([...first.items, ...rest.items].map((i) => i.comment.content)).toEqual(['Réponse', '@carol merci']);
+      expect(rest.nextCursor).toBeNull();
+      // Toutes les réponses comptent dans les commentaires de la vidéo.
+      expect((await videoRepository.findPublishedByIds([video]))[0].commentsCount).toBe(3);
+      // Pas de fil sous une réponse.
+      await expect(service.listReplies(reply.id, null, 10)).rejects.toBeInstanceOf(CommentNotFoundError);
+    });
+
+    it('refuse une réponse à un commentaire d’une autre vidéo ou inconnu', async () => {
+      const other = await createVideo();
+      const { comment } = await service.addComment('alice', other, 'Ailleurs');
+      await expect(service.addComment('carol', video, 'x', comment.id)).rejects.toBeInstanceOf(CommentNotFoundError);
+      await expect(service.addComment('carol', video, 'x', 'inconnu')).rejects.toBeInstanceOf(CommentNotFoundError);
+    });
+
+    it('prévient l’auteur du commentaire (réponse) et l’auteur de la vidéo (commentaire), une fois chacun', async () => {
+      const { comment: root } = await service.addComment('alice', video, 'Premier');
+      await service.addComment('carol', video, 'Je réponds', root.id);
+      expect(await received('alice')).toEqual(['commentReply:carol']);
+      expect(await received('bob')).toEqual(['comment:carol', 'comment:alice']);
+      // bob, auteur de la vidéo, répond à alice : alice est prévenue de la réponse, bob de rien.
+      await service.addComment('bob', video, 'Merci', root.id);
+      expect(await received('alice')).toEqual(['commentReply:bob', 'commentReply:carol']);
+      expect(await received('bob')).toEqual(['comment:carol', 'comment:alice']);
+    });
+
+    it('j’aime : compteur, aimé par le lecteur et par l’auteur de la vidéo, notification groupée retirée à l’annulation', async () => {
+      const { comment } = await service.addComment('alice', video, 'Top');
+      await expect(service.setCommentLike('carol', comment.id, true)).resolves.toEqual({ active: true, count: 1 });
+      await expect(service.setCommentLike('carol', comment.id, true)).resolves.toEqual({ active: true, count: 1 });
+      await expect(service.setCommentLike('bob', comment.id, true)).resolves.toEqual({ active: true, count: 2 });
+      // Son propre commentaire : permis, sans notification.
+      await expect(service.setCommentLike('alice', comment.id, true)).resolves.toEqual({ active: true, count: 3 });
+      expect(await received('alice')).toEqual(['commentLike:bob', 'commentLike:carol']);
+
+      const asCarol = await service.listComments(video, null, 10, 'carol');
+      expect(asCarol.items[0]).toMatchObject({ likedByViewer: true, likedByAuthor: true });
+      expect(asCarol.items[0].comment.likesCount).toBe(3);
+      // Invité : pas d'état du lecteur.
+      expect((await service.listComments(video, null, 10)).items[0].likedByViewer).toBeUndefined();
+
+      await expect(service.setCommentLike('bob', comment.id, false)).resolves.toEqual({ active: false, count: 2 });
+      expect(await received('alice')).toEqual(['commentLike:carol']);
+      expect((await service.listComments(video, null, 10, 'carol')).items[0].likedByAuthor).toBe(false);
+    });
+
+    it('j’aime refusé en cas de blocage avec l’auteur du commentaire ; commentaire inconnu', async () => {
+      const { comment } = await service.addComment('alice', video, 'Top');
+      await service.setBlock('alice', 'carol', true);
+      await expect(service.setCommentLike('carol', comment.id, true)).rejects.toBeInstanceOf(BlockedError);
+      await expect(service.addComment('carol', video, 'x', comment.id)).rejects.toBeInstanceOf(BlockedError);
+      await expect(service.setCommentLike('carol', 'inconnu', true)).rejects.toBeInstanceOf(CommentNotFoundError);
+    });
+
+    it('mentions : prévient les comptes cités, sauf soi, ceux déjà prévenus, inconnus ou bloqués', async () => {
+      await service.addComment('alice', video, 'Regarde @carol, @bob, @alice et @inconnu.');
+      expect(await received('carol')).toEqual(['mention:alice']);
+      // bob, auteur de la vidéo, est déjà prévenu du commentaire.
+      expect(await received('bob')).toEqual(['comment:alice']);
+      expect(await received('alice')).toEqual([]);
+
+      await service.setBlock('carol', 'alice', true);
+      await service.addComment('alice', video, 'Encore @carol');
+      expect(await received('carol')).toEqual([]);
+    });
+
+    it('supprimer un commentaire emporte ses réponses, leurs j’aime et leurs notifications', async () => {
+      const { comment: root } = await service.addComment('alice', video, 'Premier');
+      const { comment: reply } = await service.addComment('carol', video, 'Réponse @alice', root.id);
+      await service.setCommentLike('alice', reply.id, true);
+      expect(await received('carol')).toEqual(['commentLike:alice']);
+      await service.deleteComment('alice', root.id);
+      expect(await received('carol')).toEqual([]);
+      expect(await received('alice')).toEqual([]);
+      expect((await videoRepository.findPublishedByIds([video]))[0].commentsCount).toBe(0);
+      await expect(service.setCommentLike('alice', reply.id, true)).rejects.toBeInstanceOf(CommentNotFoundError);
+    });
+  });
+
   describe("centre d'activité", () => {
     it("notifie l'auteur d'un like, d'une republication, d'un commentaire, et le compte suivi", async () => {
       await service.setReaction('alice', video, 'like', true);

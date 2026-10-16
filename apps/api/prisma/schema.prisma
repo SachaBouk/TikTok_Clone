@@ -70,6 +70,7 @@ model User {
   favorites                Favorite[]
   reposts                  Repost[]
   comments                 Comment[]
+  commentLikes             CommentLike[]
   following                Follow[]                  @relation("Follower")
   followers                Follow[]                  @relation("Following")
   viewHistory              ViewHistory[]
@@ -226,6 +227,19 @@ model VideoHashtag {
 // ─── Interactions (ADR-006, ADR-016) ─────────────────────────────────────────
 // Clés composites : double like / favori / republication / follow impossibles par construction.
 
+// J'aime sur un commentaire ou une réponse (ADR-060).
+model CommentLike {
+  commentId String   @map("comment_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@map("comment_likes")
+}
+
 model Like {
   userId    String   @map("user_id") @db.Uuid
   videoId   String   @map("video_id") @db.Uuid
@@ -287,17 +301,27 @@ model Follow {
 }
 
 model Comment {
-  id        String   @id @default(uuid(7)) @map("comment_id") @db.Uuid
-  videoId   String   @map("video_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  content   String
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid(7)) @map("comment_id") @db.Uuid
+  videoId      String   @map("video_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  // Commentaire d'origine d'une réponse (ADR-060, un seul niveau) ; nul pour un commentaire. Supprimé avec lui.
+  parentId     String?  @map("parent_id") @db.Uuid
+  content      String
+  // Tenus par des triggers (migration comment_threads), jamais écrits par le code.
+  repliesCount Int      @default(0) @map("replies_count")
+  likesCount   Int      @default(0) @map("likes_count")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   video         Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent        Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Comment[]      @relation("CommentReplies")
+  likes         CommentLike[]
   notifications Notification[]
 
   @@index([videoId, createdAt])
+  // Réponses d'un fil, de la plus ancienne à la plus récente.
+  @@index([parentId, id])
   // Historique des commentaires du centre d'activités.
   @@index([userId, createdAt])
   @@map("comments")
@@ -572,6 +596,10 @@ enum NotificationType {
   gift
   // Un compte suivi lance un live (ADR-053).
   live
+  // Commentaires (ADR-060) : réponse à son commentaire, j'aime sur son commentaire, mention dans un commentaire.
+  commentReply   @map("comment_reply")
+  commentLike    @map("comment_like")
+  mention
 
   @@map("notification_type")
 }
@@ -617,6 +645,9 @@ model Notification {
   @@unique([actorId, userId], map: "notifications_follow_key", where: raw("type = 'follow'"))
   // Une notification par live et par abonné (lancement rejoué).
   @@unique([liveId, userId], map: "notifications_live_key", where: raw("type = 'live'"))
+  // Un j'aime notifié par compte et par commentaire ; une mention par commentaire et par compte mentionné (ADR-060).
+  @@unique([actorId, commentId], map: "notifications_comment_like_key", where: raw("type = 'comment_like'"))
+  @@unique([commentId, userId], map: "notifications_mention_key", where: raw("type = 'mention'"))
   @@index([userId, createdAt])
   // Suppression d'une vidéo ou d'un compte : ses notifications sont relues, retirées et annoncées (ADR-043), avant la
   // cascade qui cherche aussi par ces colonnes.

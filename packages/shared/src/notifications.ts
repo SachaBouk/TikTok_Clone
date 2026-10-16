@@ -5,7 +5,9 @@ import type { UserSummaryDto } from './users.js';
 
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
 // `live` : un compte suivi lance un live (ADR-053).
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live';
+// `commentReply`, `commentLike`, `mention` : commentaires (ADR-060), avec `video` et `comment`.
+export type NotificationType =
+  'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live' | 'commentReply' | 'commentLike' | 'mention';
 
 // Live lancé (ADR-053) : à ouvrir, en cours ou terminé.
 export interface NotificationLiveDto {
@@ -50,7 +52,7 @@ export interface NotificationDto {
   actor?: UserSummaryDto;
   // Absent pour un follow (plutôt que null : voir FeedItemDto.viewer).
   video?: NotificationVideoDto;
-  // Présent pour un commentaire seulement.
+  // Commentaire, réponse, mention, j'aime de commentaire (ADR-060).
   comment?: NotificationCommentDto;
   // Présent pour une notification de modération seulement.
   moderation?: NotificationModerationDto;
@@ -82,7 +84,7 @@ export interface NotificationGroupDto {
   count: number;
   // Like, republication, commentaire.
   video?: NotificationVideoDto;
-  // Groupe d'un commentaire (toujours seul).
+  // Commentaire, réponse ou mention (toujours seuls), j'aime d'un commentaire (groupés par commentaire).
   comment?: NotificationCommentDto;
   // Notification de modération (toujours seule, sans auteur : `actors` vide).
   moderation?: NotificationModerationDto;

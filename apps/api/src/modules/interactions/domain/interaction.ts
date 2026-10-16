@@ -10,7 +10,12 @@ export interface Comment {
   id: string;
   videoId: string;
   userId: string;
+  // Commentaire d'origine d'une réponse (ADR-060, un seul niveau) ; nul pour un commentaire.
+  parentId: string | null;
   content: string;
+  // Tenus par des triggers (migration comment_threads) ; comptent aussi les comptes masqués.
+  repliesCount: number;
+  likesCount: number;
   createdAt: Date;
 }
 

@@ -42,3 +42,4 @@ Mise en œuvre :
 - ADR-016 — Périmètre (interactions sociales)
 - ADR-028 — Règles produit de la première version (blocage)
 - ADR-038 — Signalements
+- Complété par [ADR-060](ADR-060-commentaires-facon-tiktok.md) — Commentaires façon TikTok : réponses, j'aime, mentions

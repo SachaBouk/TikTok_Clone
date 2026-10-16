@@ -5,8 +5,9 @@ import type { PublishedVideo } from '../../videos/domain/video';
 // Créées par le module interactions via NotificationsService (ADR-003).
 
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
-// `live` : un compte suivi lance un live (ADR-053).
-export type NotificationType = 'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live';
+// `live` : un compte suivi lance un live (ADR-053). `commentReply`, `commentLike`, `mention` : commentaires (ADR-060).
+export type NotificationType =
+  'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live' | 'commentReply' | 'commentLike' | 'mention';
 
 // Modération (ADR-038). Mêmes valeurs que le module reports, recopiées : ce module n'en dépend pas (c'est reports
 // qui le prévient).
@@ -32,7 +33,19 @@ export type ModerationEvent =
 
 export const MODERATION_TYPES: NotificationType[] = ['reportResolved', 'contentRemoved'];
 // Listes complètes, pour la spec OpenAPI (mêmes enums nommés que le module reports).
-export const NOTIFICATION_TYPES: NotificationType[] = ['like', 'comment', 'follow', 'repost', 'reportResolved', 'contentRemoved', 'gift', 'live'];
+export const NOTIFICATION_TYPES: NotificationType[] = [
+  'like',
+  'comment',
+  'follow',
+  'repost',
+  'reportResolved',
+  'contentRemoved',
+  'gift',
+  'live',
+  'commentReply',
+  'commentLike',
+  'mention',
+];
 export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message', 'story', 'live'];
 export const MODERATION_REASONS: ModerationReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
 export const MODERATION_OUTCOMES: ModerationOutcome[] = ['contentRemoved', 'accountSuspended', 'dismissed'];
@@ -44,7 +57,10 @@ export function isModeration(type: NotificationType): boolean {
 // Action qui produit une notification pour `recipientId`.
 export type ActivityEvent =
   | { type: 'like' | 'repost'; actorId: string; recipientId: string; videoId: string }
-  | { type: 'comment'; actorId: string; recipientId: string; videoId: string; commentId: string; commentText: string }
+  // Commentaire sur sa vidéo ; réponse à son commentaire (`commentId` : la réponse) ; mention dans un commentaire (ADR-060).
+  | { type: 'comment' | 'commentReply' | 'mention'; actorId: string; recipientId: string; videoId: string; commentId: string; commentText: string }
+  // J'aime sur son commentaire (ADR-060) : texte du commentaire aimé copié. Au plus une par compte et par commentaire.
+  | { type: 'commentLike'; actorId: string; recipientId: string; videoId: string; commentId: string; commentText: string }
   | { type: 'follow'; actorId: string; recipientId: string }
   // Cadeau (ADR-050, module wallet) : code du catalogue et prix copiés (ce module ne lit pas les tables du portefeuille).
   // Une notification par cadeau, jamais retirée (le cadeau est définitif).
@@ -55,7 +71,8 @@ export type ActivityEvent =
 
 // Actions réversibles : leur notification disparaît quand elles sont annulées (unlike, unfollow…).
 // Un commentaire, une vidéo ou un compte supprimés emportent aussi les leurs (retirées juste avant, pour être annoncées).
-export type RetractableActivity = Extract<ActivityEvent, { type: 'like' | 'repost' | 'follow' }>;
+export type RetractableActivity =
+  Extract<ActivityEvent, { type: 'like' | 'repost' | 'follow' }> | { type: 'commentLike'; actorId: string; recipientId: string; commentId: string };
 
 export interface Notification {
   id: string;
@@ -126,8 +143,14 @@ export function groupKey(notification: Notification): string {
       return `${notification.type}:${notification.videoId}`;
     case 'follow':
       return 'follow';
+    // Chaque commentaire, réponse et mention seul (son texte compte).
     case 'comment':
-      return `comment:${notification.id}`;
+    case 'commentReply':
+    case 'mention':
+      return `${notification.type}:${notification.id}`;
+    // J'aime d'un commentaire : par commentaire (ADR-060).
+    case 'commentLike':
+      return `commentLike:${notification.commentId}`;
     // Chaque live seul.
     case 'live':
       return `live:${notification.liveId}`;
@@ -148,15 +171,19 @@ export function groupFilter(notification: Notification): NotificationFilter | nu
       return { type: notification.type, videoId: notification.videoId ?? undefined };
     case 'follow':
       return { type: 'follow' };
+    case 'commentLike':
+      return { type: 'commentLike', commentId: notification.commentId ?? undefined };
     default:
       return null;
   }
 }
 
-// Notifications d'un groupe, pour sa liste complète : `type`, et la vidéo pour un like ou une republication.
+// Notifications d'un groupe, pour sa liste complète : `type`, et la vidéo pour un like ou une republication, le
+// commentaire pour un j'aime de commentaire (ADR-060).
 export interface NotificationFilter {
   type?: NotificationType;
   videoId?: string;
+  commentId?: string;
 }
 
 export const DEFAULT_NOTIFICATIONS_PAGE_SIZE = 20;

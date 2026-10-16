@@ -4,6 +4,7 @@ import type {
   AccountSuggestionListDto,
   BlockedUsersDto,
   CommentDto,
+  CommentViewerStateDto,
   CommentedVideoDto,
   CommentHistoryItemDto,
   CommentHistoryPageDto,
@@ -34,12 +35,20 @@ export class ShareResultResponse implements ShareResultDto {
   sharesCount!: number;
 }
 
+export class CommentViewerStateResponse implements CommentViewerStateDto {
+  @ApiProperty()
+  liked!: boolean;
+}
+
 export class CommentResponse implements CommentDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
   @ApiProperty({ format: 'uuid' })
   videoId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Commentaire d’origine d’une réponse (un seul niveau) ; absent pour un commentaire.' })
+  parentId?: string;
 
   @ApiProperty()
   content!: string;
@@ -49,10 +58,26 @@ export class CommentResponse implements CommentDto {
 
   @ApiProperty({ type: UserSummaryResponse })
   author!: UserSummaryResponse;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Réponses du fil (0 pour une réponse), comptes masqués compris.' })
+  repliesCount!: number;
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  likesCount!: number;
+
+  @ApiProperty({ description: 'L’auteur de la vidéo a aimé ce commentaire.' })
+  likedByAuthor!: boolean;
+
+  // Compte connecté seulement (absent en mode invité).
+  @ApiPropertyOptional({ type: CommentViewerStateResponse })
+  viewer?: CommentViewerStateResponse;
 }
 
 export class CommentPageResponse implements CommentPageDto {
-  @ApiProperty({ type: [CommentResponse], description: 'Du plus récent au plus ancien.' })
+  @ApiProperty({
+    type: [CommentResponse],
+    description: 'Commentaires : du plus récent au plus ancien. Réponses : de la plus ancienne à la plus récente.',
+  })
   items!: CommentResponse[];
 
   @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'À renvoyer tel quel pour la page suivante ; null s’il n’y en a plus.' })

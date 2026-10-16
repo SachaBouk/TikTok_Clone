@@ -11,14 +11,26 @@ struct InteractionState: Equatable, Sendable {
     let count: Int
 }
 
+// Commentaire ou réponse (ADR-060 : un seul niveau, `parentID` = commentaire d'origine).
 struct VideoComment: Identifiable, Equatable, Sendable {
     let id: String
     let videoID: String
+    var parentID: String? = nil
     let content: String
     let createdAt: Date
     let author: UserSummary
+    // Réponses du fil (commentaire d'origine), comptes masqués compris.
+    var repliesCount = 0
+    var likesCount = 0
+    // L'auteur de la vidéo l'a aimé (« aimé par l'auteur »).
+    var likedByAuthor = false
+    // Le compte connecté l'a aimé ; nil en mode invité.
+    var viewerLiked: Bool? = nil
+
+    var isReply: Bool { parentID != nil }
 }
 
+// Commentaires d'une vidéo (du plus récent au plus ancien), ou réponses d'un fil (de la plus ancienne à la plus récente).
 struct CommentPage: Equatable, Sendable {
     let comments: [VideoComment]
     let nextCursor: String?
@@ -26,6 +38,23 @@ struct CommentPage: Equatable, Sendable {
 
 enum CommentRules {
     static let maxLength = 500
+    // Barre d'emojis au-dessus du champ, comme TikTok : un toucher ajoute l'emoji au texte.
+    static let quickEmojis = ["😁", "🥰", "😂", "😳", "😏", "😅", "🥺"]
+
+    enum DateStyle: Equatable {
+        case relative, dayMonth, full
+    }
+
+    // Date d'un commentaire, courte comme TikTok : relative la première semaine, puis jour et mois, et l'année si elle diffère.
+    static func dateStyle(for date: Date, now: Date, calendar: Calendar = .current) -> DateStyle {
+        if now.timeIntervalSince(date) < 7 * 24 * 3600 { return .relative }
+        return calendar.component(.year, from: date) == calendar.component(.year, from: now) ? .dayMonth : .full
+    }
+
+    // Réponse à une réponse (un seul niveau) : le texte commence par « @pseudo », comme TikTok.
+    static func replyPrefix(to comment: VideoComment) -> String {
+        comment.isReply ? "@\(comment.author.username) " : ""
+    }
 
     // Texte envoyé (nettoyé), ou nil s'il est vide ou trop long.
     static func sanitized(_ text: String) -> String? {

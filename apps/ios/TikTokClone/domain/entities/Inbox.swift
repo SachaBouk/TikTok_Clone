@@ -91,8 +91,8 @@ enum ActivityTypeFilter: CaseIterable, Hashable, Sendable {
     var kinds: [ActivityKind] {
         switch self {
         case .all: ActivityKind.allCases.filter { $0 != .follow }
-        case .likes: [.like]
-        case .comments: [.comment]
+        case .likes: [.like, .commentLike]
+        case .comments: [.comment, .commentReply, .mention]
         case .reposts: [.repost]
         case .gifts: [.gift]
         case .lives: [.live]

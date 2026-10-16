@@ -26,7 +26,8 @@ struct RemoteActivityRepository: ActivityRepository {
             cursor: cursor,
             limit: Self.pageSize,
             kind: filter.map { .init($0.kind) },
-            videoId: filter?.videoID
+            videoId: filter?.videoID,
+            commentId: filter?.commentID
         )
         let output = try await mappingErrors { try await client.listNotifications(query: query) }
         switch output {
@@ -141,6 +142,9 @@ extension Components.Schemas.NotificationType {
         case .contentRemoved: self = .contentRemoved
         case .gift: self = .gift
         case .live: self = .live
+        case .commentReply: self = .commentReply
+        case .commentLike: self = .commentLike
+        case .mention: self = .mention
         }
     }
 }
@@ -156,6 +160,9 @@ extension ActivityKind {
         case .contentRemoved: self = .contentRemoved
         case .gift: self = .gift
         case .live: self = .live
+        case .commentReply: self = .commentReply
+        case .commentLike: self = .commentLike
+        case .mention: self = .mention
         }
     }
 }

@@ -17,9 +17,22 @@ export interface ShareResultDto {
 export interface CommentDto {
   id: string;
   videoId: string;
+  // Commentaire d'origine d'une réponse (ADR-060, un seul niveau) ; absent pour un commentaire.
+  parentId?: string;
   content: string;
   createdAt: string;
   author: UserSummaryDto;
+  // Réponses (commentaire d'origine seulement, 0 pour une réponse) et j'aime ; comptent aussi les comptes masqués.
+  repliesCount: number;
+  likesCount: number;
+  // L'auteur de la vidéo l'a aimé (« aimé par l'auteur »).
+  likedByAuthor: boolean;
+  // Compte connecté seulement : l'a-t-il aimé ?
+  viewer?: CommentViewerStateDto;
+}
+
+export interface CommentViewerStateDto {
+  liked: boolean;
 }
 
 // Comptes bloqués par le compte connecté (réglages de l'app), du plus récent au plus ancien.
@@ -28,7 +41,7 @@ export interface BlockedUsersDto {
 }
 
 export interface CommentPageDto {
-  // Du plus récent au plus ancien.
+  // Commentaires : du plus récent au plus ancien. Réponses d'un fil : de la plus ancienne à la plus récente.
   items: CommentDto[];
   // À renvoyer tel quel pour la page suivante ; null s'il n'y a plus de commentaires.
   nextCursor: string | null;

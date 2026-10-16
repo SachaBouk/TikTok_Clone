@@ -22,7 +22,9 @@ struct InboxTests {
     func activityFilters() {
         #expect(!ActivityTypeFilter.all.kinds.contains(.follow))
         #expect(ActivityTypeFilter.all.kinds.count == ActivityKind.allCases.count - 1)
-        #expect(ActivityTypeFilter.likes.kinds == [.like])
+        // J'aime et commentaires comprennent ceux des commentaires (ADR-060).
+        #expect(ActivityTypeFilter.likes.kinds == [.like, .commentLike])
+        #expect(ActivityTypeFilter.comments.kinds == [.comment, .commentReply, .mention])
         #expect(ActivityTypeFilter.moderation.kinds == [.reportResolved, .contentRemoved])
         #expect(ActivityTypeFilter.comments.includes(.comment) && !ActivityTypeFilter.comments.includes(.like))
     }

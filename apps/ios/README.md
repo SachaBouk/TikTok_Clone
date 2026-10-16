@@ -114,7 +114,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Republication : pastille en bas à gauche, au-dessus du pseudo : « Republier », puis « Tu as republié » (toucher : retirer, après confirmation). Absente sur ses propres vidéos.
 - Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
 - En invité, toute action ouvre la connexion.
-- Commentaires : feuille native à mi-hauteur, glisser vers la gauche pour supprimer le sien ; sur sa propre vidéo, aussi ceux des autres (confirmation, sans prévenir leur auteur, ADR-042).
+- Commentaires, façon TikTok (ADR-060) : feuille blanche aux trois quarts, « N commentaires ». Chaque commentaire : nom, badge « Créateur » pour l'auteur de la vidéo, mentions et hashtags cliquables, date courte, « Répondre », photo de l'auteur de la vidéo avec un cœur s'il l'a aimé, cœur et compteur, « Je n'aime pas » (replie le commentaire, sur l'appareil seulement). Fils de réponses repliés (« Afficher N réponses », « Masquer »), réponse avec le bandeau « Réponse à @pseudo ». Barre d'emojis, « @ » pour mentionner un compte (suggestions : abonnements, puis recherche), flèche rose d'envoi. Glisser vers la gauche pour supprimer le sien ; sur sa propre vidéo, aussi ceux des autres, avec leurs réponses (confirmation, sans prévenir leur auteur, ADR-042).
 - Partage : feuille « Envoyer à », comme TikTok : « Republier » et tes contacts (un toucher envoie la vidéo par message), puis « Copier le lien », SMS, Email et « Plus » (feuille système), puis « Signaler » ou, sur ta vidéo, « Supprimer ». Lien `tiktokclone://videos/<id>` ; un partage n'est compté que s'il est réellement envoyé. « Copier » copie le message avec le lien, en une seule entrée. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
 
 ## Publication
@@ -191,7 +191,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 ## Centre d'activité
 
 - Écran d'activité (ADR-058) : onglets « Activité ▾ » (sans les abonnements ; menu de filtres par type, `listNotificationGroups` avec `kind` répété) et « Nouveaux followers » (« Suivre en retour », ou « Message » pour un ami), 3 lignes puis « Tout voir » / « Voir plus », puis « Comptes suggérés » (`listSuggestions` : amis d'amis et abonnés non suivis ; × écarte sur l'appareil).
-- Activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, chaque commentaire seul.
+- Activité regroupée (`listNotificationGroups`), comme TikTok : « Inès Moreau, Nathan Petit et 3 autres ont aimé ta vidéo ». Likes et republications par vidéo, tous les abonnements ensemble, j'aime d'un commentaire par commentaire, chaque commentaire, réponse et mention seuls (ADR-060).
 - Toucher un groupe ouvre sa liste complète, une ligne par notification (`listNotifications` avec `kind` et `videoId`). Une notification seule ouvre la vidéo (ou le profil pour un abonnement) ; la photo ouvre le profil.
 - « Suivre en retour » (ADR-036) : sur l'abonnement d'un seul compte et sur chaque ligne de « Nouveaux abonnés », puis « Ami(e)s » (toucher à nouveau : ne plus suivre). La relation est lue à part, une requête par page (`getRelationships`).
 - Une notification reçue en direct rejoint son groupe, qui remonte en tête.

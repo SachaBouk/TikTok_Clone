@@ -27,6 +27,27 @@ struct InteractionsTests {
         return (model, session)
     }
 
+    // Feuille de commentaires (ADR-060) avec les adaptateurs en mémoire.
+    func makeComments(
+        video: FeedVideo, session: SessionStore, dislikes: CommentDislikesModel = CommentDislikesModel(store: InMemoryDislikedCommentsStore()),
+        relationships: FakeRelationshipRepository = FakeRelationshipRepository(), search: FakeSearchRepository = FakeSearchRepository(),
+        onCountChange: @escaping (Int) -> Void = { _ in }
+    ) -> CommentsViewModel {
+        CommentsViewModel(
+            video: video,
+            loadComments: LoadCommentsUseCase(interactions: repository),
+            loadReplies: LoadRepliesUseCase(interactions: repository),
+            addComment: AddCommentUseCase(interactions: repository),
+            deleteComment: DeleteCommentUseCase(interactions: repository),
+            setCommentLike: SetCommentLikeUseCase(interactions: repository),
+            mentionSuggestions: MentionSuggestionsUseCase(relationships: relationships, search: search),
+            dislikes: dislikes,
+            session: session,
+            analytics: analytics,
+            onCountChange: onCountChange
+        )
+    }
+
     // Vidéo de bob, vue par alice (connectée) : 2 likes au départ.
     let video = FeedVideo.sample("v1", viewer: .empty)
 
@@ -149,15 +170,7 @@ struct InteractionsTests {
         let (_, session) = await makeModel()
         repository.state.withLock { $0.comments["v1"] = [.sample("c1"), .sample("c2"), .sample("c3", author: .alice)] }
         var deltas: [Int] = []
-        let viewModel = CommentsViewModel(
-            video: video,
-            loadComments: LoadCommentsUseCase(interactions: repository),
-            addComment: AddCommentUseCase(interactions: repository),
-            deleteComment: DeleteCommentUseCase(interactions: repository),
-            session: session,
-            analytics: analytics,
-            onCountChange: { deltas.append($0) }
-        )
+        let viewModel = makeComments(video: video, session: session, onCountChange: { deltas.append($0) })
         await viewModel.start()
         #expect(viewModel.comments.map(\.id) == ["c1", "c2"])
         #expect(viewModel.hasMore)
@@ -191,10 +204,7 @@ struct InteractionsTests {
         let mine = FeedVideo(
             id: sample.id, description: sample.description, hlsURL: sample.hlsURL, thumbnailURL: sample.thumbnailURL,
             createdAt: sample.createdAt, stats: sample.stats, author: .alice, viewer: sample.viewer)
-        let viewModel = CommentsViewModel(
-            video: mine, loadComments: LoadCommentsUseCase(interactions: repository),
-            addComment: AddCommentUseCase(interactions: repository),
-            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let viewModel = makeComments(video: mine, session: session, onCountChange: { _ in })
         await viewModel.start()
         let others = viewModel.comments[0]
         #expect(viewModel.isOwnVideo)
@@ -204,10 +214,7 @@ struct InteractionsTests {
         #expect(viewModel.comments.map(\.id) == ["c2"])
 
         // Sur la vidéo de bob, le commentaire de bob ne se supprime pas.
-        let onBob = CommentsViewModel(
-            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
-            addComment: AddCommentUseCase(interactions: repository),
-            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let onBob = makeComments(video: video, session: session, onCountChange: { _ in })
         #expect(!onBob.isOwnVideo)
         #expect(!onBob.canDelete(.sample("c9")))
     }
@@ -216,10 +223,7 @@ struct InteractionsTests {
     func deleteFailure() async {
         let (_, session) = await makeModel()
         repository.state.withLock { $0.comments["v1"] = [.sample("c1", author: .alice)] }
-        let viewModel = CommentsViewModel(
-            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
-            addComment: AddCommentUseCase(interactions: repository),
-            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let viewModel = makeComments(video: video, session: session, onCountChange: { _ in })
         await viewModel.start()
         repository.fail(with: .network)
         await viewModel.delete(viewModel.comments[0])
@@ -231,10 +235,7 @@ struct InteractionsTests {
     func commentsOfBlockedAccount() async {
         let (_, session) = await makeModel()
         repository.state.withLock { $0.comments["v1"] = [.sample("c1"), .sample("c2", author: .alice)] }
-        let viewModel = CommentsViewModel(
-            video: video, loadComments: LoadCommentsUseCase(interactions: repository),
-            addComment: AddCommentUseCase(interactions: repository),
-            deleteComment: DeleteCommentUseCase(interactions: repository), session: session, analytics: analytics, onCountChange: { _ in })
+        let viewModel = makeComments(video: video, session: session, onCountChange: { _ in })
         await viewModel.start()
         viewModel.removeComments(byAuthors: [UserSummary.bob.id])
         #expect(viewModel.comments.map(\.id) == ["c2"])

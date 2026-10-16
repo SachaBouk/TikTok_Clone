@@ -21,8 +21,8 @@ export abstract class NotificationRepository {
   // Notifications échangées entre deux comptes (blocage).
   abstract removeBetween(userId: string, otherId: string): Promise<Notification[]>;
   // Avant la suppression d'un contenu ou d'un compte (sinon la cascade les emporterait sans prévenir) :
-  // notification d'un commentaire ;
-  abstract removeForComment(commentId: string): Promise<Notification[]>;
+  // notifications de commentaires (un commentaire et ses réponses, ADR-060 : commentaire, réponse, j'aime, mention) ;
+  abstract removeForComments(commentIds: string[]): Promise<Notification[]>;
   // notifications d'une vidéo (like, republication, commentaire) ;
   abstract removeForVideo(videoId: string): Promise<Notification[]>;
   // notifications dont le compte est l'auteur, chez les autres.

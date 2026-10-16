@@ -38,7 +38,7 @@ struct RemoteInteractionRepositoryTests {
             try await repository { _ in tooManyRequests(retryAfter: 3600) }.setFollow(username: "bob", active: true)
         }
         await #expect(throws: AppError.tooManyActions(.comments, retryAfter: 90)) {
-            try await repository { _ in tooManyRequests(retryAfter: 90) }.addComment(videoID: "v1", content: "Salut")
+            try await repository { _ in tooManyRequests(retryAfter: 90) }.addComment(videoID: "v1", content: "Salut", replyToID: nil)
         }
         #expect(AppError.tooManyActions(.reactions, retryAfter: 42).message == "Trop de réactions en peu de temps. Réessaie dans 42 s.")
         #expect(AppError.tooManyActions(.comments, retryAfter: 90).message == "Trop de commentaires en peu de temps. Réessaie dans 2 min.")
@@ -55,7 +55,7 @@ struct RemoteInteractionRepositoryTests {
             try await repository { _ in json(.notFound, errorJSON(404, "x")) }.setFollow(username: "bob", active: true)
         }
         await #expect(throws: AppError.sessionExpired) {
-            try await repository { _ in json(.unauthorized, errorJSON(401, "x")) }.addComment(videoID: "v1", content: "Salut")
+            try await repository { _ in json(.unauthorized, errorJSON(401, "x")) }.addComment(videoID: "v1", content: "Salut", replyToID: nil)
         }
         await #expect(throws: AppError.rejected("Impossible de se suivre soi-même")) {
             try await repository { _ in json(.badRequest, errorJSON(400, "Impossible de se suivre soi-même")) }.setFollow(
@@ -66,10 +66,13 @@ struct RemoteInteractionRepositoryTests {
     @Test("commentaires : mapping de la page ; suppression déjà faite (404) acceptée")
     func comments() async throws {
         let body =
-            #"{"items":[{"id":"c1","videoId":"v1","content":"Top","createdAt":"2026-09-25T10:00:00.000Z","author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null}}],"nextCursor":"c1"}"#
+            #"{"items":[{"id":"c1","videoId":"v1","content":"Top","createdAt":"2026-09-25T10:00:00.000Z","author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null},"repliesCount":2,"likesCount":1,"likedByAuthor":false}],"nextCursor":"c1"}"#
         let page = try await repository { _ in json(.ok, body) }.comments(videoID: "v1", cursor: nil)
         #expect(page.comments.map(\.content) == ["Top"])
         #expect(page.comments[0].author.username == "bob")
+        // Invité : pas d'état du lecteur.
+        #expect(page.comments[0].repliesCount == 2)
+        #expect(page.comments[0].viewerLiked == nil)
         #expect(page.nextCursor == "c1")
         try await repository { _ in json(.notFound, errorJSON(404, "x")) }.deleteComment(id: "c1")
     }

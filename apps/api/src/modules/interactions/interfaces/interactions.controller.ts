@@ -187,7 +187,40 @@ export class InteractionsController {
     @Param('id', VIDEO_ID) id: string,
     @Body() body: CreateCommentRequest,
   ): Promise<CommentDto> {
-    return toCommentDto(await this.interactions.addComment(user.userId, id, body.content));
+    return toCommentDto(await this.interactions.addComment(user.userId, id, body.content, body.replyToId ?? null));
+  }
+
+  // Public. Réponses d'un commentaire (ADR-060), de la plus ancienne à la plus récente ; curseur = dernière reçue.
+  @Public()
+  @Get('comments/:id/replies')
+  @ApiOkResponse({ type: CommentPageResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Curseur ou taille de page invalide.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire inconnu, réponse, ou d’un compte masqué.' })
+  async listReplies(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query() query: CommentsQuery,
+  ): Promise<CommentPageDto> {
+    const page = await this.interactions.listReplies(id, query.cursor ?? null, query.limit, user?.userId ?? null);
+    return { items: page.items.map(toCommentDto), nextCursor: page.nextCursor };
+  }
+
+  @Put('comments/:id/like')
+  @ApiOkResponse({ type: InteractionStateResponse, description: '`count` : j’aime du commentaire.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire inconnu, ou vidéo indisponible.' })
+  @ApiForbiddenResponse(BLOCKED)
+  @ApiTooManyRequests('Trop de réactions récentes (ADR-039)')
+  likeComment(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string): Promise<InteractionStateDto> {
+    return this.interactions.setCommentLike(user.userId, id, true);
+  }
+
+  @Delete('comments/:id/like')
+  @ApiOkResponse({ type: InteractionStateResponse, description: '`count` : j’aime du commentaire.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire inconnu, ou vidéo indisponible.' })
+  unlikeComment(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string): Promise<InteractionStateDto> {
+    return this.interactions.setCommentLike(user.userId, id, false);
   }
 
   // Centre d'activités : ses propres commentaires, privés. Suppression : `DELETE /comments/:id`.
@@ -330,13 +363,18 @@ export class InteractionsController {
 }
 
 // Mapping explicite : rien n'est exposé par accident (ADR-003).
-function toCommentDto({ comment, author }: CommentWithAuthor): CommentDto {
+function toCommentDto({ comment, author, likedByViewer, likedByAuthor }: CommentWithAuthor): CommentDto {
   return {
     id: comment.id,
     videoId: comment.videoId,
+    ...(comment.parentId ? { parentId: comment.parentId } : {}),
     content: comment.content,
     createdAt: comment.createdAt.toISOString(),
     author: toUserSummary(author),
+    repliesCount: comment.repliesCount,
+    likesCount: comment.likesCount,
+    likedByAuthor,
+    ...(likedByViewer === undefined ? {} : { viewer: { liked: likedByViewer } }),
   };
 }
 

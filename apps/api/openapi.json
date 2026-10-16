@@ -1924,6 +1924,205 @@
         ]
       }
     },
+    "/comments/{id}/replies": {
+      "get": {
+        "operationId": "listReplies",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Commentaire inconnu, réponse, ou d’un compte masqué.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ],
+        "security": []
+      }
+    },
+    "/comments/{id}/like": {
+      "put": {
+        "operationId": "likeComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`count` : j’aime du commentaire.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "L’un des deux comptes a bloqué l’autre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Commentaire inconnu, ou vidéo indisponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de réactions récentes (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "unlikeComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`count` : j’aime du commentaire.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Commentaire inconnu, ou vidéo indisponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
     "/users/me/comments": {
       "get": {
         "operationId": "listMyComments",
@@ -2659,6 +2858,15 @@
           },
           {
             "name": "videoId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
             "required": false,
             "in": "query",
             "schema": {
@@ -8772,6 +8980,17 @@
           "avatarUrl"
         ]
       },
+      "CommentViewerStateResponse": {
+        "type": "object",
+        "properties": {
+          "liked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "liked"
+        ]
+      },
       "CommentResponse": {
         "type": "object",
         "properties": {
@@ -8783,6 +9002,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Commentaire d’origine d’une réponse (un seul niveau) ; absent pour un commentaire."
+          },
           "content": {
             "type": "string"
           },
@@ -8792,6 +9016,22 @@
           },
           "author": {
             "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "repliesCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Réponses du fil (0 pour une réponse), comptes masqués compris."
+          },
+          "likesCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "likedByAuthor": {
+            "type": "boolean",
+            "description": "L’auteur de la vidéo a aimé ce commentaire."
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/CommentViewerStateResponse"
           }
         },
         "required": [
@@ -8799,14 +9039,17 @@
           "videoId",
           "content",
           "createdAt",
-          "author"
+          "author",
+          "repliesCount",
+          "likesCount",
+          "likedByAuthor"
         ]
       },
       "CommentPageResponse": {
         "type": "object",
         "properties": {
           "items": {
-            "description": "Du plus récent au plus ancien.",
+            "description": "Commentaires : du plus récent au plus ancien. Réponses : de la plus ancienne à la plus récente.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CommentResponse"
@@ -8832,6 +9075,11 @@
             "minLength": 1,
             "maxLength": 500,
             "example": "Trop bien !"
+          },
+          "replyToId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Réponse (ADR-060) : commentaire ou réponse de la même vidéo auquel on répond."
           }
         },
         "required": [
@@ -9104,7 +9352,10 @@
           "reportResolved",
           "contentRemoved",
           "gift",
-          "live"
+          "live",
+          "commentReply",
+          "commentLike",
+          "mention"
         ]
       },
       "NotificationVideoResponse": {
@@ -9301,7 +9552,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `live:<liveId>`, `moderation:<notificationId>`."
+            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`."
           },
           "kind": {
             "$ref": "#/components/schemas/NotificationType"

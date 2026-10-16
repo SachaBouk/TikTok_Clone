@@ -61,9 +61,10 @@
 | [ADR-057](ADR-057-menu-profil-solde-parametres.md) | Menu du profil, page « Solde », centre des activités et paramètres façon TikTok, date de visionnage dans l'historique (complète ADR-016, ADR-006 et ADR-009) | Accepté |
 | [ADR-058](ADR-058-onglet-messages.md) | Onglet « Messages » façon TikTok : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages (complète ADR-016, ADR-018 et ADR-028) | Accepté |
 | [ADR-059](ADR-059-chats-de-groupe.md) | Chats de groupe (complète ADR-016, ADR-018 et ADR-028) | Accepté |
+| [ADR-060](ADR-060-commentaires-facon-tiktok.md) | Commentaires façon TikTok : réponses, j'aime, mentions (complète ADR-016, ADR-006 et ADR-042) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 059 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+Les ADR 017 à 060 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
 l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
 (« Complété par »).

@@ -30,6 +30,7 @@ import {
   type LimitedAction,
 } from '../domain/interaction.errors';
 import { COMMENT_RATE_LIMITS, FOLLOW_RATE_LIMITS, REACTION_RATE_LIMITS, SHARE_DEDUP_SECONDS, VIEW_RATE_LIMITS } from '../domain/interaction';
+import { extractMentions, MAX_MENTIONS_NOTIFIED } from '../domain/mentions';
 import type { InteractionRepository } from '../domain/interaction.repository';
 import type { ProfileCountersPublisher } from '../domain/profile-counters-publisher';
 import type { RateLimiter, RateLimitRule } from '../../../rate-limit/rate-limiter';
@@ -43,6 +44,10 @@ export interface InteractionState {
 export interface CommentWithAuthor {
   comment: Comment;
   author: User;
+  // Le compte connecté l'a-t-il aimé ? Absent en mode invité (ADR-060).
+  likedByViewer?: boolean;
+  // L'auteur de la vidéo l'a-t-il aimé ? (« aimé par l'auteur »)
+  likedByAuthor: boolean;
 }
 
 // Un commentaire de l'historique, avec la vidéo commentée et son auteur.
@@ -218,23 +223,108 @@ export class InteractionsService {
     };
   }
 
-  async addComment(userId: string, videoId: string, content: string): Promise<CommentWithAuthor> {
+  // Commentaire, ou réponse (`replyToId` : commentaire ou réponse de la même vidéo, ADR-060). Une réponse est rangée
+  // sous le commentaire d'origine (un seul niveau). Prévenus : l'auteur du commentaire auquel on répond (« a répondu »),
+  // l'auteur de la vidéo (« a commenté ») s'il ne l'est pas déjà, puis les comptes mentionnés.
+  async addComment(userId: string, videoId: string, content: string, replyToId: string | null = null): Promise<CommentWithAuthor> {
     const text = content.trim();
     if (!text) throw new EmptyCommentError();
     const video = await this.publishedVideo(videoId);
     await this.assertNotSuspended(video.userId, videoId);
     await this.assertNotBlocked(userId, video.userId);
+    const replyTo = replyToId ? await this.visibleComment(replyToId, videoId) : null;
+    if (replyTo) await this.assertNotBlocked(userId, replyTo.userId);
     await this.limit('comment', userId, COMMENT_RATE_LIMITS);
-    const comment = await this.interactions.createComment({ videoId, userId, content: text });
-    await this.notifications.notify({
-      type: 'comment',
-      actorId: userId,
-      recipientId: video.userId,
+    const comment = await this.interactions.createComment({
       videoId,
-      commentId: comment.id,
-      commentText: comment.content,
+      userId,
+      content: text,
+      parentId: replyTo ? (replyTo.parentId ?? replyTo.id) : null,
     });
-    return { comment, author: await this.users.getById(userId) };
+    const notice = { actorId: userId, videoId, commentId: comment.id, commentText: comment.content };
+    const notified = new Set([userId]);
+    if (replyTo && !notified.has(replyTo.userId)) {
+      await this.notifications.notify({ type: 'commentReply', recipientId: replyTo.userId, ...notice });
+      notified.add(replyTo.userId);
+    }
+    if (!notified.has(video.userId)) await this.notifications.notify({ type: 'comment', recipientId: video.userId, ...notice });
+    notified.add(video.userId);
+    await this.notifyMentions(comment, video.userId, notified);
+    return { comment, author: await this.users.getById(userId), likedByViewer: false, likedByAuthor: false };
+  }
+
+  // Mentions (ADR-060) : « t'a mentionné(e) » aux comptes cités, 5 au plus. Jamais un compte déjà prévenu pour ce
+  // commentaire, ni un compte inconnu, suspendu ou avec qui l'auteur du commentaire ou celui de la vidéo a un blocage.
+  private async notifyMentions(comment: Comment, videoAuthorId: string, notified: Set<string>): Promise<void> {
+    const usernames = extractMentions(comment.content);
+    if (usernames.length === 0) return;
+    const [hidden, hiddenFromAuthor] = await Promise.all([
+      this.hiddenAccounts(comment.userId),
+      this.interactions.findBlockedEitherWay(videoAuthorId),
+    ]);
+    let sent = 0;
+    for (const username of usernames) {
+      if (sent === MAX_MENTIONS_NOTIFIED) return;
+      const user = await this.users.getByUsername(username).catch((error: unknown) => {
+        if (error instanceof UserNotFoundError) return null;
+        throw error;
+      });
+      if (!user || notified.has(user.id) || hidden.has(user.id) || hiddenFromAuthor.has(user.id)) continue;
+      await this.notifications.notify({
+        type: 'mention',
+        actorId: comment.userId,
+        recipientId: user.id,
+        videoId: comment.videoId,
+        commentId: comment.id,
+        commentText: comment.content,
+      });
+      notified.add(user.id);
+      sent += 1;
+    }
+  }
+
+  // J'aime sur un commentaire ou une réponse (ADR-060), ou son retrait. Idempotent. L'auteur du commentaire est prévenu
+  // (groupé par commentaire), et la notification part avec le j'aime. Aimer son propre commentaire est permis (sans
+  // notification). Mêmes refus qu'un like de vidéo : vidéo non publiée ou d'un compte suspendu, blocage.
+  async setCommentLike(userId: string, commentId: string, active: boolean): Promise<InteractionState> {
+    const comment = await this.interactions.findComment(commentId);
+    if (!comment) throw new CommentNotFoundError(commentId);
+    const video = await this.publishedVideo(comment.videoId);
+    if (active) {
+      await this.assertNotSuspended(video.userId, video.id);
+      if (await this.suspended.has(comment.userId)) throw new CommentNotFoundError(commentId);
+      await this.assertNotBlocked(userId, comment.userId);
+      await this.assertNotBlocked(userId, video.userId);
+      await this.limit('reaction', userId, REACTION_RATE_LIMITS);
+      await this.interactions.likeComment(userId, commentId);
+      await this.notifications.notify({
+        type: 'commentLike',
+        actorId: userId,
+        recipientId: comment.userId,
+        videoId: video.id,
+        commentId,
+        commentText: comment.content,
+      });
+    } else {
+      await this.interactions.unlikeComment(userId, commentId);
+      await this.notifications.retract({ type: 'commentLike', actorId: userId, recipientId: comment.userId, commentId });
+    }
+    const updated = await this.interactions.findComment(commentId);
+    return { active, count: updated?.likesCount ?? 0 };
+  }
+
+  // Commentaire ou réponse de la vidéo `videoId`, visible (auteur non suspendu), auquel on répond.
+  private async visibleComment(commentId: string, videoId: string): Promise<Comment> {
+    const comment = await this.interactions.findComment(commentId);
+    if (!comment || comment.videoId !== videoId || (await this.suspended.has(comment.userId))) throw new CommentNotFoundError(commentId);
+    return comment;
+  }
+
+  // Un commentaire et ses réponses : leurs notifications sont retirées et annoncées (ADR-043), puis la cascade les
+  // supprime avec leurs j'aime ; les signalements ouverts sont clos par la base (ADR-038).
+  private async deleteThread(commentId: string): Promise<void> {
+    await this.notifications.retractComments([commentId, ...(await this.interactions.listReplyIds(commentId))]);
+    await this.interactions.deleteComment(commentId);
   }
 
   // L'auteur du commentaire le supprime, ou l'auteur de la vidéo (ADR-042), quel que soit le statut de la vidéo.
@@ -248,8 +338,7 @@ export class InteractionsService {
       if (video?.userId !== userId) throw new NotCommentAuthorError();
     }
     // Sa notification est retirée d'abord, pour être annoncée en direct (ADR-043).
-    await this.notifications.retractComment(commentId);
-    await this.interactions.deleteComment(commentId);
+    await this.deleteThread(commentId);
   }
 
   // Retrait d'un commentaire par un administrateur (backoffice, ADR-004), quel que soit son auteur.
@@ -257,8 +346,7 @@ export class InteractionsService {
   async removeComment(commentId: string): Promise<void> {
     if (!(await this.interactions.findComment(commentId))) throw new CommentNotFoundError(commentId);
     // Sa notification est retirée d'abord, pour être annoncée en direct (ADR-043).
-    await this.notifications.retractComment(commentId);
-    await this.interactions.deleteComment(commentId);
+    await this.deleteThread(commentId);
   }
 
   // Backoffice : tous les commentaires (vidéos de tous statuts), filtrés par vidéo et par auteur, du plus récent
@@ -289,20 +377,51 @@ export class InteractionsService {
   // Blocage (`viewerId`, compte connecté) : la vidéo d'un compte bloqué dans un sens ou dans l'autre est
   // introuvable, comme dans le feed, et les commentaires de ces comptes sont retirés (page plus courte ;
   // `comments_count` les compte toujours).
+  // Commentaires d'origine seulement (ADR-060) : les réponses se lisent par `listReplies`.
   async listComments(videoId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
     const [video, hidden] = await Promise.all([this.publishedVideo(videoId), this.hiddenAccounts(viewerId)]);
     if (hidden.has(video.userId)) throw new VideoNotAvailableError(videoId);
     const rows = await this.interactions.listComments(videoId, cursor, limit + 1);
     const page = rows.slice(0, limit);
-    const authorIds = page.map((c) => c.userId).filter((id) => !hidden.has(id));
-    const authors = new Map((await this.users.getByIds(authorIds)).map((u) => [u.id, u]));
     return {
-      items: page.flatMap((comment) => {
-        const author = authors.get(comment.userId);
-        return author ? [{ comment, author }] : [];
-      }),
+      items: await this.withAuthors(page, hidden, video.userId, viewerId),
       nextCursor: rows.length > limit ? page.at(-1)!.id : null,
     };
+  }
+
+  // Réponses d'un commentaire (ADR-060), de la plus ancienne à la plus récente ; curseur = identifiant de la dernière
+  // reçue. Mêmes règles de masquage que les commentaires : introuvable pour un commentaire ou une vidéo d'un compte
+  // masqué, réponses de ces comptes retirées (page plus courte ; `repliesCount` les compte toujours).
+  async listReplies(commentId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
+    const parent = await this.interactions.findComment(commentId);
+    if (!parent || parent.parentId) throw new CommentNotFoundError(commentId);
+    const [video, hidden] = await Promise.all([this.publishedVideo(parent.videoId), this.hiddenAccounts(viewerId)]);
+    if (hidden.has(video.userId) || hidden.has(parent.userId)) throw new CommentNotFoundError(commentId);
+    const rows = await this.interactions.listReplies(commentId, cursor, limit + 1);
+    const page = rows.slice(0, limit);
+    return {
+      items: await this.withAuthors(page, hidden, video.userId, viewerId),
+      nextCursor: rows.length > limit ? page.at(-1)!.id : null,
+    };
+  }
+
+  // Auteurs (sans les comptes masqués, ni ceux supprimés entre-temps) et j'aime du lecteur et de l'auteur de la vidéo.
+  private async withAuthors(comments: Comment[], hidden: Set<string>, videoAuthorId: string, viewerId: string | null): Promise<CommentWithAuthor[]> {
+    const visible = comments.filter((c) => !hidden.has(c.userId));
+    const ids = visible.map((c) => c.id);
+    const [authors, likedByViewer, likedByAuthor] = await Promise.all([
+      this.users.getByIds([...new Set(visible.map((c) => c.userId))]),
+      viewerId ? this.interactions.findLikedComments(viewerId, ids) : null,
+      this.interactions.findLikedComments(videoAuthorId, ids),
+    ]);
+    const byId = new Map(authors.map((u) => [u.id, u]));
+    return visible.flatMap((comment) => {
+      const author = byId.get(comment.userId);
+      if (!author) return [];
+      return [
+        { comment, author, likedByAuthor: likedByAuthor.has(comment.id), ...(likedByViewer ? { likedByViewer: likedByViewer.has(comment.id) } : {}) },
+      ];
+    });
   }
 
   // Relation entre le compte connecté et @username (boutons de l'écran de profil). Avec soi-même : tout est faux.

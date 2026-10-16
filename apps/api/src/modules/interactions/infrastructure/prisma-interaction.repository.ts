@@ -18,7 +18,16 @@ import { SUGGESTION_FOLLOWERS_SHOWN } from '../domain/interaction';
 import { VideoNotAvailableError } from '../domain/interaction.errors';
 import { InteractionRepository } from '../domain/interaction.repository';
 
-const commentSelect = { id: true, videoId: true, userId: true, content: true, createdAt: true } as const;
+const commentSelect = {
+  id: true,
+  videoId: true,
+  userId: true,
+  parentId: true,
+  content: true,
+  repliesCount: true,
+  likesCount: true,
+  createdAt: true,
+} as const;
 
 // Tables likes, favorites, reposts, comments, follows. Les triggers de la base mettent les compteurs à jour.
 @Injectable()
@@ -143,7 +152,7 @@ export class PrismaInteractionRepository extends InteractionRepository {
     };
   }
 
-  createComment(comment: { videoId: string; userId: string; content: string }): Promise<Comment> {
+  createComment(comment: { videoId: string; userId: string; content: string; parentId: string | null }): Promise<Comment> {
     return withVideoCheck(comment.videoId, () => this.prisma.comment.create({ data: comment, select: commentSelect }));
   }
 
@@ -162,11 +171,49 @@ export class PrismaInteractionRepository extends InteractionRepository {
 
   listComments(videoId: string, beforeId: string | null, limit: number): Promise<Comment[]> {
     return this.prisma.comment.findMany({
-      where: { videoId, ...(beforeId ? { id: { lt: beforeId } } : {}) },
+      where: { videoId, parentId: null, ...(beforeId ? { id: { lt: beforeId } } : {}) },
       orderBy: { id: 'desc' },
       take: limit,
       select: commentSelect,
     });
+  }
+
+  // Index (parent_id, comment_id).
+  listReplies(parentId: string, afterId: string | null, limit: number): Promise<Comment[]> {
+    return this.prisma.comment.findMany({
+      where: { parentId, ...(afterId ? { id: { gt: afterId } } : {}) },
+      orderBy: { id: 'asc' },
+      take: limit,
+      select: commentSelect,
+    });
+  }
+
+  async listReplyIds(parentId: string): Promise<string[]> {
+    const rows = await this.prisma.comment.findMany({ where: { parentId }, select: { id: true } });
+    return rows.map((row) => row.id);
+  }
+
+  // `skipDuplicates` : un second j'aime ne crée rien (le trigger ne compte que les lignes insérées). Un commentaire
+  // supprimé entre-temps fait échouer la clé étrangère : rien n'est ajouté.
+  async likeComment(userId: string, commentId: string): Promise<boolean> {
+    try {
+      const { count } = await this.prisma.commentLike.createMany({ data: [{ userId, commentId }], skipDuplicates: true });
+      return count > 0;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') return false;
+      throw error;
+    }
+  }
+
+  async unlikeComment(userId: string, commentId: string): Promise<boolean> {
+    const { count } = await this.prisma.commentLike.deleteMany({ where: { userId, commentId } });
+    return count > 0;
+  }
+
+  async findLikedComments(userId: string, commentIds: string[]): Promise<Set<string>> {
+    if (commentIds.length === 0) return new Set();
+    const rows = await this.prisma.commentLike.findMany({ where: { userId, commentId: { in: commentIds } }, select: { commentId: true } });
+    return new Set(rows.map((row) => row.commentId));
   }
 
   // Filtre sur l'index (user_id, created_at) ; l'identifiant UUID v7 suit l'ordre de création.

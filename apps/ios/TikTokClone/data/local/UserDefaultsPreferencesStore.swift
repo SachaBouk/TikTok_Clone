@@ -14,6 +14,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let guestPromptDecided = "guestPromptDecided"
         static let searchHistory = "searchHistory"
         static let dismissedSuggestions = "dismissedSuggestions"
+        static let dislikedComments = "dislikedComments"
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
     }
@@ -81,6 +82,21 @@ extension UserDefaultsPreferencesStore: DismissedSuggestionsStore {
             defaults.removeObject(forKey: Key.dismissedSuggestions)
         } else {
             defaults.set(ids, forKey: Key.dismissedSuggestions)
+        }
+    }
+}
+
+// « Je n'aime pas » sur les commentaires (ADR-060) : sur l'appareil seulement.
+extension UserDefaultsPreferencesStore: DislikedCommentsStore {
+    var dislikedComments: [String] {
+        defaults.stringArray(forKey: Key.dislikedComments) ?? []
+    }
+
+    func setDislikedComments(_ ids: [String]) {
+        if ids.isEmpty {
+            defaults.removeObject(forKey: Key.dislikedComments)
+        } else {
+            defaults.set(ids, forKey: Key.dislikedComments)
         }
     }
 }

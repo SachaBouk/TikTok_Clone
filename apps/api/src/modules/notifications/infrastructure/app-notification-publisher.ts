@@ -84,6 +84,12 @@ function pushBody({ notification }: NotificationWithContext): string {
     }
     case 'live':
       return 'est en direct';
+    case 'commentReply':
+      return `a répondu à ton commentaire : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
+    case 'commentLike':
+      return `a aimé ton commentaire : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
+    case 'mention':
+      return `t'a mentionné(e) dans un commentaire : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
   }
 }
 

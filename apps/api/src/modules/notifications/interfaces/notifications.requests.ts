@@ -30,7 +30,8 @@ export class NotificationGroupsQuery extends NotificationsQuery {
   kind?: NotificationType[];
 }
 
-// Liste complète d'un groupe : son type, et sa vidéo pour un like ou une republication.
+// Liste complète d'un groupe : son type, et sa vidéo pour un like ou une republication, son commentaire pour un j'aime
+// de commentaire (ADR-060).
 export class NotificationListQuery extends NotificationsQuery {
   // Pas de description : sur un enum nommé, elle produirait un `allOf` (voir CLAUDE.md).
   @ApiPropertyOptional({ enum: NOTIFICATION_TYPES, enumName: 'NotificationType' })
@@ -42,6 +43,11 @@ export class NotificationListQuery extends NotificationsQuery {
   @IsOptional()
   @IsUUID()
   videoId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  commentId?: string;
 }
 
 export class MarkNotificationsReadRequest {

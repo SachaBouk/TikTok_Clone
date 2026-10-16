@@ -135,3 +135,15 @@ final class InMemoryDismissedSuggestionsStore: DismissedSuggestionsStore {
     var dismissedSuggestions: [String] { stored.withLock { $0 } }
     func setDismissedSuggestions(_ ids: [String]) { stored.withLock { $0 = ids } }
 }
+
+// « Je n'aime pas » sur les commentaires, en mémoire (ADR-060).
+final class InMemoryDislikedCommentsStore: DislikedCommentsStore {
+    private let stored: Mutex<[String]>
+
+    init(_ ids: [String] = []) {
+        stored = Mutex(ids)
+    }
+
+    var dislikedComments: [String] { stored.withLock { $0 } }
+    func setDislikedComments(_ ids: [String]) { stored.withLock { $0 = ids } }
+}

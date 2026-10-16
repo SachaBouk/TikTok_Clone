@@ -20,6 +20,11 @@ export class CreateCommentRequest {
   @MinLength(1)
   @MaxLength(MAX_COMMENT_LENGTH)
   content!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Réponse (ADR-060) : commentaire ou réponse de la même vidéo auquel on répond.' })
+  @IsOptional()
+  @IsUUID()
+  replyToId?: string;
 }
 
 export class CommentsQuery {

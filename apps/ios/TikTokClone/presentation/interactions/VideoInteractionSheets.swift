@@ -71,8 +71,11 @@ private struct VideoInteractionSheets: ViewModifier {
                     },
                     container: container
                 )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                // Trois quarts de l'écran puis grande, fond blanc, comme TikTok (ADR-060).
+                .presentationDetents([.fraction(0.75), .large])
+                .presentationCornerRadius(16)
+                .presentationBackground(.white)
+                .environment(\.colorScheme, .light)
             }
             // Feuille « Envoyer à », comme TikTok (`VideoShareSheet`).
             .sheet(item: $share, onDismiss: runAfterShare) { video in
