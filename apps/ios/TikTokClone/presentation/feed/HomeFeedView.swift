@@ -8,6 +8,9 @@ import SwiftUI
 //   aboutit pendant qu'il est affiché. Il s'arrête à sa fin.
 // - En invité, il invite à se connecter.
 // - La loupe ouvre la recherche (ADR-049), dans la pile de l'accueil.
+// - Toucher l'onglet Accueil alors qu'il est affiché recharge le feed affiché (comme TikTok) : les deux points rose et
+//   cyan prennent la place de la loupe le temps du rechargement (0,8 s au moins).
+
 struct HomeFeedView: View {
     enum Selection: Hashable {
         case following, forYou
@@ -42,18 +45,29 @@ struct HomeFeedView: View {
         .overlay(alignment: .top) { FeedSelector(selection: $selection) }
         // Recherche de comptes et hashtags (ADR-049).
         .overlay(alignment: .topTrailing) {
-            NavigationLink(value: SearchRoute()) {
-                Image(systemName: "magnifyingglass")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 3)
-                    .frame(width: 44, height: 36)
-                    .contentShape(Rectangle())
+            Group {
+                if container.router.isHomeRefreshing {
+                    DotsLoader(size: 10)
+                        .frame(width: 44, height: 36)
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityIdentifier("feed.refreshing")
+                } else {
+                    NavigationLink(value: SearchRoute()) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.6), radius: 3)
+                            .frame(width: 44, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Rechercher")
+                    .accessibilityIdentifier("feed.search")
+                }
             }
-            .accessibilityLabel("Rechercher")
-            .accessibilityIdentifier("feed.search")
             .padding(.trailing, 8)
         }
+        .onChange(of: container.router.homeRefreshRequests) { Task { await refreshShownFeed() } }
         .onChange(of: selection) { showFollowingIfSelected() }
         // Abonnement confirmé par l'API alors que le feed des abonnements est déjà affiché (toucher « Abonnements »
         // pendant l'envoi, désabonnement depuis un profil ouvert par-dessus).
@@ -79,6 +93,22 @@ struct HomeFeedView: View {
         .allowsHitTesting(shown)
         .accessibilityHidden(!shown)
     }
+
+    // Recharge le feed affiché (« Pour toi », ou les abonnements), une fois à la fois.
+    private func refreshShownFeed() async {
+        let router = container.router
+        guard !router.isHomeRefreshing else { return }
+        let viewModel: FeedViewModel? = selection == .forYou ? forYou : following
+        guard let viewModel else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { router.isHomeRefreshing = true }
+        async let minimum: Void = { try? await Task.sleep(for: Self.refreshMinimumDuration) }()
+        await viewModel.reload()
+        await minimum
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { router.isHomeRefreshing = false }
+    }
+
+    // La flèche et les points restent au moins ce temps (environ un tour de flèche, comme sur la vidéo de TikTok).
+    static let refreshMinimumDuration: Duration = .milliseconds(800)
 
     private func showFollowingIfSelected() {
         guard selection == .following, session.isSignedIn else { return }

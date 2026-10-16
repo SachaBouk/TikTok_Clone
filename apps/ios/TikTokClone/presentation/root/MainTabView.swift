@@ -15,13 +15,44 @@ struct MainTabView: View {
     @State private var friendsPath = NavigationPath()
     @State private var inboxPath = NavigationPath()
     @State private var profilePath = NavigationPath()
+    // Icône de l'onglet Accueil pendant un rechargement (flèche qui tourne, `HomeTabIcon`).
+    @State private var homeIcon = HomeTabIcon.standard
+    @State private var homeIconTask: Task<Void, Never>?
     private var router: AppRouter { container.router }
+
+    // Toucher l'onglet déjà sélectionné : Accueil revient au feed s'il y a des écrans par-dessus, sinon le recharge
+    // (comme TikTok).
+    private var tabSelection: Binding<Destination> {
+        Binding(
+            get: { selection },
+            set: { new in
+                if new == .home, selection == .home {
+                    if feedPath.isEmpty { container.router.homeRefreshRequests += 1 } else { feedPath = NavigationPath() }
+                }
+                selection = new
+            }
+        )
+    }
+
+    // Étapes de l'icône d'Accueil, ~30 par seconde, jusqu'au retour de la maison après le rechargement.
+    private func animateHomeIcon() async {
+        let start = Date.now
+        var end: Date?
+        while !Task.isCancelled {
+            let elapsed = Date.now.timeIntervalSince(start)
+            if end == nil, !container.router.isHomeRefreshing, HomeTabIcon.canEnd(elapsed: elapsed) { end = .now }
+            let icon = HomeTabIcon.at(elapsed: elapsed, endedFor: end.map { Date.now.timeIntervalSince($0) })
+            homeIcon = icon
+            if icon == .standard { return }
+            try? await Task.sleep(for: HomeTabIcon.frameInterval)
+        }
+    }
 
     var body: some View {
         @Bindable var session = session
         @Bindable var router = container.router
-        TabView(selection: $selection) {
-            Tab("Accueil", systemImage: "house", value: .home) {
+        TabView(selection: tabSelection) {
+            Tab(value: .home) {
                 NavigationStack(path: $feedPath) {
                     // « Abonnements | Pour toi » (ADR-048).
                     HomeFeedView(
@@ -34,6 +65,16 @@ struct MainTabView: View {
                 }
                 .providesNavigationPath($feedPath)
                 .environment(\.isTabActive, selection == .home && !router.coversTabs)
+            } label: {
+                // Pendant le rechargement demandé par un toucher sur l'onglet : une flèche qui tourne, comme TikTok.
+                Label {
+                    Text("Accueil")
+                } icon: {
+                    switch homeIcon {
+                    case .standard: Image(systemName: "house")
+                    case .frame(let symbol, let angle, let scale): Image(uiImage: HomeTabIcon.image(symbol: symbol, angle: angle, scale: scale))
+                    }
+                }
             }
             // Feed des amis (ADR-054), entre l'accueil et la publication.
             Tab("Amis", systemImage: "person.2", value: .friends) {
@@ -90,6 +131,11 @@ struct MainTabView: View {
             ProfileMenuOverlay(isOpen: $router.isProfileMenuOpen) { route in profilePath.append(route) }
         }
         .onChange(of: selection) { router.isProfileMenuOpen = false }
+        .onChange(of: router.isHomeRefreshing) { _, refreshing in
+            guard refreshing else { return }
+            homeIconTask?.cancel()
+            homeIconTask = Task { await animateHomeIcon() }
+        }
         .onChange(of: session.isSignedIn) { router.isProfileMenuOpen = false }
         .sheet(isPresented: $session.isPresentingSignIn) {
             AuthFlowView(container: container)

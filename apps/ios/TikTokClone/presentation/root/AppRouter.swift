@@ -22,6 +22,11 @@ final class AppRouter {
 
     // Menu ☰ de son profil (ADR-057), panneau par-dessus les onglets.
     var isProfileMenuOpen = false
+    // Toucher l'onglet Accueil alors qu'il est déjà affiché (comme TikTok) : le feed affiché se recharge. Chaque toucher
+    // incrémente le compteur ; `isHomeRefreshing` pendant le rechargement (flèche qui tourne dans la barre d'onglets,
+    // deux points à la place de la loupe).
+    var homeRefreshRequests = 0
+    var isHomeRefreshing = false
 
     // Visionneuse de stories (ADR-051) : les stories d'un compte, puis celles des suivants (rangée).
     struct StoriesRoute: Identifiable, Equatable {
