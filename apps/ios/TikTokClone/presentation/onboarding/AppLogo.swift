@@ -6,12 +6,14 @@ struct AppLogo: View {
     var size: CGFloat = 64
     // Blanc sur fond sombre, noir sur fond clair.
     var foreground: Color = .white
+    // Écart des échos cyan et rose : 0 confondus avec la note, 1 à leur place (animé par l'écran de lancement).
+    var spread: CGFloat = 1
 
     var body: some View {
         let note = Image(systemName: "music.note").font(.system(size: size, weight: .black))
         ZStack {
-            note.foregroundStyle(Color.brandCyan).offset(x: -size * 0.05, y: -size * 0.04)
-            note.foregroundStyle(Color.brandPink).offset(x: size * 0.05, y: size * 0.04)
+            note.foregroundStyle(Color.brandCyan).offset(x: -size * 0.05 * spread, y: -size * 0.04 * spread)
+            note.foregroundStyle(Color.brandPink).offset(x: size * 0.05 * spread, y: size * 0.04 * spread)
             note.foregroundStyle(foreground)
         }
         .accessibilityHidden(true)

@@ -84,7 +84,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
   - **rafraîchit avant l'envoi un token expiré** (marge de 30 s). Indispensable : sur une route publique (feed, profils), l'API traite un token expiré comme une absence de compte, sans 401 ;
   - sur un 401, rafraîchit puis rejoue la requête une fois.
 - `TokenRefresher` (actor) : **un seul rafraîchissement à la fois**, les requêtes simultanées attendent le même résultat (rejouer un refresh token déjà utilisé révoquerait toute la session). Refresh refusé : session effacée, l'app repasse en invité avec l'alerte « Session expirée ». API injoignable : la session est gardée.
-- Lancement : la session enregistrée est reprise (`RestoreSessionUseCase`) ; API injoignable : écran « Serveur injoignable » (réessayer, ou continuer sans compte).
+- Lancement : écran noir avec le logo et le nom, animé, au moins 2 s ; pendant ce temps, la session enregistrée est reprise (`RestoreSessionUseCase`) ; API injoignable : écran « Serveur injoignable » (réessayer, ou continuer sans compte).
 - Déconnexion : session oubliée localement, puis révoquée côté serveur au mieux (`POST /auth/logout`).
 
 ## Feed et lecteur

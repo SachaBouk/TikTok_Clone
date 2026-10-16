@@ -5,36 +5,34 @@ struct RootView: View {
     @Environment(SessionStore.self) private var session
     @Environment(AnalyticsModel.self) private var analytics
     @Environment(\.scenePhase) private var scenePhase
+    // Durée minimale de l'écran de lancement écoulée (`LaunchView.minimumDuration`).
+    @State private var launchDelayElapsed = false
+
+    // Écran de lancement : pendant la reprise de session, et au moins `LaunchView.minimumDuration`.
+    private var isLaunching: Bool { session.state == .restoring || !launchDelayElapsed }
 
     var body: some View {
         Group {
-            switch session.state {
-            case .restoring:
+            if isLaunching {
                 LaunchView()
-            case .unavailable:
-                ContentUnavailableView {
-                    Label("Serveur injoignable", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text("Impossible de reprendre ta session. Vérifie ta connexion.")
-                } actions: {
-                    Button("Réessayer") { Task { await session.restore() } }
-                        .buttonStyle(.borderedProminent)
-                    Button("Continuer sans compte") { session.continueAsGuest() }
-                }
-            case .guest, .signedIn:
-                MainTabView(container: container)
+            } else {
+                content
             }
         }
         .task { await session.restore() }
+        .task {
+            try? await Task.sleep(for: LaunchView.minimumDuration)
+            launchDelayElapsed = true
+        }
         // Temps réel et reprise des publications : compte connecté et app au premier plan.
         .onChange(of: [session.isSignedIn, scenePhase == .active], initial: true) { _, state in
             container.activityChanged(signedIn: state[0], active: state[1])
         }
         .onOpenURL { container.router.open($0) }
-        // Session reprise : onboarding du premier lancement (ADR-055), puis consentement à la mesure d'audience
-        // (ADR-013), après l'onboarding et pas par-dessus.
-        .onChange(of: session.state == .restoring) { _, restoring in
-            guard !restoring, session.state != .unavailable else { return }
+        // Session reprise et écran de lancement terminé : onboarding du premier lancement (ADR-055), puis consentement à
+        // la mesure d'audience (ADR-013), après l'onboarding et pas par-dessus.
+        .onChange(of: isLaunching) { _, launching in
+            guard !launching, session.state != .unavailable else { return }
             container.sessionRestored(signedIn: session.isSignedIn)
             // Sans l'animation de présentation (glissement depuis le bas) : l'introduction remplace l'écran de lancement.
             var transaction = Transaction()
@@ -67,6 +65,26 @@ struct RootView: View {
             )
         ) {
             AnalyticsConsentView()
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch session.state {
+        case .restoring:
+            LaunchView()
+        case .unavailable:
+            ContentUnavailableView {
+                Label("Serveur injoignable", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text("Impossible de reprendre ta session. Vérifie ta connexion.")
+            } actions: {
+                Button("Réessayer") { Task { await session.restore() } }
+                    .buttonStyle(.borderedProminent)
+                Button("Continuer sans compte") { session.continueAsGuest() }
+            }
+        case .guest, .signedIn:
+            MainTabView(container: container)
         }
     }
 
