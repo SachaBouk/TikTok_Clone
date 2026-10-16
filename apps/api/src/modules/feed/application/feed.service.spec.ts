@@ -369,6 +369,36 @@ describe('FeedService', () => {
     });
   });
 
+  describe('vidéos privées (ADR-061)', () => {
+    const makePrivate = (id: string) => Object.assign(videoRepository.videos.get(id)!, { visibility: 'private' });
+
+    it('visible de son seul auteur : grille « cadenas », vidéo seule ; absente du feed, de la grille et des abonnements', async () => {
+      const shown = await publish('alice');
+      const hidden = await publish('alice');
+      makePrivate(hidden);
+      await interactions.setFollow('bob', 'alice', true);
+
+      expect((await feed.listPrivateVideos('alice', undefined, 10)).items.map((i) => i.video.id)).toEqual([hidden]);
+      expect((await feed.listPrivateVideos('bob', undefined, 10)).items).toEqual([]);
+      expect((await feed.listAuthorVideos('alice', undefined, 10, 'alice')).items.map((i) => i.video.id)).toEqual([shown]);
+      expect((await feed.listFollowing('bob', undefined, 10)).items.map((i) => i.video.id)).toEqual([shown]);
+      await expect(feed.getItem(hidden, 'alice')).resolves.toMatchObject({ video: { visibility: 'private' } });
+      for (const viewer of ['bob', null]) await expect(feed.getItem(hidden, viewer)).rejects.toBeInstanceOf(FeedItemNotFoundError);
+      expect((await scrollAll(10)).flat()).toEqual([shown]);
+    });
+
+    it('devenue privée : sautée par une session déjà commencée, et absente des favoris des autres', async () => {
+      const id = await publish('alice');
+      await interactions.setReaction('bob', id, 'favorite', true);
+      const first = await feed.getPage(undefined, 10);
+      expect(first.items.map((i) => i.video.id)).toEqual([id]);
+      makePrivate(id);
+      expect((await feed.getPage(undefined, 10, 'alice')).items).toEqual([]);
+      expect((await feed.listFavorites('bob', undefined, 10)).items).toEqual([]);
+      await expect(interactions.setReaction('bob', id, 'like', true)).rejects.toThrow();
+    });
+  });
+
   describe('feed des abonnements (ADR-048)', () => {
     // Parcourt tout le feed des abonnements de `viewer`, page par page.
     async function readFollowing(viewer: string, limit: number) {

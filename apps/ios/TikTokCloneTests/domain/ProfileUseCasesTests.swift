@@ -44,7 +44,7 @@ struct ProfileUseCasesTests {
 
     @Test("grilles : favoris et likes sur son seul profil")
     func grids() {
-        #expect(ProfileGrid.available(isOwn: true) == [.videos, .reposts, .favorites, .likes])
+        #expect(ProfileGrid.available(isOwn: true) == [.videos, .privateVideos, .reposts, .favorites, .likes])
         #expect(ProfileGrid.available(isOwn: false) == [.videos, .reposts])
         #expect(VideoList(.likes, username: "alice") == .myLikes)
         #expect(VideoList(.reposts, username: "bob") == .reposts(username: "bob"))

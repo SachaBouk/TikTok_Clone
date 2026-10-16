@@ -50,7 +50,8 @@ enum FollowStatus: Equatable, Sendable {
 
 // Grilles d'un profil. Favoris et likes sont privés : seulement sur son propre profil (choix du développeur).
 enum ProfileGrid: String, CaseIterable, Hashable, Sendable {
-    case videos, reposts, favorites, likes
+    // `privateVideos` : onglet « cadenas » (ADR-061), sur son propre profil.
+    case videos, privateVideos, reposts, favorites, likes
 
     static func available(isOwn: Bool) -> [ProfileGrid] {
         isOwn ? allCases : [.videos, .reposts]
@@ -59,6 +60,7 @@ enum ProfileGrid: String, CaseIterable, Hashable, Sendable {
     var title: String {
         switch self {
         case .videos: "Vidéos"
+        case .privateVideos: "Vidéos privées"
         case .reposts: "Republications"
         case .favorites: "Favoris"
         case .likes: "J’aime"
@@ -68,6 +70,7 @@ enum ProfileGrid: String, CaseIterable, Hashable, Sendable {
     var systemImage: String {
         switch self {
         case .videos: "square.grid.3x3"
+        case .privateVideos: "lock"
         case .reposts: "arrow.2.squarepath"
         case .favorites: "bookmark"
         case .likes: "heart"
@@ -82,12 +85,15 @@ enum VideoList: Hashable, Sendable {
     case myFavorites
     case myLikes
     case myHistory
+    // Ses vidéos privées (ADR-061).
+    case myPrivateVideos
     // Page d'un hashtag (ADR-049), sans « # ».
     case hashtag(name: String)
 
     init(_ grid: ProfileGrid, username: String) {
         switch grid {
         case .videos: self = .accountVideos(username: username)
+        case .privateVideos: self = .myPrivateVideos
         case .reposts: self = .reposts(username: username)
         case .favorites: self = .myFavorites
         case .likes: self = .myLikes

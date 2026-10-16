@@ -57,3 +57,4 @@ L'historique des recherches n'est pas modélisé : il est reporté avec la reche
 - Complété par [ADR-020](ADR-020-modele-donnees-complements.md) — Modèle de données : compléments
 - Complété par [ADR-057](ADR-057-menu-profil-solde-parametres.md) — Menu du profil, Solde, centre des activités et paramètres
 - Complété par [ADR-060](ADR-060-commentaires-facon-tiktok.md) — Commentaires façon TikTok : réponses, j'aime, mentions
+- Complété par [ADR-061](ADR-061-videos-privees.md) — Vidéos privées

@@ -260,7 +260,7 @@ export class MessagingService {
     const openRequest = status === 'requestSent' && view.requestSenderId === null;
     // Vidéo introuvable aussi quand son auteur et l'expéditeur se sont bloqués : l'expéditeur ne la voit pas.
     if (sharedVideoId) {
-      const [video] = await this.videos.getPublishedVideos([sharedVideoId]);
+      const [video] = await this.videos.getPublishedVideos([sharedVideoId], userId);
       if (!video || (await this.interactions.getHiddenAccountIds(userId)).has(video.userId)) throw new SharedVideoNotFoundError(sharedVideoId);
     }
     // Réponse à une story : visible de l'expéditeur (active, pas d'un compte masqué) et publiée par l'autre participant.
@@ -722,7 +722,7 @@ export class MessagingService {
     const stories = storyIds.length > 0 ? await this.stories.getStoryPreviews(storyIds, viewerId) : new Map<string, ActiveStory>();
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
     const [published, hidden] = videoIds.length
-      ? await Promise.all([this.videos.getPublishedVideos(videoIds), this.interactions.getHiddenAccountIds(viewerId)])
+      ? await Promise.all([this.videos.getPublishedVideos(videoIds, viewerId), this.interactions.getHiddenAccountIds(viewerId)])
       : [[], new Set<string>()];
     const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const people = inGroup ? messages.flatMap((m) => [m.senderId, ...(m.eventUserId ? [m.eventUserId] : [])]) : [];

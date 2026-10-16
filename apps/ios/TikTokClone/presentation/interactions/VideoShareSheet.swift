@@ -6,7 +6,8 @@ import UIKit
 // - ligne 1 : « Republier » (rond jaune), puis ses conversations récentes et ses abonnements : un toucher envoie la vidéo
 //   par message (compté comme un partage par l'API) ; compte connecté seulement pour les destinataires ;
 // - ligne 2 : « Copier le lien », SMS, Email, « Plus » (feuille système) ; un partage envoyé est compté ;
-// - ligne 3 : « Signaler » (vidéo d'un autre) ou « Supprimer » (la sienne, confirmation attachée au bouton).
+// - ligne 3 : « Signaler » (vidéo d'un autre), ou « Rendre privée / publique » (ADR-061) et « Supprimer » (la sienne,
+//   confirmation attachée au bouton).
 // Pas de Facebook, « Pas intéressé », « Enregistrer la vidéo », « Pourquoi cette vidéo », « Promouvoir » ni
 // « Sous-titres » (hors périmètre, ADR-016). Signaler et supprimer ferment la feuille : l'écran qui l'a présentée enchaîne.
 struct VideoShareSheet: View {
@@ -39,65 +40,19 @@ struct VideoShareSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 14) {
-                    repostTarget
-                    if let recipients {
-                        ForEach(recipients.recent + recipients.others) { recipient in
-                            recipientTarget(recipient, model: recipients)
-                        }
-                        if recipients.following.nextCursor != nil {
-                            ProgressView()
-                                .frame(width: 64, height: 64)
-                                .onAppear { Task { await recipients.following.loadMore() } }
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
+            // Vidéo privée (ADR-061) : personne d'autre ne pourrait l'ouvrir, ni partage ni republication.
+            if current.visibility == .onlyMe {
+                Label("Vidéo privée : toi seul peux la voir.", systemImage: "lock.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .accessibilityIdentifier("share.privateNotice")
+            } else {
+                shareRows
             }
-            .scrollIndicators(.hidden)
-            .padding(.vertical, 12)
-            Divider()
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 14) {
-                    ShareTarget(title: copied ? "Copié" : "Copier le lien", systemImage: copied ? "checkmark" : "link", color: .blue) { copyLink() }
-                        .accessibilityIdentifier("share.copyLink")
-                    ShareTarget(title: "SMS", systemImage: "message.fill", color: .green) { compose(.sms) }
-                        .accessibilityIdentifier("share.sms")
-                    ShareTarget(title: "Email", systemImage: "envelope.fill", color: .cyan) { compose(.mail) }
-                        .accessibilityIdentifier("share.mail")
-                    ShareTarget(title: "Plus", systemImage: "ellipsis", color: .blue) { isPresentingSystemSheet = true }
-                        .accessibilityIdentifier("share.more")
-                }
-                .padding(.horizontal, 16)
-            }
-            .scrollIndicators(.hidden)
-            .padding(.vertical, 12)
-            HStack(alignment: .top, spacing: 14) {
-                if isOwn {
-                    ShareTarget(title: "Supprimer", systemImage: "trash.fill", color: Color(.systemGray5), iconColor: .red) {
-                        isConfirmingDelete = true
-                    }
-                    .accessibilityIdentifier("share.delete")
-                    .confirmationDialog("Supprimer cette vidéo ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
-                        Button("Supprimer", role: .destructive) {
-                            dismiss()
-                            onDelete()
-                        }
-                    } message: {
-                        Text("Ses likes, commentaires et republications disparaîtront aussi.")
-                    }
-                } else {
-                    ShareTarget(title: "Signaler", systemImage: "flag.fill", color: Color(.systemGray5), iconColor: .primary) {
-                        dismiss()
-                        onReport()
-                    }
-                    .accessibilityIdentifier("share.report")
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            ownerRow
             Spacer(minLength: 0)
         }
         .task {
@@ -137,6 +92,87 @@ struct VideoShareSheet: View {
         } message: {
             Text(unavailableMessage ?? recipients?.errorMessage ?? "")
         }
+    }
+
+    // Lignes 1 et 2 : republier, destinataires, puis copier le lien, SMS, Email, « Plus ».
+    private var shareRows: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    repostTarget
+                    if let recipients {
+                        ForEach(recipients.recent + recipients.others) { recipient in
+                            recipientTarget(recipient, model: recipients)
+                        }
+                        if recipients.following.nextCursor != nil {
+                            ProgressView()
+                                .frame(width: 64, height: 64)
+                                .onAppear { Task { await recipients.following.loadMore() } }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.vertical, 12)
+            Divider()
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    ShareTarget(title: copied ? "Copié" : "Copier le lien", systemImage: copied ? "checkmark" : "link", color: .blue) { copyLink() }
+                        .accessibilityIdentifier("share.copyLink")
+                    ShareTarget(title: "SMS", systemImage: "message.fill", color: .green) { compose(.sms) }
+                        .accessibilityIdentifier("share.sms")
+                    ShareTarget(title: "Email", systemImage: "envelope.fill", color: .cyan) { compose(.mail) }
+                        .accessibilityIdentifier("share.mail")
+                    ShareTarget(title: "Plus", systemImage: "ellipsis", color: .blue) { isPresentingSystemSheet = true }
+                        .accessibilityIdentifier("share.more")
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // Ligne 3 : « Signaler », ou « Rendre privée / publique » et « Supprimer » sur sa vidéo.
+    private var ownerRow: some View {
+        HStack(alignment: .top, spacing: 14) {
+            if isOwn {
+                // Vidéo privée ou publique (ADR-061).
+                let isPrivate = current.visibility == .onlyMe
+                ShareTarget(
+                    title: isPrivate ? "Rendre publique" : "Rendre privée", systemImage: isPrivate ? "lock.open.fill" : "lock.fill",
+                    color: Color(.systemGray5), iconColor: .primary
+                ) {
+                    dismiss()
+                    Task {
+                        if let message = await interactions.setVisibility(isPrivate ? .everyone : .onlyMe, of: video) { onAlert(message) }
+                    }
+                }
+                .accessibilityIdentifier("share.visibility")
+                ShareTarget(title: "Supprimer", systemImage: "trash.fill", color: Color(.systemGray5), iconColor: .red) {
+                    isConfirmingDelete = true
+                }
+                .accessibilityIdentifier("share.delete")
+                .confirmationDialog("Supprimer cette vidéo ?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
+                    Button("Supprimer", role: .destructive) {
+                        dismiss()
+                        onDelete()
+                    }
+                } message: {
+                    Text("Ses likes, commentaires et republications disparaîtront aussi.")
+                }
+            } else {
+                ShareTarget(title: "Signaler", systemImage: "flag.fill", color: Color(.systemGray5), iconColor: .primary) {
+                    dismiss()
+                    onReport()
+                }
+                .accessibilityIdentifier("share.report")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var header: some View {

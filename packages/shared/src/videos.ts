@@ -1,11 +1,15 @@
 // Cycle de vie d'une vidéo (ADR-008).
 export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
 
+// Visibilité (ADR-061) : publique, ou privée (« Toi uniquement »), visible de son seul auteur.
+export type VideoVisibility = 'public' | 'private';
+
 export interface VideoDto {
   id: string;
   userId: string;
   description: string | null;
   status: VideoStatus;
+  visibility: VideoVisibility;
   // Renseignés quand la vidéo est `ready` (ADR-008).
   hlsUrl: string | null;
   thumbnailUrl: string | null;

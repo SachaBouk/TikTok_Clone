@@ -1,7 +1,18 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
+import type {
+  NewVideo,
+  PublishedVideo,
+  TranscodeOutcome,
+  Video,
+  VideoDetails,
+  VideoFilter,
+  VideoPosition,
+  VideoStatus,
+  VideoVisibility,
+} from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
 const videoSelect = {
@@ -12,6 +23,7 @@ const videoSelect = {
   uploadId: true,
   rawSize: true,
   status: true,
+  visibility: true,
   hlsUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -52,16 +64,22 @@ export class PrismaVideoRepository extends VideoRepository {
         ? { status: 'ready' as const, hlsUrl: outcome.hlsUrl, thumbnailUrl: outcome.thumbnailUrl }
         : { status: 'failed' as const };
     return this.prisma.$transaction(async (tx) => {
-      const { count } = await tx.video.updateMany({ where: { id, status: 'processing' }, data });
-      if (count !== 1) return false;
-      if (outcome.status === 'ready' && hashtags.length > 0) {
-        // ON CONFLICT DO NOTHING : un hashtag créé en même temps par une autre publication est relu ensuite.
-        await tx.hashtag.createMany({ data: hashtags.map((name) => ({ name })), skipDuplicates: true });
-        const rows = await tx.hashtag.findMany({ where: { name: { in: hashtags } }, select: { id: true } });
-        // `videos_count` suit par trigger (migration search_hashtags).
-        await tx.videoHashtag.createMany({ data: rows.map((row) => ({ videoId: id, hashtagId: row.id })), skipDuplicates: true });
-      }
+      const [updated] = await tx.video.updateManyAndReturn({ where: { id, status: 'processing' }, data, select: { visibility: true } });
+      if (!updated) return false;
+      // Une vidéo privée n'est rangée sous aucun hashtag (ADR-061).
+      if (outcome.status === 'ready' && updated.visibility === 'public') await tagVideo(tx, id, hashtags);
       return true;
+    });
+  }
+
+  // Dans une transaction : la vidéo verrouillée par la mise à jour, deux changements simultanés se suivent.
+  setVisibility(id: string, visibility: VideoVisibility, hashtags: string[]): Promise<Video | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const [video] = await tx.video.updateManyAndReturn({ where: { id }, data: { visibility }, select: videoSelect });
+      if (!video) return null;
+      if (visibility === 'private') await tx.videoHashtag.deleteMany({ where: { videoId: id } });
+      else if (video.status === 'ready') await tagVideo(tx, id, hashtags);
+      return video;
     });
   }
 
@@ -89,7 +107,7 @@ export class PrismaVideoRepository extends VideoRepository {
 
   async listPublishedIds(limit: number): Promise<string[]> {
     const rows = await this.prisma.video.findMany({
-      where: { status: 'ready' },
+      where: { status: 'ready', visibility: 'public' },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: { id: true },
@@ -118,12 +136,18 @@ export class PrismaVideoRepository extends VideoRepository {
 
   // Pagination par clé (created_at, video_id), sur l'index (user_id, created_at).
   // Index `videos(user_id, created_at)`.
-  async findPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+  async findPublishedByAuthors(
+    userIds: string[],
+    after: VideoPosition | null,
+    limit: number,
+    visibility: VideoVisibility,
+  ): Promise<PublishedVideo[]> {
     if (userIds.length === 0) return [];
     const rows = await this.prisma.video.findMany({
       where: {
         userId: { in: userIds },
         status: 'ready',
+        visibility,
         ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -214,7 +238,7 @@ export class PrismaVideoRepository extends VideoRepository {
   }
 
   async sumLikesByAuthor(userId: string): Promise<number> {
-    const result = await this.prisma.video.aggregate({ where: { userId, status: 'ready' }, _sum: { likesCount: true } });
+    const result = await this.prisma.video.aggregate({ where: { userId, status: 'ready', visibility: 'public' }, _sum: { likesCount: true } });
     return result._sum.likesCount ?? 0;
   }
 }
@@ -224,6 +248,7 @@ const detailsSelect = {
   userId: true,
   description: true,
   status: true,
+  visibility: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,
@@ -239,6 +264,7 @@ const publishedSelect = {
   id: true,
   userId: true,
   description: true,
+  visibility: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,
@@ -257,4 +283,14 @@ function toPublished({
   ...video
 }: { hlsUrl: string | null; thumbnailUrl: string | null } & Omit<PublishedVideo, 'hlsUrl' | 'thumbnailUrl'>): PublishedVideo[] {
   return hlsUrl && thumbnailUrl ? [{ ...video, hlsUrl, thumbnailUrl }] : [];
+}
+
+// Range une vidéo sous ses hashtags (ADR-049), dans la transaction `tx`.
+async function tagVideo(tx: Prisma.TransactionClient, videoId: string, hashtags: string[]): Promise<void> {
+  if (hashtags.length === 0) return;
+  // ON CONFLICT DO NOTHING : un hashtag créé en même temps par une autre publication est relu ensuite.
+  await tx.hashtag.createMany({ data: hashtags.map((name) => ({ name })), skipDuplicates: true });
+  const rows = await tx.hashtag.findMany({ where: { name: { in: hashtags } }, select: { id: true } });
+  // `videos_count` suit par trigger (migration search_hashtags).
+  await tx.videoHashtag.createMany({ data: rows.map((row) => ({ videoId, hashtagId: row.id })), skipDuplicates: true });
 }

@@ -3,6 +3,7 @@ import { AuthorStoryResponse } from '../../stories/interfaces/stories.responses'
 import type { FeedItemDto, FeedPageDto, FeedViewerStateDto, VideoPageDto } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { FeedItem } from '../application/feed.service';
+import { VIDEO_VISIBILITIES, type VideoVisibility } from '../../videos/domain/video';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -32,6 +33,10 @@ export class FeedItemResponse implements FeedItemDto {
 
   @ApiProperty({ format: 'uri' })
   thumbnailUrl!: string;
+
+  // Privée (ADR-061) : seul son auteur la reçoit.
+  @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
+  visibility!: VideoVisibility;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -100,6 +105,7 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     description: video.description,
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
+    visibility: video.visibility,
     createdAt: video.createdAt.toISOString(),
     viewsCount: video.viewsCount,
     likesCount: video.likesCount,

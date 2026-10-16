@@ -82,7 +82,8 @@ export class FeedService {
     for (let round = 0; round < PAGE_FILL_ROUNDS && items.length < limit && offset < order.length; round++) {
       const ids = order.slice(offset, offset + limit - items.length);
       offset += ids.length;
-      items.push(...(await this.loadItems(ids, viewerId, hidden)));
+      // Publiques seulement : la photo peut encore contenir une vidéo devenue privée (ADR-061).
+      items.push(...(await this.loadItems(ids, viewerId, hidden)).filter((item) => item.video.visibility === 'public'));
     }
 
     return {
@@ -110,6 +111,18 @@ export class FeedService {
     const last = page.at(-1);
     return {
       items: await this.toItems(page, viewerId, hidden),
+      nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
+    };
+  }
+
+  // Grille « cadenas » de son profil (ADR-061) : ses vidéos privées publiées, de la plus récente à la plus ancienne.
+  async listPrivateVideos(userId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
+    const after = cursor ? decodeListCursor(cursor) : null;
+    const rows = await this.videos.listPublishedByAuthor(userId, after && { createdAt: after.at, id: after.videoId }, limit + 1, 'private');
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: await this.toItems(page, userId, new Set()),
       nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.createdAt, videoId: last.id }) : null,
     };
   }
@@ -248,7 +261,7 @@ export class FeedService {
   // Remet les vidéos dans l'ordre de la page. Une vidéo supprimée (ou son auteur) depuis la photo est
   // simplement absente : la page peut être plus courte, la pagination continue.
   private async loadItems(ids: string[], viewerId: string | null, hidden: Set<string>): Promise<FeedItem[]> {
-    const videos = new Map((await this.videos.getPublishedVideos(ids)).map((v) => [v.id, v]));
+    const videos = new Map((await this.videos.getPublishedVideos(ids, viewerId)).map((v) => [v.id, v]));
     return this.toItems(
       ids.flatMap((id) => videos.get(id) ?? []),
       viewerId,

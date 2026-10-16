@@ -54,6 +54,8 @@ final class PublishDraftViewModel {
         case failed(String)
     }
 
+    // « Qui peut regarder ta vidéo » (ADR-061) ; une story est toujours publique.
+    var visibility: VideoVisibility = .everyone
     var description = "" {
         didSet { if description != oldValue { suggestHashtags() } }
     }
@@ -198,7 +200,8 @@ final class PublishDraftViewModel {
         guard canPublish, case .ready(let draft) = state else { return false }
         let details = PublicationDetails(source: draft.source, plan: draft.isPhoto ? nil : draft.plan)
         if let message = publishing.publish(
-            file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind, details: details)
+            file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind, details: details,
+            visibility: mode == .story ? .everyone : visibility)
         {
             errorMessage = message
             return false
@@ -207,6 +210,7 @@ final class PublishDraftViewModel {
         removeSources(of: draft)
         state = .empty
         description = ""
+        visibility = .everyone
         return true
     }
 

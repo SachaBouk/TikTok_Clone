@@ -1,6 +1,10 @@
 // Cycle de vie (ADR-008) : uploading → processing → ready / failed.
 export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
 
+// Visibilité (ADR-061) : publique, ou privée (« Toi uniquement »), visible de son seul auteur.
+export type VideoVisibility = 'public' | 'private';
+export const VIDEO_VISIBILITIES: VideoVisibility[] = ['public', 'private'];
+
 export interface Video {
   id: string;
   userId: string;
@@ -12,6 +16,7 @@ export interface Video {
   // Taille déclarée du fichier brut, en octets.
   rawSize: number;
   status: VideoStatus;
+  visibility: VideoVisibility;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   createdAt: Date;
@@ -22,6 +27,7 @@ export interface PublishedVideo {
   id: string;
   userId: string;
   description: string | null;
+  visibility: VideoVisibility;
   hlsUrl: string;
   thumbnailUrl: string;
   viewsCount: number;
@@ -39,6 +45,7 @@ export interface VideoDetails {
   userId: string;
   description: string | null;
   status: VideoStatus;
+  visibility: VideoVisibility;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -75,4 +82,6 @@ export interface NewVideo {
   rawKey: string;
   uploadId: string;
   rawSize: number;
+  // Publique par défaut (ADR-061).
+  visibility?: VideoVisibility;
 }

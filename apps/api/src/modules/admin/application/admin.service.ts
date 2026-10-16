@@ -321,7 +321,7 @@ export class AdminService {
     const idsOf = (type: ReportTarget['type']) => rows.filter((r) => r.target.type === type).map((r) => r.target.id);
     const [users, videos, comments, messages, stories, lives] = await Promise.all([
       this.usersById(rows.flatMap((r) => (r.targetUserId ? [r.targetUserId] : []))),
-      this.videos.getPublishedVideos(idsOf('video')),
+      this.videos.getPublishedVideosIncludingPrivate(idsOf('video')),
       this.interactions.getComments(idsOf('comment')),
       this.messaging.getMessages(idsOf('message')),
       this.stories.getStoriesByIds(idsOf('story')),

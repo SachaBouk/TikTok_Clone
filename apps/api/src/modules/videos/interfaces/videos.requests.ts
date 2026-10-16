@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MAX_DESCRIPTION_LENGTH, MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
+import { VIDEO_VISIBILITIES, type VideoVisibility } from '../domain/video';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
 
@@ -38,6 +39,18 @@ export class CreateUploadRequest {
   @IsString()
   @MaxLength(MAX_DESCRIPTION_LENGTH)
   description?: string;
+
+  // Publique par défaut (ADR-061). Pas de description : sur un enum nommé, elle produirait un `allOf`.
+  @ApiPropertyOptional({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
+  @IsOptional()
+  @IsIn(VIDEO_VISIBILITIES)
+  visibility?: VideoVisibility;
+}
+
+export class SetVideoVisibilityRequest {
+  @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
+  @IsIn(VIDEO_VISIBILITIES)
+  visibility!: VideoVisibility;
 }
 
 export class UploadedPartRequest {

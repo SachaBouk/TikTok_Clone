@@ -16,7 +16,7 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/curre
 import { Public } from '../../auth/interfaces/public.decorator';
 import { VideosService, type VideoUpload } from '../application/videos.service';
 import { VideoErrorFilter } from './video-error.filter';
-import { CompleteUploadRequest, CreateUploadRequest } from './videos.requests';
+import { CompleteUploadRequest, CreateUploadRequest, SetVideoVisibilityRequest } from './videos.requests';
 import { toVideoDto, VideoResponse, VideoUploadResponse } from './videos.responses';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
@@ -39,7 +39,14 @@ export class VideosController {
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiTooManyRequests('Trop d’envois de vidéos démarrés récemment (ADR-039)')
   async createUpload(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateUploadRequest): Promise<VideoUploadDto> {
-    return toUploadDto(await this.videos.createUpload(user.userId, body));
+    return toUploadDto(
+      await this.videos.createUpload(user.userId, {
+        contentType: body.contentType,
+        fileSize: body.fileSize,
+        description: body.description,
+        visibility: body.visibility,
+      }),
+    );
   }
 
   @Patch(':id/uploaded')
@@ -55,6 +62,20 @@ export class VideosController {
     @Body() body: CompleteUploadRequest,
   ): Promise<VideoDto> {
     return toVideoDto(await this.videos.completeUpload(user.userId, id, body.parts));
+  }
+
+  // Vidéo privée ou publique (ADR-061), par son auteur, quel que soit son statut.
+  @Patch(':id/visibility')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
+  async setVideoVisibility(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SetVideoVisibilityRequest,
+  ): Promise<VideoDto> {
+    return toVideoDto(await this.videos.setVisibility(user.userId, id, body.visibility));
   }
 
   // Par son auteur, quel que soit le statut. Likes, commentaires, favoris, republications et notifications

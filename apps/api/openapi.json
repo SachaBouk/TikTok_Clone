@@ -993,6 +993,66 @@
         ]
       }
     },
+    "/videos/{id}/visibility": {
+      "patch": {
+        "operationId": "setVideoVisibility",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVideoVisibilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
     "/videos/{id}": {
       "delete": {
         "operationId": "deleteVideo",
@@ -4499,6 +4559,68 @@
         "responses": {
           "200": {
             "description": "Vidéos likées par le compte connecté, du like le plus récent au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/users/me/videos/private": {
+      "get": {
+        "operationId": "listMyPrivateVideos",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 60,
+              "default": 21,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vidéos privées publiées du compte connecté, de la plus récente à la plus ancienne.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8721,6 +8843,13 @@
           "items"
         ]
       },
+      "VideoVisibility": {
+        "type": "string",
+        "enum": [
+          "public",
+          "private"
+        ]
+      },
       "CreateUploadRequest": {
         "type": "object",
         "properties": {
@@ -8741,6 +8870,9 @@
           "description": {
             "type": "string",
             "maxLength": 2200
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/VideoVisibility"
           }
         },
         "required": [
@@ -8776,6 +8908,9 @@
           "status": {
             "$ref": "#/components/schemas/VideoStatus"
           },
+          "visibility": {
+            "$ref": "#/components/schemas/VideoVisibility"
+          },
           "hlsUrl": {
             "type": "string",
             "nullable": true,
@@ -8797,6 +8932,7 @@
           "userId",
           "description",
           "status",
+          "visibility",
           "hlsUrl",
           "thumbnailUrl",
           "createdAt"
@@ -8881,6 +9017,17 @@
         },
         "required": [
           "parts"
+        ]
+      },
+      "SetVideoVisibilityRequest": {
+        "type": "object",
+        "properties": {
+          "visibility": {
+            "$ref": "#/components/schemas/VideoVisibility"
+          }
+        },
+        "required": [
+          "visibility"
         ]
       },
       "PendingVideosResponse": {
@@ -10292,6 +10439,9 @@
             "type": "string",
             "format": "uri"
           },
+          "visibility": {
+            "$ref": "#/components/schemas/VideoVisibility"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -10340,6 +10490,7 @@
           "description",
           "hlsUrl",
           "thumbnailUrl",
+          "visibility",
           "createdAt",
           "viewsCount",
           "likesCount",
@@ -11654,6 +11805,9 @@
           "status": {
             "$ref": "#/components/schemas/VideoStatus"
           },
+          "visibility": {
+            "$ref": "#/components/schemas/VideoVisibility"
+          },
           "hlsUrl": {
             "type": "string",
             "nullable": true,
@@ -11693,6 +11847,7 @@
           "author",
           "description",
           "status",
+          "visibility",
           "hlsUrl",
           "thumbnailUrl",
           "viewsCount",

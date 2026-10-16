@@ -40,6 +40,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     var authorStory: StoryRing? = nil
     // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo.
     var viewedAt: Date? = nil
+    // Privée (ADR-061) : seul son auteur la reçoit.
+    var visibility: VideoVisibility = .everyone
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

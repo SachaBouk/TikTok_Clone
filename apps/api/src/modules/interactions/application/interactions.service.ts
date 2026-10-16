@@ -112,7 +112,7 @@ export class InteractionsService {
   // Like, favori ou republication (`active`), ou leur retrait. Idempotent. Seulement sur une vidéo publiée.
   // Un favori ne notifie pas l'auteur (pas de type `favorite` dans le centre d'activité, ADR-006).
   async setReaction(userId: string, videoId: string, kind: VideoReaction, active: boolean): Promise<InteractionState> {
-    const { userId: authorId } = await this.publishedVideo(videoId);
+    const { userId: authorId } = await this.publishedVideo(videoId, userId);
     // Compte suspendu (ADR-037) : sa vidéo est introuvable ; retirer une réaction reste possible.
     if (active) await this.assertNotSuspended(authorId, videoId);
     // Blocage : ni like ni republication (visibles et notifiés). Le favori, privé, reste possible ;
@@ -129,7 +129,7 @@ export class InteractionsService {
       else await this.notifications.retract(activity);
     }
 
-    const video = await this.publishedVideo(videoId);
+    const video = await this.publishedVideo(videoId, userId);
     return { active, count: video[REACTION_COUNTERS[kind]] };
   }
 
@@ -138,7 +138,7 @@ export class InteractionsService {
   // Ses propres vidéos ne sont ni comptées ni ajoutées à l'historique. Pas de restriction de blocage :
   // voir une vidéo reste possible, comme dans le feed.
   async recordView(userId: string, videoId: string): Promise<void> {
-    const video = await this.publishedVideo(videoId);
+    const video = await this.publishedVideo(videoId, userId);
     if (video.userId === userId) return;
     // Au-delà de la limite (ADR-039), la vue est ignorée sans erreur : l'app l'envoie seule.
     if ((await this.rateLimiter.consume(`view:${userId}`, VIEW_RATE_LIMITS)) !== null) return;
@@ -164,7 +164,7 @@ export class InteractionsService {
   // Au plus un partage compté par vidéo et par personne sur 24 h (ADR-030) ; les suivants renvoient le compteur
   // inchangé, sans erreur. Le dédoublonnage n'est posé que pour une vidéo publiée.
   async share(videoId: string, sharer: Sharer): Promise<number> {
-    const video = await this.publishedVideo(videoId);
+    const video = await this.publishedVideo(videoId, 'userId' in sharer ? sharer.userId : null);
     await this.assertNotSuspended(video.userId, videoId);
     const who = 'userId' in sharer ? `user:${sharer.userId}` : `ip:${sharer.ip}`;
     if (!(await this.rateLimiter.once(`share:${videoId}:${who}`, SHARE_DEDUP_SECONDS))) return video.sharesCount;
@@ -229,7 +229,7 @@ export class InteractionsService {
   async addComment(userId: string, videoId: string, content: string, replyToId: string | null = null): Promise<CommentWithAuthor> {
     const text = content.trim();
     if (!text) throw new EmptyCommentError();
-    const video = await this.publishedVideo(videoId);
+    const video = await this.publishedVideo(videoId, userId);
     await this.assertNotSuspended(video.userId, videoId);
     await this.assertNotBlocked(userId, video.userId);
     const replyTo = replyToId ? await this.visibleComment(replyToId, videoId) : null;
@@ -243,6 +243,8 @@ export class InteractionsService {
     });
     const notice = { actorId: userId, videoId, commentId: comment.id, commentText: comment.content };
     const notified = new Set([userId]);
+    // Vidéo privée (ADR-061) : seul son auteur y écrit, et personne n'est prévenu.
+    if (video.visibility === 'private') return { comment, author: await this.users.getById(userId), likedByViewer: false, likedByAuthor: false };
     if (replyTo && !notified.has(replyTo.userId)) {
       await this.notifications.notify({ type: 'commentReply', recipientId: replyTo.userId, ...notice });
       notified.add(replyTo.userId);
@@ -289,7 +291,7 @@ export class InteractionsService {
   async setCommentLike(userId: string, commentId: string, active: boolean): Promise<InteractionState> {
     const comment = await this.interactions.findComment(commentId);
     if (!comment) throw new CommentNotFoundError(commentId);
-    const video = await this.publishedVideo(comment.videoId);
+    const video = await this.publishedVideo(comment.videoId, userId);
     if (active) {
       await this.assertNotSuspended(video.userId, video.id);
       if (await this.suspended.has(comment.userId)) throw new CommentNotFoundError(commentId);
@@ -297,14 +299,16 @@ export class InteractionsService {
       await this.assertNotBlocked(userId, video.userId);
       await this.limit('reaction', userId, REACTION_RATE_LIMITS);
       await this.interactions.likeComment(userId, commentId);
-      await this.notifications.notify({
-        type: 'commentLike',
-        actorId: userId,
-        recipientId: comment.userId,
-        videoId: video.id,
-        commentId,
-        commentText: comment.content,
-      });
+      // Vidéo privée (ADR-061) : personne n'est prévenu.
+      if (video.visibility === 'public')
+        await this.notifications.notify({
+          type: 'commentLike',
+          actorId: userId,
+          recipientId: comment.userId,
+          videoId: video.id,
+          commentId,
+          commentText: comment.content,
+        });
     } else {
       await this.interactions.unlikeComment(userId, commentId);
       await this.notifications.retract({ type: 'commentLike', actorId: userId, recipientId: comment.userId, commentId });
@@ -379,7 +383,7 @@ export class InteractionsService {
   // `comments_count` les compte toujours).
   // Commentaires d'origine seulement (ADR-060) : les réponses se lisent par `listReplies`.
   async listComments(videoId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
-    const [video, hidden] = await Promise.all([this.publishedVideo(videoId), this.hiddenAccounts(viewerId)]);
+    const [video, hidden] = await Promise.all([this.publishedVideo(videoId, viewerId), this.hiddenAccounts(viewerId)]);
     if (hidden.has(video.userId)) throw new VideoNotAvailableError(videoId);
     const rows = await this.interactions.listComments(videoId, cursor, limit + 1);
     const page = rows.slice(0, limit);
@@ -395,7 +399,7 @@ export class InteractionsService {
   async listReplies(commentId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
     const parent = await this.interactions.findComment(commentId);
     if (!parent || parent.parentId) throw new CommentNotFoundError(commentId);
-    const [video, hidden] = await Promise.all([this.publishedVideo(parent.videoId), this.hiddenAccounts(viewerId)]);
+    const [video, hidden] = await Promise.all([this.publishedVideo(parent.videoId, viewerId), this.hiddenAccounts(viewerId)]);
     if (hidden.has(video.userId) || hidden.has(parent.userId)) throw new CommentNotFoundError(commentId);
     const rows = await this.interactions.listReplies(commentId, cursor, limit + 1);
     const page = rows.slice(0, limit);
@@ -467,7 +471,7 @@ export class InteractionsService {
   async listCommentHistory(userId: string, cursor: string | null, limit: number): Promise<CommentHistoryPage> {
     const [rows, hidden] = await Promise.all([this.interactions.listUserComments(userId, cursor, limit + 1), this.hiddenAccounts(userId)]);
     const page = rows.slice(0, limit);
-    const published = await this.videos.getPublishedVideos([...new Set(page.map((c) => c.videoId))]);
+    const published = await this.videos.getPublishedVideos([...new Set(page.map((c) => c.videoId))], userId);
     const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const authors = new Map((await this.users.getByIds([...videos.values()].map((v) => v.userId))).map((u) => [u.id, u]));
     return {
@@ -593,8 +597,9 @@ export class InteractionsService {
     if (userId !== otherId && (await this.interactions.isBlockedBetween(userId, otherId))) throw new BlockedError();
   }
 
-  private async publishedVideo(videoId: string): Promise<PublishedVideo> {
-    const [video] = await this.videos.getPublishedVideos([videoId]);
+  // Vidéo publiée visible de `viewerId` : une vidéo privée (ADR-061) n'existe que pour son auteur.
+  private async publishedVideo(videoId: string, viewerId: string | null): Promise<PublishedVideo> {
+    const [video] = await this.videos.getPublishedVideos([videoId], viewerId);
     if (!video) throw new VideoNotAvailableError(videoId);
     return video;
   }

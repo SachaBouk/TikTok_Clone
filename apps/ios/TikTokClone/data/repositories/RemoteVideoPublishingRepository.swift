@@ -5,12 +5,13 @@ import TikTokAPI
 struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     let client: Client
 
-    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility) async throws -> UploadTicket {
         // Une photo n'est publiée qu'en story (ADR-051).
         guard let type = Components.Schemas.CreateUploadRequest.ContentTypePayload(contentType) else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
         }
-        let body = Components.Schemas.CreateUploadRequest(contentType: type, fileSize: fileSize, description: description)
+        let body = Components.Schemas.CreateUploadRequest(
+            contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility))
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
         case .tooManyRequests(let error): throw AppError.tooManyActions(.uploads, retryAfter: max(1, error.headers.retryAfter ?? 60))
@@ -28,6 +29,16 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
         case .badRequest, .notFound: throw UploadFailure.restartNeeded
         case .conflict: throw UploadFailure.alreadyConfirmed
         case .unauthorized: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func setVisibility(videoID: String, visibility: VideoVisibility) async throws {
+        let body = Components.Schemas.SetVideoVisibilityRequest(visibility: .init(visibility))
+        switch try await mappingErrors({ try await client.setVideoVisibility(path: .init(id: videoID), body: .json(body)) }) {
+        case .ok: return
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
         case .undocumented: throw AppError.unexpected
         }
     }
@@ -99,6 +110,24 @@ extension VideoStatus {
         case .processing: self = .processing
         case .ready: self = .ready
         case .failed: self = .failed
+        }
+    }
+}
+
+extension Components.Schemas.VideoVisibility {
+    init(_ visibility: VideoVisibility) {
+        switch visibility {
+        case .everyone: self = ._public
+        case .onlyMe: self = ._private
+        }
+    }
+}
+
+extension VideoVisibility {
+    init(_ dto: Components.Schemas.VideoVisibility) {
+        switch dto {
+        case ._public: self = .everyone
+        case ._private: self = .onlyMe
         }
     }
 }

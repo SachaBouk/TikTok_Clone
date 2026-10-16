@@ -240,6 +240,15 @@ struct PublishView: View {
                 }
             }
             .padding(.vertical, 4)
+            // Vidéo privée (ADR-061) : seul son auteur la voit, dans l'onglet « cadenas » de son profil.
+            Picker(selection: $draft.visibility) {
+                ForEach(VideoVisibility.allCases, id: \.self) { visibility in
+                    Text(visibility.label).tag(visibility)
+                }
+            } label: {
+                Label("Qui peut regarder", systemImage: draft.visibility == .onlyMe ? "lock" : "globe")
+            }
+            .accessibilityIdentifier("publish.visibility")
             Button {
                 isEditingDescription = false
                 draft.publish()

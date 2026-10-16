@@ -102,6 +102,7 @@ final class AppContainer {
             setFollow: SetFollowUseCase(interactions: interactions),
             recordShare: ShareVideoUseCase(interactions: interactions),
             deleteVideo: DeleteVideoUseCase(videos: videos),
+            setVisibility: SetVideoVisibilityUseCase(videos: videos),
             session: session,
             analytics: analytics
         )

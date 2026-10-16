@@ -1,5 +1,6 @@
 import type { AuthorStoryDto } from './stories.js';
 import type { UserSummaryDto } from './users.js';
+import type { VideoVisibility } from './videos.js';
 
 // Feed principal (ADR-016) : vidéos publiées, dans un ordre aléatoire propre à chaque session de scroll.
 
@@ -18,6 +19,8 @@ export interface FeedItemDto {
   // Manifeste HLS à donner à AVPlayer (ADR-008).
   hlsUrl: string;
   thumbnailUrl: string;
+  // Privée (ADR-061) : seul son auteur la reçoit.
+  visibility: VideoVisibility;
   createdAt: string;
   viewsCount: number;
   likesCount: number;

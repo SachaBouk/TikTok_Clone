@@ -34,8 +34,10 @@ import type {
   WalletTransactionKind,
   AdminGiftDto,
   AdminGiftPageDto,
+  VideoVisibility,
 } from '@repo/shared';
 import type { User } from '../../users/domain/user';
+import { VIDEO_VISIBILITIES } from '../../videos/domain/video';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { GiftWithContext } from '../../wallet/application/wallet.service';
 import { WALLET_HISTORY_KINDS } from '../../wallet/domain/wallet';
@@ -131,6 +133,10 @@ export class AdminVideoResponse implements AdminVideoDto {
 
   @ApiProperty(VIDEO_STATUS)
   status!: VideoStatus;
+
+  // Privée (ADR-061) : visible de son seul auteur dans l'app.
+  @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
+  visibility!: VideoVisibility;
 
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
@@ -439,6 +445,7 @@ export function toAdminVideoDto({ video, author }: ModeratedVideo): AdminVideoDt
     author: toUserSummary(author),
     description: video.description,
     status: video.status,
+    visibility: video.visibility,
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     viewsCount: video.viewsCount,

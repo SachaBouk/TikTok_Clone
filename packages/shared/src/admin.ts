@@ -1,5 +1,5 @@
 import type { UserSummaryDto } from './users.js';
-import type { VideoStatus } from './videos.js';
+import type { VideoStatus, VideoVisibility } from './videos.js';
 import type { GiftDto, GiftVideoDto, WalletTransactionKind } from './wallet.js';
 
 // Backoffice (ADR-004) : routes `/admin`, réservées aux comptes au rôle `admin`.
@@ -54,6 +54,8 @@ export interface AdminVideoDto {
   author: UserSummaryDto;
   description: string | null;
   status: VideoStatus;
+  // Privée (ADR-061) : visible de son seul auteur dans l'app.
+  visibility: VideoVisibility;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;

@@ -3,7 +3,7 @@ import Foundation
 // Port des vidéos du compte connecté, côté API (module videos).
 protocol VideoPublishingRepository: Sendable {
     // Crée la vidéo en `uploading` et renvoie une URL signée par partie. `.rejected` : format ou taille refusés.
-    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility) async throws -> UploadTicket
     // Assemble les parties et lance le transcodage : la vidéo passe en `processing`.
     // Lève UploadFailure.alreadyConfirmed si l'API l'a déjà fait (réponse perdue), .restartNeeded si l'envoi
     // est perdu (parties refusées, vidéo supprimée entre-temps).
@@ -14,6 +14,8 @@ protocol VideoPublishingRepository: Sendable {
     func pendingVideos() async throws -> [OwnVideo]
     // Quel que soit le statut, y compris pendant l'envoi. Déjà supprimée : sans erreur.
     func deleteVideo(id: String) async throws
+    // Vidéo privée ou publique (ADR-061), quel que soit le statut. `.notFound` : supprimée.
+    func setVisibility(videoID: String, visibility: VideoVisibility) async throws
 }
 
 // Port de l'envoi d'une partie au stockage objet, sur son URL signée (PUT direct, sans passer par l'API).

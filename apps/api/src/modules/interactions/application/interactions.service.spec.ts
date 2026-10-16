@@ -401,6 +401,28 @@ describe('InteractionsService', () => {
     });
   });
 
+  describe('vidéo privée (ADR-061)', () => {
+    it('les autres ne peuvent ni réagir ni commenter ; son auteur y écrit sans prévenir personne', async () => {
+      const { comment } = await service.addComment('alice', video, 'Avant');
+      Object.assign(videoRepository.videos.get(video)!, { visibility: 'private' });
+      await expect(service.setReaction('carol', video, 'like', true)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.addComment('carol', video, 'x')).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.listComments(video, null, 10, 'carol')).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.share(video, { userId: 'carol' })).rejects.toBeInstanceOf(VideoNotAvailableError);
+
+      // bob, l'auteur : réponse, j'aime et mention, sans notification.
+      await service.addComment('bob', video, 'Merci @carol', comment.id);
+      await service.setCommentLike('bob', comment.id, true);
+      expect(await received('alice')).toEqual([]);
+      expect(await received('carol')).toEqual([]);
+      await expect(service.listComments(video, null, 10, 'bob')).resolves.toMatchObject({
+        items: [{ comment: { id: comment.id, repliesCount: 1 } }],
+      });
+      // Historique des commentaires d'alice : le commentaire sur une vidéo devenue privée n'y est plus.
+      expect((await service.listCommentHistory('alice', null, 10)).items).toEqual([]);
+    });
+  });
+
   describe("centre d'activité", () => {
     it("notifie l'auteur d'un like, d'une republication, d'un commentaire, et le compte suivi", async () => {
       await service.setReaction('alice', video, 'like', true);

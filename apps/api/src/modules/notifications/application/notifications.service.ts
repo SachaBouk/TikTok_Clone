@@ -1,5 +1,6 @@
 import type { UsersService } from '../../users/application/users.service';
 import type { VideosService } from '../../videos/application/videos.service';
+import type { PublishedVideo } from '../../videos/domain/video';
 import {
   type ActivityEvent,
   groupFilter,
@@ -174,10 +175,10 @@ export class NotificationsService {
   private async groupsWithContext(groups: NotificationGroup[]): Promise<NotificationGroupWithContext[]> {
     const actors = new Map((await this.users.getByIds([...new Set(groups.flatMap((g) => g.recentActorIds))])).map((u) => [u.id, u]));
     const videoIds = [...new Set(groups.flatMap((g) => (g.latest.videoId ? [g.latest.videoId] : [])))];
-    const videos = new Map((await this.videos.getPublishedVideos(videoIds)).map((v) => [v.id, v]));
+    const videos = new Map((await this.videos.getPublishedVideosIncludingPrivate(videoIds)).map((v) => [v.id, v]));
     return groups.flatMap((group) => {
       const groupActors = group.recentActorIds.flatMap((id) => actors.get(id) ?? []);
-      const video = group.latest.videoId ? videos.get(group.latest.videoId) : null;
+      const video = group.latest.videoId ? visibleTo(videos.get(group.latest.videoId), group.latest.recipientId) : null;
       // Une notification de modération n'a pas d'auteur.
       if ((groupActors.length === 0 && !isModeration(group.latest.type)) || video === undefined) return [];
       return [{ group, actors: groupActors, video }];
@@ -189,12 +190,18 @@ export class NotificationsService {
   private async withContext(notifications: Notification[]): Promise<NotificationWithContext[]> {
     const actors = new Map((await this.users.getByIds(notifications.flatMap((n) => (n.actorId ? [n.actorId] : [])))).map((u) => [u.id, u]));
     const videoIds = [...new Set(notifications.flatMap((n) => (n.videoId ? [n.videoId] : [])))];
-    const videos = new Map((await this.videos.getPublishedVideos(videoIds)).map((v) => [v.id, v]));
+    const videos = new Map((await this.videos.getPublishedVideosIncludingPrivate(videoIds)).map((v) => [v.id, v]));
     return notifications.flatMap((notification) => {
       const actor = notification.actorId ? (actors.get(notification.actorId) ?? null) : null;
-      const video = notification.videoId ? videos.get(notification.videoId) : null;
+      const video = notification.videoId ? visibleTo(videos.get(notification.videoId), notification.recipientId) : null;
       if ((!actor && !isModeration(notification.type)) || video === undefined) return [];
       return [{ notification, actor, video }];
     });
   }
+}
+
+// Vidéo d'une notification telle que son destinataire la voit : une vidéo privée d'un autre (ADR-061) est absente, et
+// la notification sautée, comme pour une vidéo supprimée.
+function visibleTo(video: PublishedVideo | undefined, recipientId: string): PublishedVideo | undefined {
+  return video && (video.visibility === 'public' || video.userId === recipientId) ? video : undefined;
 }

@@ -128,6 +128,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 - URLs expirées (2 h) ou refusées : l'envoi repart de zéro sur une nouvelle vidéo, à partir du fichier local.
 - Suivi : « Envoi… 42 % », « Traitement en cours… », puis « Publiée » (bouton « Voir ») ou « Échec du traitement », par l'événement `videoProcessed` ; l'état est relu par l'API à chaque reconnexion et au retour au premier plan.
 - Glisser une publication vers la gauche : annuler l'envoi, ou supprimer la vidéo (`deleteVideo`).
+- **Vidéo privée** (ADR-061) : « Qui peut regarder : Tout le monde / Toi uniquement » avant de publier (`visibility` de `createUpload`, gardée avec l'envoi). Ensuite : « Rendre privée » / « Rendre publique » dans la feuille de partage de ses vidéos (`setVideoVisibility`). Une vidéo privée n'apparaît que dans l'onglet « cadenas » de son profil (`listMyPrivateVideos`), avec la pastille « Toi uniquement » dans le lecteur ; personne d'autre ne la voit.
 - Pour tester en simulateur : `xcrun simctl addmedia booted video.mp4` ajoute une vidéo à la galerie.
 - Sélecteur « Vidéo | Story » en haut de l'onglet : une story suit le même envoi (voir « Stories »).
 
@@ -161,7 +162,7 @@ Onglet « Publier » : vidéo filmée (« Filmer ») ou choisie dans la galerie 
 ## Écran de profil
 
 - Son profil (onglet Profil) ou celui d'un autre compte, ouvert depuis le pseudo ou l'avatar d'une vidéo, un commentaire, une liste d'abonnés. Lisible en invité ; « Suivre » ouvre alors la connexion.
-- Grilles en 3 colonnes : vidéos et republications ; favoris et likes sur son seul profil. Toucher une vidéo ouvre le lecteur vertical sur elle, avec la suite de la liste. En tête de ses vidéos : ses publications en cours ou en échec.
+- Grilles en 3 colonnes : vidéos et republications ; vidéos privées (onglet « cadenas », ADR-061), favoris et likes sur son seul profil. Toucher une vidéo ouvre le lecteur vertical sur elle, avec la suite de la liste. En tête de ses vidéos : ses publications en cours ou en échec.
 - Comme TikTok (ADR-056) : grande photo avec un « + » pour la changer, @pseudo, Abonnements | Abonnés | J'aime (likes reçus), boutons « Modifier le profil », « Partager le profil » (lien `tiktokclone://users/<pseudo>`) et jetons, « + Ajouter une bio », onglets des grilles en icônes.
 - Photo : « Prendre une photo » ou « Choisir une photo », recadrage rond au doigt, « Publier cette photo en story » (cochée par défaut, aperçu) : l'app dessine la story « J'ai une nouvelle photo de profil » et la publie comme une story photo. Photo envoyée en carré de 512 px, directement au stockage.
 - « Modifier le profil » : page avec la photo, puis Nom, Pseudo (et le lien du profil à copier), Bio ; chaque champ sur sa page (« Annuler », « Enregistrer »), puis « Enregistré ». Tester un lien de profil : `xcrun simctl openurl booted "tiktokclone://users/<pseudo>"`.

@@ -26,7 +26,9 @@ struct CreatePublicationUseCase: Sendable {
     var now: @Sendable () -> Date = { Date() }
     var makeID: @Sendable () -> String = { UUID().uuidString }
 
-    func callAsFunction(file: URL, description: String, userID: String, kind: PublicationKind = .video) throws -> PendingUpload {
+    func callAsFunction(
+        file: URL, description: String, userID: String, kind: PublicationKind = .video, visibility: VideoVisibility = .everyone
+    ) throws -> PendingUpload {
         guard let contentType = MediaContentType(fileExtension: file.pathExtension), contentType.isVideo || kind == .story else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
         }
@@ -48,7 +50,8 @@ struct CreatePublicationUseCase: Sendable {
             fileSize: fileSize,
             description: description,
             createdAt: now(),
-            kind: kind
+            kind: kind,
+            visibility: kind == .story ? .everyone : visibility
         )
         try store.save(upload)
         return upload
@@ -145,7 +148,8 @@ struct UploadVideoUseCase: Sendable {
         upload.ticket = try await withRetries {
             switch request.kind {
             case .video:
-                try await videos.createUpload(contentType: request.contentType, fileSize: request.fileSize, description: request.description)
+                try await videos.createUpload(
+                    contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility)
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
         }
@@ -243,5 +247,14 @@ struct DiscardUploadsUseCase: Sendable {
         for upload in store.all() where upload.userID == userID {
             store.remove(upload)
         }
+    }
+}
+
+// Vidéo privée ou publique (ADR-061), par son auteur.
+struct SetVideoVisibilityUseCase: Sendable {
+    let videos: any VideoPublishingRepository
+
+    func callAsFunction(videoID: String, visibility: VideoVisibility) async throws {
+        try await videos.setVisibility(videoID: videoID, visibility: visibility)
     }
 }

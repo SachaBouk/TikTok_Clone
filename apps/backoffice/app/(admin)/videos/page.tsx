@@ -4,7 +4,7 @@ import type { VideoStatus } from '@repo/shared';
 import { FilterChip } from '@/components/filter-chip';
 import { Pagination } from '@/components/pagination';
 import { Thumbnail } from '@/components/thumbnail';
-import { VIDEO_STATUS_LABELS, VideoStatusBadge } from '@/components/video-status-badge';
+import { VIDEO_STATUS_LABELS, VideoStatusBadge, VideoVisibilityBadge } from '@/components/video-status-badge';
 import { Button } from '@/components/ui/button';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -70,7 +70,10 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
                 </Link>
               </TableCell>
               <TableCell>
-                <VideoStatusBadge status={video.status} />
+                <div className="flex gap-1">
+                  <VideoStatusBadge status={video.status} />
+                  <VideoVisibilityBadge visibility={video.visibility} />
+                </div>
               </TableCell>
               <TableCell className="text-right tabular-nums">{formatNumber(video.viewsCount)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatNumber(video.likesCount)}</TableCell>

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { PendingVideosDto, UploadPartUrlDto, VideoDto, VideoStatus, VideoUploadDto } from '@repo/shared';
-import type { Video } from '../domain/video';
+import type { PendingVideosDto, UploadPartUrlDto, VideoDto, VideoStatus, VideoUploadDto, VideoVisibility } from '@repo/shared';
+import { VIDEO_VISIBILITIES, type Video } from '../domain/video';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -16,6 +16,10 @@ export class VideoResponse implements VideoDto {
 
   @ApiProperty({ enum: ['uploading', 'processing', 'ready', 'failed'], enumName: 'VideoStatus' })
   status!: VideoStatus;
+
+  // Privée (ADR-061) : visible de son seul auteur.
+  @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
+  visibility!: VideoVisibility;
 
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
@@ -62,6 +66,7 @@ export function toVideoDto(video: Video): VideoDto {
     userId: video.userId,
     description: video.description,
     status: video.status,
+    visibility: video.visibility,
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     createdAt: video.createdAt.toISOString(),

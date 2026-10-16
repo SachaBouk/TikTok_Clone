@@ -40,6 +40,10 @@ final class VideoInteractionsModel {
     // comme TikTok, jusqu'à « Afficher la vidéo ». Sur l'appareil seulement, pendant la session de l'app (oubliées à
     // la déconnexion et à la relance) ; l'API ne masque rien avant la décision d'un administrateur.
     private(set) var reportedVideoIDs: Set<String> = []
+    // Visibilité changée depuis l'app (ADR-061), par vidéo : superposée aux vidéos chargées.
+    private var visibilityOverrides: [String: VideoVisibility] = [:]
+    // Incrémenté à chaque changement de visibilité : les grilles « Vidéos » et « cadenas » du profil se rechargent.
+    private(set) var visibilityVersion = 0
     // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
     // (ADR-048) se recharge quand on y revient.
     private(set) var followsVersion = 0
@@ -48,6 +52,7 @@ final class VideoInteractionsModel {
     private let setFollow: SetFollowUseCase
     private let recordShare: ShareVideoUseCase
     private let deleteVideo: DeleteVideoUseCase
+    private let setVisibility: SetVideoVisibilityUseCase?
     private let session: SessionStore
     private let analytics: AnalyticsModel
 
@@ -56,9 +61,11 @@ final class VideoInteractionsModel {
         setFollow: SetFollowUseCase,
         recordShare: ShareVideoUseCase,
         deleteVideo: DeleteVideoUseCase,
+        setVisibility: SetVideoVisibilityUseCase? = nil,
         session: SessionStore,
         analytics: AnalyticsModel
     ) {
+        self.setVisibility = setVisibility
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
@@ -74,6 +81,7 @@ final class VideoInteractionsModel {
         if let following = followOverrides[video.author.id] {
             result = result.with(viewer: (result.viewer ?? .empty).with(followingAuthor: following))
         }
+        if let visibility = visibilityOverrides[video.id] { result = result.with(viewer: result.viewer, visibility: visibility) }
         return result
     }
 
@@ -179,6 +187,23 @@ final class VideoInteractionsModel {
             deletedVideoIDs.insert(video.id)
             return nil
         } catch {
+            return handle(error)
+        }
+    }
+
+    // Rendre sa vidéo privée ou publique (ADR-061) : l'écran change tout de suite, et revient en cas d'erreur.
+    func setVisibility(_ visibility: VideoVisibility, of video: FeedVideo) async -> String? {
+        guard isOwn(video), let setVisibility else { return nil }
+        let before = display(video).visibility
+        guard before != visibility, pending.insert("visibility-\(video.id)").inserted else { return nil }
+        defer { pending.remove("visibility-\(video.id)") }
+        visibilityOverrides[video.id] = visibility
+        do {
+            try await setVisibility(videoID: video.id, visibility: visibility)
+            visibilityVersion += 1
+            return nil
+        } catch {
+            visibilityOverrides[video.id] = before
             return handle(error)
         }
     }

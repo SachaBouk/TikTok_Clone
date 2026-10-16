@@ -1,6 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from '../domain/video';
+import type {
+  NewVideo,
+  PublishedVideo,
+  TranscodeOutcome,
+  Video,
+  VideoDetails,
+  VideoFilter,
+  VideoPosition,
+  VideoStatus,
+  VideoVisibility,
+} from '../domain/video';
 import { VideoRepository } from '../domain/video.repository';
 
 type Counter = 'viewsCount' | 'likesCount' | 'commentsCount' | 'favoritesCount' | 'sharesCount' | 'repostsCount';
@@ -18,6 +28,7 @@ export class InMemoryVideoRepository extends VideoRepository {
   async create(video: NewVideo): Promise<Video> {
     const created: StoredVideo = {
       ...video,
+      visibility: video.visibility ?? 'public',
       id: randomUUID(),
       status: 'uploading',
       hlsUrl: null,
@@ -51,8 +62,18 @@ export class InMemoryVideoRepository extends VideoRepository {
     const video = this.videos.get(id);
     if (!video || video.status !== 'processing') return false;
     Object.assign(video, outcome, { updatedAt: this.now() });
-    if (outcome.status === 'ready' && hashtags.length > 0) video.hashtags = { names: hashtags, taggedAt: this.now() };
+    if (outcome.status === 'ready' && video.visibility === 'public' && hashtags.length > 0)
+      video.hashtags = { names: hashtags, taggedAt: this.now() };
     return true;
+  }
+
+  async setVisibility(id: string, visibility: VideoVisibility, hashtags: string[]): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { visibility, updatedAt: this.now() });
+    if (visibility === 'private') video.hashtags = undefined;
+    else if (video.status === 'ready' && hashtags.length > 0) video.hashtags = { names: hashtags, taggedAt: this.now() };
+    return toVideo(video);
   }
 
   async findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]> {
@@ -79,7 +100,7 @@ export class InMemoryVideoRepository extends VideoRepository {
 
   async listPublishedIds(limit: number): Promise<string[]> {
     return [...this.videos.values()]
-      .filter((v) => v.status === 'ready')
+      .filter((v) => v.status === 'ready' && v.visibility === 'public')
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit)
       .map((v) => v.id);
@@ -93,10 +114,15 @@ export class InMemoryVideoRepository extends VideoRepository {
     });
   }
 
-  async findPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
+  async findPublishedByAuthors(
+    userIds: string[],
+    after: VideoPosition | null,
+    limit: number,
+    visibility: VideoVisibility,
+  ): Promise<PublishedVideo[]> {
     const authors = new Set(userIds);
     return [...this.videos.values()]
-      .filter((v) => authors.has(v.userId))
+      .filter((v) => authors.has(v.userId) && v.visibility === visibility)
       .sort(newestFirst)
       .filter((v) => !after || newestFirst(after, v) < 0)
       .flatMap((v) => toPublished(v) ?? [])
@@ -154,7 +180,7 @@ export class InMemoryVideoRepository extends VideoRepository {
   async sumLikesByAuthor(userId: string): Promise<number> {
     let sum = 0;
     for (const video of this.videos.values()) {
-      if (video.userId === userId && video.status === 'ready') sum += video.counters.likesCount;
+      if (video.userId === userId && video.status === 'ready' && video.visibility === 'public') sum += video.counters.likesCount;
     }
     return sum;
   }
@@ -231,6 +257,7 @@ function toDetails(v: StoredVideo): VideoDetails {
     userId: v.userId,
     description: v.description,
     status: v.status,
+    visibility: v.visibility,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,
@@ -244,6 +271,7 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     id: v.id,
     userId: v.userId,
     description: v.description,
+    visibility: v.visibility,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,

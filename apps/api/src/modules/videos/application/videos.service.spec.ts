@@ -323,6 +323,44 @@ describe('VideosService', () => {
     });
   });
 
+  describe('vidéos privées (ADR-061)', () => {
+    async function published(visibility: 'public' | 'private', description = '#été') {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, description, visibility });
+      await service.completeUpload(ALICE, video.id, uploadAllParts(video.uploadId!, 1000, 1));
+      await service.applyTranscodeResult(video.id, { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b' });
+      return video.id;
+    }
+
+    it('une vidéo privée n’est rendue qu’à son auteur, et n’est rangée sous aucun hashtag', async () => {
+      const hidden = await published('private');
+      const shown = await published('public');
+      expect((await service.getVideo(hidden, ALICE)).visibility).toBe('private');
+      expect((await service.getPublishedVideos([hidden, shown], null)).map((v) => v.id)).toEqual([shown]);
+      expect((await service.getPublishedVideos([hidden, shown], BOB)).map((v) => v.id)).toEqual([shown]);
+      expect((await service.getPublishedVideos([hidden, shown], ALICE)).map((v) => v.id)).toEqual([hidden, shown]);
+      expect(await service.getPublishedVideosIncludingPrivate([hidden])).toHaveLength(1);
+      await expect(service.getHashtag('été')).resolves.toEqual({ name: 'été', videosCount: 1 });
+      expect((await service.listPublishedByAuthor(ALICE, null, 10)).map((v) => v.id)).toEqual([shown]);
+      expect((await service.listPublishedByAuthor(ALICE, null, 10, 'private')).map((v) => v.id)).toEqual([hidden]);
+      expect(await service.listPublishedVideoIds(10)).toEqual([shown]);
+    });
+
+    it('par son auteur seulement ; les hashtags suivent ; le compteur de likes reçus ne compte que les publiques', async () => {
+      const id = await published('public');
+      videos.adjustCounter(id, 'likesCount', 3);
+      await expect(service.countLikesReceived(ALICE)).resolves.toBe(3);
+      await expect(service.setVisibility(BOB, id, 'private')).rejects.toBeInstanceOf(VideoNotFoundError);
+
+      await expect(service.setVisibility(ALICE, id, 'private')).resolves.toMatchObject({ visibility: 'private' });
+      await expect(service.getHashtag('été')).resolves.toEqual({ name: 'été', videosCount: 0 });
+      await expect(service.countLikesReceived(ALICE)).resolves.toBe(0);
+
+      await expect(service.setVisibility(ALICE, id, 'public')).resolves.toMatchObject({ visibility: 'public' });
+      await expect(service.getHashtag('été')).resolves.toEqual({ name: 'été', videosCount: 1 });
+      await expect(service.countLikesReceived(ALICE)).resolves.toBe(3);
+    });
+  });
+
   describe('maintenance', () => {
     let now: Date;
 

@@ -126,6 +126,14 @@ final class ProfileViewModel {
         await self.grid(grid).loadFirstIfNeeded()
     }
 
+    // Vidéo rendue privée ou publique (ADR-061) : les grilles « Vidéos » et « cadenas » déjà ouvertes sont relues.
+    func visibilityChanged() async {
+        guard isOwn else { return }
+        for grid in [ProfileGrid.videos, .privateVideos] {
+            if let list = grids[grid], list.state != .idle { await list.loadFirst() }
+        }
+    }
+
     // Vidéos supprimées depuis un lecteur : retirées des grilles.
     func removeVideos(_ ids: Set<String>) {
         removeVideos { ids.contains($0.id) }

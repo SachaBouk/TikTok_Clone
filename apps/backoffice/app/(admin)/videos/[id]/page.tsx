@@ -6,7 +6,7 @@ import { RemoveContent } from '@/components/remove-content';
 import { HlsPlayer } from '@/components/hls-player';
 import { Thumbnail } from '@/components/thumbnail';
 import { UserAvatar } from '@/components/user-avatar';
-import { VideoStatusBadge } from '@/components/video-status-badge';
+import { VideoStatusBadge, VideoVisibilityBadge } from '@/components/video-status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { removeVideo } from '@/controllers/moderation.actions';
@@ -46,6 +46,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
         <div className="flex min-w-64 flex-1 flex-col gap-4">
           <div className="flex items-center gap-3">
             <VideoStatusBadge status={video.status} />
+            <VideoVisibilityBadge visibility={video.visibility} />
             <span className="text-sm text-muted-foreground">{formatDateTime(video.createdAt)}</span>
           </div>
           <p className="whitespace-pre-wrap">{video.description || <em className="text-muted-foreground">Sans description</em>}</p>

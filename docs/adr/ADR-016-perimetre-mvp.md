@@ -72,3 +72,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages
 - Complété par [ADR-059](ADR-059-chats-de-groupe.md) — Chats de groupe
 - Complété par [ADR-060](ADR-060-commentaires-facon-tiktok.md) — Commentaires façon TikTok : réponses, j'aime, mentions
+- Complété par [ADR-061](ADR-061-videos-privees.md) — Vidéos privées

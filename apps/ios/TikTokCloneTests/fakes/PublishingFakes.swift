@@ -16,6 +16,9 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         var completeErrors: [any Error] = []
         var createError: AppError?
         var expiresAt = Date(timeIntervalSince1970: 1_900_000_000)
+        // Visibilité demandée à la création, puis changée (ADR-061), par vidéo.
+        var visibilities: [String: VideoVisibility] = [:]
+        var visibilityError: AppError?
     }
 
     let state = Mutex(State())
@@ -24,11 +27,21 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
     var deleted: [String] { state.withLock { $0.deleted } }
     func completed(_ id: String) -> [UploadedPart]? { state.withLock { $0.completed[id] } }
 
-    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?) async throws -> UploadTicket {
+    func visibility(of id: String) -> VideoVisibility? { state.withLock { $0.visibilities[id] } }
+
+    func setVisibility(videoID: String, visibility: VideoVisibility) async throws {
+        try state.withLock { state in
+            if let error = state.visibilityError { throw error }
+            state.visibilities[videoID] = visibility
+        }
+    }
+
+    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility) async throws -> UploadTicket {
         try state.withLock { state in
             if let error = state.createError { throw error }
             let id = "vid-\(state.created.count + 1)"
             state.created.append(id)
+            state.visibilities[id] = visibility
             state.videos[id] = OwnVideo(id: id, description: description, status: .uploading, thumbnailURL: nil, createdAt: .now)
             let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
             let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }

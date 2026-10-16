@@ -39,6 +39,15 @@ export class ProfileVideosController {
     return toPageDto(this.feed.listLikes(user.userId, query.cursor, query.limit));
   }
 
+  // Vidéos privées (ADR-061) : grille « cadenas » de son seul profil.
+  @Get('me/videos/private')
+  @ApiOkResponse({ type: VideoPageResponse, description: 'Vidéos privées publiées du compte connecté, de la plus récente à la plus ancienne.' })
+  @ApiBadRequestResponse(BAD_REQUEST)
+  @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
+  listMyPrivateVideos(@CurrentUser() user: AuthenticatedUser, @Query() query: VideoGridQuery): Promise<VideoPageDto> {
+    return toPageDto(this.feed.listPrivateVideos(user.userId, query.cursor, query.limit));
+  }
+
   // Privé ; effacement : `DELETE /users/me/history` (module interactions).
   @Get('me/history')
   @ApiOkResponse({ type: VideoPageResponse, description: 'Historique de visionnage du compte connecté, du plus récent au plus ancien.' })

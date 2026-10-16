@@ -12,6 +12,20 @@ enum VideoStatus: String, Codable, Equatable, Sendable {
     case failed
 }
 
+// Visibilité d'une vidéo (ADR-061) : publique, ou privée (« Toi uniquement »), visible de son seul auteur.
+enum VideoVisibility: String, Codable, CaseIterable, Equatable, Sendable {
+    case everyone = "public"
+    case onlyMe = "private"
+
+    // « Qui peut regarder ta vidéo ».
+    var label: String {
+        switch self {
+        case .everyone: "Tout le monde"
+        case .onlyMe: "Toi uniquement"
+        }
+    }
+}
+
 // Vidéo (ou story, ADR-051) du compte connecté, suivie de l'envoi à la publication. La miniature n'existe qu'une fois
 // `ready` ; une story n'a pas de description.
 struct OwnVideo: Identifiable, Equatable, Sendable {
@@ -84,6 +98,8 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     // Parties déjà reçues par le stockage, par numéro : jamais renvoyées.
     var sentParts: [Int: String] = [:]
     var kind: PublicationKind = .video
+    // Choisie à la publication (ADR-061) ; une story est toujours publique.
+    var visibility: VideoVisibility = .everyone
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -100,10 +116,11 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
-        case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind
+        case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility
     }
 
-    // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo.
+    // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
+    // `visibility` : elle est publique.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -116,7 +133,8 @@ extension PendingUpload {
             createdAt: try container.decode(Date.self, forKey: .createdAt),
             ticket: try container.decodeIfPresent(UploadTicket.self, forKey: .ticket),
             sentParts: try container.decodeIfPresent([Int: String].self, forKey: .sentParts) ?? [:],
-            kind: try container.decodeIfPresent(PublicationKind.self, forKey: .kind) ?? .video
+            kind: try container.decodeIfPresent(PublicationKind.self, forKey: .kind) ?? .video,
+            visibility: try container.decodeIfPresent(VideoVisibility.self, forKey: .visibility) ?? .everyone
         )
     }
 }

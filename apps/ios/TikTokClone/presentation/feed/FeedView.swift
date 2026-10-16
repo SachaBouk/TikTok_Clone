@@ -315,6 +315,16 @@ struct FeedPageView: View {
                         if let badge = RepostBadge.of(video, isOwn: !showsFollowButton) {
                             RepostPill(badge: badge, toggle: { actions.toggle(.repost) })
                         }
+                        // Sa vidéo privée (ADR-061) : seul lui la voit.
+                        if video.visibility == .onlyMe {
+                            Label("Toi uniquement", systemImage: "lock.fill")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .frame(height: 26)
+                                .background(.white.opacity(0.92), in: Capsule())
+                                .accessibilityIdentifier("video.private")
+                        }
                         authorAndDescription
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

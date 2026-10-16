@@ -31,6 +31,7 @@ import {
   type VideoFilter,
   type VideoPosition,
   type VideoStatus,
+  type VideoVisibility,
 } from '../domain/video';
 import {
   InvalidHashtagError,
@@ -49,6 +50,8 @@ export interface CreateUploadInput {
   contentType: string;
   fileSize: number;
   description?: string;
+  // Publique par défaut (ADR-061).
+  visibility?: VideoVisibility;
 }
 
 export interface VideoUpload {
@@ -94,6 +97,7 @@ export class VideosService {
         rawKey,
         uploadId,
         rawSize: input.fileSize,
+        visibility: input.visibility ?? 'public',
       });
     } catch (error) {
       await this.storage.abortMultipartUpload(rawKey, uploadId);
@@ -230,19 +234,44 @@ export class VideosService {
     return this.videos.listPublishedIds(limit);
   }
 
-  // Vidéos publiées parmi `ids`, dans un ordre quelconque ; celles qui ne sont plus publiées sont absentes.
-  getPublishedVideos(ids: string[]): Promise<PublishedVideo[]> {
+  // Vidéos publiées parmi `ids`, dans un ordre quelconque ; celles qui ne sont plus publiées sont absentes. Une vidéo
+  // privée (ADR-061) n'est rendue qu'à son auteur : `viewerId` est le compte pour qui on lit (compte connecté,
+  // destinataire d'une notification, expéditeur d'un message…), null pour un invité.
+  async getPublishedVideos(ids: string[], viewerId: string | null): Promise<PublishedVideo[]> {
+    return (await this.videos.findPublishedByIds(ids)).filter((video) => video.visibility === 'public' || video.userId === viewerId);
+  }
+
+  // Vidéos publiées parmi `ids`, privées comprises : backoffice (ADR-004), ou lecteur propre à chaque vidéo
+  // (notifications), filtré par l'appelant.
+  getPublishedVideosIncludingPrivate(ids: string[]): Promise<PublishedVideo[]> {
     return this.videos.findPublishedByIds(ids);
   }
 
-  // Pour le module feed : vidéos publiées d'un auteur (grille du profil), de la plus récente à la plus ancienne.
-  listPublishedByAuthor(userId: string, after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
-    return this.videos.findPublishedByAuthors([userId], after, limit);
+  // Pour le module feed : vidéos publiées d'un auteur, de la plus récente à la plus ancienne. Publiques : grille
+  // « Vidéos » du profil ; privées : grille « cadenas » de son auteur (ADR-061).
+  listPublishedByAuthor(
+    userId: string,
+    after: VideoPosition | null,
+    limit: number,
+    visibility: VideoVisibility = 'public',
+  ): Promise<PublishedVideo[]> {
+    return this.videos.findPublishedByAuthors([userId], after, limit, visibility);
   }
 
-  // Pour le module feed : vidéos publiées de plusieurs auteurs (feed des abonnements), même ordre.
+  // Pour le module feed : vidéos publiques de plusieurs auteurs (feeds des abonnements et des amis), même ordre.
   listPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]> {
-    return this.videos.findPublishedByAuthors(userIds, after, limit);
+    return this.videos.findPublishedByAuthors(userIds, after, limit, 'public');
+  }
+
+  // Vidéo privée ou publique (ADR-061), par son auteur seulement (404 sinon), quel que soit son statut. Les hashtags
+  // suivent : retirés d'une vidéo privée, réécrits d'une vidéo redevenue publique.
+  async setVisibility(userId: string, videoId: string, visibility: VideoVisibility): Promise<Video> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
+    if (video.visibility === visibility) return video;
+    const updated = await this.videos.setVisibility(videoId, visibility, extractHashtags(video.description));
+    if (!updated) throw new VideoNotFoundError(videoId);
+    return updated;
   }
 
   // Vidéos de l'auteur pas encore publiées (en traitement) ou en échec, visibles de lui seul, en tête de sa grille.

@@ -129,7 +129,7 @@ export class WalletService {
   async sendGift(senderId: string, videoId: string, giftCode: string, clientGiftId: string): Promise<SentGift> {
     const catalogItem = findGift(giftCode);
     if (!catalogItem) throw new UnknownGiftError(giftCode);
-    const [video] = await this.gifts.videos.getPublishedVideos([videoId]);
+    const [video] = await this.gifts.videos.getPublishedVideos([videoId], senderId);
     if (!video) throw new GiftVideoUnavailableError(videoId);
     const authorId = video.userId;
     if (authorId === senderId) throw new CannotGiftYourselfError();
@@ -214,7 +214,7 @@ export class WalletService {
 
   // Cadeaux reçus par le compte, du plus récent au plus ancien (ADR-050). Curseur : identifiant du dernier reçu.
   async listReceivedGifts(userId: string, cursor: string | null, limit: number): Promise<GiftPage> {
-    return this.giftPage(await this.wallets.listReceivedGifts(userId, cursor, limit + 1), limit);
+    return this.giftPage(await this.wallets.listReceivedGifts(userId, cursor, limit + 1), limit, userId);
   }
 
   // Backoffice (ADR-050) : journal des cadeaux, tous ou envoyés et reçus par `userId`, du plus récent au plus ancien.
@@ -283,11 +283,14 @@ export class WalletService {
     return { gift, balance: await this.wallets.getBalance(senderId) };
   }
 
-  private async giftPage(rows: Gift[], limit: number): Promise<GiftPage> {
+  // `viewerId` : compte qui lit ses cadeaux reçus (une vidéo privée d'un autre est absente, ADR-061) ; absent pour le
+  // backoffice, qui voit tout.
+  private async giftPage(rows: Gift[], limit: number, viewerId?: string): Promise<GiftPage> {
     const page = rows.slice(0, limit);
+    const videoIds = [...new Set(page.flatMap((gift) => (gift.videoId ? [gift.videoId] : [])))];
     const [users, videos] = await Promise.all([
       this.usersById(page.flatMap((gift) => [gift.senderId, gift.recipientId])),
-      this.gifts.videos.getPublishedVideos([...new Set(page.flatMap((gift) => (gift.videoId ? [gift.videoId] : [])))]),
+      viewerId ? this.gifts.videos.getPublishedVideos(videoIds, viewerId) : this.gifts.videos.getPublishedVideosIncludingPrivate(videoIds),
     ]);
     const videoById = new Map(videos.map((video) => [video.id, video]));
     return {

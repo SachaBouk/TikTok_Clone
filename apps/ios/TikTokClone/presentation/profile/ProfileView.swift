@@ -97,6 +97,8 @@ struct ProfileView: View {
                 Text(alertMessage ?? "")
             }
             .onChange(of: container.videoInteractions.deletedVideoIDs) { _, ids in viewModel.removeVideos(ids) }
+            // Vidéo rendue privée ou publique (ADR-061) : elle passe d'une grille à l'autre.
+            .onChange(of: container.videoInteractions.visibilityVersion) { Task { await viewModel.visibilityChanged() } }
             .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in viewModel.removeVideos(byAuthors: ids) }
             // Une publication vient d'être mise en ligne : elle rejoint la grille des vidéos.
             .onChange(of: publishedCount) { old, new in
@@ -274,6 +276,7 @@ struct ProfileView: View {
     private var emptyTitle: String {
         switch viewModel.selectedGrid {
         case .videos: viewModel.isOwn ? "Publie ta première vidéo" : "Aucune vidéo"
+        case .privateVideos: "Tes vidéos privées apparaîtront ici"
         case .reposts: "Aucune republication"
         case .favorites: "Aucun favori"
         case .likes: "Aucune vidéo aimée"

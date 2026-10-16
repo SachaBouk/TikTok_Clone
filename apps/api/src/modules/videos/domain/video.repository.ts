@@ -1,5 +1,15 @@
 import type { Hashtag, HashtagVideoPosition } from './hashtags';
-import type { NewVideo, PublishedVideo, TranscodeOutcome, Video, VideoDetails, VideoFilter, VideoPosition, VideoStatus } from './video';
+import type {
+  NewVideo,
+  PublishedVideo,
+  TranscodeOutcome,
+  Video,
+  VideoDetails,
+  VideoFilter,
+  VideoPosition,
+  VideoStatus,
+  VideoVisibility,
+} from './video';
 
 export abstract class VideoRepository {
   abstract create(video: NewVideo): Promise<Video>;
@@ -10,8 +20,11 @@ export abstract class VideoRepository {
   abstract markFailed(id: string): Promise<void>;
   // Applique le résultat du transcodage, seulement si la vidéo est encore en `processing`.
   // Renvoie false sinon (résultat en double, vidéo supprimée entre-temps). Vidéo publiée : ses `hashtags` (noms
-  // normalisés, ADR-049) sont écrits dans la même transaction.
+  // normalisés, ADR-049) sont écrits dans la même transaction, sauf pour une vidéo privée (ADR-061).
   abstract finishTranscoding(id: string, outcome: TranscodeOutcome, hashtags: string[]): Promise<boolean>;
+  // Change la visibilité (ADR-061). Une vidéo privée n'est rangée sous aucun hashtag : ses lignes `video_hashtags` sont
+  // retirées ; redevenue publique (et publiée), ses `hashtags` sont réécrits. Null si la vidéo n'existe plus.
+  abstract setVisibility(id: string, visibility: VideoVisibility, hashtags: string[]): Promise<Video | null>;
   // Vidéos restées en `uploading` depuis avant `createdBefore` (uploads abandonnés).
   abstract findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]>;
   // Vidéos en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu).
@@ -19,14 +32,19 @@ export abstract class VideoRepository {
   abstract delete(id: string): Promise<void>;
   // Toutes les vidéos de `userId`, quel que soit leur statut (suppression du compte).
   abstract findAllByAuthor(userId: string): Promise<Video[]>;
-  // Identifiants des vidéos publiées (`ready`), les plus récentes d'abord.
+  // Identifiants des vidéos publiées (`ready`) et publiques, les plus récentes d'abord.
   abstract listPublishedIds(limit: number): Promise<string[]>;
-  // Vidéos publiées parmi `ids`, dans un ordre quelconque ; les autres (supprimées, pas `ready`) sont absentes.
+  // Vidéos publiées parmi `ids`, privées comprises, dans un ordre quelconque ; les autres (supprimées, pas `ready`) sont absentes.
   abstract findPublishedByIds(ids: string[]): Promise<PublishedVideo[]>;
-  // Vidéos publiées des comptes `userIds`, de la plus récente à la plus ancienne (date, puis identifiant
-  // décroissant), strictement après `after` s'il est donné. Un seul compte : grille du profil ; ses abonnements :
-  // feed des abonnements.
-  abstract findPublishedByAuthors(userIds: string[], after: VideoPosition | null, limit: number): Promise<PublishedVideo[]>;
+  // Vidéos publiées de visibilité `visibility` des comptes `userIds`, de la plus récente à la plus ancienne (date, puis
+  // identifiant décroissant), strictement après `after` s'il est donné. Un seul compte : grilles du profil (publiques,
+  // ou privées pour son auteur) ; ses abonnements : feed des abonnements.
+  abstract findPublishedByAuthors(
+    userIds: string[],
+    after: VideoPosition | null,
+    limit: number,
+    visibility: VideoVisibility,
+  ): Promise<PublishedVideo[]>;
   // Vidéos de `userId` en `processing` ou `failed`, de la plus récente à la plus ancienne.
   abstract findUnpublishedByAuthor(userId: string, limit: number): Promise<Video[]>;
   // +1 partage sur une vidéo publiée ; renvoie le nouveau total, ou null si la vidéo n'est pas publiée.
@@ -41,7 +59,7 @@ export abstract class VideoRepository {
   abstract countCreatedSince(since: Date): Promise<number>;
   // Nombre de vidéos (tous statuts) de chaque compte de `userIds` ; un compte sans vidéo est absent.
   abstract countByAuthors(userIds: string[]): Promise<Map<string, number>>;
-  // Likes reçus par un compte : somme des likes de ses vidéos publiées (ADR-056).
+  // Likes reçus par un compte : somme des likes de ses vidéos publiées et publiques (ADR-056, ADR-061).
   abstract sumLikesByAuthor(userId: string): Promise<number>;
 
   // Hashtags (ADR-049), écrits par `finishTranscoding`.

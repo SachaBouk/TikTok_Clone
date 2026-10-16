@@ -6,7 +6,7 @@ import TikTokAPI
 
 private let videoJSON = """
     {"id":"0192f3a0-0000-7000-8000-00000000000a","userId":"0192f3a0-0000-7000-8000-000000000001","description":"Ma vidéo",\
-    "status":"processing","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
+    "status":"processing","visibility":"public","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
     """
 
 @Suite("RemoteVideoPublishingRepository")
@@ -18,7 +18,8 @@ struct RemoteVideoPublishingRepositoryTests {
     @Test("createUpload : 429 (ADR-039) → trop d'envois, avec le délai de Retry-After")
     func createUploadRateLimited() async {
         await #expect(throws: AppError.tooManyActions(.uploads, retryAfter: 5400)) {
-            try await repository { _ in tooManyRequests(retryAfter: 5400) }.createUpload(contentType: .mp4, fileSize: 1000, description: nil)
+            try await repository { _ in tooManyRequests(retryAfter: 5400) }.createUpload(
+                contentType: .mp4, fileSize: 1000, description: nil, visibility: .everyone)
         }
     }
 
@@ -28,7 +29,8 @@ struct RemoteVideoPublishingRepositoryTests {
             {"video":\(videoJSON),"partSize":10485760,"parts":[{"partNumber":1,"url":"http://localhost:9000/videos-raw/a?partNumber=1"},\
             {"partNumber":2,"url":"http://localhost:9000/videos-raw/a?partNumber=2"}],"expiresAt":"2026-09-25T14:00:00.000Z"}
             """
-        let ticket = try await repository { _ in json(.created, body) }.createUpload(contentType: .quickTime, fileSize: 12_000_000, description: nil)
+        let ticket = try await repository { _ in json(.created, body) }.createUpload(
+            contentType: .quickTime, fileSize: 12_000_000, description: nil, visibility: .everyone)
         #expect(ticket.videoID == "0192f3a0-0000-7000-8000-00000000000a")
         #expect(ticket.partSize == 10_485_760)
         #expect(ticket.parts.map(\.number) == [1, 2])
@@ -39,7 +41,7 @@ struct RemoteVideoPublishingRepositoryTests {
     func createRejected() async {
         await #expect(throws: AppError.rejected("fichier trop volumineux")) {
             try await repository { _ in json(.badRequest, errorJSON(400, "fichier trop volumineux")) }.createUpload(
-                contentType: .mp4, fileSize: 1, description: nil)
+                contentType: .mp4, fileSize: 1, description: nil, visibility: .everyone)
         }
     }
 

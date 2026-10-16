@@ -53,3 +53,4 @@ Ce qui existe déjà : le profil (ADR-016) sans compteur de likes reçus ; la ph
 - ADR-046 — Dimensions de la photo de profil
 - ADR-049 — Recherche de comptes et hashtags
 - ADR-051 — Stories
+- Complété par [ADR-061](ADR-061-videos-privees.md) — Vidéos privées

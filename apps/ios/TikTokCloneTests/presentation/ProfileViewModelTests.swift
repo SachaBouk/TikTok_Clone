@@ -42,7 +42,7 @@ struct ProfileViewModelTests {
         )
     }
 
-    @Test("son profil : relu et partagé avec la session ; 4 grilles, chargées à la demande")
+    @Test("son profil : relu et partagé avec la session ; 5 grilles, chargées à la demande")
     func ownProfile() async {
         let session = await makeSession()
         videoLists.set(.accountVideos(username: "alice"), [page(["v1", "v2"], next: nil)])
@@ -50,7 +50,7 @@ struct ProfileViewModelTests {
         await viewModel.load()
         #expect(viewModel.state == .loaded)
         #expect(viewModel.isOwn)
-        #expect(viewModel.availableGrids.count == 4)
+        #expect(viewModel.availableGrids.count == 5)
         #expect(viewModel.followStatus == nil)
         #expect(viewModel.grid(.videos).items.map(\.id) == ["v1", "v2"])
         #expect(videoLists.requests == ["accountVideos(username: \"alice\")-nil"])

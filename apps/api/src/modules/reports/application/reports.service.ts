@@ -241,7 +241,7 @@ export class ReportsService {
   private async resolve(reporterId: string, target: ReportTarget): Promise<{ userId: string; excerpt: string | null }> {
     switch (target.type) {
       case 'video': {
-        const [video] = await this.videos.getPublishedVideos([target.id]);
+        const [video] = await this.videos.getPublishedVideos([target.id], reporterId);
         if (!video) throw new ReportTargetNotFoundError();
         await this.assertNotSuspended(video.userId);
         return { userId: video.userId, excerpt: video.description };
