@@ -338,7 +338,7 @@ struct FeedPageView: View {
             }
             .overlay {
                 if let revealReported {
-                    ReportedVideoMask(thumbnailURL: video.thumbnailURL, bottomInset: bottomInset, reveal: revealReported)
+                    ReportedVideoMask(bottomInset: bottomInset, reveal: revealReported)
                         .transition(.opacity)
                 }
             }
@@ -371,25 +371,18 @@ struct FeedPageView: View {
     }
 }
 
-// Voile d'une vidéo signalée, comme TikTok : miniature floutée et assombrie, coche verte dans un rond gris, « Merci pour
-// ton signalement », puis « Afficher la vidéo ». Il recouvre auteur, description et boutons, et retient les touchers
-// (pas de pause ni de like) ; le défilement vers la vidéo suivante reste possible.
+// Voile d'une vidéo signalée, comme TikTok : la vidéo (arrêtée sur son image) reste devinée sous un flou sombre, coche
+// verte dans un rond gris, « Merci pour ton signalement », puis « Afficher la vidéo ». Il recouvre auteur, description et
+// boutons, et retient les touchers (pas de pause ni de like) ; le défilement vers la vidéo suivante reste possible.
 struct ReportedVideoMask: View {
-    let thumbnailURL: URL?
     let bottomInset: CGFloat
     let reveal: () -> Void
 
     var body: some View {
-        Color.black
-            .overlay {
-                AsyncImage(url: thumbnailURL) { image in
-                    image.resizable().scaledToFill().blur(radius: 40, opaque: true)
-                } placeholder: {
-                    Color.black
-                }
-            }
-            .overlay { Color.black.opacity(0.35) }
-            .clipped()
+        // Flou d'UIKit : celui de SwiftUI (`blur`) ne s'applique pas à la couche du lecteur (AVPlayerLayer).
+        BlurView(style: .systemUltraThinMaterialDark)
+            // Assombri un peu, pour que le texte blanc reste lisible sur une vidéo claire.
+            .overlay { Color.black.opacity(0.2) }
             .overlay {
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
@@ -426,6 +419,19 @@ struct ReportedVideoMask: View {
             .onTapGesture {}
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("video.reportedMask")
+    }
+}
+
+// Flou d'UIKit par-dessus ce qui est dessous (vidéo comprise).
+struct BlurView: UIViewRepresentable {
+    let style: UIBlurEffect.Style
+
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+
+    func updateUIView(_ view: UIVisualEffectView, context: Context) {
+        view.effect = UIBlurEffect(style: style)
     }
 }
 
