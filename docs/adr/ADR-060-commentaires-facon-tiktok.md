@@ -61,3 +61,4 @@ App iOS : feuille de commentaires redessinée (titre « N commentaires » et ×,
 - ADR-039 — Limites de débit
 - ADR-042 — Suppression des commentaires par l'auteur de la vidéo
 - ADR-043 — Notifications supprimées annoncées en direct
+- Complété par [ADR-062](ADR-062-creation-video-facon-tiktok.md) — Création vidéo façon TikTok : caméra, galerie, éditeur par clips, commentaires désactivables

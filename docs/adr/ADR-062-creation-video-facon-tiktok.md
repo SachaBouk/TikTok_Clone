@@ -1,7 +1,7 @@
 # ADR-062 — Création vidéo façon TikTok : caméra, galerie, éditeur par clips, réglages de publication
 
 ## Statut
-Proposé
+Accepté
 
 Complète [ADR-052](ADR-052-enregistrement-edition-video.md) (enregistrement et édition vidéo), [ADR-016](ADR-016-perimetre-mvp.md) (publication) et [ADR-060](ADR-060-commentaires-facon-tiktok.md) (commentaires), sans les remplacer.
 

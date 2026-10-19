@@ -63,10 +63,10 @@
 | [ADR-059](ADR-059-chats-de-groupe.md) | Chats de groupe (complète ADR-016, ADR-018 et ADR-028) | Accepté |
 | [ADR-060](ADR-060-commentaires-facon-tiktok.md) | Commentaires façon TikTok : réponses, j'aime, mentions (complète ADR-016, ADR-006 et ADR-042) | Accepté |
 | [ADR-061](ADR-061-videos-privees.md) | Vidéos privées (complète ADR-016, ADR-006 et ADR-056) | Accepté |
-| [ADR-062](ADR-062-creation-video-facon-tiktok.md) | Création vidéo façon TikTok : caméra, galerie, éditeur par clips, commentaires désactivables (complète ADR-052, ADR-016 et ADR-060) | Proposé |
+| [ADR-062](ADR-062-creation-video-facon-tiktok.md) | Création vidéo façon TikTok : caméra, galerie, éditeur par clips, commentaires désactivables (complète ADR-052, ADR-016 et ADR-060) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 
-Les ADR 017 à 061 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
+Les ADR 017 à 062 (acceptés) consignent les décisions prises pendant la réalisation. Chacun **complète** un ADR accepté (ou, pour
 l'ADR-039, en **prolonge** un) sans le remplacer : l'ADR d'origine reste valable, et renvoie vers son complément
 (« Complété par »).
