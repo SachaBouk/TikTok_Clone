@@ -108,7 +108,7 @@ enum EditRendering {
 }
 
 // Textes posés sur la vidéo, dessinés une fois par export dans une image transparente de la taille de la vidéo.
-// Mêmes proportions que l'aperçu SwiftUI (`EditorTextStyle`) : police relative à la largeur, centre relatif.
+// Même mise en page que l'aperçu SwiftUI (`EditorTextStyle`) : police relative à la largeur, centre relatif.
 enum TextOverlayRenderer {
     static func image(_ texts: [TextOverlay], size: CGSize) -> CIImage? {
         guard !texts.isEmpty else { return nil }
@@ -123,38 +123,104 @@ enum TextOverlayRenderer {
 
     private static func draw(_ overlay: TextOverlay, in size: CGSize) {
         let style = EditorTextStyle(overlay: overlay, width: size.width)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        let shadow = NSShadow()
-        shadow.shadowColor = UIColor(white: overlay.color == .black ? 1 : 0, alpha: 0.6)
-        shadow.shadowBlurRadius = style.shadowRadius
-        shadow.shadowOffset = .zero
-        let rgb = overlay.color.rgb
-        let text = NSAttributedString(
-            string: overlay.text,
-            attributes: [
-                .font: UIFont.systemFont(ofSize: style.fontSize, weight: .heavy),
-                .foregroundColor: UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1),
-                .paragraphStyle: paragraph,
-                .shadow: shadow,
-            ])
-        let bounds = text.boundingRect(
-            with: CGSize(width: style.maxWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
-        let height = bounds.height.rounded(.up)
-        let origin = CGPoint(x: overlay.center.x * size.width - style.maxWidth / 2, y: overlay.center.y * size.height - height / 2)
-        text.draw(with: CGRect(origin: origin, size: CGSize(width: style.maxWidth, height: height)), options: [.usesLineFragmentOrigin], context: nil)
+        let text = style.attributedText(overlay.text, shadow: overlay.style.background == .none)
+        let box = style.boxSize(for: overlay.text)
+        let frame = CGRect(
+            x: overlay.center.x * size.width - box.width / 2, y: overlay.center.y * size.height - box.height / 2, width: box.width,
+            height: box.height)
+        if let fill = overlay.style.fill {
+            let rgb = fill.color.rgb
+            UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: fill.opacity).setFill()
+            UIBezierPath(roundedRect: frame, cornerRadius: style.cornerRadius).fill()
+        }
+        let textRect = frame.insetBy(dx: style.horizontalPadding, dy: style.verticalPadding)
+        text.draw(with: textRect, options: [.usesLineFragmentOrigin], context: nil)
     }
 }
 
-// Proportions d'un texte pour une image de largeur `width` : partagées par l'export et l'aperçu.
+// Mise en page d'un texte pour une image de largeur `width` : partagée par l'export, l'aperçu et l'éditeur de texte.
+// La largeur est mesurée par UIKit, pour que les lignes se coupent au même endroit partout.
 struct EditorTextStyle {
+    let font: UIFont
     let fontSize: CGFloat
     let maxWidth: CGFloat
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+    let cornerRadius: CGFloat
     let shadowRadius: CGFloat
+    let style: TextOverlay.Style
 
     init(overlay: TextOverlay, width: CGFloat) {
-        fontSize = width * overlay.size.relativeFontSize
+        self.init(style: overlay.style, scale: overlay.scale, width: width)
+    }
+
+    init(style: TextOverlay.Style, scale: Double, width: CGFloat) {
+        self.style = style
+        fontSize = width * TextOverlay.baseRelativeFontSize * scale
+        font = Self.font(style.font, size: fontSize)
+        horizontalPadding = fontSize * 0.32
+        verticalPadding = fontSize * 0.14
+        cornerRadius = fontSize * 0.28
         maxWidth = width * 0.9
         shadowRadius = max(1, width * 0.008)
+    }
+
+    // Fichiers des polices d'iOS ; la police du système (grasse) si l'un manque.
+    static func font(_ font: TextOverlay.Font, size: CGFloat) -> UIFont {
+        let name: String? =
+            switch font {
+            case .classic: nil
+            case .elegance: "Didot"
+            case .retro: "Georgia-BoldItalic"
+            case .vintage: "Baskerville-SemiBold"
+            case .handwriting: "Noteworthy-Bold"
+            case .postcard: "Copperplate-Bold"
+            case .script: "Courier-Bold"
+            case .technic: "Futura-CondensedExtraBold"
+            }
+        return name.flatMap { UIFont(name: $0, size: size) } ?? .systemFont(ofSize: size, weight: .heavy)
+    }
+
+    var textAlignment: NSTextAlignment {
+        switch style.alignment {
+        case .center: .center
+        case .left: .left
+        case .right: .right
+        }
+    }
+
+    var textUIColor: UIColor {
+        let rgb = style.textColor.rgb
+        return UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+    }
+
+    func attributedText(_ string: String, shadow: Bool) -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = textAlignment
+        var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textUIColor, .paragraphStyle: paragraph]
+        if shadow {
+            let value = NSShadow()
+            value.shadowColor = UIColor(white: style.textColor == .black ? 1 : 0, alpha: 0.6)
+            value.shadowBlurRadius = shadowRadius
+            value.shadowOffset = .zero
+            attributes[.shadow] = value
+        }
+        return NSAttributedString(string: string, attributes: attributes)
+    }
+
+    // Taille des lignes, coupées à la largeur maximale moins les marges du fond.
+    func textSize(for string: String) -> CGSize {
+        // Une ligne vide (texte vide, ou retour à la ligne final) compte pour une ligne.
+        let measured = string.isEmpty || string.hasSuffix("\n") ? string + " " : string
+        let bounds = attributedText(measured, shadow: false).boundingRect(
+            with: CGSize(width: maxWidth - 2 * horizontalPadding, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin],
+            context: nil)
+        return CGSize(width: bounds.width.rounded(.up), height: bounds.height.rounded(.up))
+    }
+
+    // Taille du cadre (texte et marges du fond).
+    func boxSize(for string: String) -> CGSize {
+        let text = textSize(for: string)
+        return CGSize(width: text.width + 2 * horizontalPadding, height: text.height + 2 * verticalPadding)
     }
 }

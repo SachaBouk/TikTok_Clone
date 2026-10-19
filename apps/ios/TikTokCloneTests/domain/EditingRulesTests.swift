@@ -249,7 +249,7 @@ struct EditingRulesTests {
         #expect(blank == nil)
         let tooLong = plan.addText(String(repeating: "a", count: 81))
         #expect(tooLong == nil)
-        let added = plan.addText("  Bonjour  ", color: .yellow, size: .large)
+        let added = plan.addText("  Bonjour  ", style: TextOverlay.Style(color: .yellow, font: .retro))
         let first = try #require(added)
         #expect(first.text == "Bonjour")
         #expect(first.center == CGPoint(x: 0.5, y: 0.5))
@@ -262,17 +262,49 @@ struct EditingRulesTests {
 
         plan.moveText(first.id, to: CGPoint(x: -1, y: 2))
         #expect(plan.texts[0].center == CGPoint(x: 0.05, y: 0.95))
-        let updated = plan.updateText(first.id, text: "Salut", color: .red, size: .small)
+        let style = TextOverlay.Style(color: .red, font: .technic, background: .solid, alignment: .left)
+        let updated = plan.updateText(first.id, text: "Salut", style: style)
         #expect(updated)
-        #expect(plan.texts[0].text == "Salut" && plan.texts[0].color == .red && plan.texts[0].size == .small)
-        let updatedTooLong = plan.updateText(first.id, text: String(repeating: "b", count: 81), color: .red, size: .small)
+        #expect(plan.texts[0].text == "Salut" && plan.texts[0].style == style)
+        plan.scaleText(first.id, to: 10)
+        #expect(plan.texts[0].scale == TextOverlay.scaleRange.upperBound)
+        plan.scaleText(first.id, to: 0)
+        #expect(plan.texts[0].scale == TextOverlay.scaleRange.lowerBound)
+        let updatedTooLong = plan.updateText(first.id, text: String(repeating: "b", count: 81), style: style)
         #expect(!updatedTooLong)
         #expect(plan.texts[0].text == "Salut")
-        let emptied = plan.updateText(first.id, text: "  ", color: .red, size: .small)
+        let emptied = plan.updateText(first.id, text: "  ", style: style)
         #expect(!emptied)
         #expect(plan.texts.count == 4)
         plan.removeText(plan.texts[0].id)
         #expect(plan.texts.count == 3)
+    }
+
+    @Test("style des textes : lettres lisibles sur le fond, « A » et alignement en boucle ; déplacement aimanté, corbeille")
+    func textStyleAndDrag() {
+        var style = TextOverlay.Style(color: .yellow)
+        #expect(style.textColor == .yellow && style.fill == nil)
+        style.background = style.background.next
+        #expect(style.background == .solid && style.textColor == .black && style.fill?.opacity == 1)
+        style.color = .darkBlue
+        #expect(style.textColor == .white)
+        style.background = style.background.next
+        #expect(style.background == .translucent && style.textColor == .white && style.fill?.opacity == 0.55)
+        style.color = .white
+        #expect(style.textColor == .black)
+        #expect(style.background.next == .none)
+        #expect(TextOverlay.Alignment.center.next == .left && TextOverlay.Alignment.left.next == .right)
+        #expect(TextOverlay.Alignment.right.next == .center)
+        #expect(TextOverlay.Color.white.isLight && TextOverlay.Color.cream.isLight && TextOverlay.Color.yellow.isLight)
+        #expect(!TextOverlay.Color.gray.isLight && !TextOverlay.Color.green.isLight && !TextOverlay.Color.lavender.isLight)
+
+        let near = TextDragRules.snapped(CGPoint(x: 0.51, y: 0.3))
+        #expect(near.center == CGPoint(x: 0.5, y: 0.3) && near.onGuide)
+        let far = TextDragRules.snapped(CGPoint(x: 0.6, y: 0.3))
+        #expect(far.center == CGPoint(x: 0.6, y: 0.3) && !far.onGuide)
+        #expect(TextDragRules.isOverTrash(CGPoint(x: 0.5, y: 0.05)))
+        #expect(!TextDragRules.isOverTrash(CGPoint(x: 0.5, y: 0.3)))
+        #expect(!TextDragRules.isOverTrash(CGPoint(x: 0.1, y: 0.05)))
     }
 
     @Test("mesure d'audience : source et modifications, jamais le texte")

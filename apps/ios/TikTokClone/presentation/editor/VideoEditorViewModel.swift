@@ -228,23 +228,36 @@ final class VideoEditorViewModel {
 
     // Faux (avec un message) si le texte est vide, trop long, ou s'il y en a déjà 5.
     @discardableResult
-    func addText(_ text: String, color: TextOverlay.Color, size: TextOverlay.Size) -> Bool {
+    func addText(_ text: String, style: TextOverlay.Style = TextOverlay.Style()) -> Bool {
         var added = false
-        perform { added = $0.addText(text, color: color, size: size) != nil }
+        perform { added = $0.addText(text, style: style) != nil }
         if !added { errorMessage = textProblem(text) }
         return added
     }
 
     @discardableResult
-    func updateText(_ id: UUID, text: String, color: TextOverlay.Color, size: TextOverlay.Size) -> Bool {
+    func updateText(_ id: UUID, text: String, style: TextOverlay.Style) -> Bool {
         let removed = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         var updated = false
-        perform { updated = $0.updateText(id, text: text, color: color, size: size) }
+        perform { updated = $0.updateText(id, text: text, style: style) }
         if !updated, !removed {
             errorMessage = textProblem(text)
             return false
         }
         return true
+    }
+
+    // Fin de l'éditeur de texte : texte existant modifié (retiré s'il est vidé), nouveau texte ajouté s'il n'est pas vide.
+    func finishEditingText(_ overlay: TextOverlay?, text: String, style: TextOverlay.Style) {
+        if let overlay {
+            updateText(overlay.id, text: text, style: style)
+        } else if EditPlan.sanitizedText(text) != nil {
+            addText(text, style: style)
+        }
+    }
+
+    func scaleText(_ id: UUID, to scale: Double) {
+        perform { $0.scaleText(id, to: scale) }
     }
 
     func moveText(_ id: UUID, to center: CGPoint) {

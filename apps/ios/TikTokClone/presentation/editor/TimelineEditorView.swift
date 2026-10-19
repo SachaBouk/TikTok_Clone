@@ -13,6 +13,7 @@ struct TimelineEditorView: View {
     let onBack: () -> Void
     let onNext: () -> Void
     @State private var editingText: TextDraft?
+    @State private var isDraggingText = false
     @State private var isPickingFilter = false
     @State private var isAddingVideos = false
     @State private var isAddingClips = false
@@ -30,9 +31,12 @@ struct TimelineEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            EditorCanvas(model: model, preview: preview, cornerRadius: 0) { overlay in editingText = TextDraft(overlay: overlay) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 8)
+                .opacity(editingText == nil && !isDraggingText ? 1 : 0)
+            EditorCanvas(
+                model: model, preview: preview, cornerRadius: 0, hiddenTextID: editingText?.overlay?.id, isDraggingText: $isDraggingText
+            ) { overlay in editingText = TextDraft(overlay: overlay) }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.vertical, 8)
             controls
             timeline
                 .frame(height: Self.rulerHeight + Self.stripHeight + 40)
@@ -44,16 +48,22 @@ struct TimelineEditorView: View {
             }
         }
         .background(Color(white: 0.07).ignoresSafeArea())
+        // Le clavier de l'éditeur de texte passe par-dessus sans déplacer l'écran.
+        .ignoresSafeArea(.keyboard)
+        .overlay {
+            if let draft = editingText {
+                TextEditorOverlay(draft: draft) { text, style in
+                    model.finishEditingText(draft.overlay, text: text, style: style)
+                    editingText = nil
+                }
+            }
+        }
         .overlay {
             if isAddingClips {
                 ProgressView("Préparation…")
                     .padding(24)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
-        }
-        .sheet(item: $editingText) { draft in
-            TextOverlaySheet(draft: draft) { result in apply(result, to: draft) }
-                .presentationDetents([.medium])
         }
         .sheet(isPresented: $isPickingFilter) {
             FilterPickerSheet(model: model)
@@ -354,19 +364,6 @@ struct TimelineEditorView: View {
             } catch {
                 model.errorMessage = AppError.from(error).message
             }
-        }
-    }
-
-    private func apply(_ result: TextOverlaySheet.Result, to draft: TextDraft) {
-        switch result {
-        case .save(let text, let color, let size):
-            if let id = draft.overlay?.id {
-                model.updateText(id, text: text, color: color, size: size)
-            } else {
-                model.addText(text, color: color, size: size)
-            }
-        case .delete:
-            if let id = draft.overlay?.id { model.removeText(id) }
         }
     }
 }

@@ -211,9 +211,9 @@ struct EditingTests {
         model.setFilter(.vintage)
         model.setFilter(.vintage)
         let version = model.previewVersion
-        #expect(model.addText("Coucou", color: .red, size: .small))
+        #expect(model.addText("Coucou", style: TextOverlay.Style(color: .red)))
         #expect(model.previewVersion == version)
-        #expect(!model.addText(" ", color: .red, size: .small))
+        #expect(!model.addText(" "))
         #expect(model.errorMessage == "Écris un texte.")
         model.deleteSelectedClip()
         #expect(model.plan.clips.count == 1 && model.selectedClipID == nil)
@@ -227,6 +227,37 @@ struct EditingTests {
         #expect(editor.exported == [result.plan])
         #expect(result.plan.texts.map(\.text) == ["Coucou"])
         #expect(exists(clip))
+    }
+
+    @Test("éditeur de texte : nouveau texte vide ignoré, ajouté avec son style, vidé = retiré ; pincer, glisser à la corbeille")
+    func textEditing() throws {
+        let editor = FakeVideoEditor(store: store)
+        let clip = try temporaryClip(5)
+        let model = VideoEditorViewModel(
+            request: EditorRequest(plan: EditPlan(clips: [clip], kind: .video), source: .camera),
+            exportVideo: ExportEditedVideoUseCase(editor: editor), makeThumbnails: { _, _ in [] })
+        model.finishEditingText(nil, text: "   ", style: TextOverlay.Style())
+        #expect(model.plan.texts.isEmpty && model.errorMessage == nil && !model.canUndo)
+
+        let style = TextOverlay.Style(color: .green, font: .technic, background: .solid)
+        model.finishEditingText(nil, text: "motion", style: style)
+        let text = try #require(model.plan.texts.first)
+        #expect(text.text == "motion" && text.style == style)
+        model.scaleText(text.id, to: 1.5)
+        model.moveText(text.id, to: CGPoint(x: 0.5, y: 0.2))
+        #expect(model.plan.texts[0].scale == 1.5 && model.plan.texts[0].center == CGPoint(x: 0.5, y: 0.2))
+        model.undo()
+        #expect(model.plan.texts[0].center == CGPoint(x: 0.5, y: 0.5) && model.plan.texts[0].scale == 1.5)
+
+        model.finishEditingText(model.plan.texts[0], text: "motion !", style: TextOverlay.Style(color: .gray, background: .solid))
+        #expect(model.plan.texts[0].text == "motion !" && model.plan.texts[0].style.color == .gray)
+        // La position et la taille sont gardées.
+        #expect(model.plan.texts[0].scale == 1.5)
+        model.finishEditingText(model.plan.texts[0], text: "", style: style)
+        #expect(model.plan.texts.isEmpty)
+        model.undo()
+        model.removeText(model.plan.texts[0].id)
+        #expect(model.plan.texts.isEmpty)
     }
 
     @Test("éditeur : vidéos ajoutées par « + », supprimées à l'abandon ; clips retirés supprimés à l'export")

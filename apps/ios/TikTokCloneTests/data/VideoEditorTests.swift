@@ -126,8 +126,9 @@ struct VideoEditorTests {
         try await TestVideos.write(to: source, width: 360, height: 640, seconds: 1)
 
         var plan = EditPlan(clips: [try await clip(source)], kind: .video)
-        let added = plan.addText("MMMM", color: .white, size: .large)
+        let added = plan.addText("MMMM")
         let text = try #require(added)
+        plan.scaleText(text.id, to: 1.4)
         plan.moveText(text.id, to: CGPoint(x: 0.5, y: 0.8))
         let output = try await editor.export(plan)
         defer { try? FileManager.default.removeItem(at: output) }
@@ -135,6 +136,30 @@ struct VideoEditorTests {
         let frame = try await TestVideos.frame(of: output, at: 0.5)
         #expect(try Self.whiteShare(in: frame, rows: 0.72...0.88) > 0.05)
         #expect(try Self.whiteShare(in: frame, rows: 0.55...0.65) == 0)
+    }
+
+    @Test("texte sur fond plein, polices d'iOS présentes, taille selon l'échelle")
+    func textBackgroundAndFonts() throws {
+        for font in TextOverlay.Font.allCases where font != .classic {
+            let resolved = EditorTextStyle.font(font, size: 20)
+            #expect(resolved.fontName != UIFont.systemFont(ofSize: 20, weight: .heavy).fontName, "police manquante : \(font.rawValue)")
+        }
+        let small = EditorTextStyle(style: TextOverlay.Style(), scale: 1, width: 360)
+        let large = EditorTextStyle(style: TextOverlay.Style(), scale: 2, width: 360)
+        #expect(large.boxSize(for: "Salut").width > small.boxSize(for: "Salut").width * 1.5)
+        // Un texte trop long pour une ligne passe à la ligne, sans dépasser l'image.
+        let long = small.boxSize(for: String(repeating: "mot ", count: 20))
+        #expect(long.width <= 360 * 0.9 + 1 && long.height > small.boxSize(for: "mot").height * 2)
+
+        let size = CGSize(width: 360, height: 640)
+        let overlay = TextOverlay(id: UUID(), text: "Salut", style: TextOverlay.Style(color: .white, background: .solid))
+        let image = try #require(TextOverlayRenderer.image([overlay], size: size))
+        let cgImage = try #require(CIContext().createCGImage(image, from: CGRect(origin: .zero, size: size)))
+        // Fond blanc opaque autour du mot, lettres noires dessus (plus de pixels opaques que de blancs).
+        let opaque = try Self.opaqueShare(in: cgImage, rows: 0.49...0.51)
+        let white = try Self.whiteShare(in: cgImage, rows: 0.49...0.51)
+        #expect(opaque > 0.15 && white > 0.08 && opaque > white + 0.05)
+        #expect(try Self.opaqueShare(in: cgImage, rows: 0.3...0.4) == 0)
     }
 
     @Test("rotation d'une image : quart de tour, demi-tour, trois quarts, miroir")
@@ -257,6 +282,26 @@ struct VideoEditorTests {
     }
 
     // Part des pixels presque blancs dans une bande horizontale de l'image (lignes en proportion de la hauteur).
+    private static func opaqueShare(in image: CGImage, rows: ClosedRange<Double>) throws -> Double {
+        let width = image.width
+        let height = image.height
+        var data = [UInt8](repeating: 0, count: width * height * 4)
+        let context = try #require(
+            CGContext(
+                data: &data, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var opaque = 0
+        var total = 0
+        for row in Int(rows.lowerBound * Double(height))..<Int(rows.upperBound * Double(height)) {
+            for column in 0..<width {
+                total += 1
+                if data[(row * width + column) * 4 + 3] > 200 { opaque += 1 }
+            }
+        }
+        return Double(opaque) / Double(max(total, 1))
+    }
+
     private static func whiteShare(in image: CGImage, rows: ClosedRange<Double>) throws -> Double {
         let width = image.width
         let height = image.height

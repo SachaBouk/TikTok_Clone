@@ -123,6 +123,7 @@ struct EditorPreviewView: View {
     let onStory: () -> Void
     let onBack: () -> Void
     @State private var editingText: TextDraft?
+    @State private var isDraggingText = false
     @State private var isPickingFilter = false
     @State private var isShowingSettings = false
     @State private var showsToolNames = false
@@ -132,9 +133,11 @@ struct EditorPreviewView: View {
     var body: some View {
         VStack(spacing: 12) {
             ZStack(alignment: .top) {
-                EditorCanvas(model: model, preview: preview) { overlay in editingText = TextDraft(overlay: overlay) }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture { preview.togglePlayback() }
+                EditorCanvas(model: model, preview: preview, hiddenTextID: editingText?.overlay?.id, isDraggingText: $isDraggingText) {
+                    overlay in editingText = TextDraft(overlay: overlay)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onTapGesture { preview.togglePlayback() }
                 HStack(alignment: .top) {
                     backButton
                     Spacer()
@@ -142,18 +145,29 @@ struct EditorPreviewView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
+                .opacity(showsControls ? 1 : 0)
                 notice
                     .padding(.top, 64)
+                    .opacity(showsControls ? 1 : 0)
             }
             bottomBar
+                .opacity(showsControls ? 1 : 0)
+                .allowsHitTesting(showsControls)
         }
         .background(Color.black.ignoresSafeArea())
+        // Le clavier de l'éditeur de texte passe par-dessus la vidéo sans la déplacer.
+        .ignoresSafeArea(.keyboard)
+        .overlay {
+            if let draft = editingText {
+                TextEditorOverlay(draft: draft) { text, style in
+                    model.finishEditingText(draft.overlay, text: text, style: style)
+                    editingText = nil
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: isDraggingText)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { preview.play() } else { preview.pause() }
-        }
-        .sheet(item: $editingText) { draft in
-            TextOverlaySheet(draft: draft) { result in apply(result, to: draft) }
-                .presentationDetents([.medium])
         }
         .sheet(isPresented: $isPickingFilter) {
             FilterPickerSheet(model: model)
@@ -164,6 +178,9 @@ struct EditorPreviewView: View {
             PostSettingsSheet(draft: draft)
         }
     }
+
+    // Boutons masqués pendant la saisie ou le déplacement d'un texte, comme TikTok.
+    private var showsControls: Bool { editingText == nil && !isDraggingText }
 
     private var backButton: some View {
         Button("Retour", systemImage: "chevron.left") { confirmingDiscard = true }
@@ -277,27 +294,26 @@ struct EditorPreviewView: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }
-
-    private func apply(_ result: TextOverlaySheet.Result, to draft: TextDraft) {
-        switch result {
-        case .save(let text, let color, let size):
-            if let id = draft.overlay?.id {
-                model.updateText(id, text: text, color: color, size: size)
-            } else {
-                model.addText(text, color: color, size: size)
-            }
-        case .delete:
-            if let id = draft.overlay?.id { model.removeText(id) }
-        }
-    }
 }
 
-// Image finale en 9:16 : la composition du plan, les textes par-dessus (déplacés au doigt, touchés pour les modifier).
+// Image finale en 9:16 : la composition du plan, les textes par-dessus (déplacés au doigt, pincés, touchés pour les
+// modifier). Pendant un déplacement : repère central et corbeille « Supprimer » (`isDraggingText` : l'écran masque ses
+// boutons, comme TikTok). Le texte en cours de modification (`hiddenTextID`) est montré par l'éditeur de texte.
 struct EditorCanvas: View {
+    static let coordinateSpace = "editorCanvas"
+
+    private struct DragState: Equatable {
+        var onGuide: Bool
+        var overTrash: Bool
+    }
+
     let model: VideoEditorViewModel
     let preview: EditorPreviewPlayer
     var cornerRadius: CGFloat = 12
+    var hiddenTextID: UUID?
+    @Binding var isDraggingText: Bool
     let onEditText: (TextOverlay) -> Void
+    @State private var drag: DragState?
 
     var body: some View {
         // Aperçu simplifié (simulateur, sans composition) : la vidéo brute est ajustée dans le 9:16, comme à l'export.
@@ -305,13 +321,16 @@ struct EditorCanvas: View {
             .aspectRatio(preview.aspectRatio, contentMode: .fit)
             .overlay {
                 GeometryReader { geometry in
-                    ForEach(model.plan.texts) { overlay in
-                        DraggableText(overlay: overlay, size: geometry.size) { center in
-                            model.moveText(overlay.id, to: center)
-                        } onTap: {
-                            onEditText(overlay)
+                    ZStack {
+                        if let drag {
+                            TextDragGuides(onGuide: drag.onGuide, overTrash: drag.overTrash)
+                        }
+                        ForEach(model.plan.texts.filter { $0.id != hiddenTextID }) { overlay in
+                            text(overlay, size: geometry.size)
                         }
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .coordinateSpace(.named(Self.coordinateSpace))
                 }
             }
             .overlay {
@@ -322,6 +341,25 @@ struct EditorCanvas: View {
             .background(Color.black)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .accessibilityIdentifier("editor.preview")
+    }
+
+    private func text(_ overlay: TextOverlay, size: CGSize) -> some View {
+        DraggableText(overlay: overlay, size: size) { center, finger in
+            drag = DragState(onGuide: abs(center.x - 0.5) < 0.0001, overTrash: TextDragRules.isOverTrash(finger))
+            isDraggingText = true
+        } onDragEnded: { center, finger in
+            drag = nil
+            isDraggingText = false
+            if TextDragRules.isOverTrash(finger) {
+                model.removeText(overlay.id)
+            } else {
+                model.moveText(overlay.id, to: center)
+            }
+        } onScale: { scale in
+            model.scaleText(overlay.id, to: scale)
+        } onTap: {
+            onEditText(overlay)
+        }
     }
 }
 

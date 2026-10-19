@@ -1,6 +1,7 @@
 import SwiftUI
 
-// Textes posés sur la vidéo (ADR-052) : saisie (contenu, couleur, taille) et déplacement au doigt sur l'aperçu.
+// Textes posés sur la vidéo, comme TikTok (ADR-052, ADR-062) : éditeur plein écran (police, couleur, fond, alignement),
+// puis texte déplacé au doigt sur l'aperçu (repère central, corbeille « Supprimer »), pincé pour changer sa taille.
 
 // Texte en cours de saisie : nouveau (`overlay` nil) ou existant.
 struct TextDraft: Identifiable {
@@ -8,132 +9,345 @@ struct TextDraft: Identifiable {
     let overlay: TextOverlay?
 }
 
-// Texte de l'aperçu, aux proportions de l'export (`EditorTextStyle`) : glisser le déplace, toucher le modifie.
+extension EditorTextStyle {
+    var swiftUIFont: Font { Font(font as CTFont) }
+
+    var textColor: Color { Color(uiColor: textUIColor) }
+
+    var multilineAlignment: TextAlignment {
+        switch style.alignment {
+        case .center: .center
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+
+    var frameAlignment: Alignment {
+        switch style.alignment {
+        case .center: .center
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+
+    // Fond du texte (couleur et opacité) ; transparent sans fond.
+    var fillColor: Color {
+        guard let fill = style.fill else { return .clear }
+        let rgb = fill.color.rgb
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue).opacity(fill.opacity)
+    }
+
+    var shadowColor: Color {
+        guard style.background == .none else { return .clear }
+        return style.textColor == .black ? .white.opacity(0.6) : .black.opacity(0.6)
+    }
+}
+
+// Texte mis en page comme à l'export : mêmes lignes (largeur mesurée par UIKit), marges et fond arrondi.
+struct StyledTextBox: View {
+    let text: String
+    let layout: EditorTextStyle
+
+    var body: some View {
+        Text(text)
+            .font(layout.swiftUIFont)
+            .foregroundStyle(layout.textColor)
+            .multilineTextAlignment(layout.multilineAlignment)
+            .frame(width: layout.textSize(for: text).width + 1, alignment: layout.frameAlignment)
+            .fixedSize(horizontal: false, vertical: true)
+            .shadow(color: layout.shadowColor, radius: layout.shadowRadius)
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.vertical, layout.verticalPadding)
+            .background(layout.fillColor, in: RoundedRectangle(cornerRadius: layout.cornerRadius))
+    }
+}
+
+// Texte de l'aperçu : glisser le déplace (repère central et corbeille affichés par `EditorCanvas`), pincer change sa
+// taille, toucher le rouvre dans l'éditeur. Positions relatives à l'image.
 struct DraggableText: View {
     let overlay: TextOverlay
     let size: CGSize
-    let onMove: (CGPoint) -> Void
+    // Centre (aimanté) et position du doigt pendant le glissement.
+    let onDragChanged: (CGPoint, CGPoint) -> Void
+    let onDragEnded: (CGPoint, CGPoint) -> Void
+    let onScale: (Double) -> Void
     let onTap: () -> Void
     @State private var dragOffset: CGSize = .zero
+    @State private var magnification: CGFloat = 1
+    @State private var isOverTrash = false
 
     var body: some View {
-        let style = EditorTextStyle(overlay: overlay, width: size.width)
-        let rgb = overlay.color.rgb
-        Text(overlay.text)
-            .font(.system(size: style.fontSize, weight: .heavy))
-            .foregroundStyle(Color(red: rgb.red, green: rgb.green, blue: rgb.blue))
-            .multilineTextAlignment(.center)
-            .shadow(color: overlay.color == .black ? .white.opacity(0.6) : .black.opacity(0.6), radius: style.shadowRadius)
-            .frame(maxWidth: style.maxWidth)
-            .fixedSize(horizontal: false, vertical: true)
-            .position(x: overlay.center.x * size.width + dragOffset.width, y: overlay.center.y * size.height + dragOffset.height)
+        let layout = EditorTextStyle(style: overlay.style, scale: overlay.scale * magnification, width: size.width)
+        let center = currentCenter
+        StyledTextBox(text: overlay.text, layout: layout)
+            .scaleEffect(isOverTrash ? 0.6 : 1)
+            .opacity(isOverTrash ? 0.5 : 1)
+            .animation(.snappy(duration: 0.15), value: isOverTrash)
+            .position(x: center.x * size.width, y: center.y * size.height)
             .gesture(
-                DragGesture()
-                    .onChanged { dragOffset = $0.translation }
+                DragGesture(coordinateSpace: .named(EditorCanvas.coordinateSpace))
+                    .onChanged { value in
+                        dragOffset = value.translation
+                        let finger = relative(value.location)
+                        isOverTrash = TextDragRules.isOverTrash(finger)
+                        onDragChanged(currentCenter, finger)
+                    }
                     .onEnded { value in
-                        dragOffset = .zero
-                        onMove(
-                            CGPoint(
-                                x: overlay.center.x + value.translation.width / size.width,
-                                y: overlay.center.y + value.translation.height / size.height))
+                        let center = currentCenter
+                        let finger = relative(value.location)
+                        // Lâché sur la corbeille : il reste dessous pendant qu'il disparaît.
+                        if !TextDragRules.isOverTrash(finger) {
+                            dragOffset = .zero
+                            isOverTrash = false
+                        }
+                        onDragEnded(center, finger)
+                    }
+            )
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { magnification = $0.magnification }
+                    .onEnded { value in
+                        magnification = 1
+                        onScale(overlay.scale * value.magnification)
                     }
             )
             .onTapGesture(perform: onTap)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Touche pour modifier le texte")
+            .accessibilityLabel(overlay.text)
+            .accessibilityHint("Touche pour modifier le texte, glisse-le pour le déplacer")
+            .accessibilityIdentifier("editor.text")
+    }
+
+    // Centre du texte pendant le glissement, aimanté au repère vertical.
+    private var currentCenter: CGPoint {
+        let moved = CGPoint(
+            x: overlay.center.x + dragOffset.width / max(size.width, 1), y: overlay.center.y + dragOffset.height / max(size.height, 1))
+        return dragOffset == .zero ? overlay.center : TextDragRules.snapped(moved).center
+    }
+
+    private func relative(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x / max(size.width, 1), y: point.y / max(size.height, 1))
     }
 }
 
-// Saisie d'un texte : contenu, couleur, taille ; « Supprimer » pour un texte existant.
-struct TextOverlaySheet: View {
-    enum Result {
-        case save(String, TextOverlay.Color, TextOverlay.Size)
-        case delete
+// Repère vertical cyan et corbeille « Supprimer », affichés pendant le déplacement d'un texte.
+struct TextDragGuides: View {
+    let onGuide: Bool
+    let overTrash: Bool
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            if onGuide {
+                Rectangle()
+                    .fill(Color.brandCyan)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+            }
+            VStack(spacing: 4) {
+                Image(systemName: "trash")
+                    .font(.system(size: overTrash ? 30 : 24, weight: .medium))
+                    .foregroundStyle(overTrash ? Color.red : .white)
+                    .frame(width: 52, height: 52)
+                    .background(overTrash ? Color.white : .black.opacity(0.25), in: Circle())
+                Text("Supprimer")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            .shadow(radius: 3)
+            .padding(.top, 12)
+            .animation(.snappy(duration: 0.15), value: overTrash)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .allowsHitTesting(false)
+        .sensoryFeedback(.impact(weight: .light), trigger: onGuide) { _, new in new }
+        .sensoryFeedback(.impact, trigger: overTrash) { _, new in new }
     }
+}
 
+// Éditeur de texte plein écran, comme TikTok : vidéo assombrie, « Terminé » en haut à droite, texte au centre écrit en
+// direct dans son style ; au-dessus du clavier, fond (« A »), alignement, polices, puis la palette de couleurs.
+// « Terminé » valide ; un texte vide n'est pas ajouté (ou est retiré).
+struct TextEditorOverlay: View {
     let draft: TextDraft
-    let onDone: (Result) -> Void
+    let onDone: (String, TextOverlay.Style) -> Void
     @State private var text: String
-    @State private var color: TextOverlay.Color
-    @State private var size: TextOverlay.Size
+    @State private var style: TextOverlay.Style
     @FocusState private var focused: Bool
-    @Environment(\.dismiss) private var dismiss
 
-    init(draft: TextDraft, onDone: @escaping (Result) -> Void) {
+    init(draft: TextDraft, onDone: @escaping (String, TextOverlay.Style) -> Void) {
         self.draft = draft
         self.onDone = onDone
         _text = State(initialValue: draft.overlay?.text ?? "")
-        _color = State(initialValue: draft.overlay?.color ?? .white)
-        _size = State(initialValue: draft.overlay?.size ?? .medium)
+        _style = State(initialValue: draft.overlay?.style ?? TextOverlay.Style())
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Ton texte", text: $text, axis: .vertical)
-                        .lineLimit(1...3)
-                        .focused($focused)
-                        .accessibilityIdentifier("editor.textField")
-                } footer: {
-                    Text("\(EditPlan.maxTextLength - text.count) caractères restants")
-                        .foregroundStyle(text.count > EditPlan.maxTextLength ? .red : .secondary)
-                }
-                Section("Couleur") {
+        ZStack {
+            // Le fond ne valide pas : un toucher qui ferme une alerte du système (collage) y retombe.
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {}
+            GeometryReader { geometry in
+                let layout = EditorTextStyle(style: style, scale: draft.overlay?.scale ?? 1, width: geometry.size.width)
+                VStack(spacing: 0) {
                     HStack {
-                        ForEach(TextOverlay.Color.allCases) { option in
-                            let rgb = option.rgb
-                            Button {
-                                color = option
-                            } label: {
-                                Circle()
-                                    .fill(Color(red: rgb.red, green: rgb.green, blue: rgb.blue))
-                                    .overlay(
-                                        Circle().stroke(
-                                            option == color ? Color.accentColor : Color.gray.opacity(0.5), lineWidth: option == color ? 3 : 1)
-                                    )
-                                    .frame(width: 32, height: 32)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(option.title)
-                            .accessibilityAddTraits(option == color ? .isSelected : [])
-                            if option != TextOverlay.Color.allCases.last { Spacer(minLength: 0) }
+                        Spacer()
+                        Button("Terminé", action: finish)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 44)
+                            .accessibilityIdentifier("textEditor.done")
+                    }
+                    Spacer(minLength: 0)
+                    field(layout)
+                    Spacer(minLength: 0)
+                    toolbar
+                    colors
+                        .padding(.vertical, 12)
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+        }
+        // Focus posé un instant après l'apparition : posé dans `onAppear`, il est parfois perdu (clavier absent).
+        .task {
+            try? await Task.sleep(for: .milliseconds(150))
+            focused = true
+        }
+        .onChange(of: text) { _, value in
+            if value.count > EditPlan.maxTextLength { text = String(value.prefix(EditPlan.maxTextLength)) }
+        }
+    }
+
+    // Champ de saisie mis en page comme le texte posé : il grandit avec le texte, dans son fond.
+    private func field(_ layout: EditorTextStyle) -> some View {
+        TextField("", text: $text, axis: .vertical)
+            .font(layout.swiftUIFont)
+            .foregroundStyle(layout.textColor)
+            .multilineTextAlignment(layout.multilineAlignment)
+            .tint(Color.brandPink)
+            .focused($focused)
+            .frame(width: layout.textSize(for: text).width + 8)
+            .shadow(color: layout.shadowColor, radius: layout.shadowRadius)
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.vertical, layout.verticalPadding)
+            .background(layout.fillColor, in: RoundedRectangle(cornerRadius: layout.cornerRadius))
+            .accessibilityLabel("Ton texte")
+            .accessibilityIdentifier("textEditor.field")
+    }
+
+    // Fond, alignement, puis les polices (défilantes).
+    private var toolbar: some View {
+        HStack(spacing: 14) {
+            Button {
+                style.background = style.background.next
+            } label: {
+                TextBackgroundIcon(background: style.background)
+            }
+            .accessibilityLabel("Fond du texte")
+            .accessibilityValue(style.background.title)
+            .accessibilityIdentifier("textEditor.background")
+            Button {
+                style.alignment = style.alignment.next
+            } label: {
+                Image(systemName: alignmentSymbol)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+            }
+            .accessibilityLabel("Alignement")
+            .accessibilityValue(style.alignment.title)
+            .accessibilityIdentifier("textEditor.alignment")
+            Rectangle().fill(.white.opacity(0.3)).frame(width: 1, height: 28)
+            ScrollView(.horizontal) {
+                HStack(spacing: 10) {
+                    ForEach(TextOverlay.Font.allCases) { font in
+                        let selected = style.font == font
+                        Button {
+                            style.font = font
+                        } label: {
+                            Text(font.title)
+                                .font(Font(EditorTextStyle.font(font, size: 17) as CTFont))
+                                .lineLimit(1)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .frame(height: 36)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8).stroke(
+                                        selected ? Color.white : .white.opacity(0.35), lineWidth: selected ? 2 : 1))
                         }
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                        .accessibilityIdentifier("textEditor.font.\(font.rawValue)")
                     }
                 }
-                Section("Taille") {
-                    Picker("Taille", selection: $size) {
-                        ForEach(TextOverlay.Size.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
+                .padding(.vertical, 2)
+                .padding(.trailing, 16)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .padding(.leading, 16)
+    }
+
+    private var colors: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 12) {
+                ForEach(TextOverlay.Color.allCases) { color in
+                    let selected = style.color == color
+                    let rgb = color.rgb
+                    Button {
+                        style.color = color
+                    } label: {
+                        Circle()
+                            .fill(Color(red: rgb.red, green: rgb.green, blue: rgb.blue))
+                            .overlay(Circle().stroke(.white, lineWidth: selected ? 3 : 2))
+                            .frame(width: selected ? 34 : 28, height: selected ? 34 : 28)
+                            .frame(width: 36, height: 36)
                     }
-                    .pickerStyle(.segmented)
-                }
-                if draft.overlay != nil {
-                    Section {
-                        Button("Supprimer le texte", role: .destructive) {
-                            onDone(.delete)
-                            dismiss()
-                        }
-                    }
+                    .accessibilityLabel(color.title)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("textEditor.color.\(color.rawValue)")
                 }
             }
-            .navigationTitle(draft.overlay == nil ? "Nouveau texte" : "Modifier le texte")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("OK") {
-                        onDone(.save(text, color, size))
-                        dismiss()
-                    }
-                    .disabled(EditPlan.sanitizedText(text) == nil && draft.overlay == nil)
-                    .accessibilityIdentifier("editor.textDone")
-                }
-            }
-            .onAppear { focused = true }
+            .padding(.horizontal, 16)
+        }
+        .scrollIndicators(.hidden)
+        .animation(.snappy(duration: 0.15), value: style.color)
+    }
+
+    private var alignmentSymbol: String {
+        switch style.alignment {
+        case .center: "text.aligncenter"
+        case .left: "text.alignleft"
+        case .right: "text.alignright"
+        }
+    }
+
+    private func finish() {
+        focused = false
+        onDone(text, style)
+    }
+}
+
+// Bouton « A » du fond : lettre seule, lettre noire sur carré blanc (fond plein), lettre sur carré translucide.
+struct TextBackgroundIcon: View {
+    let background: TextOverlay.Background
+
+    var body: some View {
+        Text("A")
+            .font(.system(size: 24, weight: .bold))
+            .foregroundStyle(background == .solid ? Color.black : .white)
+            .frame(width: 32, height: 32)
+            .background(fill, in: RoundedRectangle(cornerRadius: 5))
+            .shadow(color: background == .none ? .black.opacity(0.6) : .clear, radius: 2)
+            .frame(width: 36, height: 36)
+    }
+
+    private var fill: Color {
+        switch background {
+        case .none: .clear
+        case .solid: .white
+        case .translucent: .white.opacity(0.35)
         }
     }
 }

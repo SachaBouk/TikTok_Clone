@@ -120,16 +120,35 @@ enum VideoFilter: String, CaseIterable, Identifiable, Equatable, Sendable {
     }
 }
 
-// Texte posé sur la vidéo, visible pendant toute sa durée. Position du centre et taille relatives à l'image : le rendu
-// est le même en aperçu et à l'export, quelle que soit la résolution.
+// Texte posé sur la vidéo, visible pendant toute sa durée, comme TikTok : police, couleur, fond, alignement, taille
+// (pincer). Position du centre et taille relatives à l'image : le rendu est le même en aperçu et à l'export, quelle que
+// soit la résolution.
 struct TextOverlay: Identifiable, Equatable, Sendable {
+    // Palette de l'éditeur de texte, dans l'ordre de TikTok.
     enum Color: String, CaseIterable, Identifiable, Sendable {
         case white
         case black
-        case yellow
         case red
-        case blue
+        case orange
+        case yellow
         case green
+        case teal
+        case cyan
+        case blue
+        case darkBlue
+        case indigo
+        case purple
+        case magenta
+        case steel
+        case navy
+        case sky
+        case periwinkle
+        case lavender
+        case pink
+        case salmon
+        case cream
+        case gray
+        case darkGray
 
         var id: String { rawValue }
 
@@ -138,56 +157,201 @@ struct TextOverlay: Identifiable, Equatable, Sendable {
             switch self {
             case .white: (1, 1, 1)
             case .black: (0, 0, 0)
-            case .yellow: (1, 0.84, 0.04)
-            case .red: (1, 0.23, 0.19)
-            case .blue: (0.04, 0.52, 1)
-            case .green: (0.2, 0.78, 0.35)
+            case .red: (0.91, 0.25, 0.25)
+            case .orange: (0.98, 0.56, 0.2)
+            case .yellow: (0.95, 0.8, 0.24)
+            case .green: (0.44, 0.76, 0.33)
+            case .teal: (0.04, 0.69, 0.6)
+            case .cyan: (0.04, 0.67, 0.84)
+            case .blue: (0.25, 0.6, 0.95)
+            case .darkBlue: (0.13, 0.29, 0.7)
+            case .indigo: (0.36, 0.36, 0.84)
+            case .purple: (0.62, 0.42, 0.95)
+            case .magenta: (0.78, 0.2, 0.93)
+            case .steel: (0.2, 0.42, 0.6)
+            case .navy: (0.13, 0.2, 0.36)
+            case .sky: (0.5, 0.85, 0.9)
+            case .periwinkle: (0.53, 0.65, 0.97)
+            case .lavender: (0.7, 0.66, 0.97)
+            case .pink: (0.98, 0.72, 0.96)
+            case .salmon: (0.98, 0.65, 0.58)
+            case .cream: (0.98, 0.95, 0.6)
+            case .gray: (0.56, 0.57, 0.6)
+            case .darkGray: (0.2, 0.2, 0.22)
             }
+        }
+
+        // Couleur claire (blanc, jaune, roses et bleu ciel pâles…) : un texte posé dessus est écrit en noir ; sur le vert ou
+        // le gris, en blanc, comme TikTok.
+        var isLight: Bool {
+            let (red, green, blue) = rgb
+            return 0.299 * red + 0.587 * green + 0.114 * blue > 0.72
         }
 
         var title: String {
             switch self {
             case .white: "Blanc"
             case .black: "Noir"
-            case .yellow: "Jaune"
             case .red: "Rouge"
-            case .blue: "Bleu"
+            case .orange: "Orange"
+            case .yellow: "Jaune"
             case .green: "Vert"
+            case .teal: "Turquoise"
+            case .cyan: "Cyan"
+            case .blue: "Bleu"
+            case .darkBlue: "Bleu foncé"
+            case .indigo: "Indigo"
+            case .purple: "Violet"
+            case .magenta: "Magenta"
+            case .steel: "Bleu acier"
+            case .navy: "Bleu marine"
+            case .sky: "Bleu ciel"
+            case .periwinkle: "Pervenche"
+            case .lavender: "Lavande"
+            case .pink: "Rose"
+            case .salmon: "Saumon"
+            case .cream: "Crème"
+            case .gray: "Gris"
+            case .darkGray: "Gris foncé"
             }
         }
     }
 
-    enum Size: String, CaseIterable, Identifiable, Sendable {
-        case small
-        case medium
-        case large
+    // Polices proposées (les fichiers sont choisis par la couche de rendu).
+    enum Font: String, CaseIterable, Identifiable, Sendable {
+        case classic
+        case elegance
+        case retro
+        case vintage
+        case handwriting
+        case postcard
+        case script
+        case technic
 
         var id: String { rawValue }
 
-        // Taille de la police, en part de la largeur de l'image.
-        var relativeFontSize: Double {
+        var title: String {
             switch self {
-            case .small: 0.05
-            case .medium: 0.075
-            case .large: 0.1
+            case .classic: "Classique"
+            case .elegance: "Élégance"
+            case .retro: "Rétro"
+            case .vintage: "Vintage"
+            case .handwriting: "Manuscrit"
+            case .postcard: "Carte postale"
+            case .script: "Script"
+            case .technic: "Technique"
+            }
+        }
+    }
+
+    // Fond du texte, changé par le bouton « A » : aucun (texte coloré, ombré), plein (fond de la couleur), transparent.
+    enum Background: String, CaseIterable, Identifiable, Sendable {
+        case none
+        case solid
+        case translucent
+
+        var id: String { rawValue }
+
+        var next: Background {
+            switch self {
+            case .none: .solid
+            case .solid: .translucent
+            case .translucent: .none
             }
         }
 
         var title: String {
             switch self {
-            case .small: "Petit"
-            case .medium: "Moyen"
-            case .large: "Grand"
+            case .none: "Sans fond"
+            case .solid: "Fond plein"
+            case .translucent: "Fond transparent"
             }
         }
     }
 
+    enum Alignment: String, CaseIterable, Identifiable, Sendable {
+        case center
+        case left
+        case right
+
+        var id: String { rawValue }
+
+        var next: Alignment {
+            switch self {
+            case .center: .left
+            case .left: .right
+            case .right: .center
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .center: "Centré"
+            case .left: "Aligné à gauche"
+            case .right: "Aligné à droite"
+            }
+        }
+    }
+
+    // Apparence choisie dans l'éditeur de texte.
+    struct Style: Equatable, Sendable {
+        var color: Color = .white
+        var font: Font = .classic
+        var background: Background = .none
+        var alignment: Alignment = .center
+
+        // Couleur des lettres : la couleur choisie sans fond ; sur un fond, noir ou blanc selon sa clarté.
+        var textColor: Color {
+            switch background {
+            case .none: color
+            case .solid: color.isLight ? .black : .white
+            case .translucent: color == .white ? .black : .white
+            }
+        }
+
+        // Fond (couleur et opacité) ; nil sans fond.
+        var fill: (color: Color, opacity: Double)? {
+            switch background {
+            case .none: nil
+            case .solid: (color, 1)
+            case .translucent: (color, 0.55)
+            }
+        }
+    }
+
+    // Taille de la police à l'échelle 1, en part de la largeur de l'image ; l'échelle se change en pinçant le texte.
+    static let baseRelativeFontSize = 0.075
+    static let scaleRange: ClosedRange<Double> = 0.4...3
+
     let id: UUID
     var text: String
-    var color: Color = .white
-    var size: Size = .medium
+    var style = Style()
+    var scale: Double = 1
     // Centre du texte, de 0 à 1 dans chaque dimension (origine en haut à gauche).
     var center = CGPoint(x: 0.5, y: 0.5)
+
+    var relativeFontSize: Double { Self.baseRelativeFontSize * scale }
+    var color: Color { style.color }
+}
+
+// Déplacement d'un texte au doigt, comme TikTok : repère vertical au centre (le texte s'y aimante), corbeille
+// « Supprimer » en haut de l'image. Coordonnées relatives à l'image (0 à 1, origine en haut à gauche).
+enum TextDragRules {
+    // Écart au centre sous lequel le texte s'aimante au repère.
+    static let snapDistance = 0.02
+    // Corbeille : en haut, au milieu.
+    static let trashZone = CGRect(x: 0.3, y: 0, width: 0.4, height: 0.14)
+
+    // Centre aimanté au repère vertical, et vrai si le repère s'affiche.
+    static func snapped(_ center: CGPoint) -> (center: CGPoint, onGuide: Bool) {
+        guard abs(center.x - 0.5) < snapDistance else { return (center, false) }
+        return (CGPoint(x: 0.5, y: center.y), true)
+    }
+
+    // Le doigt est sur la corbeille : le texte lâché là est supprimé.
+    static func isOverTrash(_ finger: CGPoint) -> Bool {
+        trashZone.contains(finger)
+    }
 }
 
 // Durées proposées au-dessus du déclencheur de la caméra (ADR-062) : la vidéo filmée s'arrête seule à la limite.
@@ -554,27 +718,30 @@ struct EditPlan: Equatable, Sendable {
 
     // Texte ajouté (nettoyé) ; nil s'il est vide, trop long, ou s'il y en a déjà 5.
     @discardableResult
-    mutating func addText(_ text: String, color: TextOverlay.Color = .white, size: TextOverlay.Size = .medium, id: UUID = UUID())
-        -> TextOverlay?
-    {
+    mutating func addText(_ text: String, style: TextOverlay.Style = TextOverlay.Style(), id: UUID = UUID()) -> TextOverlay? {
         guard texts.count < Self.maxTexts, let text = Self.sanitizedText(text) else { return nil }
-        let overlay = TextOverlay(id: id, text: text, color: color, size: size)
+        let overlay = TextOverlay(id: id, text: text, style: style)
         texts.append(overlay)
         return overlay
     }
 
     // Texte modifié ; un texte vidé est retiré. Faux si le nouveau texte est trop long.
     @discardableResult
-    mutating func updateText(_ id: UUID, text: String, color: TextOverlay.Color, size: TextOverlay.Size) -> Bool {
+    mutating func updateText(_ id: UUID, text: String, style: TextOverlay.Style) -> Bool {
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return false }
         guard let sanitized = Self.sanitizedText(text) else {
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { texts.remove(at: index) }
             return false
         }
         texts[index].text = sanitized
-        texts[index].color = color
-        texts[index].size = size
+        texts[index].style = style
         return true
+    }
+
+    // Pincé : l'échelle reste dans `TextOverlay.scaleRange`.
+    mutating func scaleText(_ id: UUID, to scale: Double) {
+        guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
+        texts[index].scale = min(max(scale, TextOverlay.scaleRange.lowerBound), TextOverlay.scaleRange.upperBound)
     }
 
     // Déplacé au doigt : le centre reste dans l'image (marge de 5 %).
