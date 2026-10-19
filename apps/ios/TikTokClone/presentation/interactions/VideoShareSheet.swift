@@ -6,8 +6,8 @@ import UIKit
 // - ligne 1 : « Republier » (rond jaune), puis ses conversations récentes et ses abonnements : un toucher envoie la vidéo
 //   par message (compté comme un partage par l'API) ; compte connecté seulement pour les destinataires ;
 // - ligne 2 : « Copier le lien », SMS, Email, « Plus » (feuille système) ; un partage envoyé est compté ;
-// - ligne 3 : « Signaler » (vidéo d'un autre), ou « Rendre privée / publique » (ADR-061) et « Supprimer » (la sienne,
-//   confirmation attachée au bouton).
+// - ligne 3 : « Signaler » (vidéo d'un autre), ou « Rendre privée / publique » (ADR-061), « Désactiver / Activer les
+//   commentaires » (ADR-062) et « Supprimer » (la sienne, confirmation attachée au bouton).
 // Pas de Facebook, « Pas intéressé », « Enregistrer la vidéo », « Pourquoi cette vidéo », « Promouvoir » ni
 // « Sous-titres » (hors périmètre, ADR-016). Signaler et supprimer ferment la feuille : l'écran qui l'a présentée enchaîne.
 struct VideoShareSheet: View {
@@ -134,7 +134,7 @@ struct VideoShareSheet: View {
         }
     }
 
-    // Ligne 3 : « Signaler », ou « Rendre privée / publique » et « Supprimer » sur sa vidéo.
+    // Ligne 3 : « Signaler », ou « Rendre privée / publique », commentaires et « Supprimer » sur sa vidéo.
     private var ownerRow: some View {
         HStack(alignment: .top, spacing: 14) {
             if isOwn {
@@ -150,6 +150,18 @@ struct VideoShareSheet: View {
                     }
                 }
                 .accessibilityIdentifier("share.visibility")
+                // Commentaires coupés ou rétablis (ADR-062).
+                let commentsEnabled = current.commentsEnabled
+                ShareTarget(
+                    title: commentsEnabled ? "Désactiver les commentaires" : "Activer les commentaires",
+                    systemImage: commentsEnabled ? "text.bubble" : "text.bubble.fill", color: Color(.systemGray5), iconColor: .primary
+                ) {
+                    dismiss()
+                    Task {
+                        if let message = await interactions.setCommentsEnabled(!commentsEnabled, of: video) { onAlert(message) }
+                    }
+                }
+                .accessibilityIdentifier("share.comments")
                 ShareTarget(title: "Supprimer", systemImage: "trash.fill", color: Color(.systemGray5), iconColor: .red) {
                     isConfirmingDelete = true
                 }
@@ -286,7 +298,7 @@ struct ShareTarget: View {
                     .background(color, in: Circle())
                 Text(title)
                     .font(.footnote)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .multilineTextAlignment(.center)
             }
             .frame(width: 76)

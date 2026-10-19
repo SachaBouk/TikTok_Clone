@@ -161,30 +161,32 @@ enum VideoStatus {
 }
 
 model Video {
-  id             String          @id @default(uuid(7)) @map("video_id") @db.Uuid
-  userId         String          @map("user_id") @db.Uuid
-  description    String?
+  id              String          @id @default(uuid(7)) @map("video_id") @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  description     String?
   // Clé de l'objet brut dans le bucket des uploads (ADR-007).
-  rawKey         String          @map("raw_key")
+  rawKey          String          @map("raw_key")
   // Identifiant de l'upload multipart en cours ; nul une fois l'upload terminé (ADR-007).
-  uploadId       String?         @map("upload_id")
+  uploadId        String?         @map("upload_id")
   // Taille déclarée du fichier brut, en octets : l'objet assemblé doit la respecter exactement.
-  rawSize        Int             @map("raw_size")
+  rawSize         Int             @map("raw_size")
   // URL du manifeste HLS, renseignée quand le transcodage est terminé (ADR-008).
-  hlsUrl         String?         @map("hls_url")
-  thumbnailUrl   String?         @map("thumbnail_url")
-  status         VideoStatus     @default(uploading)
+  hlsUrl          String?         @map("hls_url")
+  thumbnailUrl    String?         @map("thumbnail_url")
+  status          VideoStatus     @default(uploading)
   // Vidéo privée (ADR-061) : visible de son seul auteur.
-  visibility     VideoVisibility @default(public)
+  visibility      VideoVisibility @default(public)
+  // Commentaires autorisés (ADR-062) ; coupés, ils sont gardés mais cachés.
+  commentsEnabled Boolean         @default(true) @map("comments_enabled")
   // Compteurs dénormalisés, maintenus par les services applicatifs.
-  viewsCount     Int             @default(0) @map("views_count")
-  likesCount     Int             @default(0) @map("likes_count")
-  commentsCount  Int             @default(0) @map("comments_count")
-  favoritesCount Int             @default(0) @map("favorites_count")
-  repostsCount   Int             @default(0) @map("reposts_count")
-  sharesCount    Int             @default(0) @map("shares_count")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  viewsCount      Int             @default(0) @map("views_count")
+  likesCount      Int             @default(0) @map("likes_count")
+  commentsCount   Int             @default(0) @map("comments_count")
+  favoritesCount  Int             @default(0) @map("favorites_count")
+  repostsCount    Int             @default(0) @map("reposts_count")
+  sharesCount     Int             @default(0) @map("shares_count")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes         Like[]

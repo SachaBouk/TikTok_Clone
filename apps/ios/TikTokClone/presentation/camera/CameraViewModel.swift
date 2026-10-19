@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// Caméra de l'onglet « Publier » (ADR-052) : segments filmés (toucher pour démarrer, toucher pour arrêter), caméra avant
+// Caméra de la création (ADR-052, ADR-062) : segments filmés (toucher pour démarrer, toucher pour arrêter), caméra avant
 // ou arrière entre deux segments, lampe, minuteur de 3 s ; en mode Story, une photo. La durée totale est bornée par la
-// publication (3 minutes, ou 60 s pour une story) : l'enregistrement s'arrête seul à la limite.
+// durée choisie (« 3 min », « 60 s », « 15 s ») ou par la story (60 s) : l'enregistrement s'arrête seul à la limite.
 @MainActor
 @Observable
 final class CameraViewModel {
@@ -24,7 +24,9 @@ final class CameraViewModel {
 
     static let countdownSeconds = 3
 
-    let kind: PublicationKind
+    private(set) var kind: PublicationKind
+    // Durée choisie au-dessus du déclencheur (vidéo seulement).
+    private(set) var limit: RecordingLimit = .threeMinutes
     private(set) var status: Status = .starting
     private(set) var recording: RecordingSession
     private(set) var isRecording = false
@@ -67,6 +69,22 @@ final class CameraViewModel {
     var canRemoveLast: Bool { !recording.segments.isEmpty && !isBusy }
     var canFinish: Bool { !recording.segments.isEmpty && !isBusy }
     var hasSegments: Bool { !recording.segments.isEmpty }
+    // Mode ou durée changés seulement avant le premier segment.
+    var canChangeSettings: Bool { !hasSegments && !isBusy }
+
+    // Mode « Caméra » ou « Story » (ADR-062) : la durée maximale suit ; une story filme 60 s au plus.
+    func setKind(_ kind: PublicationKind) {
+        guard canChangeSettings, kind != self.kind else { return }
+        self.kind = kind
+        if kind == .video { captureMode = .video }
+        recording = RecordingSession(kind: kind, limit: kind == .video ? limit.duration : nil)
+    }
+
+    func setLimit(_ limit: RecordingLimit) {
+        guard canChangeSettings, kind == .video else { return }
+        self.limit = limit
+        recording = RecordingSession(kind: kind, limit: limit.duration)
+    }
 
     func start() async {
         switch await camera.start(position: position) {

@@ -10,6 +10,8 @@ export interface VideoDto {
   description: string | null;
   status: VideoStatus;
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062).
+  commentsEnabled: boolean;
   // Renseignés quand la vidéo est `ready` (ADR-008).
   hlsUrl: string | null;
   thumbnailUrl: string | null;

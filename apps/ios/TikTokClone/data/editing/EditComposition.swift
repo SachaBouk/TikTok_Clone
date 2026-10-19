@@ -1,24 +1,28 @@
 import AVFoundation
 import CoreImage
 
-// Composition AVFoundation d'un plan d'édition (ADR-052), partagée par l'aperçu de l'éditeur et l'export : même rendu.
-// - fichiers d'origine mis bout à bout sur une piste vidéo et une piste son ;
-// - intervalle gardé, puis vitesse (`scaleTimeRange`, sur toutes les pistes) ;
-// - une instruction par fichier d'origine, pour le compositeur (`EditCompositor`) : rotation propre à chaque segment
-//   (caméra avant ou arrière), filtre, textes.
+// Composition AVFoundation d'un plan d'édition (ADR-052, ADR-062), partagée par l'aperçu de l'éditeur et l'export : même
+// rendu.
+// - clips mis bout à bout sur une piste vidéo et une piste son, chacun avec son intervalle, puis sa vitesse
+//   (`scaleTimeRange`, sur toutes les pistes) ;
+// - volume de chaque clip par un mixage audio (son d'origine coupé : volume nul partout) ;
+// - une instruction par clip, pour le compositeur (`EditCompositor`) : rotation de la piste et du clip, cadre, image
+//   ajustée en 9:16, filtre, textes.
 struct EditComposition {
-    // Petit côté de l'image exportée, au plus (jamais agrandie).
+    // Image finale en 9:16, petit côté de 1080 px au plus (jamais agrandie au-delà du plus grand clip).
     static let maxShortSide: CGFloat = 1080
     static let maxFrameRate: Float = 60
 
     let composition: AVMutableComposition
     let videoComposition: AVMutableVideoComposition
+    let audioMix: AVMutableAudioMix?
     let renderSize: CGSize
 
     private struct Piece {
         let start: CMTime
         let duration: CMTime
         let transform: CGAffineTransform
+        let clip: EditClip
         var end: CMTime { start + duration }
     }
 
@@ -31,14 +35,18 @@ struct EditComposition {
 
         var pieces: [Piece] = []
         var cursor = CMTime.zero
-        var orientedSize = CGSize.zero
+        var largestShortSide: CGFloat = 0
         var frameRate: Float = 30
         var hasAudio = false
+        let audioParameters = AVMutableAudioMixInputParameters(track: audioTrack)
         for clip in plan.clips {
-            let asset = AVURLAsset(url: clip.file)
+            let asset = AVURLAsset(url: clip.source.file)
             guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw CocoaError(.fileReadCorruptFile) }
-            let (range, transform, naturalSize, nominalFrameRate) = try await track.load(
+            let (trackRange, transform, naturalSize, nominalFrameRate) = try await track.load(
                 .timeRange, .preferredTransform, .naturalSize, .nominalFrameRate)
+            let wanted = CMTimeRange(start: time(clip.start), end: time(clip.end))
+            let range = wanted.intersection(trackRange)
+            guard range.duration > .zero else { continue }
             try videoTrack.insertTimeRange(range, of: track, at: cursor)
             if let audio = try await asset.loadTracks(withMediaType: .audio).first {
                 let audioRange = try await audio.load(.timeRange).intersection(range)
@@ -47,48 +55,36 @@ struct EditComposition {
                     hasAudio = true
                 }
             }
-            if pieces.isEmpty {
-                orientedSize = EditRendering.orientedSize(naturalSize, transform: transform)
-                if nominalFrameRate > 0 { frameRate = min(nominalFrameRate.rounded(), maxFrameRate) }
+            // Vitesse du clip, sur toutes les pistes.
+            var duration = range.duration
+            if clip.speed != 1 {
+                let scaled = CMTimeMultiplyByFloat64(duration, multiplier: 1 / clip.speed)
+                composition.scaleTimeRange(CMTimeRange(start: cursor, duration: duration), toDuration: scaled)
+                duration = scaled
             }
-            pieces.append(Piece(start: cursor, duration: range.duration, transform: transform))
-            cursor = cursor + range.duration
+            audioParameters.setVolume(plan.isMuted ? 0 : Float(clip.volume), at: cursor)
+            let oriented = EditRendering.orientedSize(naturalSize, transform: transform)
+            largestShortSide = max(largestShortSide, min(oriented.width, oriented.height))
+            if pieces.isEmpty, nominalFrameRate > 0 { frameRate = min(nominalFrameRate.rounded(), maxFrameRate) }
+            pieces.append(Piece(start: cursor, duration: duration, transform: transform, clip: clip))
+            cursor = cursor + duration
         }
         if !hasAudio { composition.removeTrack(audioTrack) }
-        guard orientedSize.width > 0, orientedSize.height > 0 else { throw CocoaError(.fileReadCorruptFile) }
+        guard !pieces.isEmpty, largestShortSide > 0 else { throw CocoaError(.fileReadCorruptFile) }
 
-        // Intervalle gardé, dans la durée d'origine, puis vitesse.
-        let start = min(CMTime(seconds: plan.trimStart.seconds, preferredTimescale: 600), cursor)
-        let end = min(CMTime(seconds: plan.trimEnd.seconds, preferredTimescale: 600), cursor)
-        if end < cursor { composition.removeTimeRange(CMTimeRange(start: end, end: cursor)) }
-        if start > .zero { composition.removeTimeRange(CMTimeRange(start: .zero, end: start)) }
-        let kept = end - start
-        let factor = 1 / plan.speed.rawValue
-        if plan.speed != .normal {
-            composition.scaleTimeRange(CMTimeRange(start: .zero, duration: kept), toDuration: CMTimeMultiplyByFloat64(kept, multiplier: factor))
-        }
         let total = composition.duration
-        // Instant de la vidéo finale qui correspond à `time` dans la durée d'origine.
-        func output(_ time: CMTime) -> CMTime {
-            CMTimeMultiplyByFloat64(time - start, multiplier: factor)
-        }
-
-        let renderSize = renderSize(for: orientedSize)
+        let renderSize = renderSize(shortSide: largestShortSide)
         let overlay = includeTexts ? TextOverlayRenderer.image(plan.texts, size: renderSize) : nil
-        let keptPieces = pieces.filter { $0.end > start && $0.start < end }
         var instructions: [EditInstruction] = []
-        for (index, piece) in keptPieces.enumerated() {
-            // Bornes jointives : la première commence à zéro, la dernière finit avec la composition.
-            let from = index == 0 ? .zero : output(max(piece.start, start))
-            let to = index == keptPieces.count - 1 ? total : output(min(piece.end, end))
-            guard to > from else { continue }
+        for (index, piece) in pieces.enumerated() {
+            // Bornes jointives : la dernière finit avec la composition.
+            let end = index == pieces.count - 1 ? total : piece.end
+            guard end > piece.start else { continue }
             instructions.append(
                 EditInstruction(
-                    timeRange: CMTimeRange(start: from, end: to), trackID: videoTrack.trackID, transform: piece.transform,
-                    renderSize: renderSize, filter: plan.filter, overlay: overlay))
-        }
-        if let last = instructions.last, last.timeRange.end != total {
-            last.timeRange = CMTimeRange(start: last.timeRange.start, end: total)
+                    timeRange: CMTimeRange(start: piece.start, end: end), trackID: videoTrack.trackID, transform: piece.transform,
+                    quarterTurns: piece.clip.quarterTurns, crop: piece.clip.crop, renderSize: renderSize, filter: plan.filter,
+                    overlay: overlay))
         }
 
         let videoComposition = AVMutableVideoComposition()
@@ -100,14 +96,25 @@ struct EditComposition {
         videoComposition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
         videoComposition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
         videoComposition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
-        return EditComposition(composition: composition, videoComposition: videoComposition, renderSize: renderSize)
+        var audioMix: AVMutableAudioMix?
+        if hasAudio {
+            audioParameters.audioTimePitchAlgorithm = .spectral
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [audioParameters]
+            audioMix = mix
+        }
+        return EditComposition(composition: composition, videoComposition: videoComposition, audioMix: audioMix, renderSize: renderSize)
     }
 
-    // Taille de l'image affichée, ramenée à un petit côté de 1080 px au plus, en dimensions paires.
-    static func renderSize(for orientedSize: CGSize) -> CGSize {
-        let scale = min(1, maxShortSide / min(orientedSize.width, orientedSize.height))
-        func even(_ value: CGFloat) -> CGFloat { max(2, (value * scale / 2).rounded() * 2) }
-        return CGSize(width: even(orientedSize.width), height: even(orientedSize.height))
+    // Image 9:16 dont le petit côté est celui du plus grand clip, ramené à 1080 px au plus, en dimensions paires.
+    static func renderSize(shortSide: CGFloat) -> CGSize {
+        let width = min(maxShortSide, shortSide)
+        func even(_ value: CGFloat) -> CGFloat { max(2, (value / 2).rounded() * 2) }
+        return CGSize(width: even(width), height: even(width * 16 / 9))
+    }
+
+    private static func time(_ duration: Duration) -> CMTime {
+        CMTime(seconds: duration.seconds, preferredTimescale: 600)
     }
 }
 
@@ -121,17 +128,21 @@ final class EditInstruction: NSObject, AVVideoCompositionInstructionProtocol, @u
 
     let trackID: CMPersistentTrackID
     let transform: CGAffineTransform
+    let quarterTurns: Int
+    let crop: CropRect
     let renderSize: CGSize
     let filter: VideoFilter
     let overlay: CIImage?
 
     init(
-        timeRange: CMTimeRange, trackID: CMPersistentTrackID, transform: CGAffineTransform, renderSize: CGSize, filter: VideoFilter,
-        overlay: CIImage?
+        timeRange: CMTimeRange, trackID: CMPersistentTrackID, transform: CGAffineTransform, quarterTurns: Int, crop: CropRect,
+        renderSize: CGSize, filter: VideoFilter, overlay: CIImage?
     ) {
         self.timeRange = timeRange
         self.trackID = trackID
         self.transform = transform
+        self.quarterTurns = quarterTurns
+        self.crop = crop
         self.renderSize = renderSize
         self.filter = filter
         self.overlay = overlay
@@ -139,7 +150,7 @@ final class EditInstruction: NSObject, AVVideoCompositionInstructionProtocol, @u
     }
 }
 
-// Compositeur (Core Image) : rotation du segment, remplissage de l'image finale, filtre, textes.
+// Compositeur (Core Image) : rotation de la piste et du clip, cadre, image ajustée en 9:16, filtre, textes.
 final class EditCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let colorSpace = CGColorSpace(name: CGColorSpace.itur_709)
@@ -166,8 +177,8 @@ final class EditCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
         let image: CIImage
         if let frame = request.sourceFrame(byTrackID: instruction.trackID) {
             image = EditRendering.render(
-                CIImage(cvPixelBuffer: frame), transform: instruction.transform, renderSize: instruction.renderSize,
-                filter: instruction.filter, overlay: instruction.overlay)
+                CIImage(cvPixelBuffer: frame), transform: instruction.transform, quarterTurns: instruction.quarterTurns,
+                crop: instruction.crop, renderSize: instruction.renderSize, filter: instruction.filter, overlay: instruction.overlay)
         } else {
             image = CIImage(color: .black).cropped(to: bounds)
         }

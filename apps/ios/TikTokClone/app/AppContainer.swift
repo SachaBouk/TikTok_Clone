@@ -103,6 +103,7 @@ final class AppContainer {
             recordShare: ShareVideoUseCase(interactions: interactions),
             deleteVideo: DeleteVideoUseCase(videos: videos),
             setVisibility: SetVideoVisibilityUseCase(videos: videos),
+            setCommentsEnabled: SetCommentsEnabledUseCase(videos: videos),
             session: session,
             analytics: analytics
         )
@@ -352,20 +353,30 @@ final class AppContainer {
         PublishDraftViewModel(
             publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()),
             preparePhoto: PrepareStoryPhotoUseCase(renderer: UIKitStoryPhotoRenderer()),
-            searchHashtags: SearchHashtagsUseCase(search: search))
+            searchHashtags: SearchHashtagsUseCase(search: search), preferences: UserDefaultsPreferencesStore())
     }
 
-    // Caméra (ADR-052) : son modèle et la session de capture pour l'aperçu. Une caméra par ouverture de l'écran.
+    // Caméra (ADR-052) : son modèle et la session de capture pour l'aperçu. Une caméra par ouverture de la création.
     func makeCamera(kind: PublicationKind) -> CameraSetup {
         let camera = AVFoundationVideoCamera()
         return CameraSetup(model: CameraViewModel(kind: kind, camera: camera), session: camera.session)
     }
 
-    // Éditeur (ADR-052) : export sur l'iPhone, miniatures de la frise.
+    // Galerie maison de la création (ADR-062).
+    let mediaLibrary: any MediaLibrary = PhotoKitMediaLibrary()
+
+    func makeGallery(kind: PublicationKind) -> GalleryViewModel {
+        GalleryViewModel(kind: kind, library: mediaLibrary)
+    }
+
+    // Éditeur (ADR-052, ADR-062) : export sur l'iPhone, miniatures de la frise, image d'un clip pour le recadrage.
     func makeVideoEditor(_ request: EditorRequest) -> VideoEditorViewModel {
         VideoEditorViewModel(
             request: request, exportVideo: ExportEditedVideoUseCase(editor: AVFoundationVideoEditor()),
-            makeThumbnails: { plan, count in await EditThumbnails.images(for: plan, count: count) })
+            makeThumbnails: { source, times in await EditThumbnails.images(of: source, at: times) },
+            makeFrame: { source, time in
+                await EditThumbnails.images(of: source, at: [time], maxSize: CGSize(width: 1080, height: 1080), exact: true).first
+            })
     }
 
     // Visionneuse de stories (ADR-051).

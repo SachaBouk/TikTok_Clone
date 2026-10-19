@@ -19,6 +19,7 @@ import type {
 } from '../domain/interaction';
 import {
   BlockedError,
+  CommentsDisabledError,
   CannotBlockYourselfError,
   CannotFollowYourselfError,
   CommentNotFoundError,
@@ -232,6 +233,7 @@ export class InteractionsService {
     const video = await this.publishedVideo(videoId, userId);
     await this.assertNotSuspended(video.userId, videoId);
     await this.assertNotBlocked(userId, video.userId);
+    if (!video.commentsEnabled) throw new CommentsDisabledError();
     const replyTo = replyToId ? await this.visibleComment(replyToId, videoId) : null;
     if (replyTo) await this.assertNotBlocked(userId, replyTo.userId);
     await this.limit('comment', userId, COMMENT_RATE_LIMITS);
@@ -297,6 +299,7 @@ export class InteractionsService {
       if (await this.suspended.has(comment.userId)) throw new CommentNotFoundError(commentId);
       await this.assertNotBlocked(userId, comment.userId);
       await this.assertNotBlocked(userId, video.userId);
+      if (!video.commentsEnabled) throw new CommentsDisabledError();
       await this.limit('reaction', userId, REACTION_RATE_LIMITS);
       await this.interactions.likeComment(userId, commentId);
       // Vidéo privée (ADR-061) : personne n'est prévenu.
@@ -385,6 +388,8 @@ export class InteractionsService {
   async listComments(videoId: string, cursor: string | null, limit: number, viewerId: string | null = null): Promise<CommentPage> {
     const [video, hidden] = await Promise.all([this.publishedVideo(videoId, viewerId), this.hiddenAccounts(viewerId)]);
     if (hidden.has(video.userId)) throw new VideoNotAvailableError(videoId);
+    // Commentaires coupés (ADR-062) : gardés, mais cachés à tous sauf à l'auteur de la vidéo.
+    if (!video.commentsEnabled && video.userId !== viewerId) return { items: [], nextCursor: null };
     const rows = await this.interactions.listComments(videoId, cursor, limit + 1);
     const page = rows.slice(0, limit);
     return {
@@ -401,6 +406,7 @@ export class InteractionsService {
     if (!parent || parent.parentId) throw new CommentNotFoundError(commentId);
     const [video, hidden] = await Promise.all([this.publishedVideo(parent.videoId, viewerId), this.hiddenAccounts(viewerId)]);
     if (hidden.has(video.userId) || hidden.has(parent.userId)) throw new CommentNotFoundError(commentId);
+    if (!video.commentsEnabled && video.userId !== viewerId) throw new CommentNotFoundError(commentId);
     const rows = await this.interactions.listReplies(commentId, cursor, limit + 1);
     const page = rows.slice(0, limit);
     return {

@@ -46,6 +46,10 @@ const VIDEO_ID = new ParseUUIDPipe();
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 const VIDEO_NOT_FOUND = { type: ErrorResponse, description: 'Vidéo inconnue ou pas encore publiée.' };
 const BLOCKED = { type: ErrorResponse, description: 'L’un des deux comptes a bloqué l’autre.' };
+const BLOCKED_OR_COMMENTS_DISABLED = {
+  type: ErrorResponse,
+  description: 'L’un des deux comptes a bloqué l’autre, ou les commentaires de la vidéo sont désactivés (ADR-062).',
+};
 const TOO_MANY_REACTIONS = 'Trop de likes, favoris ou republications récents (ADR-039)';
 
 // Interactions sociales (ADR-016). Liker, commenter, republier et suivre exigent un compte (ADR-010).
@@ -180,7 +184,7 @@ export class InteractionsController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Commentaire vide ou trop long.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse(VIDEO_NOT_FOUND)
-  @ApiForbiddenResponse(BLOCKED)
+  @ApiForbiddenResponse(BLOCKED_OR_COMMENTS_DISABLED)
   @ApiTooManyRequests('Trop de commentaires récents (ADR-039)')
   async addComment(
     @CurrentUser() user: AuthenticatedUser,
@@ -209,7 +213,7 @@ export class InteractionsController {
   @ApiOkResponse({ type: InteractionStateResponse, description: '`count` : j’aime du commentaire.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Commentaire inconnu, ou vidéo indisponible.' })
-  @ApiForbiddenResponse(BLOCKED)
+  @ApiForbiddenResponse(BLOCKED_OR_COMMENTS_DISABLED)
   @ApiTooManyRequests('Trop de réactions récentes (ADR-039)')
   likeComment(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string): Promise<InteractionStateDto> {
     return this.interactions.setCommentLike(user.userId, id, true);

@@ -17,6 +17,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let dislikedComments = "dislikedComments"
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
+        static let defaultVideoVisibility = "defaultVideoVisibility"
     }
 
     var analyticsConsent: Bool? {
@@ -98,5 +99,16 @@ extension UserDefaultsPreferencesStore: DislikedCommentsStore {
         } else {
             defaults.set(ids, forKey: Key.dislikedComments)
         }
+    }
+}
+
+// Audience par défaut des publications (ADR-062).
+extension UserDefaultsPreferencesStore: PublishingPreferences {
+    var defaultVisibility: VideoVisibility {
+        defaults.string(forKey: Key.defaultVideoVisibility).flatMap(VideoVisibility.init(rawValue:)) ?? .everyone
+    }
+
+    func setDefaultVisibility(_ visibility: VideoVisibility) {
+        defaults.set(visibility.rawValue, forKey: Key.defaultVideoVisibility)
     }
 }

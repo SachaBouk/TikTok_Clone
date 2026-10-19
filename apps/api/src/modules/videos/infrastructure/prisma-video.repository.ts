@@ -24,6 +24,7 @@ const videoSelect = {
   rawSize: true,
   status: true,
   visibility: true,
+  commentsEnabled: true,
   hlsUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -81,6 +82,11 @@ export class PrismaVideoRepository extends VideoRepository {
       else if (video.status === 'ready') await tagVideo(tx, id, hashtags);
       return video;
     });
+  }
+
+  async setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null> {
+    const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { commentsEnabled: enabled }, select: videoSelect });
+    return video ?? null;
   }
 
   findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]> {
@@ -249,6 +255,7 @@ const detailsSelect = {
   description: true,
   status: true,
   visibility: true,
+  commentsEnabled: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,
@@ -265,6 +272,7 @@ const publishedSelect = {
   userId: true,
   description: true,
   visibility: true,
+  commentsEnabled: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,

@@ -122,14 +122,15 @@ final class PublishingModel {
     // `details` : source et modifications (mesure d'audience, ADR-052).
     func publish(
         file: URL, description: String, preview: UIImage?, kind: PublicationKind = .video, details: PublicationDetails = PublicationDetails(),
-        visibility: VideoVisibility = .everyone
+        visibility: VideoVisibility = .everyone, commentsEnabled: Bool = true
     ) -> String? {
         guard let userID = session.profile?.id else {
             session.requestSignIn()
             return nil
         }
         do {
-            let upload = try createPublication(file: file, description: description, userID: userID, kind: kind, visibility: visibility)
+            let upload = try createPublication(
+                file: file, description: description, userID: userID, kind: kind, visibility: visibility, commentsEnabled: commentsEnabled)
             if let preview { previews[upload.id] = preview }
             insert(
                 Publication(

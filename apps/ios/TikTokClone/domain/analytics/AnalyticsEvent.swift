@@ -274,7 +274,9 @@ extension PublicationDetails {
         properties["trimmed"] = .bool(trimmed)
         properties["filter"] = .string(filter.rawValue)
         properties["text_count"] = .int(textCount)
-        properties["speed"] = .double(speed.rawValue)
+        properties["speed"] = .double(speed)
+        properties["cropped"] = .bool(cropped)
+        properties["rotated"] = .bool(rotated)
         return properties
     }
 }

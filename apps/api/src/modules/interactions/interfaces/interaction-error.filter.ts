@@ -12,6 +12,7 @@ import type { Response } from 'express';
 import {
   BlockedError,
   CannotBlockYourselfError,
+  CommentsDisabledError,
   CannotFollowYourselfError,
   EmptyCommentError,
   InteractionError,
@@ -46,7 +47,8 @@ function toHttpException(error: InteractionError): HttpException {
   ) {
     return new BadRequestException(error.message);
   }
-  if (error instanceof NotCommentAuthorError || error instanceof BlockedError) return new ForbiddenException(error.message);
+  if (error instanceof NotCommentAuthorError || error instanceof BlockedError || error instanceof CommentsDisabledError)
+    return new ForbiddenException(error.message);
   // VideoNotAvailableError, TargetUserNotFoundError, CommentNotFoundError
   return new NotFoundException(error.message);
 }

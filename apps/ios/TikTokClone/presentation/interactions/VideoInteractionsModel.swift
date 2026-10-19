@@ -42,6 +42,8 @@ final class VideoInteractionsModel {
     private(set) var reportedVideoIDs: Set<String> = []
     // Visibilité changée depuis l'app (ADR-061), par vidéo : superposée aux vidéos chargées.
     private var visibilityOverrides: [String: VideoVisibility] = [:]
+    // Commentaires coupés ou rétablis depuis l'app (ADR-062), par vidéo.
+    private var commentsOverrides: [String: Bool] = [:]
     // Incrémenté à chaque changement de visibilité : les grilles « Vidéos » et « cadenas » du profil se rechargent.
     private(set) var visibilityVersion = 0
     // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
@@ -53,6 +55,7 @@ final class VideoInteractionsModel {
     private let recordShare: ShareVideoUseCase
     private let deleteVideo: DeleteVideoUseCase
     private let setVisibility: SetVideoVisibilityUseCase?
+    private let setCommentsEnabled: SetCommentsEnabledUseCase?
     private let session: SessionStore
     private let analytics: AnalyticsModel
 
@@ -62,10 +65,12 @@ final class VideoInteractionsModel {
         recordShare: ShareVideoUseCase,
         deleteVideo: DeleteVideoUseCase,
         setVisibility: SetVideoVisibilityUseCase? = nil,
+        setCommentsEnabled: SetCommentsEnabledUseCase? = nil,
         session: SessionStore,
         analytics: AnalyticsModel
     ) {
         self.setVisibility = setVisibility
+        self.setCommentsEnabled = setCommentsEnabled
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
@@ -82,6 +87,7 @@ final class VideoInteractionsModel {
             result = result.with(viewer: (result.viewer ?? .empty).with(followingAuthor: following))
         }
         if let visibility = visibilityOverrides[video.id] { result = result.with(viewer: result.viewer, visibility: visibility) }
+        if let enabled = commentsOverrides[video.id] { result = result.with(viewer: result.viewer, commentsEnabled: enabled) }
         return result
     }
 
@@ -204,6 +210,22 @@ final class VideoInteractionsModel {
             return nil
         } catch {
             visibilityOverrides[video.id] = before
+            return handle(error)
+        }
+    }
+
+    // Couper ou rétablir les commentaires de sa vidéo (ADR-062) : l'écran change tout de suite, et revient en cas d'erreur.
+    func setCommentsEnabled(_ enabled: Bool, of video: FeedVideo) async -> String? {
+        guard isOwn(video), let setCommentsEnabled else { return nil }
+        let before = display(video).commentsEnabled
+        guard before != enabled, pending.insert("comments-\(video.id)").inserted else { return nil }
+        defer { pending.remove("comments-\(video.id)") }
+        commentsOverrides[video.id] = enabled
+        do {
+            try await setCommentsEnabled(videoID: video.id, enabled: enabled)
+            return nil
+        } catch {
+            commentsOverrides[video.id] = before
             return handle(error)
         }
     }

@@ -16,7 +16,7 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/curre
 import { Public } from '../../auth/interfaces/public.decorator';
 import { VideosService, type VideoUpload } from '../application/videos.service';
 import { VideoErrorFilter } from './video-error.filter';
-import { CompleteUploadRequest, CreateUploadRequest, SetVideoVisibilityRequest } from './videos.requests';
+import { CompleteUploadRequest, CreateUploadRequest, SetCommentSettingsRequest, SetVideoVisibilityRequest } from './videos.requests';
 import { toVideoDto, VideoResponse, VideoUploadResponse } from './videos.responses';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
@@ -45,6 +45,7 @@ export class VideosController {
         fileSize: body.fileSize,
         description: body.description,
         visibility: body.visibility,
+        commentsEnabled: body.commentsEnabled,
       }),
     );
   }
@@ -76,6 +77,20 @@ export class VideosController {
     @Body() body: SetVideoVisibilityRequest,
   ): Promise<VideoDto> {
     return toVideoDto(await this.videos.setVisibility(user.userId, id, body.visibility));
+  }
+
+  // Commentaires autorisés ou coupés (ADR-062), par son auteur, quel que soit son statut.
+  @Patch(':id/comment-settings')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
+  async setVideoCommentSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SetCommentSettingsRequest,
+  ): Promise<VideoDto> {
+    return toVideoDto(await this.videos.setCommentsEnabled(user.userId, id, body.commentsEnabled));
   }
 
   // Par son auteur, quel que soit le statut. Likes, commentaires, favoris, republications et notifications

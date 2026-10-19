@@ -27,7 +27,8 @@ struct CreatePublicationUseCase: Sendable {
     var makeID: @Sendable () -> String = { UUID().uuidString }
 
     func callAsFunction(
-        file: URL, description: String, userID: String, kind: PublicationKind = .video, visibility: VideoVisibility = .everyone
+        file: URL, description: String, userID: String, kind: PublicationKind = .video, visibility: VideoVisibility = .everyone,
+        commentsEnabled: Bool = true
     ) throws -> PendingUpload {
         guard let contentType = MediaContentType(fileExtension: file.pathExtension), contentType.isVideo || kind == .story else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
@@ -51,7 +52,8 @@ struct CreatePublicationUseCase: Sendable {
             description: description,
             createdAt: now(),
             kind: kind,
-            visibility: kind == .story ? .everyone : visibility
+            visibility: kind == .story ? .everyone : visibility,
+            commentsEnabled: kind == .story || commentsEnabled
         )
         try store.save(upload)
         return upload
@@ -149,7 +151,8 @@ struct UploadVideoUseCase: Sendable {
             switch request.kind {
             case .video:
                 try await videos.createUpload(
-                    contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility)
+                    contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility,
+                    commentsEnabled: request.commentsEnabled)
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
         }
@@ -256,5 +259,14 @@ struct SetVideoVisibilityUseCase: Sendable {
 
     func callAsFunction(videoID: String, visibility: VideoVisibility) async throws {
         try await videos.setVisibility(videoID: videoID, visibility: visibility)
+    }
+}
+
+// Commentaires autorisés ou coupés (ADR-062), par l'auteur de la vidéo.
+struct SetCommentsEnabledUseCase: Sendable {
+    let videos: any VideoPublishingRepository
+
+    func callAsFunction(videoID: String, enabled: Bool) async throws {
+        try await videos.setCommentsEnabled(videoID: videoID, enabled: enabled)
     }
 }

@@ -40,8 +40,20 @@ final class AppRouter {
     }
 
     var presentedStories: StoriesRoute?
-    // « + » de « Ta story » : l'onglet Publier s'ouvre en mode Story (lu puis remis à nil par l'onglet).
-    var requestedPublishMode: PublishDraftViewModel.Mode?
+    // Création en plein écran (bouton « + », ADR-062), dans le mode demandé (« + » de « Ta story » : Story).
+    struct CreationRoute: Identifiable, Equatable {
+        let id = UUID()
+        let mode: PublishDraftViewModel.Mode
+    }
+
+    var presentedCreation: CreationRoute?
+    // Incrémenté à chaque vidéo publiée depuis la création : l'onglet Profil s'ouvre (publication en cours).
+    var publishedFromCreation = 0
+
+    func openCreation(mode: PublishDraftViewModel.Mode = .video) {
+        guard presentedCreation == nil else { return }
+        presentedCreation = CreationRoute(mode: mode)
+    }
 
     func openStories(_ authors: [UserSummary], startAuthor: Int = 0, source: StorySource) {
         guard !authors.isEmpty else { return }
@@ -68,13 +80,14 @@ final class AppRouter {
     private func presentLive(_ mode: LiveRoomModel.Mode) {
         guard presentedLive == nil else { return }
         let route = LiveRoute(mode: mode)
-        guard presentedVideo != nil || presentedStories != nil else {
+        guard presentedVideo != nil || presentedStories != nil || presentedCreation != nil else {
             presentedLive = route
             return
         }
         // Fermer un plein écran et en présenter un autre dans la même mise à jour échoue : le live attend la fermeture.
         presentedVideo = nil
         presentedStories = nil
+        presentedCreation = nil
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(600))
             if self?.presentedLive == nil { self?.presentedLive = route }
@@ -83,7 +96,7 @@ final class AppRouter {
 
     // Un écran plein écran couvre les onglets : le feed est en pause.
     var coversTabs: Bool {
-        presentedVideo != nil || presentedStories != nil || presentedLive != nil
+        presentedVideo != nil || presentedStories != nil || presentedLive != nil || presentedCreation != nil
     }
 
     // Renvoie false si le lien n'est pas reconnu.

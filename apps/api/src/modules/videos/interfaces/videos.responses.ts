@@ -21,6 +21,9 @@ export class VideoResponse implements VideoDto {
   @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
   visibility!: VideoVisibility;
 
+  @ApiProperty({ description: 'Commentaires autorisés (ADR-062).' })
+  commentsEnabled!: boolean;
+
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
 
@@ -67,6 +70,7 @@ export function toVideoDto(video: Video): VideoDto {
     description: video.description,
     status: video.status,
     visibility: video.visibility,
+    commentsEnabled: video.commentsEnabled,
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     createdAt: video.createdAt.toISOString(),

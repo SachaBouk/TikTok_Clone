@@ -42,6 +42,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     var viewedAt: Date? = nil
     // Privée (ADR-061) : seul son auteur la reçoit.
     var visibility: VideoVisibility = .everyone
+    // Commentaires autorisés (ADR-062) : coupés, la liste n'est lue que par l'auteur.
+    var commentsEnabled = true
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

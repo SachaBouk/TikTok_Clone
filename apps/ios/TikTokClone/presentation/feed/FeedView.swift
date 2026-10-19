@@ -724,6 +724,8 @@ struct FeedCounter: View {
 // Couche AVPlayerLayer : la vidéo remplit l'écran (recadrée), transparente tant que rien n'est prêt.
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer?
+    // Faux : la vidéo est ajustée (bandes noires) au lieu de remplir le cadre.
+    var fills = true
 
     func makeUIView(context: Context) -> PlayerUIView {
         PlayerUIView()
@@ -731,6 +733,8 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func updateUIView(_ view: PlayerUIView, context: Context) {
         if view.playerLayer.player !== player { view.playerLayer.player = player }
+        let gravity: AVLayerVideoGravity = fills ? .resizeAspectFill : .resizeAspect
+        if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
     }
 
     final class PlayerUIView: UIView {

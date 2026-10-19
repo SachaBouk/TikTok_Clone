@@ -33,6 +33,11 @@ struct MainTabView: View {
                 if new == .friends, selection == .friends, session.isSignedIn {
                     if friendsPath.isEmpty { container.router.friendsRefreshRequests += 1 } else { friendsPath = NavigationPath() }
                 }
+                // « + » (ADR-062) : la création s'ouvre en plein écran, l'onglet affiché ne change pas.
+                if new == .publish {
+                    if session.isSignedIn { container.router.openCreation() } else { session.requestSignIn() }
+                    return
+                }
                 selection = new
             }
         )
@@ -113,12 +118,9 @@ struct MainTabView: View {
                     tabIcon(friendsIcon, systemImage: "person.2")
                 }
             }
+            // Jamais affiché : le toucher ouvre la création (`tabSelection`).
             Tab("Publier", systemImage: "plus.app", value: .publish) {
-                SignedInOnly(title: "Publier", systemImage: "plus.app", reason: "Connecte-toi pour publier une vidéo.") {
-                    PublishView(
-                        draft: container.makePublishDraftViewModel(), publishing: container.publishing, router: container.router, container: container
-                    )
-                }
+                Color.clear
             }
             // Publications en cours d'envoi ou de traitement.
             .badge(container.publishing.inProgressCount)
@@ -193,9 +195,18 @@ struct MainTabView: View {
         .storiesPresenter(container) { container.router.presentedVideo == nil }
         // Live (ADR-053), par-dessus tout.
         .livePresenter(container)
-        // « + » de « Ta story » : onglet Publier, en mode Story.
-        .onChange(of: router.requestedPublishMode) { _, mode in
-            if mode != nil { selection = .publish }
+        // Création (ADR-062), par-dessus les onglets ; une vidéo publiée ouvre le profil (publication en cours).
+        .fullScreenCover(item: $router.presentedCreation) { route in
+            CreationScreen(container: container, mode: route.mode) { story in
+                router.presentedCreation = nil
+                if !story { router.publishedFromCreation += 1 }
+            } onClose: {
+                router.presentedCreation = nil
+            }
+        }
+        .onChange(of: router.publishedFromCreation) {
+            profilePath = NavigationPath()
+            selection = .profile
         }
         .environment(container.stories)
         .alert(

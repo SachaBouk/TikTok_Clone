@@ -146,48 +146,126 @@ struct EditingTests {
         #expect(model.errorMessage == "Impossible de prendre la photo.")
     }
 
+    @Test("modes « Caméra » et « Story », durée choisie : seulement avant le premier segment")
+    func cameraSettings() async throws {
+        let camera = FakeVideoCamera()
+        let model = CameraViewModel(kind: .video, camera: camera)
+        await model.start()
+        #expect(model.recording.maxDuration == .seconds(180))
+        model.setLimit(.fifteenSeconds)
+        #expect(model.limit == .fifteenSeconds && model.recording.maxDuration == .seconds(15))
+        model.setKind(.story)
+        #expect(model.kind == .story && model.recording.maxDuration == .seconds(60))
+        #expect(model.captureModes == [.video, .photo])
+        model.setLimit(.threeMinutes)
+        #expect(model.limit == .fifteenSeconds)
+        model.captureMode = .photo
+        model.setKind(.video)
+        #expect(model.captureMode == .video && model.recording.maxDuration == .seconds(15))
+
+        model.shutterTapped()
+        camera.finishSegment(.success(try temporaryClip(2)))
+        #expect(model.hasSegments && !model.canChangeSettings)
+        model.setKind(.story)
+        model.setLimit(.sixtySeconds)
+        #expect(model.kind == .video && model.limit == .fifteenSeconds)
+        model.discard()
+    }
+
     // MARK: Éditeur
 
-    @Test("éditeur : découpage, vitesse et filtre relisent l'aperçu ; export du plan")
+    @Test("éditeur par clips : diviser, vitesse, volume, filtre relisent l'aperçu ; un geste = un pas d'annulation ; export")
     func editor() async throws {
         let editor = FakeVideoEditor(store: store)
         let clip = try temporaryClip(10)
         let model = VideoEditorViewModel(
             request: EditorRequest(plan: EditPlan(clips: [clip], kind: .video), source: .camera),
-            exportVideo: ExportEditedVideoUseCase(editor: editor), makeThumbnails: { _, count in Array(repeating: UIImage(), count: count) })
-        await model.loadThumbnails(count: 4)
-        #expect(model.thumbnails.count == 4)
-        model.setTrimStart(fraction: 0.2)
-        model.setTrimEnd(fraction: 0.8)
-        #expect(model.plan.trimStart == .seconds(2) && model.plan.trimEnd == .seconds(8))
-        #expect(abs(model.startFraction - 0.2) < 0.0001)
-        model.setSpeed(.double)
+            exportVideo: ExportEditedVideoUseCase(editor: editor), makeThumbnails: { _, times in Array(repeating: UIImage(), count: times.count) })
+        let first = try #require(model.plan.clips.first)
+        let key = model.thumbnailKey(for: first)
+        #expect(key.count == 10)
+        await model.loadThumbnails(key)
+        #expect(model.thumbnails[key]?.count == 10)
+
+        // Poignée de début, en un geste : un seul pas d'annulation.
+        model.setStart(.seconds(1), of: first.id)
+        model.setStart(.seconds(2), of: first.id)
+        model.endInteraction()
+        #expect(model.plan.clips[0].start == .seconds(2))
+        #expect(model.previewVersion == 1)
+        model.undo()
+        #expect(model.plan.clips[0].start == .zero)
+        model.redo()
+        #expect(model.plan.clips[0].start == .seconds(2))
+
+        // Diviser sous la tête de lecture : le second morceau est choisi.
+        model.split(at: .seconds(3))
+        #expect(model.plan.clips.count == 2)
+        #expect(model.selectedClipID == model.plan.clips[1].id)
+        model.setSpeed(2, applyToAll: false)
+        model.endInteraction()
+        #expect(model.plan.clips.map(\.speed) == [1, 2])
+        model.setVolume(0, applyToAll: true)
+        model.endInteraction()
+        #expect(model.plan.clips.map(\.volume) == [0, 0])
         model.setFilter(.vintage)
         model.setFilter(.vintage)
-        #expect(model.previewVersion == 4)
+        let version = model.previewVersion
         #expect(model.addText("Coucou", color: .red, size: .small))
-        #expect(model.previewVersion == 4)
+        #expect(model.previewVersion == version)
         #expect(!model.addText(" ", color: .red, size: .small))
         #expect(model.errorMessage == "Écris un texte.")
+        model.deleteSelectedClip()
+        #expect(model.plan.clips.count == 1 && model.selectedClipID == nil)
+        model.select(model.plan.clips[0].id)
+        model.deleteSelectedClip()
+        #expect(model.errorMessage == "La vidéo doit garder au moins un clip.")
 
         let result = try #require(await model.finish())
+        // Il reste le premier morceau : de 2 s à 5 s.
         #expect(result.plan.outputDuration == .seconds(3))
         #expect(editor.exported == [result.plan])
         #expect(result.plan.texts.map(\.text) == ["Coucou"])
+        #expect(exists(clip))
     }
 
-    @Test("éditeur : vidéo trop longue bloquée, export en échec, abandon d'une demande neuve")
+    @Test("éditeur : vidéos ajoutées par « + », supprimées à l'abandon ; clips retirés supprimés à l'export")
+    func appendedClips() async throws {
+        let clip = try temporaryClip(4)
+        let added = try temporaryClip(3)
+        let model = VideoEditorViewModel(
+            request: EditorRequest(plan: EditPlan(clips: [clip], kind: .video), source: .gallery, isNew: false),
+            exportVideo: ExportEditedVideoUseCase(editor: FakeVideoEditor(store: store)), makeThumbnails: { _, _ in [] })
+        model.append([added])
+        #expect(model.plan.outputDuration == .seconds(7))
+        model.discard()
+        #expect(exists(clip) && !exists(added))
+
+        let other = try temporaryClip(3)
+        let exporting = VideoEditorViewModel(
+            request: EditorRequest(plan: EditPlan(clips: [clip, other], kind: .video), source: .gallery),
+            exportVideo: ExportEditedVideoUseCase(editor: FakeVideoEditor(store: store)), makeThumbnails: { _, _ in [] })
+        exporting.select(exporting.plan.clips[1].id)
+        exporting.deleteSelectedClip()
+        #expect(await exporting.finish() != nil)
+        #expect(exists(clip) && !exists(other))
+    }
+
+    @Test("éditeur : vidéo trop longue bloquée, story de plus de 60 s refusée, export en échec, abandon d'une demande neuve")
     func editorProblems() async throws {
         let clip = try temporaryClip(200)
         let failing = VideoEditorViewModel(
             request: EditorRequest(plan: EditPlan(clips: [clip], kind: .video), source: .gallery),
             exportVideo: ExportEditedVideoUseCase(editor: FakeVideoEditor(store: store, fails: true)), makeThumbnails: { _, _ in [] })
         #expect(failing.canFinish)
-        failing.setSpeed(.half)
+        #expect(failing.storyProblem == "Une story dure 60 secondes au plus. Raccourcis la vidéo.")
+        failing.select(failing.plan.clips[0].id)
+        failing.setSpeed(0.5, applyToAll: false)
+        failing.endInteraction()
         #expect(!failing.canFinish)
         #expect(failing.problem == "Une vidéo dure 3 minutes au plus. Raccourcis-la.")
         #expect(await failing.finish() == nil)
-        failing.setSpeed(.normal)
+        failing.undo()
         #expect(await failing.finish() == nil)
         #expect(failing.errorMessage == "Impossible de préparer cette vidéo.")
 
@@ -238,7 +316,7 @@ struct EditingTests {
         draft.recorded(segments)
         let request = try #require(draft.editorRequest)
         #expect(request.source == .camera && request.isNew)
-        #expect(request.plan.clips == segments)
+        #expect(request.plan.sources == segments)
         #expect(!draft.canEdit)
 
         var plan = request.plan
@@ -290,8 +368,8 @@ struct EditingTests {
         #expect(!exists(secondExport) && !exists(segment))
     }
 
-    @Test("brouillon : vidéo de la galerie trop longue (ADR-040) → éditeur pour choisir le passage")
-    func tooLongGallery() async throws {
+    @Test("brouillon : une vidéo de la galerie ouvre toujours l'éditeur ; trop longue (ADR-040), avec le message")
+    func galleryOpensEditor() async throws {
         let publishing = await makePublishing()
         let draft = makeDraft(publishing, duration: .milliseconds(181_500))
         await draft.load { store.addPickedFile("long.mov", Data("long".utf8)) }
@@ -299,21 +377,85 @@ struct EditingTests {
         let request = try #require(draft.editorRequest)
         #expect(request.source == .gallery && request.isNew)
         #expect(request.notice == "Cette vidéo dure plus de 3 minutes : choisis le passage à garder.")
-        #expect(request.plan.trimEnd == .seconds(180))
+        #expect(request.plan.clips[0].end == .seconds(180))
         #expect(request.plan.problem == nil)
 
-        // À une seconde près : une vidéo de 3 min 0,9 s est acceptée telle quelle, modifiable ensuite.
+        // À une seconde près : pas de message.
         let accepted = makeDraft(publishing, duration: .milliseconds(180_900))
         await accepted.load { store.addPickedFile("ok.mov", Data("ok".utf8)) }
-        #expect(accepted.canPublish)
-        #expect(accepted.canEdit)
-        #expect(accepted.editorRequest == nil)
+        #expect(accepted.editorRequest?.notice == nil)
+        #expect(accepted.editorRequest?.plan.isTrimmed == false)
 
         let story = makeDraft(publishing, duration: .seconds(75))
         story.mode = .story
         await story.load { store.addPickedFile("story.mov", Data("story".utf8)) }
         #expect(story.editorRequest?.notice == "Une story dure 60 secondes au plus : choisis le passage à garder.")
-        #expect(story.editorRequest?.plan.trimEnd == .seconds(60))
+        #expect(story.editorRequest?.plan.clips.first?.end == .seconds(60))
+    }
+
+    @Test("brouillon : plusieurs vidéos de la galerie mises bout à bout ; une illisible fait tout échouer")
+    func multipleGalleryVideos() async throws {
+        let publishing = await makePublishing()
+        let draft = makeDraft(publishing, duration: .seconds(5))
+        await draft.loadVideos([{ store.addPickedFile("a.mov", Data("a".utf8)) }, { store.addPickedFile("b.mov", Data("b".utf8)) }])
+        let request = try #require(draft.editorRequest)
+        #expect(request.plan.clips.count == 2 && request.plan.outputDuration == .seconds(10))
+        #expect(request.notice == nil)
+
+        let unreadable = makeDraft(publishing, duration: nil)
+        await unreadable.loadVideos([{ store.addPickedFile("c.mov", Data("c".utf8)) }, { store.addPickedFile("d.mov", Data("d".utf8)) }])
+        #expect(unreadable.editorRequest == nil)
+        #expect(unreadable.state == .failed("Impossible de lire cette vidéo."))
+    }
+
+    @Test("brouillon : « Ta story » depuis l'éditeur (60 s au plus), audience par défaut, commentaires envoyés")
+    func storyAndSettings() async throws {
+        let publishing = await makePublishing()
+        let preferences = InMemoryPublishingPreferences()
+        let draft = PublishDraftViewModel(
+            publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: FakeVideoMetadataCleaner(store: store)), preferences: preferences,
+            makePreview: { _ in nil }, loadDuration: { _ in .seconds(5) })
+        #expect(draft.visibility == .everyone && draft.commentsEnabled)
+
+        // Story trop longue : refusée, le fichier exporté supprimé.
+        let long = try temporaryClip(70)
+        let tooLong = try temporaryClip(70)
+        #expect(!draft.publishStory(EditResult(file: tooLong.file, plan: EditPlan(clips: [long], kind: .video)), source: .gallery))
+        #expect(draft.errorMessage == "Une story dure 60 secondes au plus. Raccourcis la vidéo.")
+        #expect(!exists(tooLong) && exists(long))
+
+        let segment = try temporaryClip(8)
+        let exported = store.addPickedFile("story.mov", Data("story".utf8))
+        #expect(draft.publishStory(EditResult(file: exported, plan: EditPlan(clips: [segment], kind: .video)), source: .camera))
+        #expect(!exists(segment))
+        #expect(publishing.publications.first?.kind == .story)
+
+        // Audience par défaut gardée ; réglages remis à zéro après la publication.
+        draft.visibility = .onlyMe
+        draft.makeVisibilityDefault()
+        #expect(preferences.defaultVisibility == .onlyMe)
+        draft.recorded([try temporaryClip(4)])
+        let request = try #require(draft.editorRequest)
+        await draft.edited(EditResult(file: store.addPickedFile("video.mov", Data("v".utf8)), plan: request.plan), request: request)
+        #expect(draft.visibility == .onlyMe)
+        draft.commentsEnabled = false
+        #expect(draft.publish())
+        let upload = try #require(store.uploads.first { $0.kind == .video })
+        #expect(upload.visibility == .onlyMe && !upload.commentsEnabled)
+        #expect(draft.visibility == .onlyMe && draft.commentsEnabled)
+        let next = PublishDraftViewModel(
+            publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: FakeVideoMetadataCleaner(store: store)), preferences: preferences)
+        #expect(next.visibility == .onlyMe)
+    }
+
+    @Test("brouillon : « # Hashtags » ajoute un « # » à la fin de la description")
+    func hashtagSign() async {
+        let draft = makeDraft(await makePublishing())
+        draft.insertHashtagSign()
+        #expect(draft.description == "#")
+        draft.description = "Coucou"
+        draft.insertHashtagSign()
+        #expect(draft.description == "Coucou #")
     }
 
     @Test("brouillon : photo de story prise par la caméra, mesurée comme telle")

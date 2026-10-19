@@ -2,10 +2,11 @@ import Foundation
 import Observation
 import UIKit
 
-// Vidéo en préparation dans l'onglet « Publier » : choisie dans la galerie ou filmée par la caméra, modifiée au besoin
-// dans l'éditeur (ADR-052), avec sa description. En mode Story (ADR-051) : une vidéo de 60 s au plus ou une photo, sans
-// description. À la publication, elle passe au modèle partagé des publications (envoi en arrière-plan de l'écran). En mode
-// Live (ADR-053) : un titre facultatif, puis le live s'ouvre en plein écran (rien n'est envoyé ici).
+// Création (ADR-062) : vidéos filmées par la caméra ou choisies dans la galerie, toujours ouvertes dans l'éditeur (aperçu,
+// puis éditeur par clips), exportées par « Suivant », puis décrites et réglées (audience, commentaires) sur l'écran de
+// publication. « Ta story » publie directement en story (ADR-051 : 60 s au plus, ou une photo). À la publication, la
+// vidéo passe au modèle partagé des publications (envoi en arrière-plan de l'écran). En mode Live (ADR-053) : un titre
+// facultatif, puis le live s'ouvre en plein écran (rien n'est envoyé ici).
 @MainActor
 @Observable
 final class PublishDraftViewModel {
@@ -17,7 +18,7 @@ final class PublishDraftViewModel {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .video: "Vidéo"
+            case .video: "Caméra"
             case .story: "Story"
             case .live: "Live"
             }
@@ -54,8 +55,12 @@ final class PublishDraftViewModel {
         case failed(String)
     }
 
-    // « Qui peut regarder ta vidéo » (ADR-061) ; une story est toujours publique.
+    // « Qui peut voir cette publication » (ADR-061) ; une story est toujours publique. Au départ : l'audience par défaut.
     var visibility: VideoVisibility = .everyone
+    // « Autoriser les commentaires » (ADR-062).
+    var commentsEnabled = true
+    // Audience choisie par « Définir comme audience par défaut » (gardée sur l'iPhone).
+    private(set) var defaultVisibility: VideoVisibility = .everyone
     var description = "" {
         didSet { if description != oldValue { suggestHashtags() } }
     }
@@ -80,6 +85,7 @@ final class PublishDraftViewModel {
     private let makePreview: @Sendable (URL) async -> UIImage?
     private let loadDuration: @Sendable (URL) async -> Duration?
     private let searchHashtags: SearchHashtagsUseCase?
+    private let preferences: (any PublishingPreferences)?
     private let suggestionDelay: Duration
     private var suggestionTask: Task<Void, Never>?
 
@@ -88,6 +94,7 @@ final class PublishDraftViewModel {
         prepareVideo: PrepareVideoUseCase,
         preparePhoto: PrepareStoryPhotoUseCase? = nil,
         searchHashtags: SearchHashtagsUseCase? = nil,
+        preferences: (any PublishingPreferences)? = nil,
         suggestionDelay: Duration = .milliseconds(250),
         makePreview: @escaping @Sendable (URL) async -> UIImage? = { await VideoPreview.image(for: $0) },
         loadDuration: @escaping @Sendable (URL) async -> Duration? = { await VideoPreview.duration(of: $0) }
@@ -98,7 +105,22 @@ final class PublishDraftViewModel {
         self.makePreview = makePreview
         self.loadDuration = loadDuration
         self.searchHashtags = searchHashtags
+        self.preferences = preferences
         self.suggestionDelay = suggestionDelay
+        defaultVisibility = preferences?.defaultVisibility ?? .everyone
+        visibility = defaultVisibility
+    }
+
+    // « Définir comme audience par défaut » : l'audience choisie devient celle des prochaines publications.
+    func makeVisibilityDefault() {
+        defaultVisibility = visibility
+        preferences?.setDefaultVisibility(visibility)
+    }
+
+    // « # Hashtags » : un « # » ajouté à la fin de la description, suggestions comprises.
+    func insertHashtagSign() {
+        if !description.isEmpty, !description.hasSuffix(" "), !description.hasSuffix("\n") { description += " " }
+        description += "#"
     }
 
     static let maxHashtagSuggestions = 8
@@ -178,20 +200,87 @@ final class PublishDraftViewModel {
             let file = try await prepareVideo(video)
             let duration = await loadDuration(file)
             let sources = duration.map { [SourceClip(file: file, duration: $0)] } ?? []
-            // Trop longue (ADR-040, ADR-051) : l'éditeur s'ouvre pour choisir le passage à garder (ADR-052). Une durée
-            // illisible est laissée au worker.
-            if let duration, kind.isTooLong(duration) {
+            // L'éditeur s'ouvre toujours (aperçu, ADR-062) ; trop longue (ADR-040, ADR-051), le message rappelle la
+            // limite. Une durée illisible (aucun clip) : la vidéo est publiée telle quelle, le worker la vérifiera.
+            if !sources.isEmpty {
                 state = .empty
                 editorRequest = EditorRequest(
-                    plan: EditPlan(clips: sources, kind: kind), source: .gallery, notice: kind.tooLongSourceMessage)
+                    plan: EditPlan(clips: sources, kind: kind), source: source,
+                    notice: duration.map { kind.isTooLong($0) } == true ? kind.tooLongSourceMessage : nil)
                 return
             }
-            state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration, sources: sources))
+            state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration, source: source, sources: sources))
         } catch let error as AppError {
             state = .failed(error.message)
         } catch {
             state = .failed("Impossible d’importer cette vidéo.")
         }
+    }
+
+    // Plusieurs vidéos de la galerie (sélection numérotée, ADR-062) : préparées dans l'ordre (métadonnées retirées), puis
+    // mises bout à bout dans l'éditeur. Une seule vidéo illisible fait échouer l'ensemble (les autres sont supprimées).
+    func loadVideos(_ loaders: [() async throws -> URL]) async {
+        guard !loaders.isEmpty else { return }
+        if loaders.count == 1, let loader = loaders.first {
+            await loadMedia { .video(try await loader()) }
+            return
+        }
+        discardFile()
+        state = .loading
+        do {
+            let clips = try await prepareClips(loaders)
+            state = .empty
+            let plan = EditPlan(clips: clips, kind: kind)
+            editorRequest = EditorRequest(
+                plan: plan, source: .gallery, notice: kind.isTooLong(clips.reduce(.zero) { $0 + $1.duration }) ? kind.tooLongSourceMessage : nil)
+        } catch let error as AppError {
+            state = .failed(error.message)
+        } catch {
+            state = .failed("Impossible d’importer ces vidéos.")
+        }
+    }
+
+    // Vidéos préparées pour l'éditeur (« + » de la frise) : métadonnées retirées, durée lue (illisible : refusée).
+    func prepareClips(_ loaders: [() async throws -> URL]) async throws -> [SourceClip] {
+        var clips: [SourceClip] = []
+        do {
+            for loader in loaders {
+                let file = try await prepareVideo(try await loader())
+                guard let duration = await loadDuration(file) else {
+                    try? FileManager.default.removeItem(at: file)
+                    throw AppError.rejected("Impossible de lire cette vidéo.")
+                }
+                clips.append(SourceClip(file: file, duration: duration))
+            }
+        } catch {
+            for clip in clips { try? FileManager.default.removeItem(at: clip.file) }
+            throw error
+        }
+        return clips
+    }
+
+    // « Ta story » depuis l'éditeur (ADR-062) : la vidéo exportée part en story (60 s au plus). Vrai si elle est partie.
+    @discardableResult
+    func publishStory(_ result: EditResult, source: MediaSource) -> Bool {
+        guard !PublicationKind.story.isTooLong(result.plan.outputDuration) else {
+            try? FileManager.default.removeItem(at: result.file)
+            errorMessage = "Une story dure 60 secondes au plus. Raccourcis la vidéo."
+            return false
+        }
+        if let message = publishing.publish(
+            file: result.file, description: "", preview: nil, kind: .story, details: PublicationDetails(source: source, plan: result.plan))
+        {
+            errorMessage = message
+            return false
+        }
+        editorRequest = nil
+        // Vidéo exportée plus tôt (« Suivant », puis retour à l'éditeur) et fichiers d'origine : ils ne servent plus.
+        if case .ready(let draft) = state, draft.file != result.file { try? FileManager.default.removeItem(at: draft.file) }
+        for clip in result.plan.sources where clip.file != result.file {
+            try? FileManager.default.removeItem(at: clip.file)
+        }
+        reset()
+        return true
     }
 
     // Vrai si la vidéo est partie dans la file d'envoi ; sinon `errorMessage` dit pourquoi.
@@ -201,23 +290,28 @@ final class PublishDraftViewModel {
         let details = PublicationDetails(source: draft.source, plan: draft.isPhoto ? nil : draft.plan)
         if let message = publishing.publish(
             file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind, details: details,
-            visibility: mode == .story ? .everyone : visibility)
+            visibility: mode == .story ? .everyone : visibility, commentsEnabled: mode == .story || commentsEnabled)
         {
             errorMessage = message
             return false
         }
         // Le fichier envoyé est gardé par la file d'envoi ; les fichiers d'origine d'une vidéo modifiée ne servent plus.
         removeSources(of: draft)
-        state = .empty
-        description = ""
-        visibility = .everyone
+        reset()
         return true
     }
 
     func discard() {
         discardFile()
+        reset()
+    }
+
+    // Prochaine publication : réglages de départ.
+    private func reset() {
         state = .empty
         description = ""
+        visibility = defaultVisibility
+        commentsEnabled = true
     }
 
     // Segments filmés : l'éditeur s'ouvre (ADR-052).
@@ -242,7 +336,7 @@ final class PublishDraftViewModel {
         state = .ready(
             Draft(
                 file: result.file, preview: await makePreview(result.file), duration: result.plan.outputDuration, source: request.source,
-                sources: result.plan.clips, plan: result.plan))
+                sources: result.plan.sources, plan: result.plan))
     }
 
     // Éditeur fermé sans exporter : le brouillon ne change pas (l'éditeur a supprimé les fichiers d'une demande neuve).

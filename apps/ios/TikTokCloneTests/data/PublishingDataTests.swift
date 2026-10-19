@@ -6,7 +6,7 @@ import TikTokAPI
 
 private let videoJSON = """
     {"id":"0192f3a0-0000-7000-8000-00000000000a","userId":"0192f3a0-0000-7000-8000-000000000001","description":"Ma vidéo",\
-    "status":"processing","visibility":"public","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
+    "status":"processing","visibility":"public","commentsEnabled":true,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
     """
 
 @Suite("RemoteVideoPublishingRepository")
@@ -19,7 +19,7 @@ struct RemoteVideoPublishingRepositoryTests {
     func createUploadRateLimited() async {
         await #expect(throws: AppError.tooManyActions(.uploads, retryAfter: 5400)) {
             try await repository { _ in tooManyRequests(retryAfter: 5400) }.createUpload(
-                contentType: .mp4, fileSize: 1000, description: nil, visibility: .everyone)
+                contentType: .mp4, fileSize: 1000, description: nil, visibility: .everyone, commentsEnabled: true)
         }
     }
 
@@ -30,7 +30,7 @@ struct RemoteVideoPublishingRepositoryTests {
             {"partNumber":2,"url":"http://localhost:9000/videos-raw/a?partNumber=2"}],"expiresAt":"2026-09-25T14:00:00.000Z"}
             """
         let ticket = try await repository { _ in json(.created, body) }.createUpload(
-            contentType: .quickTime, fileSize: 12_000_000, description: nil, visibility: .everyone)
+            contentType: .quickTime, fileSize: 12_000_000, description: nil, visibility: .everyone, commentsEnabled: true)
         #expect(ticket.videoID == "0192f3a0-0000-7000-8000-00000000000a")
         #expect(ticket.partSize == 10_485_760)
         #expect(ticket.parts.map(\.number) == [1, 2])
@@ -41,7 +41,15 @@ struct RemoteVideoPublishingRepositoryTests {
     func createRejected() async {
         await #expect(throws: AppError.rejected("fichier trop volumineux")) {
             try await repository { _ in json(.badRequest, errorJSON(400, "fichier trop volumineux")) }.createUpload(
-                contentType: .mp4, fileSize: 1, description: nil, visibility: .everyone)
+                contentType: .mp4, fileSize: 1, description: nil, visibility: .everyone, commentsEnabled: true)
+        }
+    }
+
+    @Test("commentaires coupés ou rétablis (ADR-062) : vidéo inconnue → introuvable")
+    func setCommentsEnabled() async throws {
+        try await repository { _ in json(.ok, videoJSON) }.setCommentsEnabled(videoID: "v", enabled: false)
+        await #expect(throws: AppError.notFound) {
+            try await repository { _ in json(.notFound, errorJSON(404, "Vidéo introuvable")) }.setCommentsEnabled(videoID: "v", enabled: true)
         }
     }
 

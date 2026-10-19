@@ -56,6 +56,8 @@ export interface AdminVideoDto {
   status: VideoStatus;
   // Privée (ADR-061) : visible de son seul auteur dans l'app.
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062).
+  commentsEnabled: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;

@@ -142,12 +142,12 @@ struct PublishingModelTests {
         #expect(store.uploads.count == 1)
     }
 
-    @Test("brouillon : chargement, compteur de caractères, publication")
+    @Test("brouillon : vidéo de durée illisible publiée telle quelle (le worker la vérifiera), compteur de caractères")
     func draft() async {
         let (model, _) = await makeModel()
         let cleaner = FakeVideoMetadataCleaner(store: store)
         let draft = PublishDraftViewModel(
-            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { _ in .seconds(12) }
+            publishing: model, prepareVideo: PrepareVideoUseCase(cleaner: cleaner), makePreview: { _ in nil }, loadDuration: { _ in nil }
         )
         #expect(!draft.canPublish)
         let file = picked()
@@ -156,9 +156,8 @@ struct PublishingModelTests {
         let cleaned = file.deletingPathExtension().appendingPathExtension("clean.mov")
         #expect(cleaner.cleaned == [file])
         #expect(store.state.withLock { $0.picked[file] } == nil)
-        #expect(
-            draft.state
-                == .ready(.init(file: cleaned, preview: nil, duration: .seconds(12), sources: [SourceClip(file: cleaned, duration: .seconds(12))])))
+        #expect(draft.editorRequest == nil)
+        #expect(draft.state == .ready(.init(file: cleaned, preview: nil, duration: nil, sources: [])))
         draft.description = String(repeating: "a", count: 2201)
         #expect(draft.remainingCharacters == -1)
         #expect(!draft.canPublish)
@@ -183,7 +182,7 @@ struct PublishingModelTests {
         )
         await draft.load { picked() }
         #expect(draft.state == .empty)
-        #expect(draft.editorRequest?.plan.trimEnd == .seconds(180))
+        #expect(draft.editorRequest?.plan.clips.first?.end == .seconds(180))
         #expect(!draft.canPublish)
         #expect(model.publications.isEmpty)
 
@@ -193,7 +192,7 @@ struct PublishingModelTests {
             loadDuration: { [duration] _ in duration }
         )
         await accepted.load { picked() }
-        #expect(accepted.canPublish)
+        #expect(accepted.editorRequest != nil && accepted.editorRequest?.notice == nil)
         #expect(UploadRules.isTooLong(.seconds(182)))
         #expect(!UploadRules.isTooLong(.seconds(180)))
     }

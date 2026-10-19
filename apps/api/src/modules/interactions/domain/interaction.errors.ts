@@ -59,6 +59,14 @@ export class BlockedError extends InteractionError {
   }
 }
 
+// L'auteur de la vidéo a coupé les commentaires (ADR-062) : personne ne peut commenter, répondre ni aimer un commentaire.
+export class CommentsDisabledError extends InteractionError {
+  constructor() {
+    super('Les commentaires sont désactivés pour cette vidéo.');
+    this.name = 'CommentsDisabledError';
+  }
+}
+
 export class CommentNotFoundError extends InteractionError {
   constructor(id: string) {
     super(`Commentaire introuvable : ${id}`);

@@ -29,6 +29,7 @@ export class InMemoryVideoRepository extends VideoRepository {
     const created: StoredVideo = {
       ...video,
       visibility: video.visibility ?? 'public',
+      commentsEnabled: video.commentsEnabled ?? true,
       id: randomUUID(),
       status: 'uploading',
       hlsUrl: null,
@@ -73,6 +74,13 @@ export class InMemoryVideoRepository extends VideoRepository {
     Object.assign(video, { visibility, updatedAt: this.now() });
     if (visibility === 'private') video.hashtags = undefined;
     else if (video.status === 'ready' && hashtags.length > 0) video.hashtags = { names: hashtags, taggedAt: this.now() };
+    return toVideo(video);
+  }
+
+  async setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { commentsEnabled: enabled, updatedAt: this.now() });
     return toVideo(video);
   }
 
@@ -258,6 +266,7 @@ function toDetails(v: StoredVideo): VideoDetails {
     description: v.description,
     status: v.status,
     visibility: v.visibility,
+    commentsEnabled: v.commentsEnabled,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,
@@ -272,6 +281,7 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     userId: v.userId,
     description: v.description,
     visibility: v.visibility,
+    commentsEnabled: v.commentsEnabled,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,

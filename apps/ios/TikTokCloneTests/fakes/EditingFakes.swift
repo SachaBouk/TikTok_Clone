@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Synchronization
 
@@ -81,4 +82,46 @@ func temporaryClip(_ seconds: Double) throws -> SourceClip {
 
 func exists(_ clip: SourceClip) -> Bool {
     FileManager.default.fileExists(atPath: clip.file.path(percentEncoded: false))
+}
+
+// Galerie simulée (ADR-062) : autorisation, médias par album, miniatures et exports comptés.
+final class FakeMediaLibrary: MediaLibrary, @unchecked Sendable {
+    var accessState: MediaLibraryAccess = .notDetermined
+    var grantedAccess: MediaLibraryAccess = .full
+    var items: [LibraryAsset] = []
+    var albumItems: [String: [LibraryAsset]] = [:]
+    var albumList: [LibraryAlbum] = []
+    private(set) var requests = 0
+    private(set) var thumbnailRequests: [String] = []
+
+    func access() -> MediaLibraryAccess { accessState }
+
+    func requestAccess() async -> MediaLibraryAccess {
+        requests += 1
+        accessState = grantedAccess
+        return accessState
+    }
+
+    func albums() async -> [LibraryAlbum] { albumList }
+
+    func assets(in album: LibraryAlbum?, filter: LibraryFilter) async -> [LibraryAsset] {
+        let source = album.map { albumItems[$0.id] ?? [] } ?? items
+        switch filter {
+        case .all: return source
+        case .videos: return source.filter(\.isVideo)
+        case .photos: return source.filter { !$0.isVideo }
+        }
+    }
+
+    func thumbnail(of asset: LibraryAsset, side: Double) async -> CGImage? {
+        thumbnailRequests.append(asset.id)
+        let context = CGContext(
+            data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 8, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        return context?.makeImage()
+    }
+
+    func exportVideo(_ asset: LibraryAsset) async throws -> URL { URL(filePath: "/tmp/\(asset.id).mov") }
+
+    func photoData(_ asset: LibraryAsset) async throws -> Data { Data(asset.id.utf8) }
 }

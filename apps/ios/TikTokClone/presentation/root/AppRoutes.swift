@@ -28,6 +28,8 @@ enum AccountRoute: Hashable {
     case wallet(PaywallSource)
     // Code QR de son profil (ADR-057).
     case qrCode
+    // Publications en cours (ADR-062), depuis les vignettes « Publication… » de son profil.
+    case publications
 }
 
 // Recherche (ADR-049), ouverte par la loupe du feed ; avec une recherche de l'historique, relancée (ADR-057).
@@ -95,6 +97,7 @@ extension View {
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())
                 case .interests: InterestsSettingsView(viewModel: container.makeInterestsSettingsViewModel())
                 case .wallet(let source): WalletView(source: source, container: container)
+                case .publications: PublicationsView(publishing: container.publishing, router: container.router)
                 }
             }
     }

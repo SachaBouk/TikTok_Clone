@@ -2,13 +2,52 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 
-// Rendu d'une image de la vidéo modifiée (ADR-052) : fonctions pures sur des `CIImage`, testées sans export.
+// Rendu d'une image de la vidéo modifiée (ADR-052, ADR-062) : fonctions pures sur des `CIImage`, testées sans export.
 enum EditRendering {
-    // Image d'origine → image finale : rotation du segment, remplissage (centré, rogné), filtre, textes par-dessus.
-    static func render(_ frame: CIImage, transform: CGAffineTransform, renderSize: CGSize, filter: VideoFilter, overlay: CIImage?) -> CIImage {
-        let filled = fill(oriented(frame, transform: transform), size: renderSize)
-        let colored = filtered(filled, filter)
+    // Image d'origine → image finale : rotation de la piste, quarts de tour du clip, cadre, image ajustée dans le 9:16
+    // (bandes noires, comme TikTok), filtre, textes par-dessus.
+    static func render(
+        _ frame: CIImage, transform: CGAffineTransform, quarterTurns: Int = 0, crop: CropRect = .full, renderSize: CGSize, filter: VideoFilter,
+        overlay: CIImage?
+    ) -> CIImage {
+        let turned = rotated(oriented(frame, transform: transform), quarterTurns: quarterTurns)
+        let fitted = fit(cropped(turned, to: crop), size: renderSize)
+        let colored = filtered(fitted, filter)
         return overlay.map { $0.composited(over: colored) } ?? colored
+    }
+
+    // Quarts de tour dans le sens des aiguilles d'une montre, image ramenée à l'origine.
+    static func rotated(_ image: CIImage, quarterTurns: Int) -> CIImage {
+        let turns = ((quarterTurns % 4) + 4) % 4
+        guard turns > 0 else { return image }
+        // Core Image : angle positif = sens inverse des aiguilles d'une montre.
+        let turned = image.transformed(by: CGAffineTransform(rotationAngle: -CGFloat(turns) * .pi / 2))
+        return turned.transformed(by: CGAffineTransform(translationX: -turned.extent.minX, y: -turned.extent.minY))
+    }
+
+    // Cadre relatif (origine en haut à gauche) → rectangle Core Image (origine en bas), image ramenée à l'origine.
+    static func cropped(_ image: CIImage, to crop: CropRect) -> CIImage {
+        guard !crop.isFull else { return image }
+        let extent = image.extent
+        let rect = CGRect(
+            x: extent.minX + crop.x * extent.width, y: extent.minY + (1 - crop.y - crop.height) * extent.height,
+            width: crop.width * extent.width, height: crop.height * extent.height
+        ).integral.intersection(extent)
+        let kept = image.cropped(to: rect)
+        return kept.transformed(by: CGAffineTransform(translationX: -kept.extent.minX, y: -kept.extent.minY))
+    }
+
+    // Ajustée dans `size` en gardant les proportions : centrée, sur fond noir.
+    static func fit(_ image: CIImage, size: CGSize) -> CIImage {
+        let extent = image.extent
+        let bounds = CGRect(origin: .zero, size: size)
+        let black = CIImage(color: .black).cropped(to: bounds)
+        guard extent.width > 0, extent.height > 0 else { return black }
+        let scale = min(size.width / extent.width, size.height / extent.height)
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let dx = (size.width - scaled.extent.width) / 2 - scaled.extent.minX
+        let dy = (size.height - scaled.extent.height) / 2 - scaled.extent.minY
+        return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy)).composited(over: black).cropped(to: bounds)
     }
 
     // Taille affichée d'une piste : sa taille d'origine tournée par sa transformation (une vidéo d'iPhone en portrait
@@ -27,17 +66,6 @@ enum EditRendering {
         let toBottomUp = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0)
         let moved = image.transformed(by: toTopDown.concatenating(linear).concatenating(toBottomUp))
         return moved.transformed(by: CGAffineTransform(translationX: -moved.extent.minX, y: -moved.extent.minY))
-    }
-
-    // Remplit `size` en gardant les proportions : centrée, rognée sur les bords qui dépassent.
-    static func fill(_ image: CIImage, size: CGSize) -> CIImage {
-        let extent = image.extent
-        guard extent.width > 0, extent.height > 0 else { return image }
-        let scale = max(size.width / extent.width, size.height / extent.height)
-        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let dx = (size.width - scaled.extent.width) / 2 - scaled.extent.minX
-        let dy = (size.height - scaled.extent.height) / 2 - scaled.extent.minY
-        return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy)).cropped(to: CGRect(origin: .zero, size: size))
     }
 
     static func filtered(_ image: CIImage, _ filter: VideoFilter) -> CIImage {

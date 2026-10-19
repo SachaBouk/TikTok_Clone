@@ -52,6 +52,8 @@ export interface CreateUploadInput {
   description?: string;
   // Publique par défaut (ADR-061).
   visibility?: VideoVisibility;
+  // Autorisés par défaut (ADR-062).
+  commentsEnabled?: boolean;
 }
 
 export interface VideoUpload {
@@ -98,6 +100,7 @@ export class VideosService {
         uploadId,
         rawSize: input.fileSize,
         visibility: input.visibility ?? 'public',
+        commentsEnabled: input.commentsEnabled ?? true,
       });
     } catch (error) {
       await this.storage.abortMultipartUpload(rawKey, uploadId);
@@ -270,6 +273,16 @@ export class VideosService {
     if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
     if (video.visibility === visibility) return video;
     const updated = await this.videos.setVisibility(videoId, visibility, extractHashtags(video.description));
+    if (!updated) throw new VideoNotFoundError(videoId);
+    return updated;
+  }
+
+  // Commentaires autorisés ou coupés (ADR-062), par son auteur seulement (404 sinon), quel que soit son statut.
+  async setCommentsEnabled(userId: string, videoId: string, enabled: boolean): Promise<Video> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
+    if (video.commentsEnabled === enabled) return video;
+    const updated = await this.videos.setCommentsEnabled(videoId, enabled);
     if (!updated) throw new VideoNotFoundError(videoId);
     return updated;
   }

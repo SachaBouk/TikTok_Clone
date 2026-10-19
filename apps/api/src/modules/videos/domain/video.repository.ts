@@ -25,6 +25,8 @@ export abstract class VideoRepository {
   // Change la visibilité (ADR-061). Une vidéo privée n'est rangée sous aucun hashtag : ses lignes `video_hashtags` sont
   // retirées ; redevenue publique (et publiée), ses `hashtags` sont réécrits. Null si la vidéo n'existe plus.
   abstract setVisibility(id: string, visibility: VideoVisibility, hashtags: string[]): Promise<Video | null>;
+  // Commentaires autorisés ou coupés (ADR-062). Null si la vidéo n'existe plus.
+  abstract setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null>;
   // Vidéos restées en `uploading` depuis avant `createdBefore` (uploads abandonnés).
   abstract findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]>;
   // Vidéos en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu).

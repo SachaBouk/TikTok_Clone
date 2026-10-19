@@ -17,6 +17,8 @@ export interface Video {
   rawSize: number;
   status: VideoStatus;
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
+  commentsEnabled: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   createdAt: Date;
@@ -28,6 +30,8 @@ export interface PublishedVideo {
   userId: string;
   description: string | null;
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
+  commentsEnabled: boolean;
   hlsUrl: string;
   thumbnailUrl: string;
   viewsCount: number;
@@ -46,6 +50,8 @@ export interface VideoDetails {
   description: string | null;
   status: VideoStatus;
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
+  commentsEnabled: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -84,4 +90,6 @@ export interface NewVideo {
   rawSize: number;
   // Publique par défaut (ADR-061).
   visibility?: VideoVisibility;
+  // Autorisés par défaut (ADR-062).
+  commentsEnabled?: boolean;
 }

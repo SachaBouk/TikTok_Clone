@@ -23,3 +23,8 @@ export function VideoStatusBadge({ status }: { status: VideoStatus }) {
 export function VideoVisibilityBadge({ visibility }: { visibility: VideoVisibility }) {
   return visibility === 'private' ? <Badge variant="outline">Privée</Badge> : null;
 }
+
+// Commentaires coupés par l'auteur (ADR-062) : gardés, mais cachés dans l'app.
+export function CommentsDisabledBadge({ commentsEnabled }: { commentsEnabled: boolean }) {
+  return commentsEnabled ? null : <Badge variant="outline">Commentaires désactivés</Badge>;
+}

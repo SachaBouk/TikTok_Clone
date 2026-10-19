@@ -21,6 +21,8 @@ export interface FeedItemDto {
   thumbnailUrl: string;
   // Privée (ADR-061) : seul son auteur la reçoit.
   visibility: VideoVisibility;
+  // Commentaires autorisés (ADR-062) : coupés, la liste est vide pour tous sauf l'auteur.
+  commentsEnabled: boolean;
   createdAt: string;
   viewsCount: number;
   likesCount: number;

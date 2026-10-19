@@ -4,7 +4,7 @@ import Testing
 
 @testable import TikTokClone
 
-@Suite("Enregistrement et plan d'édition (ADR-052)")
+@Suite("Enregistrement et plan d'édition par clips (ADR-052, ADR-062)")
 struct EditingRulesTests {
     private func clip(_ name: String, _ seconds: Double) -> SourceClip {
         SourceClip(file: URL(filePath: "/tmp/\(name).mov"), duration: .milliseconds(Int64(seconds * 1000)))
@@ -36,24 +36,51 @@ struct EditingRulesTests {
         #expect(story.maxDuration == .seconds(60))
     }
 
-    @Test("plan : intervalle de départ borné à la durée maximale, durée finale avec la vitesse")
+    @Test("durée choisie sur la caméra : jamais au-delà de celle de la publication")
+    func recordingLimit() {
+        #expect(RecordingSession(kind: .video, limit: RecordingLimit.fifteenSeconds.duration).maxDuration == .seconds(15))
+        #expect(RecordingSession(kind: .story, limit: RecordingLimit.threeMinutes.duration).maxDuration == .seconds(60))
+        #expect(RecordingLimit.allCases.map(\.title) == ["3 min", "60 s", "15 s"])
+    }
+
+    @Test("plan : vidéo trop longue raccourcie à la durée maximale, durée finale avec la vitesse de chaque clip")
     func initialTrimAndSpeed() {
         var plan = EditPlan(clips: [clip("a", 200), clip("b", 40)], kind: .video)
-        #expect(plan.sourceDuration == .seconds(240))
-        #expect(plan.trimStart == .zero)
-        #expect(plan.trimEnd == .seconds(180))
+        #expect(plan.clips.map(\.keptDuration) == [.seconds(180), .seconds(40)])
         #expect(plan.isTrimmed)
-        #expect(plan.problem == nil)
-        plan.speed = .half
-        #expect(plan.outputDuration == .seconds(360))
+        #expect(plan.outputDuration == .seconds(220))
         #expect(plan.problem == "Une vidéo dure 3 minutes au plus. Raccourcis-la.")
-        plan.speed = .double
-        #expect(plan.outputDuration == .seconds(90))
+        let first = plan.clips[0].id
+        plan.setSpeed(2, of: first)
+        #expect(plan.outputDuration == .seconds(130))
         #expect(plan.problem == nil)
+        plan.setSpeed(20, of: first)
+        #expect(plan.clips[0].speed == 10)
+        plan.setSpeedForAll(0.01)
+        #expect(plan.clips.map(\.speed) == [0.1, 0.1])
+        #expect(plan.commonSpeed == 0.1)
+        plan.setSpeed(1, of: first)
+        #expect(plan.commonSpeed == nil)
 
         let story = EditPlan(clips: [clip("s", 61.5)], kind: .story)
-        #expect(story.trimEnd == .seconds(60))
+        #expect(story.clips[0].end == .seconds(60))
         #expect(!EditPlan(clips: [clip("s", 30)], kind: .story).isTrimmed)
+    }
+
+    @Test("curseur de vitesse : repères 0,1x, 1x, 2x, 5x, 10x à intervalles égaux, valeur au dixième")
+    func speedScale() {
+        #expect(SpeedScale.speed(at: 0) == 0.1)
+        #expect(SpeedScale.speed(at: 0.25) == 1)
+        #expect(SpeedScale.speed(at: 0.5) == 2)
+        #expect(SpeedScale.speed(at: 0.75) == 5)
+        #expect(SpeedScale.speed(at: 1) == 10)
+        #expect(SpeedScale.speed(at: 0.3) == 1.2)
+        #expect(SpeedScale.speed(at: 2) == 10)
+        #expect(abs(SpeedScale.fraction(of: 1.2) - 0.3) < 0.0001)
+        #expect(SpeedScale.fraction(of: 0.1) == 0)
+        #expect(SpeedScale.fraction(of: 50) == 1)
+        #expect(SpeedScale.label(1.2) == "1,2x")
+        #expect(SpeedScale.label(10) == "10x")
     }
 
     @Test("à une seconde près, comme le worker (ADR-040)")
@@ -64,40 +91,155 @@ struct EditingRulesTests {
         #expect(PublicationKind.story.isTooLong(.milliseconds(61_001)))
     }
 
-    @Test("découpage : bornes dans la vidéo, au moins 1 s gardée")
+    @Test("découpage d'un clip : bornes dans son fichier, au moins 0,1 s gardée")
     func trimBounds() {
         var plan = EditPlan(clips: [clip("a", 10)], kind: .video)
-        plan.setTrimStart(.seconds(9.5))
-        #expect(plan.trimStart == .seconds(9))
-        plan.setTrimEnd(.seconds(2))
-        #expect(plan.trimEnd == .seconds(10))
-        plan.setTrimStart(.seconds(-3))
-        #expect(plan.trimStart == .zero)
-        plan.setTrimEnd(.seconds(4))
-        #expect(plan.trimEnd == .seconds(4))
-        plan.setTrimEnd(.seconds(50))
-        #expect(plan.trimEnd == .seconds(10))
+        let id = plan.clips[0].id
+        plan.setStart(.seconds(9.95), of: id)
+        #expect(plan.clips[0].start == .milliseconds(9_900))
+        plan.setEnd(.seconds(2), of: id)
+        #expect(plan.clips[0].end == .seconds(10))
+        plan.setStart(.seconds(-3), of: id)
+        #expect(plan.clips[0].start == .zero)
+        plan.setEnd(.seconds(4), of: id)
+        #expect(plan.clips[0].end == .seconds(4))
+        plan.setEnd(.seconds(50), of: id)
+        #expect(plan.clips[0].end == .seconds(10))
 
         let short = EditPlan(clips: [clip("court", 0.5)], kind: .video)
         #expect(short.problem == "La vidéo doit durer au moins 1 seconde.")
         #expect(EditPlan(clips: [], kind: .video).problem == "Aucune vidéo.")
     }
 
-    @Test("réencodage seulement s'il le faut : assemblage, filtre, texte ou vitesse")
+    @Test("réencodage seulement s'il le faut : un seul clip seulement découpé est recopié")
     func reencoding() {
         var plan = EditPlan(clips: [clip("a", 10)], kind: .video)
+        let id = plan.clips[0].id
         #expect(!plan.needsReencoding)
-        plan.setTrimStart(.seconds(2))
+        plan.setStart(.seconds(2), of: id)
         #expect(!plan.needsReencoding)
         plan.filter = .mono
         #expect(plan.needsReencoding)
         plan.filter = .none
-        plan.speed = .faster
+        plan.setSpeed(1.5, of: id)
         #expect(plan.needsReencoding)
-        plan.speed = .normal
+        plan.setSpeed(1, of: id)
+        plan.setVolume(0.5, of: id)
+        #expect(plan.needsReencoding)
+        plan.setVolume(1, of: id)
+        plan.rotate(id)
+        #expect(plan.needsReencoding)
+        for _ in 0..<3 { plan.rotate(id) }
+        plan.setCrop(CropRect(x: 0, y: 0, width: 0.5, height: 1), ratio: .free, of: id)
+        #expect(plan.needsReencoding)
+        plan.setCrop(.full, ratio: .free, of: id)
+        #expect(!plan.needsReencoding)
         plan.addText("Salut")
         #expect(plan.needsReencoding)
         #expect(EditPlan(clips: [clip("a", 1), clip("b", 1)], kind: .video).needsReencoding)
+    }
+
+    @Test("diviser à la tête de lecture, supprimer (jamais le dernier), ajouter au bout")
+    func splitDeleteAppend() {
+        var plan = EditPlan(clips: [clip("a", 4), clip("b", 6)], kind: .video)
+        plan.setSpeed(2, of: plan.clips[1].id)
+        // 4 s de « a », puis « b » à 2× (3 s) : l'instant 5,5 s tombe à 3 s dans « b ».
+        let split = plan.split(at: .milliseconds(5_500))
+        #expect(split)
+        #expect(plan.clips.count == 3)
+        #expect(plan.clips[1].start == .zero && plan.clips[1].end == .seconds(3))
+        #expect(plan.clips[2].start == .seconds(3) && plan.clips[2].end == .seconds(6) && plan.clips[2].speed == 2)
+        #expect(plan.clips[1].id != plan.clips[2].id)
+        #expect(plan.outputDuration == .seconds(7))
+        // Trop près d'un bord : refusé.
+        let atEdge = plan.split(at: .milliseconds(4_010))
+        #expect(!atEdge)
+        #expect(plan.sources == [clip("a", 4), clip("b", 6)])
+
+        let removed = plan.removeClip(plan.clips[0].id)
+        #expect(removed)
+        var single = EditPlan(clips: [clip("a", 4)], kind: .video)
+        let removedLast = single.removeClip(single.clips[0].id)
+        #expect(!removedLast)
+        single.append([clip("c", 2)])
+        #expect(single.clips.map(\.source) == [clip("a", 4), clip("c", 2)])
+    }
+
+    @Test("instant de la vidéo finale → clip et instant de son fichier")
+    func locate() throws {
+        var plan = EditPlan(clips: [clip("a", 4), clip("b", 6)], kind: .video)
+        plan.setStart(.seconds(1), of: plan.clips[1].id)
+        plan.setSpeed(0.5, of: plan.clips[1].id)
+        let start = try #require(plan.locate(.seconds(1)))
+        #expect(start.index == 0 && start.sourceTime == .seconds(1))
+        // « b » commence à 4 s et dure 10 s (5 s à 0,5×) : 6 s → 1 s + 2 s × 0,5.
+        let second = try #require(plan.locate(.seconds(6)))
+        #expect(second.index == 1 && second.sourceTime == .seconds(2))
+        let end = try #require(plan.locate(.seconds(30)))
+        #expect(end.index == 1 && end.sourceTime == .seconds(6))
+        #expect(plan.startTime(ofClipAt: 1) == .seconds(4))
+    }
+
+    @Test("volume, rotation (cadre remis à l'image entière), recadrage borné, son coupé")
+    func clipSettings() {
+        var plan = EditPlan(clips: [clip("a", 4), clip("b", 6)], kind: .video)
+        let id = plan.clips[0].id
+        plan.setVolume(1.5, of: id)
+        #expect(plan.clips[0].volume == 1)
+        plan.setVolumeForAll(0.3)
+        #expect(plan.clips.map(\.volume) == [0.3, 0.3])
+        plan.setCrop(CropRect(x: 0.9, y: -1, width: 0.5, height: 0.01), ratio: .square, of: id)
+        #expect(plan.clips[0].crop == CropRect(x: 0.5, y: 0, width: 0.5, height: CropRules.minSize))
+        #expect(plan.clips[0].cropRatio == .square)
+        plan.rotate(id)
+        #expect(plan.clips[0].quarterTurns == 1 && plan.clips[0].crop.isFull && plan.clips[0].cropRatio == .free)
+        for _ in 0..<3 { plan.rotate(id) }
+        #expect(plan.clips[0].quarterTurns == 0)
+        plan.isMuted = true
+        #expect(plan.needsReencoding)
+    }
+
+    @Test("cadre : proportions de départ, déplacé et redimensionné sans sortir de l'image")
+    func cropRules() {
+        // Image 16:9, cadre 9:16 : toute la hauteur, largeur relative (9/16)/(16/9).
+        let portrait = CropRules.initial(ratio: .portrait, frameAspect: 16.0 / 9.0)
+        #expect(abs(portrait.width - 0.31640625) < 0.0001 && portrait.height == 1)
+        #expect(abs(portrait.x - (1 - portrait.width) / 2) < 0.0001)
+        let landscape = CropRules.initial(ratio: .landscape, frameAspect: 9.0 / 16.0)
+        #expect(landscape.width == 1 && abs(landscape.height - 0.31640625) < 0.0001)
+        #expect(CropRules.initial(ratio: .free, frameAspect: 1) == .full)
+
+        let moved = CropRules.moved(CropRect(x: 0.2, y: 0.2, width: 0.5, height: 0.5), dx: 1, dy: -1)
+        #expect(moved == CropRect(x: 0.5, y: 0, width: 0.5, height: 0.5))
+
+        let free = CropRules.resized(.full, corner: .bottomTrailing, dx: -0.5, dy: -0.95, ratio: .free, frameAspect: 1)
+        #expect(free == CropRect(x: 0, y: 0, width: 0.5, height: CropRules.minSize))
+        // Carré dans une image carrée : la hauteur suit la largeur, coin opposé fixe.
+        let square = CropRules.resized(
+            CropRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5), corner: .topLeading, dx: 0.2, dy: 0, ratio: .square, frameAspect: 1)
+        #expect(abs(square.width - 0.3) < 0.0001 && abs(square.height - 0.3) < 0.0001)
+        #expect(abs(square.x - 0.7) < 0.0001 && abs(square.y - 0.7) < 0.0001)
+    }
+
+    @Test("annuler / rétablir : états successifs, rien si rien n'a changé")
+    func history() {
+        var history = EditHistory<Int>()
+        history.record(1, current: 1)
+        #expect(!history.canUndo)
+        history.record(1, current: 2)
+        history.record(2, current: 3)
+        let undone = history.undo(3)
+        #expect(undone == 2)
+        let undoneAgain = history.undo(2)
+        #expect(undoneAgain == 1)
+        let nothing = history.undo(1)
+        #expect(nothing == nil)
+        let redone = history.redo(1)
+        #expect(redone == 2)
+        history.record(2, current: 5)
+        #expect(!history.canRedo)
+        let last = history.undo(5)
+        #expect(last == 2)
     }
 
     @Test("textes : nettoyés, 80 caractères et 5 au plus, déplacés dans l'image, vidés = retirés")
@@ -133,29 +275,19 @@ struct EditingRulesTests {
         #expect(plan.texts.count == 3)
     }
 
-    @Test("position dans les fichiers d'origine (miniatures de la frise)")
-    func clipPosition() throws {
-        let plan = EditPlan(clips: [clip("a", 4), clip("b", 6)], kind: .video)
-        let start = try #require(plan.clipPosition(at: .seconds(1)))
-        #expect(start.clip == clip("a", 4) && start.time == .seconds(1))
-        let second = try #require(plan.clipPosition(at: .seconds(7)))
-        #expect(second.clip == clip("b", 6) && second.time == .seconds(3))
-        let end = try #require(plan.clipPosition(at: .seconds(12)))
-        #expect(end.clip == clip("b", 6) && end.time == .seconds(6))
-    }
-
     @Test("mesure d'audience : source et modifications, jamais le texte")
     func details() {
         var plan = EditPlan(clips: [clip("a", 10), clip("b", 5)], kind: .video)
-        plan.setTrimEnd(.seconds(12))
+        plan.setEnd(.seconds(2), of: plan.clips[1].id)
         plan.filter = .warm
-        plan.speed = .faster
+        plan.setSpeedForAll(1.5)
+        plan.setCrop(CropRect(x: 0, y: 0, width: 0.5, height: 0.5), ratio: .free, of: plan.clips[0].id)
         plan.addText("Secret")
         let properties = PublicationDetails(source: .camera, plan: plan).properties(photo: false)
         #expect(
             properties == [
                 "source": .string("camera"), "segments": .int(2), "trimmed": .bool(true), "filter": .string("warm"), "text_count": .int(1),
-                "speed": .double(1.5),
+                "speed": .double(1.5), "cropped": .bool(true), "rotated": .bool(false),
             ])
         #expect(PublicationDetails().properties(photo: true) == ["source": .string("gallery")])
         let story = AnalyticsEvent.storyUploadStarted(photo: true, details: PublicationDetails(source: .camera))

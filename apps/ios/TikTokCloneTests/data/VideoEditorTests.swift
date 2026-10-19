@@ -30,8 +30,8 @@ struct VideoEditorTests {
         #expect(try await TestVideos.locations(in: source) == [TestVideos.location])
 
         var plan = EditPlan(clips: [try await clip(source)], kind: .video)
-        plan.setTrimStart(.milliseconds(500))
-        plan.setTrimEnd(.milliseconds(1500))
+        plan.setStart(.milliseconds(500), of: plan.clips[0].id)
+        plan.setEnd(.milliseconds(1500), of: plan.clips[0].id)
         #expect(!plan.needsReencoding)
         let output = try await editor.export(plan)
         defer { try? FileManager.default.removeItem(at: output) }
@@ -62,7 +62,8 @@ struct VideoEditorTests {
         defer { try? FileManager.default.removeItem(at: output) }
 
         #expect(abs(try await TestVideos.duration(of: output) - 2) < 0.15)
-        #expect(try await TestVideos.displaySize(of: output) == CGSize(width: 96, height: 160))
+        // Image 9:16 (ADR-062) : 96 × 160 ajustée dans 96 × 170, bandes noires en haut et en bas.
+        #expect(try await TestVideos.displaySize(of: output) == CGSize(width: 96, height: 170))
         #expect(try await TestVideos.hasAudio(output))
         #expect(try await TestVideos.locations(in: output).isEmpty)
         // Premier segment (tourné) : repère en haut à droite ; second (droit) : en haut à gauche.
@@ -79,15 +80,15 @@ struct VideoEditorTests {
         try await TestVideos.write(to: source, seconds: 3, audio: true)
 
         var plan = EditPlan(clips: [try await clip(source)], kind: .video)
-        plan.setTrimStart(.seconds(1))
-        plan.speed = .double
+        plan.setStart(.seconds(1), of: plan.clips[0].id)
+        plan.setSpeed(2, of: plan.clips[0].id)
         #expect(plan.outputDuration == .seconds(1))
         let output = try await editor.export(plan)
         defer { try? FileManager.default.removeItem(at: output) }
         #expect(abs(try await TestVideos.duration(of: output) - 1) < 0.15)
         #expect(try await TestVideos.hasAudio(output))
 
-        plan.speed = .half
+        plan.setSpeed(0.5, of: plan.clips[0].id)
         let slow = try await editor.export(plan)
         defer { try? FileManager.default.removeItem(at: slow) }
         #expect(abs(try await TestVideos.duration(of: slow) - 4) < 0.15)
@@ -103,7 +104,7 @@ struct VideoEditorTests {
         func background(_ filter: VideoFilter) async throws -> TestVideos.Color {
             var plan = EditPlan(clips: [try await clip(source)], kind: .video)
             plan.filter = filter
-            plan.speed = filter == .none ? .faster : .normal  // réencodé dans tous les cas
+            if filter == .none { plan.setSpeed(1.5, of: plan.clips[0].id) }  // réencodé dans tous les cas
             let output = try await editor.export(plan)
             defer { try? FileManager.default.removeItem(at: output) }
             return try await TestVideos.color(in: output, at: 0.3, x: 0.75, y: 0.75)
@@ -162,12 +163,44 @@ struct VideoEditorTests {
         #expect(try markerCorner(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: 0, ty: 0)) == (size, "haut-droite"))
     }
 
-    @Test("taille de rendu : petit côté de 1080 px au plus, jamais agrandie, dimensions paires")
+    @Test("taille de rendu : 9:16, petit côté de 1080 px au plus, jamais agrandie, dimensions paires")
     func renderSize() {
-        #expect(EditComposition.renderSize(for: CGSize(width: 2160, height: 3840)) == CGSize(width: 1080, height: 1920))
-        #expect(EditComposition.renderSize(for: CGSize(width: 1080, height: 1920)) == CGSize(width: 1080, height: 1920))
-        #expect(EditComposition.renderSize(for: CGSize(width: 361, height: 641)) == CGSize(width: 362, height: 642))
-        #expect(EditComposition.renderSize(for: CGSize(width: 1920, height: 1440)) == CGSize(width: 1440, height: 1080))
+        #expect(EditComposition.renderSize(shortSide: 2160) == CGSize(width: 1080, height: 1920))
+        #expect(EditComposition.renderSize(shortSide: 1080) == CGSize(width: 1080, height: 1920))
+        #expect(EditComposition.renderSize(shortSide: 361) == CGSize(width: 362, height: 642))
+        #expect(EditComposition.renderSize(shortSide: 720) == CGSize(width: 720, height: 1280))
+    }
+
+    @Test("image finale : quart de tour du clip, cadre, image ajustée dans le 9:16 avec bandes noires")
+    func clipRendering() throws {
+        let context = CIContext()
+        // Image couchée 160 × 90, moitié gauche rouge, moitié droite bleue.
+        let size = CGSize(width: 160, height: 90)
+        let left = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 80, height: 90))
+        let right = CIImage(color: CIColor(red: 0, green: 0, blue: 1)).cropped(to: CGRect(x: 80, y: 0, width: 80, height: 90))
+        let image = left.composited(over: right)
+        #expect(image.extent.size == size)
+        let canvas = CGSize(width: 90, height: 160)
+
+        func color(_ output: CIImage, x: Double, y: Double) throws -> TestVideos.Color {
+            let rendered = try #require(context.createCGImage(output, from: CGRect(origin: .zero, size: canvas)))
+            return try TestVideos.pixel(of: rendered, x: Int(x * canvas.width), y: Int(y * canvas.height))
+        }
+
+        // Ajustée : bandes noires en haut et en bas, image au milieu.
+        let fitted = EditRendering.render(image, transform: .identity, renderSize: canvas, filter: .none, overlay: nil)
+        #expect(try color(fitted, x: 0.5, y: 0.05).blue < 20 && color(fitted, x: 0.5, y: 0.05).red < 20)
+        #expect(try color(fitted, x: 0.25, y: 0.5).red > 200)
+        // Recadrée en 9:16 sur sa partie gauche : elle remplit l'image, toute rouge.
+        let cropped = EditRendering.render(
+            image, transform: .identity, crop: CropRect(x: 0, y: 0, width: 0.31640625, height: 1), renderSize: canvas, filter: .none,
+            overlay: nil)
+        #expect(try color(cropped, x: 0.5, y: 0.5).red > 200)
+        #expect(try color(cropped, x: 0.5, y: 0.1).red > 200)
+        // Quart de tour : la moitié gauche (rouge) passe en haut, et l'image debout remplit le 9:16.
+        let turned = EditRendering.render(image, transform: .identity, quarterTurns: 1, renderSize: canvas, filter: .none, overlay: nil)
+        #expect(try color(turned, x: 0.5, y: 0.25).red > 200)
+        #expect(try color(turned, x: 0.5, y: 0.75).blue > 200)
     }
 
     @Test("aperçu : composition valide, lue par AVPlayer (simplifiée si le lecteur la refuse, comme le simulateur)")
@@ -181,7 +214,7 @@ struct VideoEditorTests {
         try await TestVideos.write(to: second, width: 96, height: 160, seconds: 1, audio: true)
         var plan = EditPlan(clips: [try await clip(first), try await clip(second)], kind: .video)
         plan.filter = .mono
-        plan.speed = .faster
+        plan.setSpeedForAll(1.5)
 
         let built = try await EditComposition.make(plan, includeTexts: false)
         let composition = built.composition
@@ -209,7 +242,7 @@ struct VideoEditorTests {
         }
         #expect(preview.player.currentItem?.status == .readyToPlay, "\(String(describing: preview.player.currentItem?.error))")
         if preview.isSimplified { #expect(preview.player.currentItem?.videoComposition == nil) }
-        #expect(abs(preview.aspectRatio - 96.0 / 160.0) < 0.001)
+        #expect(abs(preview.aspectRatio - 96.0 / 170.0) < 0.001)
         preview.stop()
     }
 

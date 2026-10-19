@@ -18,6 +18,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         var expiresAt = Date(timeIntervalSince1970: 1_900_000_000)
         // Visibilité demandée à la création, puis changée (ADR-061), par vidéo.
         var visibilities: [String: VideoVisibility] = [:]
+        var commentsEnabled: [String: Bool] = [:]
         var visibilityError: AppError?
     }
 
@@ -28,6 +29,14 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
     func completed(_ id: String) -> [UploadedPart]? { state.withLock { $0.completed[id] } }
 
     func visibility(of id: String) -> VideoVisibility? { state.withLock { $0.visibilities[id] } }
+    func commentsEnabled(of id: String) -> Bool? { state.withLock { $0.commentsEnabled[id] } }
+
+    func setCommentsEnabled(videoID: String, enabled: Bool) async throws {
+        try state.withLock { state in
+            if let error = state.visibilityError { throw error }
+            state.commentsEnabled[videoID] = enabled
+        }
+    }
 
     func setVisibility(videoID: String, visibility: VideoVisibility) async throws {
         try state.withLock { state in
@@ -36,12 +45,15 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         }
     }
 
-    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility) async throws -> UploadTicket {
+    func createUpload(
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+    ) async throws -> UploadTicket {
         try state.withLock { state in
             if let error = state.createError { throw error }
             let id = "vid-\(state.created.count + 1)"
             state.created.append(id)
             state.visibilities[id] = visibility
+            state.commentsEnabled[id] = commentsEnabled
             state.videos[id] = OwnVideo(id: id, description: description, status: .uploading, thumbnailURL: nil, createdAt: .now)
             let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
             let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }
@@ -217,4 +229,12 @@ final class FakeVideoMetadataCleaner: VideoMetadataCleaner {
         }
         return output
     }
+}
+
+// Audience par défaut des publications (ADR-062), en mémoire.
+final class InMemoryPublishingPreferences: PublishingPreferences {
+    private let state = Mutex(VideoVisibility.everyone)
+
+    var defaultVisibility: VideoVisibility { state.withLock { $0 } }
+    func setDefaultVisibility(_ visibility: VideoVisibility) { state.withLock { $0 = visibility } }
 }

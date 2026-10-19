@@ -95,7 +95,7 @@ struct PrivateVideosTests {
                 default:
                     return json(
                         .ok,
-                        #"{"id":"v1","userId":"u","description":null,"status":"ready","visibility":"private","hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.000Z"}"#
+                        #"{"id":"v1","userId":"u","description":null,"status":"ready","visibility":"private","commentsEnabled":true,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.000Z"}"#
                     )
                 }
             })
@@ -108,7 +108,7 @@ struct PrivateVideosTests {
 
 extension FeedVideo {
     // La même vidéo, publiée par alice (le compte connecté des tests).
-    fileprivate var byAlice: FeedVideo {
+    var byAlice: FeedVideo {
         FeedVideo(
             id: id, description: description, hlsURL: hlsURL, thumbnailURL: thumbnailURL, createdAt: createdAt, stats: stats, author: .alice,
             viewer: viewer)

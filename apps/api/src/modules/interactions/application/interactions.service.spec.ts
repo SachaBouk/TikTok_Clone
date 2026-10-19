@@ -26,6 +26,7 @@ import {
   TargetUserNotFoundError,
   TooManyActionsError,
   VideoNotAvailableError,
+  CommentsDisabledError,
 } from '../domain/interaction.errors';
 import { InMemoryInteractionRepository } from '../infrastructure/in-memory-interaction.repository';
 import { InteractionsService } from './interactions.service';
@@ -420,6 +421,28 @@ describe('InteractionsService', () => {
       });
       // Historique des commentaires d'alice : le commentaire sur une vidéo devenue privée n'y est plus.
       expect((await service.listCommentHistory('alice', null, 10)).items).toEqual([]);
+    });
+  });
+
+  describe('commentaires désactivés (ADR-062)', () => {
+    it('personne ne commente, ne répond ni n’aime ; liste cachée sauf à l’auteur ; tout revient', async () => {
+      const { comment } = await service.addComment('alice', video, 'Avant');
+      Object.assign(videoRepository.videos.get(video)!, { commentsEnabled: false });
+      await expect(service.addComment('carol', video, 'x')).rejects.toBeInstanceOf(CommentsDisabledError);
+      await expect(service.addComment('bob', video, 'x')).rejects.toBeInstanceOf(CommentsDisabledError);
+      await expect(service.addComment('carol', video, 'x', comment.id)).rejects.toBeInstanceOf(CommentsDisabledError);
+      await expect(service.setCommentLike('carol', comment.id, true)).rejects.toBeInstanceOf(CommentsDisabledError);
+      await expect(service.listComments(video, null, 10, 'carol')).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(service.listComments(video, null, 10, null)).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(service.listReplies(comment.id, null, 10, 'carol')).rejects.toBeInstanceOf(CommentNotFoundError);
+      expect((await service.listComments(video, null, 10, 'bob')).items.map((i) => i.comment.id)).toEqual([comment.id]);
+      // Retirer un j'aime et supprimer restent possibles.
+      await expect(service.setCommentLike('carol', comment.id, false)).resolves.toMatchObject({ active: false });
+      // L'historique de son auteur le garde.
+      expect((await service.listCommentHistory('alice', null, 10)).items).toHaveLength(1);
+
+      Object.assign(videoRepository.videos.get(video)!, { commentsEnabled: true });
+      expect((await service.listComments(video, null, 10, 'carol')).items.map((i) => i.comment.id)).toEqual([comment.id]);
     });
   });
 

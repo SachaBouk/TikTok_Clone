@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
@@ -45,12 +46,23 @@ export class CreateUploadRequest {
   @IsOptional()
   @IsIn(VIDEO_VISIBILITIES)
   visibility?: VideoVisibility;
+
+  @ApiPropertyOptional({ description: 'Commentaires autorisés (ADR-062), vrai par défaut.' })
+  @IsOptional()
+  @IsBoolean()
+  commentsEnabled?: boolean;
 }
 
 export class SetVideoVisibilityRequest {
   @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
   @IsIn(VIDEO_VISIBILITIES)
   visibility!: VideoVisibility;
+}
+
+export class SetCommentSettingsRequest {
+  @ApiProperty({ description: 'Commentaires autorisés (ADR-062).' })
+  @IsBoolean()
+  commentsEnabled!: boolean;
 }
 
 export class UploadedPartRequest {

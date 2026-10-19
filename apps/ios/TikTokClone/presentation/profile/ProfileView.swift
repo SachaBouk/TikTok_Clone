@@ -10,7 +10,7 @@ struct ProfileView: View {
     @State private var reportTarget: ReportTarget?
     // « Bloquer » choisi après un signalement : la confirmation s'ouvre une fois la feuille fermée.
     @State private var blockAfterReport = false
-    @State private var failedPublication: PublishingModel.Publication?
+    @Environment(\.navigationPath) private var navigationPath
     @State private var alertMessage: String?
     // « Message » : ouvert par un bouton, le profil pouvant lui-même être poussé par `navigationDestination(item:)`.
     @State private var openedConversation: ConversationRoute?
@@ -71,19 +71,6 @@ struct ProfileView: View {
                 if !viewModel.isBlocked {
                     Text("Vous ne pourrez plus vous suivre, réagir à vos vidéos ni vous écrire. Vos abonnements mutuels seront retirés.")
                 }
-            }
-            .confirmationDialog(
-                "Publication en échec",
-                isPresented: Binding(
-                    get: { failedPublication != nil },
-                    set: { if !$0 { failedPublication = nil } }
-                ), titleVisibility: .visible, presenting: failedPublication
-            ) { publication in
-                Button("Supprimer la vidéo", role: .destructive) {
-                    Task { alertMessage = await publishing.delete(publication.id) }
-                }
-            } message: { _ in
-                Text("Le traitement de cette vidéo a échoué. Tu peux la supprimer et la publier à nouveau.")
             }
             .alert(
                 "Profil",
@@ -261,8 +248,9 @@ struct ProfileView: View {
                     viewModel.videoList(for: viewModel.selectedGrid).map { VideoPlayerRoute(list: $0, page: page, startIndex: index) }
                 },
                 emptyTitle: emptyTitle,
-                onPendingTap: { publication in
-                    if publication.phase == .failed { failedPublication = publication }
+                onPendingTap: { _ in
+                    // Liste des publications : réessayer, annuler, supprimer (ADR-062).
+                    navigationPath?.wrappedValue.append(AccountRoute.publications)
                 }
             )
         }

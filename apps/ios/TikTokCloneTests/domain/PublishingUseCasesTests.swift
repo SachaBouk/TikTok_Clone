@@ -116,7 +116,8 @@ struct PublishingUseCasesTests {
     func restartsWhenTicketExpired() async throws {
         videos.state.withLock { $0.expiresAt = Date(timeIntervalSince1970: 1_800_000_030) }
         var pending = try stored()
-        pending.ticket = try await videos.createUpload(contentType: .quickTime, fileSize: 10, description: nil, visibility: .everyone)
+        pending.ticket = try await videos.createUpload(
+            contentType: .quickTime, fileSize: 10, description: nil, visibility: .everyone, commentsEnabled: true)
         pending.sentParts = [1: "\"a\""]
         let video = try await upload(pending) { _ in }
         #expect(video.id == "vid-2")
@@ -154,7 +155,8 @@ struct PublishingUseCasesTests {
     @Test("abandon : vidéo supprimée côté API, envoi et fichier oubliés")
     func cancel() async throws {
         var pending = try stored()
-        pending.ticket = try await videos.createUpload(contentType: .quickTime, fileSize: 10, description: nil, visibility: .everyone)
+        pending.ticket = try await videos.createUpload(
+            contentType: .quickTime, fileSize: 10, description: nil, visibility: .everyone, commentsEnabled: true)
         await CancelUploadUseCase(videos: videos, stories: stories, store: store)(pending)
         #expect(videos.deleted == ["vid-1"])
         #expect(store.uploads.isEmpty)

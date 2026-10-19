@@ -361,6 +361,19 @@ describe('VideosService', () => {
     });
   });
 
+  describe('commentaires désactivables (ADR-062)', () => {
+    it('autorisés par défaut, choisis à l’envoi, changés par l’auteur seulement', async () => {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      expect((await service.getVideo(video.id, ALICE)).commentsEnabled).toBe(true);
+      const { video: closed } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, commentsEnabled: false });
+      expect((await service.getVideo(closed.id, ALICE)).commentsEnabled).toBe(false);
+
+      await expect(service.setCommentsEnabled(BOB, video.id, false)).rejects.toBeInstanceOf(VideoNotFoundError);
+      await expect(service.setCommentsEnabled(ALICE, video.id, false)).resolves.toMatchObject({ commentsEnabled: false });
+      await expect(service.setCommentsEnabled(ALICE, video.id, true)).resolves.toMatchObject({ commentsEnabled: true });
+    });
+  });
+
   describe('maintenance', () => {
     let now: Date;
 

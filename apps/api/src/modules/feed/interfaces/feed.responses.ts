@@ -38,6 +38,9 @@ export class FeedItemResponse implements FeedItemDto {
   @ApiProperty({ enum: VIDEO_VISIBILITIES, enumName: 'VideoVisibility' })
   visibility!: VideoVisibility;
 
+  @ApiProperty({ description: 'Commentaires autorisés (ADR-062).' })
+  commentsEnabled!: boolean;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -106,6 +109,7 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     visibility: video.visibility,
+    commentsEnabled: video.commentsEnabled,
     createdAt: video.createdAt.toISOString(),
     viewsCount: video.viewsCount,
     likesCount: video.likesCount,

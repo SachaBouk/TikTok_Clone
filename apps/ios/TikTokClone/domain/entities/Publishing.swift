@@ -100,6 +100,8 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var kind: PublicationKind = .video
     // Choisie à la publication (ADR-061) ; une story est toujours publique.
     var visibility: VideoVisibility = .everyone
+    // « Autoriser les commentaires » (ADR-062) ; une story n'en a pas.
+    var commentsEnabled = true
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -116,11 +118,11 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
-        case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility
+        case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
-    // `visibility` : elle est publique.
+    // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -134,7 +136,8 @@ extension PendingUpload {
             ticket: try container.decodeIfPresent(UploadTicket.self, forKey: .ticket),
             sentParts: try container.decodeIfPresent([Int: String].self, forKey: .sentParts) ?? [:],
             kind: try container.decodeIfPresent(PublicationKind.self, forKey: .kind) ?? .video,
-            visibility: try container.decodeIfPresent(VideoVisibility.self, forKey: .visibility) ?? .everyone
+            visibility: try container.decodeIfPresent(VideoVisibility.self, forKey: .visibility) ?? .everyone,
+            commentsEnabled: try container.decodeIfPresent(Bool.self, forKey: .commentsEnabled) ?? true
         )
     }
 }
@@ -174,4 +177,10 @@ enum UploadRules {
     static func isAbandoned(_ upload: PendingUpload, at now: Date) -> Bool {
         now.timeIntervalSince(upload.createdAt) >= abandonedAfter
     }
+}
+
+// Audience par défaut des publications (« Définir comme audience par défaut », ADR-062) : gardée sur l'iPhone.
+protocol PublishingPreferences: Sendable {
+    var defaultVisibility: VideoVisibility { get }
+    func setDefaultVisibility(_ visibility: VideoVisibility)
 }

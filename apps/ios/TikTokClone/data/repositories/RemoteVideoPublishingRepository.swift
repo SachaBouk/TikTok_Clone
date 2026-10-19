@@ -5,13 +5,16 @@ import TikTokAPI
 struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     let client: Client
 
-    func createUpload(contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility) async throws -> UploadTicket {
+    func createUpload(
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+    ) async throws -> UploadTicket {
         // Une photo n'est publiée qu'en story (ADR-051).
         guard let type = Components.Schemas.CreateUploadRequest.ContentTypePayload(contentType) else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
         }
         let body = Components.Schemas.CreateUploadRequest(
-            contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility))
+            contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility),
+            commentsEnabled: commentsEnabled)
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
         case .tooManyRequests(let error): throw AppError.tooManyActions(.uploads, retryAfter: max(1, error.headers.retryAfter ?? 60))
@@ -36,6 +39,16 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     func setVisibility(videoID: String, visibility: VideoVisibility) async throws {
         let body = Components.Schemas.SetVideoVisibilityRequest(visibility: .init(visibility))
         switch try await mappingErrors({ try await client.setVideoVisibility(path: .init(id: videoID), body: .json(body)) }) {
+        case .ok: return
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func setCommentsEnabled(videoID: String, enabled: Bool) async throws {
+        let body = Components.Schemas.SetCommentSettingsRequest(commentsEnabled: enabled)
+        switch try await mappingErrors({ try await client.setVideoCommentSettings(path: .init(id: videoID), body: .json(body)) }) {
         case .ok: return
         case .unauthorized: throw AppError.sessionExpired
         case .notFound: throw AppError.notFound

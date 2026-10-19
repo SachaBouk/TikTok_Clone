@@ -97,7 +97,8 @@ extension FeedVideo {
             },
             authorStory: dto.authorStory.map { StoryRing(hasUnseen: $0.hasUnseen) },
             viewedAt: dto.viewedAt,
-            visibility: VideoVisibility(dto.visibility)
+            visibility: VideoVisibility(dto.visibility),
+            commentsEnabled: dto.commentsEnabled
         )
     }
 }

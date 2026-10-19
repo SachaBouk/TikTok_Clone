@@ -86,6 +86,9 @@ struct CommentsView: View {
         } else if viewModel.comments.isEmpty {
             if viewModel.isLoading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !commentsEnabled {
+                ContentUnavailableView(
+                    "Commentaires désactivés", systemImage: "text.bubble", description: Text("Les commentaires sont désactivés pour cette vidéo."))
             } else {
                 ContentUnavailableView(
                     "Aucun commentaire", systemImage: "bubble.left.and.bubble.right", description: Text("Sois le premier à commenter."))
@@ -182,12 +185,25 @@ struct CommentsView: View {
         }
     }
 
+    // Commentaires autorisés, changements faits dans l'app compris (ADR-062).
+    private var commentsEnabled: Bool {
+        container.videoInteractions.display(viewModel.video).commentsEnabled
+    }
+
     // Bas de la feuille : suggestions de mention, bandeau de réponse, barre d'emojis, champ.
     @ViewBuilder
     private var composer: some View {
         VStack(spacing: 0) {
             Divider()
-            if viewModel.isSignedIn {
+            if !commentsEnabled {
+                // Commentaires coupés par l'auteur (ADR-062) : ni commentaire, ni réponse.
+                Text("Les commentaires sont désactivés pour cette vidéo.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .accessibilityIdentifier("comments.disabled")
+            } else if viewModel.isSignedIn {
                 if !viewModel.mentionSuggestions.isEmpty { mentionSuggestions }
                 if let replyingTo = viewModel.replyingTo {
                     HStack {

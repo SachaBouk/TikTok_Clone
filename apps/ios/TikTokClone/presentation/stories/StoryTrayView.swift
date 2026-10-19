@@ -49,13 +49,13 @@ struct StoryTrayView: View {
                 if stories.ownEntry != nil {
                     container.router.openStories([me], source: .tray)
                 } else {
-                    container.router.requestedPublishMode = .story
+                    container.router.openCreation(mode: .story)
                 }
             } label: {
                 StoryBubble(user: me, ring: stories.ownEntry.map { _ in .seen }, title: stories.ownEntry == nil ? "Créer" : "Ta story")
                     .overlay(alignment: .topTrailing) {
                         Button {
-                            container.router.requestedPublishMode = .story
+                            container.router.openCreation(mode: .story)
                         } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 12, weight: .bold))
