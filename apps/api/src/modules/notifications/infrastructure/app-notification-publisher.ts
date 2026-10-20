@@ -90,6 +90,8 @@ function pushBody({ notification }: NotificationWithContext): string {
       return `a aimé ton commentaire : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
     case 'mention':
       return `t'a mentionné(e) dans un commentaire : ${notification.commentText ?? ''}`.slice(0, PUSH_BODY_MAX_LENGTH);
+    case 'videoMention':
+      return "t'a mentionné(e) dans une vidéo";
   }
 }
 

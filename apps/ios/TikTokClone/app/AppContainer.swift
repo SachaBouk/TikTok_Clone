@@ -30,6 +30,8 @@ final class AppContainer {
     let sounds: SoundLibraryModel
     // Comptes suggérés de l'onglet Messages (ADR-058).
     let suggestions: SuggestionsModel
+    // Brouillons de la création, sur l'iPhone (ADR-065).
+    let drafts: DraftsModel
     // « Je n'aime pas » sur les commentaires, sur l'appareil (ADR-060).
     let commentDislikes = CommentDislikesModel(store: UserDefaultsPreferencesStore())
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
@@ -96,6 +98,7 @@ final class AppContainer {
         suggestions = SuggestionsModel(
             load: LoadSuggestionsUseCase(suggestions: RemoteSuggestionRepository(client: client)), store: UserDefaultsPreferencesStore(),
             session: session)
+        drafts = DraftsModel(store: FileDraftStore(), session: session)
         let analyticsService: any AnalyticsService =
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
@@ -197,6 +200,7 @@ final class AppContainer {
                 searchHistory.clear()
                 sounds.reset()
                 suggestions.reset()
+                drafts.reset()
                 commentDislikes.reset()
             }
             lastSignedIn = signedIn
@@ -354,10 +358,19 @@ final class AppContainer {
     }
 
     func makePublishDraftViewModel() -> PublishDraftViewModel {
-        PublishDraftViewModel(
+        let session = session
+        return PublishDraftViewModel(
             publishing: publishing, prepareVideo: PrepareVideoUseCase(cleaner: AVFoundationVideoMetadataCleaner()),
             preparePhoto: PrepareStoryPhotoUseCase(renderer: UIKitStoryPhotoRenderer()),
-            searchHashtags: SearchHashtagsUseCase(search: search), preferences: UserDefaultsPreferencesStore())
+            searchHashtags: SearchHashtagsUseCase(search: search), preferences: UserDefaultsPreferencesStore(),
+            mentionSuggestions: MentionSuggestionsUseCase(relationships: relationships, search: search),
+            currentUsername: { session.profile?.username }, drafts: drafts, photoSaver: PhotoKitLibrarySaver(),
+            renderCover: { await CoverRenderer.image(video: $0, choice: $1) })
+    }
+
+    // Lieux d'une publication (ADR-065) : une recherche Apple Plans par écran de publication.
+    func makePlacePicker() -> PlacePickerModel {
+        PlacePickerModel(places: MapKitPlaceSearch())
     }
 
     // Caméra (ADR-052) : son modèle et la session de capture pour l'aperçu. Une caméra par ouverture de la création.

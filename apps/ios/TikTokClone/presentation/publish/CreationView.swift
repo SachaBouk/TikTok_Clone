@@ -29,7 +29,7 @@ struct CreationView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let request = draft.editorRequest {
-                EditorFlowView(request: request, draft: draft, container: container) { onPublished(true) }
+                EditorFlowView(request: request, draft: draft, container: container, onStoryPublished: { onPublished(true) }, onDraftSaved: onClose)
                     .id(request.id)
             } else if case .ready(let video) = draft.state {
                 if video.isPhoto {
@@ -39,7 +39,11 @@ struct CreationView: View {
                         if draft.publish() { onPublished(true) }
                     }
                 } else {
-                    PostView(draft: draft, video: video) { onPublished(false) }
+                    PostView(draft: draft, video: video, container: container) {
+                        onPublished(false)
+                    } onDraftSaved: {
+                        onClose()
+                    }
                 }
             } else {
                 CameraView(
@@ -127,6 +131,8 @@ struct CreationView: View {
 struct CreationScreen: View {
     let container: AppContainer
     let mode: PublishDraftViewModel.Mode
+    // Brouillon rouvert (ADR-065).
+    var restoring: VideoDraft?
     let onPublished: (Bool) -> Void
     let onClose: () -> Void
     @State private var setup: (draft: PublishDraftViewModel, camera: CameraSetup)?
@@ -142,6 +148,7 @@ struct CreationScreen: View {
             guard setup == nil else { return }
             let draft = container.makePublishDraftViewModel()
             draft.mode = mode
+            if let restoring { draft.restore(restoring) }
             setup = (draft, container.makeCamera(kind: draft.kind))
         }
     }

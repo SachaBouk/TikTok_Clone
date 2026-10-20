@@ -25,6 +25,12 @@ export interface Video {
   thumbnailUrl: string | null;
   // Son repris d'une autre vidéo (ADR-064), nul sinon ou s'il a disparu.
   soundId: string | null;
+  // Couverture choisie dans l'app (ADR-065), dans le bucket des uploads ; jamais exposée.
+  coverKey: string | null;
+  // Étiquette « Contenu généré par l'IA » et lieu (nom, adresse affichée ; jamais de coordonnées), ADR-065.
+  aiGenerated: boolean;
+  locationName: string | null;
+  locationAddress: string | null;
   createdAt: Date;
 }
 
@@ -38,6 +44,10 @@ export interface PublishedVideo {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // Étiquette « Contenu généré par l'IA » et lieu (nom, adresse affichée ; jamais de coordonnées), ADR-065.
+  aiGenerated: boolean;
+  locationName: string | null;
+  locationAddress: string | null;
   hlsUrl: string;
   thumbnailUrl: string;
   viewsCount: number;
@@ -60,6 +70,10 @@ export interface VideoDetails {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // Étiquette « Contenu généré par l'IA » et lieu (nom, adresse affichée ; jamais de coordonnées), ADR-065.
+  aiGenerated: boolean;
+  locationName: string | null;
+  locationAddress: string | null;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -106,7 +120,16 @@ export interface NewVideo {
   soundShared?: boolean;
   // Son repris d'une autre vidéo (ADR-064).
   soundId?: string | null;
+  // ADR-065 : couverture envoyée par l'app, étiquette IA (faux par défaut), lieu.
+  coverKey?: string | null;
+  aiGenerated?: boolean;
+  locationName?: string | null;
+  locationAddress?: string | null;
 }
+
+// Lieu de la publication (ADR-065), longueurs bornées (aussi par une contrainte CHECK).
+export const MAX_LOCATION_NAME_LENGTH = 100;
+export const MAX_LOCATION_ADDRESS_LENGTH = 200;
 
 // Son d'une vidéo publiée, réutilisable par les autres (ADR-064) : « Son original - @pseudo ».
 export interface Sound {

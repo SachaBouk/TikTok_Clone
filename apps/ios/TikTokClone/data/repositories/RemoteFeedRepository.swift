@@ -98,7 +98,9 @@ extension FeedVideo {
             authorStory: dto.authorStory.map { StoryRing(hasUnseen: $0.hasUnseen) },
             viewedAt: dto.viewedAt,
             visibility: VideoVisibility(dto.visibility),
-            commentsEnabled: dto.commentsEnabled
+            commentsEnabled: dto.commentsEnabled,
+            location: dto.location.map { VideoLocation(name: $0.name, address: $0.address) },
+            aiGenerated: dto.aiGenerated
         )
     }
 }

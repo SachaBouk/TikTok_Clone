@@ -31,6 +31,6 @@ function toHttpException(error: VideoError): HttpException {
   }
   if (error instanceof VideoNotFoundError || error instanceof SoundNotFoundError) return new NotFoundException(error.message);
   if (error instanceof VideoNotAwaitingUploadError) return new ConflictException(error.message);
-  // UnsupportedVideoTypeError, VideoTooLargeError, UploadIncompleteError
+  // UnsupportedVideoTypeError, VideoTooLargeError, CoverTooLargeError, UploadIncompleteError
   return new BadRequestException(error.message);
 }

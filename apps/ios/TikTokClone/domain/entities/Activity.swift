@@ -6,7 +6,8 @@ import Foundation
 enum ActivityKind: String, CaseIterable, Equatable, Sendable {
     // `gift` : cadeau reçu sur une vidéo (ADR-050). `live` : un compte suivi lance un live (ADR-053).
     // `commentReply`, `commentLike`, `mention` : réponse à son commentaire, j'aime sur son commentaire, mention (ADR-060).
-    case like, comment, follow, repost, reportResolved, contentRemoved, gift, live, commentReply, commentLike, mention
+    // `videoMention` : mention dans la description d'une vidéo (ADR-065).
+    case like, comment, follow, repost, reportResolved, contentRemoved, gift, live, commentReply, commentLike, mention, videoMention
 
     var isModeration: Bool { self == .reportResolved || self == .contentRemoved }
 }
@@ -108,6 +109,7 @@ struct ActivityNotification: Identifiable, Equatable, Sendable {
         case .commentReply: "a répondu à ton commentaire : \(comment?.content ?? "")"
         case .commentLike: "a aimé ton commentaire : \(comment?.content ?? "")"
         case .mention: "t’a mentionné(e) dans un commentaire : \(comment?.content ?? "")"
+        case .videoMention: "t’a mentionné(e) dans une vidéo."
         }
     }
 }
@@ -164,7 +166,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .like, .repost, .gift: video.map { ActivityFilter(kind: kind, videoID: $0.id) }
         case .follow: ActivityFilter(kind: .follow, videoID: nil)
         case .commentLike: comment.map { ActivityFilter(kind: .commentLike, videoID: nil, commentID: $0.id) }
-        case .comment, .reportResolved, .contentRemoved, .live, .commentReply, .mention: nil
+        case .comment, .reportResolved, .contentRemoved, .live, .commentReply, .mention, .videoMention: nil
         }
     }
 
@@ -200,6 +202,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         case .commentReply: return "a répondu à ton commentaire : \(comment?.content ?? "")"
         case .commentLike: return (plural ? "ont aimé ton commentaire : " : "a aimé ton commentaire : ") + (comment?.content ?? "")
         case .mention: return "t’a mentionné(e) dans un commentaire : \(comment?.content ?? "")"
+        case .videoMention: return "t’a mentionné(e) dans une vidéo."
         }
     }
 
@@ -208,7 +211,7 @@ struct ActivityGroup: Identifiable, Equatable, Sendable {
         switch notification.kind {
         case .like, .repost, .gift: "\(notification.kind.rawValue):\(notification.video?.id ?? "")"
         case .follow: "follow"
-        case .comment, .commentReply, .mention: "\(notification.kind.rawValue):\(notification.id)"
+        case .comment, .commentReply, .mention, .videoMention: "\(notification.kind.rawValue):\(notification.id)"
         case .commentLike: "commentLike:\(notification.comment?.id ?? notification.id)"
         case .reportResolved, .contentRemoved: "moderation:\(notification.id)"
         case .live: "live:\(notification.liveID ?? notification.id)"
@@ -258,7 +261,7 @@ struct ActivityFilter: Hashable, Sendable {
         case .live: "Lives"
         case .commentReply: "Réponses"
         case .commentLike: "J’aime du commentaire"
-        case .mention: "Mentions"
+        case .mention, .videoMention: "Mentions"
         }
     }
 }

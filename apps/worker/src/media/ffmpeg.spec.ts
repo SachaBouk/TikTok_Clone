@@ -4,7 +4,16 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createThumbnail, extractSound, InvalidMediaError, probe, supportsToneMapping, transcodeToHls, type FfmpegOptions } from './ffmpeg';
+import {
+  createCoverThumbnail,
+  createThumbnail,
+  extractSound,
+  InvalidMediaError,
+  probe,
+  supportsToneMapping,
+  transcodeToHls,
+  type FfmpegOptions,
+} from './ffmpeg';
 import { renditionsFor } from './ladder';
 
 const options: FfmpegOptions = { ffmpegPath: 'ffmpeg', ffprobePath: 'ffprobe', x264Preset: 'ultrafast', timeoutMs: 60_000, toneMapping: true };
@@ -251,6 +260,28 @@ describe('extractSound (ADR-064)', () => {
     expect(streams[0].codec_name).toBe('aac');
     expect(streams[0].channels).toBe(2);
     expect(readFileSync(output).includes('48.8566')).toBe(false);
+  });
+});
+
+describe('createCoverThumbnail (ADR-065)', () => {
+  it('réencode la couverture au petit côté des miniatures, sans métadonnées', async () => {
+    const cover = join(dir, 'cover.jpg');
+    ffmpeg('-f', 'lavfi', '-i', 'color=c=red:s=1080x1920', '-frames:v', '1', '-metadata', 'comment=48.8566', cover);
+    const output = join(dir, 'cover-thumbnail.jpg');
+    await createCoverThumbnail(cover, output, options);
+    const [stream] = (
+      JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', output]).toString()) as {
+        streams: { width: number; height: number }[];
+      }
+    ).streams;
+    expect([stream.width, stream.height]).toEqual([720, 1280]);
+    expect(readFileSync(output).includes('48.8566')).toBe(false);
+  });
+
+  it('refuse un fichier qui n’est pas une image', async () => {
+    const notImage = join(dir, 'not-image.jpg');
+    writeFileSync(notImage, 'pas une image');
+    await expect(createCoverThumbnail(notImage, join(dir, 'never.jpg'), options)).rejects.toThrow();
   });
 });
 

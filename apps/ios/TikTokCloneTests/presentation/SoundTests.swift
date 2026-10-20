@@ -99,17 +99,17 @@ struct SoundTests {
         let store = InMemoryRecentSoundsStore()
         let library = SoundLibraryModel(repository: repository, store: store)
         library.reload()
-        try await Task.sleep(for: .milliseconds(50))
+        await library.waitForLoad()
         #expect(library.items.map(\.id) == ["s1", "s2"])
 
         library.isSearching = true
         library.search("na")
         library.search("nath")
-        try await Task.sleep(for: .milliseconds(500))
+        await library.waitForLoad()
         #expect(repository.state.withLock { $0.searches } == ["nath"])
         #expect(library.items.map(\.id) == ["s2"])
         library.closeSearch()
-        try await Task.sleep(for: .milliseconds(50))
+        await library.waitForLoad()
 
         let lea = library.items[0]
         await library.toggleFavorite(lea)
@@ -123,7 +123,7 @@ struct SoundTests {
         _ = await library.choose(library.items[1])
         #expect(store.recentSounds == ["s2", "s1"])
         library.select(.recent)
-        try await Task.sleep(for: .milliseconds(50))
+        await library.waitForLoad()
         #expect(library.items.map(\.id) == ["s2", "s1"])
         library.reset()
         #expect(store.recentSounds.isEmpty && library.items.isEmpty)

@@ -95,7 +95,7 @@ struct PrivateVideosTests {
                 default:
                     return json(
                         .ok,
-                        #"{"id":"v1","userId":"u","description":null,"status":"ready","visibility":"private","commentsEnabled":true,"soundShared":true,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.000Z"}"#
+                        #"{"id":"v1","userId":"u","description":null,"status":"ready","visibility":"private","commentsEnabled":true,"soundShared":true,"aiGenerated":false,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.000Z"}"#
                     )
                 }
             })

@@ -21,6 +21,8 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         var commentsEnabled: [String: Bool] = [:]
         // « Autoriser l'utilisation de mon son » et son repris, par vidéo créée (ADR-064).
         var sounds: [String: (shared: Bool, soundID: String?)] = [:]
+        // Réglages de l'écran de publication (ADR-065), par vidéo créée.
+        var extras: [String: UploadExtras] = [:]
         var visibilityError: AppError?
     }
 
@@ -33,6 +35,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
     func visibility(of id: String) -> VideoVisibility? { state.withLock { $0.visibilities[id] } }
     func commentsEnabled(of id: String) -> Bool? { state.withLock { $0.commentsEnabled[id] } }
     func sound(of id: String) -> (shared: Bool, soundID: String?)? { state.withLock { $0.sounds[id] } }
+    func extras(of id: String) -> UploadExtras? { state.withLock { $0.extras[id] } }
 
     func setCommentsEnabled(videoID: String, enabled: Bool) async throws {
         try state.withLock { state in
@@ -50,7 +53,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
 
     func createUpload(
         contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
-        soundShared: Bool, soundID: String?
+        soundShared: Bool, soundID: String?, extras: UploadExtras
     ) async throws -> UploadTicket {
         try state.withLock { state in
             if let error = state.createError { throw error }
@@ -59,10 +62,13 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
             state.visibilities[id] = visibility
             state.commentsEnabled[id] = commentsEnabled
             state.sounds[id] = (soundShared, soundID)
+            state.extras[id] = extras
             state.videos[id] = OwnVideo(id: id, description: description, status: .uploading, thumbnailURL: nil, createdAt: .now)
             let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
             let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }
-            return UploadTicket(videoID: id, partSize: state.partSize, parts: parts, expiresAt: state.expiresAt)
+            return UploadTicket(
+                videoID: id, partSize: state.partSize, parts: parts, expiresAt: state.expiresAt,
+                coverURL: extras.coverSize == nil ? nil : URL(string: "http://storage.test/\(id)/cover"))
         }
     }
 
@@ -105,6 +111,8 @@ final class FakePartTransport: UploadPartTransport {
         // Erreurs à lever, dans l'ordre, par les prochains envois.
         var errors: [any Error] = []
         var delay: Duration = .zero
+        // Type envoyé pour chaque URL (couverture, ADR-065).
+        var contentTypes: [URL: String] = [:]
     }
 
     let state = Mutex(State())
@@ -113,7 +121,9 @@ final class FakePartTransport: UploadPartTransport {
     func received(_ url: String) -> Data? { state.withLock { $0.received[URL(string: url)!] } }
     func fail(_ errors: [any Error]) { state.withLock { $0.errors = errors } }
 
-    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
+    func contentType(_ url: String) -> String? { state.withLock { $0.contentTypes[URL(string: url)!] } }
+
+    func upload(_ data: Data, to url: URL, contentType: String?, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
         let delay = state.withLock { $0.delay }
         if delay > .zero { try await Task.sleep(for: delay) }
         return try state.withLock { state in
@@ -121,6 +131,7 @@ final class FakePartTransport: UploadPartTransport {
             if !state.errors.isEmpty { throw state.errors.removeFirst() }
             sent(data.count)
             state.received[url] = data
+            if let contentType { state.contentTypes[url] = contentType }
             return "\"etag-\(url.absoluteString)\""
         }
     }
@@ -160,6 +171,7 @@ final class InMemoryUploadStore: UploadStore {
         state.withLock {
             $0.uploads[upload.id] = nil
             $0.files[upload.fileName] = nil
+            if let cover = upload.coverFileName { $0.files[cover] = nil }
         }
     }
 
@@ -239,7 +251,10 @@ final class FakeVideoMetadataCleaner: VideoMetadataCleaner {
 // Audience par défaut des publications (ADR-062), en mémoire.
 final class InMemoryPublishingPreferences: PublishingPreferences {
     private let state = Mutex(VideoVisibility.everyone)
+    private let saving = Mutex(false)
 
     var defaultVisibility: VideoVisibility { state.withLock { $0 } }
     func setDefaultVisibility(_ visibility: VideoVisibility) { state.withLock { $0 = visibility } }
+    var saveToDevice: Bool { saving.withLock { $0 } }
+    func setSaveToDevice(_ enabled: Bool) { saving.withLock { $0 = enabled } }
 }

@@ -119,6 +119,11 @@ final class SoundLibraryModel {
         }
     }
 
+    // Attendu par les tests : chargement ou recherche en cours (délai compris).
+    func waitForLoad() async {
+        await loadTask?.value
+    }
+
     // Changement de session : « Récents » oubliés.
     func reset() {
         loadTask?.cancel()

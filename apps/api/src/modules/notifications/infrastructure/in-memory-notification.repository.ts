@@ -23,6 +23,11 @@ export class InMemoryNotificationRepository extends NotificationRepository {
     if (event.type === 'live') {
       if ([...this.notifications.values()].some((n) => n.type === 'live' && n.liveId === event.liveId && n.recipientId === event.recipientId))
         return null;
+    } else if (event.type === 'videoMention') {
+      if (
+        [...this.notifications.values()].some((n) => n.type === 'videoMention' && n.videoId === event.videoId && n.recipientId === event.recipientId)
+      )
+        return null;
     } else if (event.type === 'mention') {
       if (
         [...this.notifications.values()].some((n) => n.type === 'mention' && n.commentId === event.commentId && n.recipientId === event.recipientId)

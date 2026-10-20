@@ -251,8 +251,12 @@ struct ProfileView: View {
                 onPendingTap: { _ in
                     // Liste des publications : réessayer, annuler, supprimer (ADR-062).
                     navigationPath?.wrappedValue.append(AccountRoute.publications)
-                }
+                },
+                drafts: viewModel.isOwn && viewModel.selectedGrid == .videos
+                    ? (container.drafts.count, container.drafts.drafts.first.flatMap(container.drafts.thumbnailURL(of:))) : nil,
+                onDraftsTap: { navigationPath?.wrappedValue.append(AccountRoute.drafts) }
             )
+            .onAppear { if viewModel.isOwn { container.drafts.reload() } }
         }
     }
 

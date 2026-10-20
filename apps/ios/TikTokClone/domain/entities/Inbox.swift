@@ -73,13 +73,14 @@ struct MessageSearchResult: Identifiable, Equatable, Sendable {
 
 // Filtre « Activité ▾ » : les abonnements sont à part, dans « Nouveaux followers ».
 enum ActivityTypeFilter: CaseIterable, Hashable, Sendable {
-    case all, likes, comments, reposts, gifts, lives, moderation
+    case all, likes, comments, mentions, reposts, gifts, lives, moderation
 
     var title: String {
         switch self {
         case .all: "Toute l’activité"
         case .likes: "J’aime"
         case .comments: "Commentaires"
+        case .mentions: "Mentions"
         case .reposts: "Republications"
         case .gifts: "Cadeaux"
         case .lives: "Lives"
@@ -93,6 +94,8 @@ enum ActivityTypeFilter: CaseIterable, Hashable, Sendable {
         case .all: ActivityKind.allCases.filter { $0 != .follow }
         case .likes: [.like, .commentLike]
         case .comments: [.comment, .commentReply, .mention]
+        // Mentions dans un commentaire (ADR-060) ou dans la description d'une vidéo (ADR-065).
+        case .mentions: [.mention, .videoMention]
         case .reposts: [.repost]
         case .gifts: [.gift]
         case .lives: [.live]

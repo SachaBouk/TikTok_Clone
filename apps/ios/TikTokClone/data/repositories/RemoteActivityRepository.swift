@@ -145,6 +145,7 @@ extension Components.Schemas.NotificationType {
         case .commentReply: self = .commentReply
         case .commentLike: self = .commentLike
         case .mention: self = .mention
+        case .videoMention: self = .videoMention
         }
     }
 }
@@ -163,6 +164,7 @@ extension ActivityKind {
         case .commentReply: self = .commentReply
         case .commentLike: self = .commentLike
         case .mention: self = .mention
+        case .videoMention: self = .videoMention
         }
     }
 }

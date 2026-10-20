@@ -1,6 +1,8 @@
 export interface TranscodingJob {
   videoId: string;
   rawKey: string;
+  // Couverture choisie dans l'app (ADR-065) : elle devient la miniature.
+  coverKey?: string;
 }
 
 // File de transcodage (ADR-012 : BullMQ, queue `video-transcode`), consommée par apps/worker (ADR-008).

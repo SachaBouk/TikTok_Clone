@@ -16,14 +16,38 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MAX_DESCRIPTION_LENGTH, MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
-import { VIDEO_VISIBILITIES, type VideoVisibility } from '../domain/video';
+import { MAX_COVER_SIZE_BYTES, MAX_DESCRIPTION_LENGTH, MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
+import { MAX_LOCATION_ADDRESS_LENGTH, MAX_LOCATION_NAME_LENGTH, VIDEO_VISIBILITIES, type VideoVisibility } from '../domain/video';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
 
 const VIDEO_TYPES = Object.keys(SUPPORTED_VIDEO_TYPES);
 // Limite S3 du nombre de parties d'un upload multipart.
 const MAX_PARTS = 10_000;
+
+// Couverture choisie dans l'app (ADR-065) : un JPEG 9:16, envoyé en un seul PUT sur `coverUrl`.
+export class CoverUploadRequest {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_COVER_SIZE_BYTES, description: 'Taille du JPEG en octets.' })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_COVER_SIZE_BYTES)
+  fileSize!: number;
+}
+
+// Lieu (ADR-065) : nom et adresse affichée, jamais de coordonnées.
+export class VideoLocationRequest {
+  @ApiProperty({ minLength: 1, maxLength: MAX_LOCATION_NAME_LENGTH })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_LOCATION_NAME_LENGTH)
+  name!: string;
+
+  @ApiPropertyOptional({ maxLength: MAX_LOCATION_ADDRESS_LENGTH })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_LOCATION_ADDRESS_LENGTH)
+  address?: string;
+}
 
 export class CreateUploadRequest {
   @ApiProperty({ enum: VIDEO_TYPES, example: 'video/quicktime' })
@@ -62,6 +86,24 @@ export class CreateUploadRequest {
   @IsOptional()
   @IsUUID()
   soundId?: string;
+
+  // Couverture à envoyer (ADR-065) : la réponse porte alors `coverUrl`.
+  @ApiPropertyOptional({ type: CoverUploadRequest })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CoverUploadRequest)
+  cover?: CoverUploadRequest;
+
+  @ApiPropertyOptional({ description: "Étiquette « Contenu généré par l'IA » (ADR-065), faux par défaut." })
+  @IsOptional()
+  @IsBoolean()
+  aiGenerated?: boolean;
+
+  @ApiPropertyOptional({ type: VideoLocationRequest })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VideoLocationRequest)
+  location?: VideoLocationRequest;
 }
 
 export class SetSoundSettingsRequest {

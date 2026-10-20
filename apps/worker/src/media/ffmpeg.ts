@@ -168,6 +168,33 @@ export async function createThumbnail(input: string, output: string, media: Medi
   );
 }
 
+// Miniature tirée de la couverture choisie dans l'app (ADR-065) : image réencodée en JPEG, petit côté à la taille des
+// miniatures, sans métadonnées. Échoue (InvalidMediaError ou erreur FFmpeg) si le fichier n'est pas une image lisible.
+export async function createCoverThumbnail(input: string, output: string, options: FfmpegOptions) {
+  const side = THUMBNAIL_SHORT_SIDE;
+  await run(
+    options.ffmpegPath,
+    [
+      '-nostdin',
+      '-y',
+      '-loglevel',
+      'error',
+      '-i',
+      input,
+      '-frames:v',
+      '1',
+      '-vf',
+      `scale=${side}:${side}:force_original_aspect_ratio=increase:force_divisible_by=2`,
+      '-map_metadata',
+      '-1',
+      '-q:v',
+      '3',
+      output,
+    ],
+    options.timeoutMs,
+  );
+}
+
 // Son d'une vidéo, réutilisable par les autres (ADR-064) : piste son seule, AAC stéréo, sans métadonnées.
 export async function extractSound(input: string, output: string, options: FfmpegOptions) {
   await run(

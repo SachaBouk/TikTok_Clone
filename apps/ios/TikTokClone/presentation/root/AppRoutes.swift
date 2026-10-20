@@ -30,6 +30,8 @@ enum AccountRoute: Hashable {
     case qrCode
     // Publications en cours (ADR-062), depuis les vignettes « Publication… » de son profil.
     case publications
+    // Brouillons sur l'iPhone (ADR-065), depuis la case « Brouillons » de son profil.
+    case drafts
 }
 
 // Recherche (ADR-049), ouverte par la loupe du feed ; avec une recherche de l'historique, relancée (ADR-057).
@@ -98,6 +100,7 @@ extension View {
                 case .interests: InterestsSettingsView(viewModel: container.makeInterestsSettingsViewModel())
                 case .wallet(let source): WalletView(source: source, container: container)
                 case .publications: PublicationsView(publishing: container.publishing, router: container.router)
+                case .drafts: DraftsView(drafts: container.drafts, router: container.router)
                 }
             }
     }

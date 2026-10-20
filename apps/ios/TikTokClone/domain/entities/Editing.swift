@@ -5,7 +5,7 @@ import Foundation
 // puis plan d'édition par clips appliqué à l'export sur l'iPhone. Règles pures, testées sans AVFoundation (ADR-002).
 
 // Origine du média publié (mesure d'audience).
-enum MediaSource: String, Equatable, Sendable {
+enum MediaSource: String, Codable, Equatable, Sendable {
     case camera
     case gallery
     // Story « nouvelle photo de profil », dessinée par l'app (ADR-056).
@@ -866,6 +866,14 @@ struct PublicationDetails: Equatable, Sendable {
     var speed: Double = 1
     var cropped = false
     var rotated = false
+    // Écran de publication (ADR-065) : couverture choisie (et titre), lieu, nombre de mentions, étiquette IA, copie dans
+    // Photos.
+    var coverChanged = false
+    var coverTitle = false
+    var locationAdded = false
+    var mentionCount = 0
+    var aiGenerated = false
+    var savedToDevice = false
 
     init(source: MediaSource = .gallery, plan: EditPlan? = nil) {
         self.source = source
@@ -883,5 +891,47 @@ struct PublicationDetails: Equatable, Sendable {
         speed = plan.commonSpeed ?? 0
         cropped = plan.clips.contains { !$0.crop.isFull }
         rotated = plan.clips.contains { $0.quarterTurns != 0 }
+    }
+}
+
+// Brouillons (ADR-065) : le plan d'édition est enregistré sur l'iPhone, avec ses fichiers.
+extension SourceClip: Codable {}
+extension EditClip: Codable {}
+extension CropRect: Codable {}
+extension CropRatio: Codable {}
+extension TextOverlay: Codable {}
+extension TextOverlay.Style: Codable {}
+extension TextOverlay.Color: Codable {}
+extension TextOverlay.Font: Codable {}
+extension TextOverlay.Background: Codable {}
+extension TextOverlay.Alignment: Codable {}
+extension EditPlan: Codable {}
+
+extension EditPlan {
+    // Tous les fichiers du plan : fichiers d'origine des clips, voix off, son repris.
+    var files: [URL] {
+        var seen = Set<URL>()
+        return (clips.map(\.source.file) + voiceovers.map(\.file) + (sound.map { [$0.file] } ?? [])).filter { seen.insert($0).inserted }
+    }
+
+    // Le même plan, ses fichiers déplacés (brouillons, ADR-065) : `move` donne le nouvel emplacement de chacun.
+    func movingFiles(_ move: (URL) -> URL) -> EditPlan {
+        var plan = self
+        plan.clips = clips.map { clip in
+            var moved = EditClip(source: SourceClip(file: move(clip.source.file), duration: clip.source.duration), id: clip.id)
+            moved.start = clip.start
+            moved.end = clip.end
+            moved.speed = clip.speed
+            moved.volume = clip.volume
+            moved.crop = clip.crop
+            moved.cropRatio = clip.cropRatio
+            moved.quarterTurns = clip.quarterTurns
+            return moved
+        }
+        plan.voiceovers = voiceovers.map { voice in
+            VoiceoverClip(id: voice.id, file: move(voice.file), start: voice.start, duration: voice.duration, offset: voice.offset)
+        }
+        plan.sound = sound.map { ChosenSound(sound: $0.sound, file: move($0.file), start: $0.start) }
+        return plan
     }
 }

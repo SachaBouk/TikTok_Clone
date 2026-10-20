@@ -21,6 +21,8 @@ struct FeedView: View {
     // Page d'un hashtag touché dans une description (ADR-049) : poussée par valeur dans la pile (`navigationPath`) ; à
     // défaut, par `navigationDestination(item:)`.
     @State private var hashtagRoute: HashtagRoute?
+    // Mention touchée dans une description, sans pile de navigation fournie (ADR-065).
+    @State private var mentionRoute: ProfileRoute?
     // Feuille de cadeaux et animation à l'envoi (ADR-050).
     @State private var giftVideo: FeedVideo?
     @State private var giftBurst: GiftBurst?
@@ -76,6 +78,9 @@ struct FeedView: View {
         )
         .navigationDestination(item: $hashtagRoute) { route in
             HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
+        }
+        .navigationDestination(item: $mentionRoute) { route in
+            ProfileView(viewModel: container.makeProfileViewModel(username: route.username), container: container)
         }
         .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
     }
@@ -148,6 +153,13 @@ struct FeedView: View {
                                     navigationPath.wrappedValue.append(HashtagRoute(name: name))
                                 } else {
                                     hashtagRoute = HashtagRoute(name: name)
+                                }
+                            },
+                            openMention: { username in
+                                if let navigationPath {
+                                    navigationPath.wrappedValue.append(ProfileRoute(username: username))
+                                } else {
+                                    mentionRoute = ProfileRoute(username: username)
                                 }
                             },
                             gift: { openGifts(entry.video) },
@@ -236,6 +248,8 @@ struct VideoPageActions {
     var follow: () -> Void
     // Hashtag touché dans la description (ADR-049) : sa page.
     var openHashtag: (String) -> Void = { _ in }
+    // Mention touchée dans la description (ADR-065) : le profil.
+    var openMention: (String) -> Void = { _ in }
     // Bouton 🎁 (ADR-050) : feuille de cadeaux, sur la vidéo d'un autre.
     var gift: () -> Void = {}
     // Avatar entouré de l'anneau des stories (ADR-051) : ses stories. Nil : l'avatar ouvre toujours le profil.
@@ -363,18 +377,38 @@ struct FeedPageView: View {
     // Pseudo et description, avec une ombre pour rester lisibles sur une vidéo claire.
     private var authorAndDescription: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Lieu (ADR-065) : pastille au-dessus du pseudo ; pas encore de page d'un lieu.
+            if let location = video.location {
+                Label(location.name, systemImage: "mappin.and.ellipse")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.35), in: Capsule())
+                    .accessibilityLabel("Lieu : \(location.name)")
+                    .accessibilityIdentifier("video.location")
+            }
             NavigationLink(value: ProfileRoute(username: video.author.username)) {
                 Text("@\(video.author.username)").font(.headline)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("video.author")
             if let description = video.description, !description.isEmpty {
-                // Hashtags cliquables (ADR-049) ; sans hashtag, le texte laisse passer les touchers.
-                HashtagText(text: description, onHashtag: actions.openHashtag)
+                // Hashtags et mentions cliquables (ADR-049, ADR-065) ; sans lien, le texte laisse passer les touchers.
+                HashtagText(text: description, onHashtag: actions.openHashtag, onMention: actions.openMention)
                     .font(.subheadline).lineLimit(3)
                     .tint(.white)
-                    .allowsHitTesting(!HashtagRules.occurrences(in: description).isEmpty)
+                    .allowsHitTesting(HashtagText.hasLinks(description, mentions: true))
                     .accessibilityIdentifier("video.description")
+            }
+            // Étiquette « Contenu généré par l'IA » (ADR-065).
+            if video.aiGenerated {
+                Label("Créé avec l’IA", systemImage: "sparkles")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.35), in: Capsule())
+                    .accessibilityIdentifier("video.aiGenerated")
             }
         }
         .shadow(color: .black.opacity(0.6), radius: 3)

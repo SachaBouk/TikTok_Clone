@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { NotificationsService } from '../notifications/application/notifications.service';
@@ -36,7 +36,20 @@ import { InteractionsController } from './interfaces/interactions.controller';
         rateLimiter: RateLimiter,
         suspended: SuspendedAccounts,
         counters: ProfileCountersPublisher,
-      ) => new InteractionsService(interactions, videos, users, notifications, rateLimiter, suspended, counters),
+      ) => {
+        const service = new InteractionsService(interactions, videos, users, notifications, rateLimiter, suspended, counters);
+        // Vidéo publiée : les comptes mentionnés dans sa description sont prévenus (ADR-065). Au mieux : un échec est
+        // journalisé, la publication reste acquise.
+        const logger = new Logger('VideoMentions');
+        videos.onVideoPublished(async (video) => {
+          try {
+            await service.notifyVideoMentions(video);
+          } catch (error) {
+            logger.warn(`Mentions de la vidéo ${video.id} non envoyées : ${error instanceof Error ? error.message : String(error)}`);
+          }
+        });
+        return service;
+      },
       inject: [InteractionRepository, VideosService, UsersService, NotificationsService, RateLimiter, SuspendedAccounts, ProfileCountersPublisher],
     },
   ],

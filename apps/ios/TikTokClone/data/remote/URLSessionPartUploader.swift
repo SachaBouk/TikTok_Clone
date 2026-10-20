@@ -1,7 +1,8 @@
 import Foundation
 
 // Envoi d'une partie au stockage objet (MinIO en local, S3 en production) sur son URL signée (ADR-007).
-// Rien n'est signé en dehors de l'hôte : ni Content-Type ni somme de contrôle à renvoyer.
+// Rien n'est signé en dehors de l'hôte pour une partie : ni Content-Type ni somme de contrôle à renvoyer. La couverture
+// (ADR-065) est un seul PUT dont le type et la taille sont signés.
 struct URLSessionPartUploader: UploadPartTransport {
     let session: URLSession
 
@@ -9,9 +10,11 @@ struct URLSessionPartUploader: UploadPartTransport {
         self.session = session
     }
 
-    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
+    func upload(_ data: Data, to url: URL, contentType: String?, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        // Couverture (ADR-065) : type signé par l'API ; la taille l'est aussi (Content-Length de `data`).
+        if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         let response: URLResponse
         do {
             (_, response) = try await session.upload(for: request, from: data, delegate: PartProgressDelegate(sent: sent))

@@ -135,7 +135,7 @@ export class NotificationPageResponse implements NotificationPageDto {
 export class NotificationGroupResponse implements NotificationGroupDto {
   @ApiProperty({
     description:
-      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`.',
+      'Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `videoMention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`.',
   })
   key!: string;
 

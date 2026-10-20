@@ -8,6 +8,8 @@ struct EditorFlowView: View {
     let container: AppContainer
     // Story publiée par « Ta story » : la création se ferme.
     let onStoryPublished: () -> Void
+    // Brouillon enregistré en abandonnant l'aperçu (ADR-065) : la création se ferme.
+    var onDraftSaved: () -> Void = {}
     @State private var editor: (model: VideoEditorViewModel, preview: EditorPreviewPlayer)?
     @State private var isEditingClips = false
 
@@ -25,7 +27,8 @@ struct EditorFlowView: View {
                     } else {
                         EditorPreviewView(
                             model: editor.model, preview: editor.preview, draft: draft, container: container,
-                            onEditClips: { isEditingClips = true }, onNext: { next(editor) }, onStory: { story(editor) }, onBack: { back(editor) })
+                            onEditClips: { isEditingClips = true }, onNext: { next(editor) }, onStory: { story(editor) }, onBack: { back(editor) },
+                            onSaveDraft: draft.mode == .video ? { saveDraft(editor) } : nil)
                     }
                 }
                 .disabled(editor.model.isExporting)
@@ -109,6 +112,22 @@ struct EditorFlowView: View {
         if !request.isNew { draft.discard() }
         draft.editorClosed()
     }
+
+    // « Enregistrer le brouillon » (ADR-065) : le montage et ses fichiers passent dans les brouillons ; la vidéo déjà
+    // exportée, s'il y en a une, est supprimée.
+    private func saveDraft(_ editor: (model: VideoEditorViewModel, preview: EditorPreviewPlayer)) {
+        editor.preview.pause()
+        Task {
+            guard await draft.saveDraft(plan: editor.model.plan, source: request.source) else {
+                editor.preview.play()
+                return
+            }
+            editor.preview.stop()
+            draft.discard()
+            draft.editorClosed()
+            onDraftSaved()
+        }
+    }
 }
 
 // Aperçu, comme TikTok : la vidéo en grand, « ♫ Ajouter un son » en haut (ADR-064), outils à droite (Réglages, Modifier,
@@ -123,6 +142,8 @@ struct EditorPreviewView: View {
     let onNext: () -> Void
     let onStory: () -> Void
     let onBack: () -> Void
+    // Vidéo seulement (ADR-065) : « Enregistrer le brouillon » dans la confirmation d'abandon.
+    var onSaveDraft: (() -> Void)? = nil
     @State private var editingText: TextDraft?
     @State private var isDraggingText = false
     @State private var isPickingFilter = false
@@ -257,6 +278,9 @@ struct EditorPreviewView: View {
             .frame(width: 44, height: 44)
             .shadow(radius: 3)
             .confirmationDialog("Abandonner la vidéo ?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                if let onSaveDraft {
+                    Button("Enregistrer le brouillon", action: onSaveDraft)
+                }
                 Button("Abandonner", role: .destructive, action: onBack)
             } message: {
                 Text(model.request.source == .camera ? "Les segments filmés seront supprimés." : "Les modifications seront perdues.")

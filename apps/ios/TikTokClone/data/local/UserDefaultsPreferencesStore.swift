@@ -19,6 +19,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
         static let defaultVideoVisibility = "defaultVideoVisibility"
+        static let saveToDevice = "saveToDevice"
     }
 
     var analyticsConsent: Bool? {
@@ -111,6 +112,14 @@ extension UserDefaultsPreferencesStore: PublishingPreferences {
 
     func setDefaultVisibility(_ visibility: VideoVisibility) {
         defaults.set(visibility.rawValue, forKey: Key.defaultVideoVisibility)
+    }
+
+    var saveToDevice: Bool {
+        defaults.bool(forKey: Key.saveToDevice)
+    }
+
+    func setSaveToDevice(_ enabled: Bool) {
+        defaults.set(enabled, forKey: Key.saveToDevice)
     }
 }
 

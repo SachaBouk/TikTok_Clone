@@ -5,6 +5,8 @@ export interface VideoFilesCleanup {
   // Absent quand seuls les fichiers HLS restent à supprimer (résultat de transcodage arrivé après la suppression).
   rawKey: string | null;
   uploadId: string | null;
+  // Couverture envoyée par l'app (ADR-065) ; absente des jobs programmés avant elle.
+  coverKey?: string | null;
 }
 
 // Programmé AVANT de supprimer la vidéo en base, avec ce délai : si la suppression échoue, l'exécution

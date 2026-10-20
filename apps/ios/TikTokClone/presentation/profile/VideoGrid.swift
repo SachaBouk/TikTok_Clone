@@ -9,6 +9,9 @@ struct VideoGrid: View {
     let route: (FeedPage, Int) -> VideoPlayerRoute?
     let emptyTitle: String
     var onPendingTap: (PublishingModel.Publication) -> Void = { _ in }
+    // Brouillons (ADR-065), en première case de ses vidéos : nombre et image du plus récent.
+    var drafts: (count: Int, thumbnail: URL?)? = nil
+    var onDraftsTap: () -> Void = {}
     // Action du menu contextuel d'une vidéo (historique : « Retirer de l'historique »).
     var removeTitle: String?
     var onRemove: (FeedVideo) -> Void = { _ in }
@@ -18,6 +21,10 @@ struct VideoGrid: View {
     var body: some View {
         VStack(spacing: 0) {
             LazyVGrid(columns: columns, spacing: 2) {
+                if let drafts, drafts.count > 0 {
+                    DraftsCell(count: drafts.count, thumbnail: drafts.thumbnail)
+                        .onTapGesture(perform: onDraftsTap)
+                }
                 ForEach(pending) { publication in
                     PendingVideoCell(publication: publication, preview: previews[publication.id])
                         .onTapGesture { onPendingTap(publication) }
@@ -65,7 +72,7 @@ struct VideoGrid: View {
             }
             .padding(.vertical, 32)
         case .loaded:
-            if list.items.isEmpty && pending.isEmpty {
+            if list.items.isEmpty && pending.isEmpty && (drafts?.count ?? 0) == 0 {
                 ContentUnavailableView(emptyTitle, systemImage: "video")
                     .padding(.vertical, 24)
             }
@@ -136,5 +143,33 @@ private struct PendingVideoCell: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(publication.phase == .failed ? "Publication en échec" : "Publication en cours")
+    }
+}
+
+// Case « Brouillons : N » (ADR-065) : image du brouillon le plus récent, assombrie.
+struct DraftsCell: View {
+    let count: Int
+    let thumbnail: URL?
+
+    var body: some View {
+        Color(.secondarySystemBackground)
+            .aspectRatio(9 / 16, contentMode: .fit)
+            .overlay {
+                if let thumbnail, let image = UIImage(contentsOfFile: thumbnail.path(percentEncoded: false)) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
+            }
+            .overlay { Color.black.opacity(0.45) }
+            .overlay {
+                Text("Brouillons : \(count)")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+            }
+            .clipped()
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel("Brouillons : \(count)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("profile.drafts")
     }
 }

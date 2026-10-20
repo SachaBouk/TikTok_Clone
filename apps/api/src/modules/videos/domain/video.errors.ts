@@ -1,6 +1,6 @@
 import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
 
-import { MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from './upload-rules';
+import { MAX_COVER_SIZE_BYTES, MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from './upload-rules';
 
 // Erreurs métier du module : la couche `interfaces/` les traduit en codes HTTP.
 export abstract class VideoError extends Error {}
@@ -31,6 +31,14 @@ export class VideoTooLargeError extends VideoError {
   constructor() {
     super(`Vidéo trop volumineuse (maximum ${MAX_VIDEO_SIZE_BYTES / 1024 ** 2} Mio)`);
     this.name = 'VideoTooLargeError';
+  }
+}
+
+// Couverture choisie trop lourde (ADR-065).
+export class CoverTooLargeError extends VideoError {
+  constructor() {
+    super(`Couverture trop volumineuse (maximum ${MAX_COVER_SIZE_BYTES / 1024 ** 2} Mio)`);
+    this.name = 'CoverTooLargeError';
   }
 }
 

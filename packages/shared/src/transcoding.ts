@@ -18,6 +18,9 @@ export interface TranscodeJobData {
   videoId: string;
   // Clé de l'objet brut dans le bucket des uploads.
   rawKey: string;
+  // Couverture choisie dans l'app (ADR-065), JPEG dans le bucket des uploads : elle devient la miniature. Absente ou
+  // illisible, la miniature est prise dans la vidéo.
+  coverKey?: string;
 }
 
 export type TranscodeResult =

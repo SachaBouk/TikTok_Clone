@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TranscodeJobData } from '@repo/shared';
 import type { WorkerConfig } from './config';
-import { createThumbnail, extractSound, probe, transcodeToHls, type FfmpegOptions } from './media/ffmpeg';
+import { createCoverThumbnail, createThumbnail, extractSound, probe, transcodeToHls, type FfmpegOptions } from './media/ffmpeg';
 import { renditionsFor } from './media/ladder';
 import { assertPublishable } from './media/rules';
 import type { VideoStorage } from './storage';
@@ -46,7 +46,10 @@ export async function transcode(
     // Durée maximale (ADR-040, ADR-051) : vérifiée avant tout transcodage.
     assertPublishable(media, maxDurationSeconds);
     await transcodeToHls(source, output, renditionsFor(media), media, options);
-    await createThumbnail(source, join(output, 'thumbnail.jpg'), media, options);
+    // Couverture choisie dans l'app (ADR-065) : elle devient la miniature ; absente ou illisible, l'image de la vidéo.
+    if (!job.coverKey || !(await coverThumbnail(job.coverKey, workDir, join(output, 'thumbnail.jpg'), storage, options))) {
+      await createThumbnail(source, join(output, 'thumbnail.jpg'), media, options);
+    }
     const sound = withSound && media.hasAudio;
     if (sound) await extractSound(source, join(output, 'sound.m4a'), options);
     await storage.uploadHls(output, job.videoId);
@@ -59,5 +62,19 @@ export async function transcode(
     };
   } finally {
     await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+// Vrai si la miniature a été tirée de la couverture. Une couverture absente ou illisible n'est pas une erreur : la
+// publication ne dépend pas d'elle.
+async function coverThumbnail(key: string, workDir: string, output: string, storage: VideoStorage, options: FfmpegOptions): Promise<boolean> {
+  const cover = join(workDir, 'cover');
+  try {
+    await storage.downloadRaw(key, cover);
+    await createCoverThumbnail(cover, output, options);
+    return true;
+  } catch (error) {
+    console.warn(`[worker] couverture ${key} ignorée : ${(error as Error).message}`);
+    return false;
   }
 }

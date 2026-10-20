@@ -6,6 +6,12 @@ export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
 // Visibilité (ADR-061) : publique, ou privée (« Toi uniquement »), visible de son seul auteur.
 export type VideoVisibility = 'public' | 'private';
 
+// Lieu de la publication (ADR-065) : nom et adresse affichée, jamais de coordonnées.
+export interface VideoLocationDto {
+  name: string;
+  address?: string;
+}
+
 export interface VideoDto {
   id: string;
   userId: string;
@@ -16,6 +22,10 @@ export interface VideoDto {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // Étiquette « Contenu généré par l'IA » (ADR-065).
+  aiGenerated: boolean;
+  // Absent sans lieu (ADR-065).
+  location?: VideoLocationDto;
   // Renseignés quand la vidéo est `ready` (ADR-008).
   hlsUrl: string | null;
   thumbnailUrl: string | null;
@@ -35,6 +45,8 @@ export interface VideoUploadDto {
   parts: UploadPartUrlDto[];
   // Expiration des URLs signées.
   expiresAt: string;
+  // Couverture choisie (ADR-065) : URL signée pour un seul PUT du JPEG, si `cover` a été demandé.
+  coverUrl?: string;
 }
 
 // Vidéos de l'auteur pas encore publiées (`processing`) ou en échec (`failed`), à afficher en tête de sa grille.

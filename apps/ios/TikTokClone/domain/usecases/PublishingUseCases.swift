@@ -28,7 +28,7 @@ struct CreatePublicationUseCase: Sendable {
 
     func callAsFunction(
         file: URL, description: String, userID: String, kind: PublicationKind = .video, visibility: VideoVisibility = .everyone,
-        commentsEnabled: Bool = true, soundShared: Bool = true, soundID: String? = nil
+        commentsEnabled: Bool = true, soundShared: Bool = true, soundID: String? = nil, extras: PublicationExtras = PublicationExtras()
     ) throws -> PendingUpload {
         guard let contentType = MediaContentType(fileExtension: file.pathExtension), contentType.isVideo || kind == .story else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
@@ -42,8 +42,10 @@ struct CreatePublicationUseCase: Sendable {
         guard fileSize <= UploadRules.maxFileSize else { throw AppError.rejected("La vidéo dépasse 1 Go.") }
         if !contentType.isVideo && fileSize > StoryRules.maxPhotoFileSize { throw AppError.rejected("La photo dépasse 5 Mo.") }
 
+        // Couverture (ADR-065) : vidéo seulement ; trop lourde ou illisible, elle est laissée de côté (miniature du worker).
+        let cover = kind == .video ? extras.cover.flatMap { url in (try? store.size(ofFileAt: url)).map { (url, $0) } } : nil
         let id = makeID()
-        let upload = PendingUpload(
+        var upload = PendingUpload(
             id: id,
             userID: userID,
             fileName: try store.adoptFile(at: file, id: id),
@@ -57,6 +59,14 @@ struct CreatePublicationUseCase: Sendable {
             soundShared: kind == .story || soundShared,
             soundID: kind == .story ? nil : soundID
         )
+        if kind == .video {
+            upload.aiGenerated = extras.aiGenerated
+            upload.location = extras.location
+            if let (url, size) = cover, size > 0, size <= UploadRules.maxCoverFileSize, let name = try? store.adoptFile(at: url, id: "\(id)-cover") {
+                upload.coverFileName = name
+                upload.coverSize = size
+            }
+        }
         try store.save(upload)
         return upload
     }
@@ -116,6 +126,8 @@ struct UploadVideoUseCase: Sendable {
             progress(upload.progress)
         }
 
+        try await sendCover(&upload, ticket: ticket)
+
         let parts = upload.sentParts.map { UploadedPart(number: $0.key, etag: $0.value) }.sorted { $0.number < $1.number }
         let kind = upload.kind
         do {
@@ -135,6 +147,24 @@ struct UploadVideoUseCase: Sendable {
         }
     }
 
+    // Couverture choisie (ADR-065) : un seul PUT, avant la confirmation (le worker la lit au transcodage). URL refusée :
+    // l'envoi repart de zéro ; une autre erreur que le réseau la laisse de côté (la miniature viendra de la vidéo).
+    private func sendCover(_ upload: inout PendingUpload, ticket: UploadTicket) async throws {
+        guard let name = upload.coverFileName, let size = upload.coverSize, !upload.coverSent, let url = ticket.coverURL else { return }
+        do {
+            let data = try store.read(fileName: name, range: 0..<size)
+            _ = try await withRetries { try await transport.upload(data, to: url, contentType: "image/jpeg") { _ in } }
+        } catch UploadFailure.restartNeeded {
+            throw UploadFailure.restartNeeded
+        } catch AppError.network {
+            throw AppError.network
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {}
+        upload.coverSent = true
+        try store.save(upload)
+    }
+
     // Nouvelle vidéo et nouvelles URLs ; l'ancienne vidéo, s'il y en a une, est supprimée au mieux
     // (sinon l'API la supprime au bout de 24 h).
     private func restart(_ upload: PendingUpload) async throws -> PendingUpload {
@@ -142,6 +172,7 @@ struct UploadVideoUseCase: Sendable {
         if let old = upload.ticket {
             upload.ticket = nil
             upload.sentParts = [:]
+            upload.coverSent = false
             try store.save(upload)
             switch upload.kind {
             case .video: try? await videos.deleteVideo(id: old.videoID)
@@ -154,7 +185,10 @@ struct UploadVideoUseCase: Sendable {
             case .video:
                 try await videos.createUpload(
                     contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility,
-                    commentsEnabled: request.commentsEnabled, soundShared: request.soundShared, soundID: request.soundID)
+                    commentsEnabled: request.commentsEnabled, soundShared: request.soundShared, soundID: request.soundID,
+                    extras: UploadExtras(
+                        aiGenerated: request.aiGenerated, location: request.location,
+                        coverSize: request.coverFileName == nil ? nil : request.coverSize))
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
         }

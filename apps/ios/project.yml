@@ -68,6 +68,9 @@ targets:
         NSCameraUsageDescription: Pour filmer tes vidéos et tes stories.
         NSMicrophoneUsageDescription: Pour enregistrer le son de tes vidéos.
         NSPhotoLibraryUsageDescription: Pour choisir les vidéos et les photos à publier.
+        # Écran de publication (ADR-065) : lieux à proximité (demandé sur la page « Ajouter un lieu »), vidéo copiée dans Photos.
+        NSLocationWhenInUseUsageDescription: Pour te proposer les lieux autour de toi quand tu ajoutes un lieu à une publication.
+        NSPhotoLibraryAddUsageDescription: Pour enregistrer tes vidéos publiées dans Photos.
         # Écran de lancement noir, comme l'attente de la reprise de session (LaunchView) et le feed.
         UILaunchScreen:
           UIColorName: LaunchBackground

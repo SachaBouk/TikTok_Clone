@@ -44,15 +44,17 @@ final class AppRouter {
     struct CreationRoute: Identifiable, Equatable {
         let id = UUID()
         let mode: PublishDraftViewModel.Mode
+        // Brouillon rouvert (ADR-065) : l'éditeur s'ouvre sur son montage.
+        var draft: VideoDraft?
     }
 
     var presentedCreation: CreationRoute?
     // Incrémenté à chaque vidéo publiée depuis la création : l'onglet Profil s'ouvre (publication en cours).
     var publishedFromCreation = 0
 
-    func openCreation(mode: PublishDraftViewModel.Mode = .video) {
+    func openCreation(mode: PublishDraftViewModel.Mode = .video, draft: VideoDraft? = nil) {
         guard presentedCreation == nil else { return }
-        presentedCreation = CreationRoute(mode: mode)
+        presentedCreation = CreationRoute(mode: mode, draft: draft)
     }
 
     func openStories(_ authors: [UserSummary], startAuthor: Int = 0, source: StorySource) {

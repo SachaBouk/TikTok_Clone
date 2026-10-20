@@ -122,7 +122,8 @@ final class PublishingModel {
     // `details` : source et modifications (mesure d'audience, ADR-052).
     func publish(
         file: URL, description: String, preview: UIImage?, kind: PublicationKind = .video, details: PublicationDetails = PublicationDetails(),
-        visibility: VideoVisibility = .everyone, commentsEnabled: Bool = true, soundShared: Bool = true, soundID: String? = nil
+        visibility: VideoVisibility = .everyone, commentsEnabled: Bool = true, soundShared: Bool = true, soundID: String? = nil,
+        extras: PublicationExtras = PublicationExtras()
     ) -> String? {
         guard let userID = session.profile?.id else {
             session.requestSignIn()
@@ -131,7 +132,7 @@ final class PublishingModel {
         do {
             let upload = try createPublication(
                 file: file, description: description, userID: userID, kind: kind, visibility: visibility, commentsEnabled: commentsEnabled,
-                soundShared: soundShared, soundID: soundID)
+                soundShared: soundShared, soundID: soundID, extras: extras)
             if let preview { previews[upload.id] = preview }
             insert(
                 Publication(
@@ -143,6 +144,14 @@ final class PublishingModel {
         } catch {
             return AppError.from(error).message
         }
+    }
+
+    // Compte connecté (brouillons, ADR-065).
+    var signedInUserID: String? { session.profile?.id }
+
+    // Mesure d'audience de la création (brouillons, ADR-065).
+    func track(_ event: AnalyticsEvent) {
+        analytics.track(event)
     }
 
     // Connexion, déconnexion, retour au premier plan.

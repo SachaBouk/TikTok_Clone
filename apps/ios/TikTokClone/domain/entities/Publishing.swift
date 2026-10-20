@@ -62,6 +62,27 @@ enum PublicationKind: String, Codable, Equatable, Sendable {
     case story
 }
 
+// Lieu d'une publication (ADR-065) : nom et adresse affichée, jamais de coordonnées.
+struct VideoLocation: Codable, Hashable, Sendable {
+    let name: String
+    var address: String?
+}
+
+// Réglages de l'écran de publication ajoutés par l'ADR-065 : étiquette « Contenu généré par l'IA », lieu, couverture choisie
+// (JPEG 9:16, déplacée dans le stockage des envois).
+struct PublicationExtras: Equatable, Sendable {
+    var aiGenerated = false
+    var location: VideoLocation?
+    var cover: URL?
+}
+
+// Ce que l'API reçoit en plus à la création de l'envoi (ADR-065) : `coverSize` demande une URL pour la couverture.
+struct UploadExtras: Equatable, Sendable {
+    var aiGenerated = false
+    var location: VideoLocation?
+    var coverSize: Int?
+}
+
 // Réponse à la demande d'upload : une URL signée par partie, valable jusqu'à `expiresAt` (2 h).
 struct UploadTicket: Codable, Equatable, Sendable {
     struct Part: Codable, Equatable, Sendable {
@@ -74,6 +95,8 @@ struct UploadTicket: Codable, Equatable, Sendable {
     let partSize: Int
     let parts: [Part]
     let expiresAt: Date
+    // Couverture demandée (ADR-065) : un seul PUT du JPEG, `Content-Type: image/jpeg`.
+    var coverURL: URL?
 }
 
 // Partie reçue par le stockage : son numéro et l'en-tête `ETag` de la réponse au PUT, tel quel.
@@ -105,6 +128,12 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     // « Autoriser l'utilisation de mon son » et son repris d'une autre vidéo (ADR-064).
     var soundShared = true
     var soundID: String?
+    // ADR-065 : étiquette IA, lieu, couverture (fichier du stockage des envois, envoyée ou non).
+    var aiGenerated = false
+    var location: VideoLocation?
+    var coverFileName: String?
+    var coverSize: Int?
+    var coverSent = false
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -122,12 +151,12 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
         case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
-        case soundShared, soundID
+        case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
     // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés ; avant l'ADR-064, son
-    // partagé, sans son repris.
+    // partagé, sans son repris ; avant l'ADR-065, sans étiquette IA, lieu ni couverture.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -144,7 +173,12 @@ extension PendingUpload {
             visibility: try container.decodeIfPresent(VideoVisibility.self, forKey: .visibility) ?? .everyone,
             commentsEnabled: try container.decodeIfPresent(Bool.self, forKey: .commentsEnabled) ?? true,
             soundShared: try container.decodeIfPresent(Bool.self, forKey: .soundShared) ?? true,
-            soundID: try container.decodeIfPresent(String.self, forKey: .soundID)
+            soundID: try container.decodeIfPresent(String.self, forKey: .soundID),
+            aiGenerated: try container.decodeIfPresent(Bool.self, forKey: .aiGenerated) ?? false,
+            location: try container.decodeIfPresent(VideoLocation.self, forKey: .location),
+            coverFileName: try container.decodeIfPresent(String.self, forKey: .coverFileName),
+            coverSize: try container.decodeIfPresent(Int.self, forKey: .coverSize),
+            coverSent: try container.decodeIfPresent(Bool.self, forKey: .coverSent) ?? false
         )
     }
 }
@@ -153,6 +187,10 @@ extension PendingUpload {
 enum UploadRules {
     static let maxFileSize = 1024 * 1024 * 1024  // 1 Gio
     static let maxDescriptionLength = 2200
+    // Couverture choisie (ADR-065) : un JPEG de 2 Mio au plus ; lieu : longueurs de l'API.
+    static let maxCoverFileSize = 2 * 1024 * 1024
+    static let maxLocationNameLength = 100
+    static let maxLocationAddressLength = 200
     // Durée maximale (ADR-040), comme le worker : 3 minutes, à une seconde près (arrondis du conteneur).
     static let maxDuration: Duration = .seconds(180)
     static let durationTolerance: Duration = .seconds(1)
@@ -190,4 +228,7 @@ enum UploadRules {
 protocol PublishingPreferences: Sendable {
     var defaultVisibility: VideoVisibility { get }
     func setDefaultVisibility(_ visibility: VideoVisibility)
+    // « Enregistrer sur l'appareil » (ADR-065), coupé par défaut.
+    var saveToDevice: Bool { get }
+    func setSaveToDevice(_ enabled: Bool)
 }

@@ -174,12 +174,12 @@ private final class FailingAfter: UploadPartTransport {
         remaining = Mutex(successes)
     }
 
-    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
+    func upload(_ data: Data, to url: URL, contentType: String?, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
         let allowed = remaining.withLock { value in
             defer { value -= 1 }
             return value > 0
         }
         guard allowed else { throw AppError.network }
-        return try await inner.upload(data, to: url, sent: sent)
+        return try await inner.upload(data, to: url, contentType: contentType, sent: sent)
     }
 }

@@ -25,6 +25,7 @@ final class FileUploadStore: UploadStore {
     func remove(_ upload: PendingUpload) {
         try? FileManager.default.removeItem(at: stateURL(upload.id))
         try? FileManager.default.removeItem(at: fileURL(named: upload.fileName))
+        if let cover = upload.coverFileName { try? FileManager.default.removeItem(at: fileURL(named: cover)) }
     }
 
     func size(ofFileAt url: URL) throws -> Int {

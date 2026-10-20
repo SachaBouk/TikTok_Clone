@@ -18,6 +18,8 @@ export abstract class VideoStorage {
   // Assemble les parties. Lève UploadIncompleteError si des parties manquent ou si un ETag ne correspond pas.
   abstract completeMultipartUpload(key: string, uploadId: string, parts: UploadedPart[]): Promise<void>;
   abstract abortMultipartUpload(key: string, uploadId: string): Promise<void>;
+  // URL signée d'un seul PUT (couverture, ADR-065) : type et taille signés, le stockage refuse tout autre fichier.
+  abstract presignPut(key: string, contentType: string, size: number, expiresInSeconds: number): Promise<string>;
   // Taille de l'objet en octets, ou null s'il n'existe pas.
   abstract getObjectSize(key: string): Promise<number | null>;
   abstract deleteObject(key: string): Promise<void>;

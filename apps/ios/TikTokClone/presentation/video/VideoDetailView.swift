@@ -93,6 +93,7 @@ struct VideoDetailView: View {
                     share: { shareVideo = interactions.display(video) },
                     alert: { alertMessage = $0 },
                     openHashtag: { path.append(HashtagRoute(name: $0)) },
+                    openMention: { path.append(ProfileRoute(username: $0)) },
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
                     openStories: { container.router.openStories([video.author], source: .feed) }
                 ),

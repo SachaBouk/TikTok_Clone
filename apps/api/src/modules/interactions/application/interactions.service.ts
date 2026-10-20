@@ -3,7 +3,7 @@ import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
 import type { VideosService } from '../../videos/application/videos.service';
-import type { PublishedVideo } from '../../videos/domain/video';
+import type { PublishedVideo, Video } from '../../videos/domain/video';
 import { decodeFollowCursor, encodeFollowCursor } from '../domain/follow-cursor';
 import type {
   BlockRelations,
@@ -285,6 +285,29 @@ export class InteractionsService {
       notified.add(user.id);
       sent += 1;
     }
+  }
+
+  // Mentions dans la description d'une vidéo qui vient d'être publiée (ADR-065, écouteur `VideosService.onVideoPublished`) :
+  // « t'a mentionné(e) dans une vidéo », mêmes règles que les commentaires (5 au plus, ni soi, ni un compte inconnu,
+  // suspendu ou avec un blocage avec l'auteur). Une vidéo privée, ou d'un compte suspendu, ne prévient personne.
+  // Renvoie le nombre de comptes prévenus.
+  async notifyVideoMentions(video: Pick<Video, 'id' | 'userId' | 'description' | 'visibility'>): Promise<number> {
+    if (video.visibility !== 'public') return 0;
+    const usernames = extractMentions(video.description ?? '');
+    if (usernames.length === 0 || (await this.suspended.has(video.userId))) return 0;
+    const hidden = await this.hiddenAccounts(video.userId);
+    const notified = new Set([video.userId]);
+    for (const username of usernames) {
+      if (notified.size - 1 === MAX_MENTIONS_NOTIFIED) break;
+      const user = await this.users.getByUsername(username).catch((error: unknown) => {
+        if (error instanceof UserNotFoundError) return null;
+        throw error;
+      });
+      if (!user || notified.has(user.id) || hidden.has(user.id)) continue;
+      await this.notifications.notify({ type: 'videoMention', actorId: video.userId, recipientId: user.id, videoId: video.id });
+      notified.add(user.id);
+    }
+    return notified.size - 1;
   }
 
   // J'aime sur un commentaire ou une réponse (ADR-060), ou son retrait. Idempotent. L'auteur du commentaire est prévenu

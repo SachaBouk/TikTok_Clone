@@ -9308,6 +9308,37 @@
           "private"
         ]
       },
+      "CoverUploadRequest": {
+        "type": "object",
+        "properties": {
+          "fileSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2097152,
+            "description": "Taille du JPEG en octets."
+          }
+        },
+        "required": [
+          "fileSize"
+        ]
+      },
+      "VideoLocationRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "CreateUploadRequest": {
         "type": "object",
         "properties": {
@@ -9344,6 +9375,16 @@
             "type": "string",
             "format": "uuid",
             "description": "Son repris d'une autre vidéo (ADR-064)."
+          },
+          "cover": {
+            "$ref": "#/components/schemas/CoverUploadRequest"
+          },
+          "aiGenerated": {
+            "type": "boolean",
+            "description": "Étiquette « Contenu généré par l'IA » (ADR-065), faux par défaut."
+          },
+          "location": {
+            "$ref": "#/components/schemas/VideoLocationRequest"
           }
         },
         "required": [
@@ -9358,6 +9399,20 @@
           "processing",
           "ready",
           "failed"
+        ]
+      },
+      "VideoLocationResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "VideoResponse": {
@@ -9390,6 +9445,13 @@
             "type": "boolean",
             "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
           },
+          "aiGenerated": {
+            "type": "boolean",
+            "description": "Étiquette « Contenu généré par l'IA » (ADR-065)."
+          },
+          "location": {
+            "$ref": "#/components/schemas/VideoLocationResponse"
+          },
           "hlsUrl": {
             "type": "string",
             "nullable": true,
@@ -9414,6 +9476,7 @@
           "visibility",
           "commentsEnabled",
           "soundShared",
+          "aiGenerated",
           "hlsUrl",
           "thumbnailUrl",
           "createdAt"
@@ -9457,6 +9520,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Expiration des URLs signées."
+          },
+          "coverUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Couverture demandée (ADR-065) : envoyer le JPEG en un seul PUT, avec `Content-Type: image/jpeg` et la taille déclarée."
           }
         },
         "required": [
@@ -10007,7 +10075,8 @@
           "live",
           "commentReply",
           "commentLike",
-          "mention"
+          "mention",
+          "videoMention"
         ]
       },
       "NotificationVideoResponse": {
@@ -10204,7 +10273,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`."
+            "description": "Identifiant stable du groupe : `like:<videoId>`, `repost:<videoId>`, `gift:<videoId>`, `follow`, `comment:<notificationId>`, `commentReply:<notificationId>`, `mention:<notificationId>`, `videoMention:<notificationId>`, `commentLike:<commentId>`, `live:<liveId>`, `moderation:<notificationId>`."
           },
           "kind": {
             "$ref": "#/components/schemas/NotificationType"
@@ -10955,6 +11024,13 @@
             "type": "boolean",
             "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
           },
+          "aiGenerated": {
+            "type": "boolean",
+            "description": "Étiquette « Contenu généré par l'IA » (ADR-065)."
+          },
+          "location": {
+            "$ref": "#/components/schemas/VideoLocationResponse"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -11006,6 +11082,7 @@
           "visibility",
           "commentsEnabled",
           "soundShared",
+          "aiGenerated",
           "createdAt",
           "viewsCount",
           "likesCount",

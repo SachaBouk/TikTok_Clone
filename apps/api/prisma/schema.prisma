@@ -184,6 +184,13 @@ model Video {
   soundShared     Boolean         @default(true) @map("sound_shared")
   // Son repris d'une autre vidéo (ADR-064) ; NULL si ce son a disparu (le son reste dans le fichier publié).
   soundId         String?         @map("sound_id") @db.Uuid
+  // Couverture choisie dans l'app (ADR-065) : JPEG dans le bucket des uploads, devenu la miniature. Jamais exposée.
+  coverKey        String?         @map("cover_key")
+  // Lieu (ADR-065) : nom et adresse affichée, jamais de coordonnées.
+  locationName    String?         @map("location_name")
+  locationAddress String?         @map("location_address")
+  // Étiquette « Contenu généré par l'IA » (ADR-065).
+  aiGenerated     Boolean         @default(false) @map("ai_generated")
   // Compteurs dénormalisés, maintenus par les services applicatifs.
   viewsCount      Int             @default(0) @map("views_count")
   likesCount      Int             @default(0) @map("likes_count")
@@ -656,6 +663,8 @@ enum NotificationType {
   commentReply   @map("comment_reply")
   commentLike    @map("comment_like")
   mention
+  // Mention dans la description d'une vidéo publiée (ADR-065).
+  videoMention   @map("video_mention")
 
   @@map("notification_type")
 }
@@ -704,6 +713,8 @@ model Notification {
   // Un j'aime notifié par compte et par commentaire ; une mention par commentaire et par compte mentionné (ADR-060).
   @@unique([actorId, commentId], map: "notifications_comment_like_key", where: raw("type = 'comment_like'"))
   @@unique([commentId, userId], map: "notifications_mention_key", where: raw("type = 'mention'"))
+  // Mention dans une description (ADR-065) : une par vidéo et par compte.
+  @@unique([videoId, userId], map: "notifications_video_mention_key", where: raw("type = 'video_mention'"))
   @@index([userId, createdAt])
   // Suppression d'une vidéo ou d'un compte : ses notifications sont relues, retirées et annoncées (ADR-043), avant la
   // cascade qui cherche aussi par ces colonnes.

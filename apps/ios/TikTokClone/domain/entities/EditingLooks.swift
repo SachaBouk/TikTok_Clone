@@ -344,3 +344,10 @@ struct EffectTrack: Equatable, Sendable {
         effects.filter { $0.contains(time) }.map(\.effect)
     }
 }
+
+// Brouillons (ADR-065).
+extension VideoFilter: Codable {}
+extension VideoEffect: Codable {}
+extension StickerOverlay: Codable {}
+extension StickerOverlay.Kind: Codable {}
+extension TimedEffect: Codable {}

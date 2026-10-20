@@ -6,8 +6,20 @@ import type { PublishedVideo } from '../../videos/domain/video';
 
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
 // `live` : un compte suivi lance un live (ADR-053). `commentReply`, `commentLike`, `mention` : commentaires (ADR-060).
+// `videoMention` : mention dans la description d'une vidéo publiée (ADR-065).
 export type NotificationType =
-  'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live' | 'commentReply' | 'commentLike' | 'mention';
+  | 'like'
+  | 'comment'
+  | 'follow'
+  | 'repost'
+  | 'reportResolved'
+  | 'contentRemoved'
+  | 'gift'
+  | 'live'
+  | 'commentReply'
+  | 'commentLike'
+  | 'mention'
+  | 'videoMention';
 
 // Modération (ADR-038). Mêmes valeurs que le module reports, recopiées : ce module n'en dépend pas (c'est reports
 // qui le prévient).
@@ -45,6 +57,7 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   'commentReply',
   'commentLike',
   'mention',
+  'videoMention',
 ];
 export const MODERATION_TARGET_TYPES: ModerationTargetType[] = ['video', 'comment', 'account', 'message', 'story', 'live'];
 export const MODERATION_REASONS: ModerationReason[] = ['spam', 'harassment', 'hate', 'violence', 'sexual', 'impersonation', 'other'];
@@ -57,6 +70,8 @@ export function isModeration(type: NotificationType): boolean {
 // Action qui produit une notification pour `recipientId`.
 export type ActivityEvent =
   | { type: 'like' | 'repost'; actorId: string; recipientId: string; videoId: string }
+  // Mention dans la description d'une vidéo publiée (ADR-065) : une par vidéo et par compte.
+  | { type: 'videoMention'; actorId: string; recipientId: string; videoId: string }
   // Commentaire sur sa vidéo ; réponse à son commentaire (`commentId` : la réponse) ; mention dans un commentaire (ADR-060).
   | { type: 'comment' | 'commentReply' | 'mention'; actorId: string; recipientId: string; videoId: string; commentId: string; commentText: string }
   // J'aime sur son commentaire (ADR-060) : texte du commentaire aimé copié. Au plus une par compte et par commentaire.
@@ -147,6 +162,7 @@ export function groupKey(notification: Notification): string {
     case 'comment':
     case 'commentReply':
     case 'mention':
+    case 'videoMention':
       return `${notification.type}:${notification.id}`;
     // J'aime d'un commentaire : par commentaire (ADR-060).
     case 'commentLike':

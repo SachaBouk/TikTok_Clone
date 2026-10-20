@@ -7,7 +7,7 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
 
     func createUpload(
         contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
-        soundShared: Bool, soundID: String?
+        soundShared: Bool, soundID: String?, extras: UploadExtras
     ) async throws -> UploadTicket {
         // Une photo n'est publiée qu'en story (ADR-051).
         guard let type = Components.Schemas.CreateUploadRequest.ContentTypePayload(contentType) else {
@@ -15,7 +15,9 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
         }
         let body = Components.Schemas.CreateUploadRequest(
             contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility),
-            commentsEnabled: commentsEnabled, soundShared: soundShared, soundId: soundID)
+            commentsEnabled: commentsEnabled, soundShared: soundShared, soundId: soundID,
+            cover: extras.coverSize.map { .init(fileSize: $0) }, aiGenerated: extras.aiGenerated,
+            location: extras.location.map { .init(name: $0.name, address: $0.address) })
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
         case .notFound: throw AppError.rejected("Ce son n'est plus disponible. Choisis-en un autre.")
@@ -102,7 +104,8 @@ extension UploadTicket {
             guard let url = URL(string: part.url) else { throw AppError.unexpected }
             return Part(number: part.partNumber, url: url)
         }
-        self.init(videoID: dto.video.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt)
+        self.init(
+            videoID: dto.video.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt, coverURL: dto.coverUrl.flatMap(URL.init(string:)))
     }
 }
 

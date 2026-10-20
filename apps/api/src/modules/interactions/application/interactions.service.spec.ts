@@ -389,6 +389,23 @@ describe('InteractionsService', () => {
       expect(await received('carol')).toEqual([]);
     });
 
+    it('mentions dans la description d’une vidéo publiée (ADR-065) : une fois par compte, ni soi, ni inconnu, ni bloqué, ni vidéo privée', async () => {
+      const published = { id: video, userId: 'bob', description: 'Avec @alice @carol @bob @alice et @inconnu', visibility: 'public' as const };
+      await expect(service.notifyVideoMentions(published)).resolves.toBe(2);
+      expect(await received('alice')).toEqual(['videoMention:bob']);
+      expect(await received('carol')).toEqual(['videoMention:bob']);
+      expect(await received('bob')).toEqual([]);
+      // Rejouée : pas de doublon (une par vidéo et par compte).
+      await service.notifyVideoMentions(published);
+      expect(await received('alice')).toEqual(['videoMention:bob']);
+
+      const other = await createVideo();
+      await expect(service.notifyVideoMentions({ ...published, id: other, visibility: 'private' })).resolves.toBe(0);
+      await service.setBlock('carol', 'bob', true);
+      await expect(service.notifyVideoMentions({ ...published, id: other })).resolves.toBe(1);
+      expect(await received('carol')).toEqual([]);
+    });
+
     it('supprimer un commentaire emporte ses réponses, leurs j’aime et leurs notifications', async () => {
       const { comment: root } = await service.addComment('alice', video, 'Premier');
       const { comment: reply } = await service.addComment('carol', video, 'Réponse @alice', root.id);

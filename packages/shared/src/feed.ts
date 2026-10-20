@@ -1,6 +1,6 @@
 import type { AuthorStoryDto } from './stories.js';
 import type { UserSummaryDto } from './users.js';
-import type { VideoVisibility } from './videos.js';
+import type { VideoLocationDto, VideoVisibility } from './videos.js';
 
 // Feed principal (ADR-016) : vidéos publiées, dans un ordre aléatoire propre à chaque session de scroll.
 
@@ -25,6 +25,10 @@ export interface FeedItemDto {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // Étiquette « Contenu généré par l'IA » (ADR-065).
+  aiGenerated: boolean;
+  // Lieu (ADR-065), absent sans lieu.
+  location?: VideoLocationDto;
   createdAt: string;
   viewsCount: number;
   likesCount: number;

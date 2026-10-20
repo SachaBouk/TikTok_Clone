@@ -44,6 +44,9 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     var visibility: VideoVisibility = .everyone
     // Commentaires autorisés (ADR-062) : coupés, la liste n'est lue que par l'auteur.
     var commentsEnabled = true
+    // Lieu et étiquette « Contenu généré par l'IA » (ADR-065).
+    var location: VideoLocation? = nil
+    var aiGenerated = false
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).
@@ -52,3 +55,6 @@ struct FeedPage: Equatable, Sendable {
     // Nil à la fin de la session : repartir sans curseur, sur un nouvel ordre.
     let nextCursor: String?
 }
+
+// Brouillons (ADR-065) : auteur d'un son repris, enregistré avec le plan.
+extension UserSummary: Codable {}

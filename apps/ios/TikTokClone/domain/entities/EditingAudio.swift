@@ -222,3 +222,9 @@ struct RecentSounds: Equatable, Sendable {
         if ids.count > Self.limit { ids.removeLast(ids.count - Self.limit) }
     }
 }
+
+// Brouillons (ADR-065).
+extension VoiceoverClip: Codable {}
+extension VoiceEffect: Codable {}
+extension Sound: Codable {}
+extension ChosenSound: Codable {}

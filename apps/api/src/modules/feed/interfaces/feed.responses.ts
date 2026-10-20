@@ -4,6 +4,7 @@ import type { FeedItemDto, FeedPageDto, FeedViewerStateDto, VideoPageDto } from 
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { FeedItem } from '../application/feed.service';
 import { VIDEO_VISIBILITIES, type VideoVisibility } from '../../videos/domain/video';
+import { locationOf, VideoLocationResponse } from '../../videos/interfaces/videos.responses';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -43,6 +44,13 @@ export class FeedItemResponse implements FeedItemDto {
 
   @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
   soundShared!: boolean;
+
+  @ApiProperty({ description: "Étiquette « Contenu généré par l'IA » (ADR-065)." })
+  aiGenerated!: boolean;
+
+  // Absent sans lieu (ADR-065). Sans description : elle produirait un `allOf`.
+  @ApiPropertyOptional({ type: VideoLocationResponse })
+  location?: VideoLocationResponse;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -114,6 +122,8 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
     soundShared: video.soundShared,
+    aiGenerated: video.aiGenerated,
+    ...locationOf(video),
     createdAt: video.createdAt.toISOString(),
     viewsCount: video.viewsCount,
     likesCount: video.likesCount,

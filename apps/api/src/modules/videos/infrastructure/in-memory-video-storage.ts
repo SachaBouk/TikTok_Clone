@@ -50,6 +50,19 @@ export class InMemoryVideoStorage extends VideoStorage {
     this.uploads.delete(uploadId);
   }
 
+  // URLs d'un seul PUT signées (couverture, ADR-065) : clé → type et taille.
+  readonly presignedPuts = new Map<string, { contentType: string; size: number }>();
+
+  async presignPut(key: string, contentType: string, size: number): Promise<string> {
+    this.presignedPuts.set(key, { contentType, size });
+    return `memory://${key}`;
+  }
+
+  // Ce que ferait l'app avec l'URL signée d'un seul PUT.
+  putObject(key: string, size: number): void {
+    this.objects.set(key, size);
+  }
+
   async getObjectSize(key: string): Promise<number | null> {
     return this.objects.get(key) ?? null;
   }

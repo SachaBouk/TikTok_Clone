@@ -4,10 +4,11 @@ import Foundation
 protocol VideoPublishingRepository: Sendable {
     // Crée la vidéo en `uploading` et renvoie une URL signée par partie. `.rejected` : format ou taille refusés.
     // `soundShared` : « Autoriser l'utilisation de mon son » ; `soundID` : son repris d'une autre vidéo (ADR-064).
-    // `.notFound` : ce son n'est plus proposé.
+    // `.notFound` : ce son n'est plus proposé. `extras` (ADR-065) : étiquette IA, lieu, taille de la couverture à envoyer
+    // (le ticket porte alors `coverURL`).
     func createUpload(
         contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
-        soundShared: Bool, soundID: String?
+        soundShared: Bool, soundID: String?, extras: UploadExtras
     ) async throws -> UploadTicket
     // Assemble les parties et lance le transcodage : la vidéo passe en `processing`.
     // Lève UploadFailure.alreadyConfirmed si l'API l'a déjà fait (réponse perdue), .restartNeeded si l'envoi
@@ -29,7 +30,14 @@ protocol VideoPublishingRepository: Sendable {
 protocol UploadPartTransport: Sendable {
     // Renvoie l'en-tête `ETag` de la réponse. `sent` : octets de la partie déjà envoyés.
     // Lève AppError.network (coupure : réessayer) ou UploadFailure.restartNeeded (URL expirée ou refusée).
-    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String
+    // `contentType` : en-tête signé par l'API (couverture, ADR-065), nil pour une partie.
+    func upload(_ data: Data, to url: URL, contentType: String?, sent: @escaping @Sendable (Int) -> Void) async throws -> String
+}
+
+extension UploadPartTransport {
+    func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
+        try await upload(data, to: url, contentType: nil, sent: sent)
+    }
 }
 
 // Port du stockage local des envois (reprise après relance de l'app).
@@ -61,5 +69,15 @@ extension VideoPublishingRepository {
         try await createUpload(
             contentType: contentType, fileSize: fileSize, description: description, visibility: visibility, commentsEnabled: commentsEnabled,
             soundShared: true, soundID: nil)
+    }
+
+    // Sans les réglages de l'ADR-065.
+    func createUpload(
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
+        soundShared: Bool, soundID: String?
+    ) async throws -> UploadTicket {
+        try await createUpload(
+            contentType: contentType, fileSize: fileSize, description: description, visibility: visibility, commentsEnabled: commentsEnabled,
+            soundShared: soundShared, soundID: soundID, extras: UploadExtras())
     }
 }

@@ -11,6 +11,7 @@ extension VideoPageActions {
         share: @escaping () -> Void,
         alert: @escaping (String) -> Void,
         openHashtag: @escaping (String) -> Void = { _ in },
+        openMention: @escaping (String) -> Void = { _ in },
         gift: @escaping () -> Void = {},
         openStories: (() -> Void)? = nil
     ) {
@@ -22,6 +23,7 @@ extension VideoPageActions {
             share: share,
             follow: { Task { if let message = await interactions.toggleFollow(authorOf: video) { alert(message) } } },
             openHashtag: openHashtag,
+            openMention: openMention,
             gift: gift,
             openStories: openStories
         )

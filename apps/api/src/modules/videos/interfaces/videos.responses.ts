@@ -1,8 +1,17 @@
-import { ApiProperty } from '@nestjs/swagger';
-import type { PendingVideosDto, UploadPartUrlDto, VideoDto, VideoStatus, VideoUploadDto, VideoVisibility } from '@repo/shared';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { PendingVideosDto, UploadPartUrlDto, VideoDto, VideoLocationDto, VideoStatus, VideoUploadDto, VideoVisibility } from '@repo/shared';
 import { VIDEO_VISIBILITIES, type Video } from '../domain/video';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
+
+// Lieu de la publication (ADR-065) : nom et adresse affichée, jamais de coordonnées.
+export class VideoLocationResponse implements VideoLocationDto {
+  @ApiProperty()
+  name!: string;
+
+  @ApiPropertyOptional()
+  address?: string;
+}
 
 export class VideoResponse implements VideoDto {
   @ApiProperty({ format: 'uuid' })
@@ -26,6 +35,13 @@ export class VideoResponse implements VideoDto {
 
   @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
   soundShared!: boolean;
+
+  @ApiProperty({ description: "Étiquette « Contenu généré par l'IA » (ADR-065)." })
+  aiGenerated!: boolean;
+
+  // Absent sans lieu (ADR-065). Sans description : elle produirait un `allOf`.
+  @ApiPropertyOptional({ type: VideoLocationResponse })
+  location?: VideoLocationResponse;
 
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
@@ -57,6 +73,12 @@ export class VideoUploadResponse implements VideoUploadDto {
 
   @ApiProperty({ format: 'date-time', description: 'Expiration des URLs signées.' })
   expiresAt!: string;
+
+  @ApiPropertyOptional({
+    format: 'uri',
+    description: 'Couverture demandée (ADR-065) : envoyer le JPEG en un seul PUT, avec `Content-Type: image/jpeg` et la taille déclarée.',
+  })
+  coverUrl?: string;
 }
 
 export class PendingVideosResponse implements PendingVideosDto {
@@ -75,8 +97,16 @@ export function toVideoDto(video: Video): VideoDto {
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
     soundShared: video.soundShared,
+    aiGenerated: video.aiGenerated,
+    ...locationOf(video),
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     createdAt: video.createdAt.toISOString(),
   };
+}
+
+// Lieu (ADR-065) : `location` absent sans lieu, `address` absente sans adresse. Partagé avec le feed.
+export function locationOf(video: { locationName: string | null; locationAddress: string | null }): { location?: VideoLocationDto } {
+  if (!video.locationName) return {};
+  return { location: { name: video.locationName, ...(video.locationAddress ? { address: video.locationAddress } : {}) } };
 }

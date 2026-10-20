@@ -55,6 +55,9 @@ export class VideosController {
         commentsEnabled: body.commentsEnabled,
         soundShared: body.soundShared,
         soundId: body.soundId,
+        cover: body.cover ? { fileSize: body.cover.fileSize } : undefined,
+        aiGenerated: body.aiGenerated,
+        location: body.location ? { name: body.location.name, address: body.location.address ?? null } : undefined,
       }),
     );
   }
@@ -143,5 +146,6 @@ function toUploadDto(upload: VideoUpload): VideoUploadDto {
     partSize: upload.partSize,
     parts: upload.parts.map((part) => ({ partNumber: part.partNumber, url: part.url })),
     expiresAt: upload.expiresAt.toISOString(),
+    ...(upload.coverUrl ? { coverUrl: upload.coverUrl } : {}),
   };
 }

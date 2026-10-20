@@ -6,8 +6,20 @@ import type { UserSummaryDto } from './users.js';
 // `reportResolved` et `contentRemoved` : modération (ADR-038), sans auteur. `gift` : cadeau reçu sur une vidéo (ADR-050).
 // `live` : un compte suivi lance un live (ADR-053).
 // `commentReply`, `commentLike`, `mention` : commentaires (ADR-060), avec `video` et `comment`.
+// `videoMention` : mentionné dans la description d'une vidéo publiée (ADR-065), avec `video`.
 export type NotificationType =
-  'like' | 'comment' | 'follow' | 'repost' | 'reportResolved' | 'contentRemoved' | 'gift' | 'live' | 'commentReply' | 'commentLike' | 'mention';
+  | 'like'
+  | 'comment'
+  | 'follow'
+  | 'repost'
+  | 'reportResolved'
+  | 'contentRemoved'
+  | 'gift'
+  | 'live'
+  | 'commentReply'
+  | 'commentLike'
+  | 'mention'
+  | 'videoMention';
 
 // Live lancé (ADR-053) : à ouvrir, en cours ou terminé.
 export interface NotificationLiveDto {

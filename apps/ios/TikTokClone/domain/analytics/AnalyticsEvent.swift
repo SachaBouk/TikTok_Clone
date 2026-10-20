@@ -189,6 +189,13 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "video_upload_started", properties: details.properties(photo: false))
     }
 
+    // Brouillons (ADR-065) : enregistré (depuis l'écran de publication ou en abandonnant l'aperçu), rouvert.
+    static func draftSaved(fromPost: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "draft_saved", properties: ["origin": .string(fromPost ? "post" : "editor")])
+    }
+
+    static let draftOpened = AnalyticsEvent(name: "draft_opened", properties: [:])
+
     static func uploadFinished(ready: Bool) -> AnalyticsEvent {
         AnalyticsEvent(name: ready ? "video_published" : "video_processing_failed", properties: [:])
     }
@@ -284,6 +291,12 @@ extension PublicationDetails {
         properties["speed"] = .double(speed)
         properties["cropped"] = .bool(cropped)
         properties["rotated"] = .bool(rotated)
+        properties["cover_changed"] = .bool(coverChanged)
+        properties["cover_title"] = .bool(coverTitle)
+        properties["location_added"] = .bool(locationAdded)
+        properties["mention_count"] = .int(mentionCount)
+        properties["ai_generated"] = .bool(aiGenerated)
+        properties["saved_to_device"] = .bool(savedToDevice)
         return properties
     }
 }

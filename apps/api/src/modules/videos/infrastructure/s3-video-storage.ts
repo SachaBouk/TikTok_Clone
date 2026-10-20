@@ -6,6 +6,7 @@ import {
   DeleteObjectsCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
   type S3Client,
   S3ServiceException,
   UploadPartCommand,
@@ -74,6 +75,12 @@ export class S3VideoStorage extends VideoStorage {
     } catch (error) {
       if (!(error instanceof S3ServiceException && error.name === 'NoSuchUpload')) throw error;
     }
+  }
+
+  presignPut(key: string, contentType: string, size: number, expiresInSeconds: number): Promise<string> {
+    const command = new PutObjectCommand({ Bucket: this.config.rawBucket, Key: key, ContentType: contentType, ContentLength: size });
+    // Comme la photo de profil : Content-Type et Content-Length signés, le stockage refuse (403) un autre fichier.
+    return getSignedUrl(this.presigner, command, { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type', 'content-length']) });
   }
 
   async getObjectSize(key: string): Promise<number | null> {

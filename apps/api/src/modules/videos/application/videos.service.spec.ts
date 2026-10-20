@@ -3,8 +3,9 @@ import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter'
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CLEANUP_DELAY_MS } from '../domain/cleanup-queue';
 import { TranscodingQueue, type TranscodingJob } from '../domain/transcoding-queue';
-import { MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
+import { MAX_COVER_SIZE_BYTES, MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
 import {
+  CoverTooLargeError,
   InvalidHashtagError,
   SoundNotFoundError,
   TooManyUploadsError,
@@ -373,6 +374,68 @@ describe('VideosService', () => {
       await expect(service.setCommentsEnabled(BOB, video.id, false)).rejects.toBeInstanceOf(VideoNotFoundError);
       await expect(service.setCommentsEnabled(ALICE, video.id, false)).resolves.toMatchObject({ commentsEnabled: false });
       await expect(service.setCommentsEnabled(ALICE, video.id, true)).resolves.toMatchObject({ commentsEnabled: true });
+    });
+  });
+
+  describe('écran de publication (ADR-065)', () => {
+    it('couverture : URL signée d’un seul PUT, clé à côté du brut, passée au transcodage puis nettoyée', async () => {
+      await expect(
+        service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, cover: { fileSize: MAX_COVER_SIZE_BYTES + 1 } }),
+      ).rejects.toBeInstanceOf(CoverTooLargeError);
+      const upload = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, cover: { fileSize: 5000 } });
+      const coverKey = upload.video.rawKey.replace(/\.mp4$/, '-cover.jpg');
+      expect(upload.video.coverKey).toBe(coverKey);
+      expect(upload.coverUrl).toBe(`memory://${coverKey}`);
+      expect(storage.presignedPuts.get(coverKey)).toEqual({ contentType: 'image/jpeg', size: 5000 });
+      storage.putObject(coverKey, 5000);
+      await service.completeUpload(ALICE, upload.video.id, uploadAllParts(upload.video.uploadId!, 1000, 1));
+      expect(queue.jobs).toEqual([{ videoId: upload.video.id, rawKey: upload.video.rawKey, coverKey }]);
+
+      await service.deleteVideo(ALICE, upload.video.id);
+      await service.cleanupFiles(cleanup.scheduled[0].cleanup);
+      expect(storage.objects.has(coverKey)).toBe(false);
+
+      const plain = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      expect(plain.coverUrl).toBeNull();
+      expect(plain.video.coverKey).toBeNull();
+    });
+
+    it('lieu nettoyé (adresse seulement avec un nom) et étiquette IA, faux par défaut', async () => {
+      const { video } = await service.createUpload(ALICE, {
+        contentType: 'video/mp4',
+        fileSize: 1000,
+        aiGenerated: true,
+        location: { name: '  Tour Eiffel ', address: ' Paris, France ' },
+      });
+      expect(video).toMatchObject({ aiGenerated: true, locationName: 'Tour Eiffel', locationAddress: 'Paris, France' });
+      const blank = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, location: { name: '  ', address: 'Paris' } });
+      expect(blank.video).toMatchObject({ aiGenerated: false, locationName: null, locationAddress: null });
+    });
+
+    it('écouteurs prévenus une fois quand la vidéo est publiée, pas pour un échec ni un résultat rejoué', async () => {
+      const published: string[] = [];
+      service.onVideoPublished(async (video) => {
+        published.push(video.id);
+      });
+      const upload = async () => {
+        const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+        await service.completeUpload(ALICE, video.id, uploadAllParts(video.uploadId!, 1000, 1));
+        return video.id;
+      };
+      const ok = await upload();
+      const ko = await upload();
+      await service.applyTranscodeResult(ok, { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b' });
+      await service.applyTranscodeResult(ok, { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b' });
+      await service.applyTranscodeResult(ko, { status: 'failed' });
+      expect(published).toEqual([ok]);
+    });
+
+    it('envoi abandonné : sa couverture est supprimée avec lui', async () => {
+      const upload = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, cover: { fileSize: 10 } });
+      storage.putObject(upload.video.coverKey!, 10);
+      videos.videos.get(upload.video.id)!.createdAt = new Date('2025-12-01T00:00:00Z');
+      expect(await service.purgeAbandonedUploads()).toBe(1);
+      expect(storage.objects.has(upload.video.coverKey!)).toBe(false);
     });
   });
 

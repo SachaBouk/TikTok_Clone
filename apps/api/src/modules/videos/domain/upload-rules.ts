@@ -20,6 +20,15 @@ export const UPLOAD_URL_TTL_SECONDS = 2 * 60 * 60;
 
 export const MAX_DESCRIPTION_LENGTH = 2200;
 
+// Couverture choisie dans l'app (ADR-065) : un JPEG envoyé en un seul PUT, à côté du brut.
+export const COVER_CONTENT_TYPE = 'image/jpeg';
+export const MAX_COVER_SIZE_BYTES = 2 * 1024 ** 2; // 2 Mio
+
+// `<userId>/<uuid>.<ext>` → `<userId>/<uuid>-cover.jpg`.
+export function coverKeyFor(rawKey: string): string {
+  return rawKey.replace(/\.[^./]+$/, '') + '-cover.jpg';
+}
+
 // Envois démarrés par compte (ADR-039) : une vidéo coûte jusqu'à 1 Gio de stockage et un transcodage.
 // Chaque `POST /videos/upload-url` compte, même si l'envoi est ensuite abandonné ou repris de zéro.
 export const UPLOAD_RATE_LIMITS: RateLimitRule[] = [

@@ -10,10 +10,13 @@ import {
   TRENDING_HASHTAGS,
   TRENDING_WINDOW_MS,
 } from '../domain/hashtags';
-import type { TranscodingQueue } from '../domain/transcoding-queue';
+import type { TranscodingJob, TranscodingQueue } from '../domain/transcoding-queue';
 import type { VideoEventPublisher } from '../domain/video-events';
 import {
+  COVER_CONTENT_TYPE,
+  coverKeyFor,
   isSupportedVideoType,
+  MAX_COVER_SIZE_BYTES,
   MAX_VIDEO_SIZE_BYTES,
   partCount,
   SUPPORTED_VIDEO_TYPES,
@@ -36,6 +39,7 @@ import {
   type VideoVisibility,
 } from '../domain/video';
 import {
+  CoverTooLargeError,
   InvalidHashtagError,
   SoundNotFoundError,
   TooManyUploadsError,
@@ -60,6 +64,10 @@ export interface CreateUploadInput {
   // « Autoriser l'utilisation de mon son », autorisé par défaut, et son repris d'une autre vidéo (ADR-064).
   soundShared?: boolean;
   soundId?: string;
+  // ADR-065 : couverture à envoyer (JPEG), étiquette « Contenu généré par l'IA », lieu (nom et adresse affichée).
+  cover?: { fileSize: number };
+  aiGenerated?: boolean;
+  location?: { name: string; address?: string | null };
 }
 
 export interface VideoUpload {
@@ -67,6 +75,8 @@ export interface VideoUpload {
   partSize: number;
   parts: PresignedPart[];
   expiresAt: Date;
+  // URL signée d'un seul PUT pour la couverture (ADR-065), si elle a été demandée.
+  coverUrl: string | null;
 }
 
 // Service applicatif du module videos (ADR-003). Upload direct via URLs signées (ADR-007) :
@@ -74,6 +84,8 @@ export interface VideoUpload {
 export class VideosService {
   // Prévenus avant la suppression en base d'une vidéo (voir `onVideoRemoving`).
   private readonly removalListeners: ((videoId: string) => Promise<void>)[] = [];
+  // Prévenus quand une vidéo est publiée (voir `onVideoPublished`).
+  private readonly publicationListeners: ((video: Video) => Promise<void>)[] = [];
 
   constructor(
     private readonly videos: VideoRepository,
@@ -89,6 +101,7 @@ export class VideosService {
   async createUpload(userId: string, input: CreateUploadInput): Promise<VideoUpload> {
     if (!isSupportedVideoType(input.contentType)) throw new UnsupportedVideoTypeError(input.contentType);
     if (input.fileSize > MAX_VIDEO_SIZE_BYTES) throw new VideoTooLargeError();
+    if (input.cover && input.cover.fileSize > MAX_COVER_SIZE_BYTES) throw new CoverTooLargeError();
     // Son repris (ADR-064) : il doit être proposé (vidéo d'origine publique, publiée, qui le permet).
     if (input.soundId && (await this.videos.findSounds({ kind: 'ids', ids: [input.soundId] }, [], 0, 1)).length === 0) {
       throw new SoundNotFoundError(input.soundId);
@@ -100,6 +113,8 @@ export class VideosService {
     // Clé préfixée par l'auteur : permet de retrouver ses objets (suppression de compte, nettoyage).
     const rawKey = `${userId}/${randomUUID()}.${SUPPORTED_VIDEO_TYPES[input.contentType]}`;
     const uploadId = await this.storage.startMultipartUpload(rawKey, input.contentType);
+    const coverKey = input.cover ? coverKeyFor(rawKey) : null;
+    const locationName = input.location?.name.trim() || null;
 
     let video: Video;
     try {
@@ -113,6 +128,10 @@ export class VideosService {
         commentsEnabled: input.commentsEnabled ?? true,
         soundShared: input.soundShared ?? true,
         soundId: input.soundId ?? null,
+        coverKey,
+        aiGenerated: input.aiGenerated ?? false,
+        locationName,
+        locationAddress: locationName ? input.location?.address?.trim() || null : null,
       });
     } catch (error) {
       await this.storage.abortMultipartUpload(rawKey, uploadId);
@@ -120,11 +139,14 @@ export class VideosService {
     }
 
     const parts = await this.storage.presignPartUrls(rawKey, uploadId, partCount(input.fileSize), UPLOAD_URL_TTL_SECONDS);
+    const coverUrl =
+      coverKey && input.cover ? await this.storage.presignPut(coverKey, COVER_CONTENT_TYPE, input.cover.fileSize, UPLOAD_URL_TTL_SECONDS) : null;
     return {
       video,
       partSize: UPLOAD_PART_SIZE_BYTES,
       parts,
       expiresAt: new Date(this.now().getTime() + UPLOAD_URL_TTL_SECONDS * 1000),
+      coverUrl,
     };
   }
 
@@ -163,7 +185,7 @@ export class VideosService {
 
     // Si la publication échoue (Redis indisponible), la vidéo reste en `processing` :
     // requeueStuckTranscodes la remettra dans la file.
-    await this.transcoding.enqueue({ videoId: uploaded.id, rawKey: uploaded.rawKey });
+    await this.transcoding.enqueue(transcodingJob(uploaded));
     return uploaded;
   }
 
@@ -181,6 +203,7 @@ export class VideosService {
     }
     const video = await this.videos.findById(videoId);
     if (video) await this.events.videoProcessed(video);
+    if (video?.status === 'ready') for (const listener of this.publicationListeners) await listener(video);
     return true;
   }
 
@@ -219,6 +242,7 @@ export class VideosService {
       if (job.uploadId) await this.storage.abortMultipartUpload(job.rawKey, job.uploadId);
       await this.storage.deleteObject(job.rawKey);
     }
+    if (job.coverKey) await this.storage.deleteObject(job.coverKey);
     await this.storage.deleteHlsFiles(job.videoId);
     return true;
   }
@@ -230,6 +254,8 @@ export class VideosService {
     for (const video of abandoned) {
       // Annule l'upload multipart : le stockage libère les parties déjà reçues.
       if (video.uploadId) await this.storage.abortMultipartUpload(video.rawKey, video.uploadId);
+      // Couverture déjà envoyée (ADR-065) : sans effet si elle ne l'a pas été.
+      if (video.coverKey) await this.storage.deleteObject(video.coverKey);
       await this.videos.delete(video.id);
     }
     return abandoned.length;
@@ -240,7 +266,7 @@ export class VideosService {
   async requeueStuckTranscodes(): Promise<number> {
     const cutoff = new Date(this.now().getTime() - STUCK_TRANSCODE_AFTER_MS);
     const stuck = await this.videos.findStuckTranscodes(cutoff, MAINTENANCE_BATCH_SIZE);
-    for (const video of stuck) await this.transcoding.enqueue({ videoId: video.id, rawKey: video.rawKey });
+    for (const video of stuck) await this.transcoding.enqueue(transcodingJob(video));
     return stuck.length;
   }
 
@@ -398,6 +424,13 @@ export class VideosService {
     this.removalListeners.push(listener);
   }
 
+  // Un autre module agit quand une vidéo est publiée (passage en `ready`), une seule fois par vidéo (ex. interactions :
+  // prévenir les comptes mentionnés dans sa description, ADR-065). Un échec de l'écouteur fait rejouer le résultat du
+  // transcodage, qui est alors ignoré : l'écouteur doit gérer ses propres erreurs.
+  onVideoPublished(listener: (video: Video) => Promise<void>): void {
+    this.publicationListeners.push(listener);
+  }
+
   // Une vidéo pas encore `ready` n'est visible que par son auteur (suivi du traitement).
   async getVideo(videoId: string, viewerId: string | null): Promise<Video> {
     const video = await this.videos.findById(videoId);
@@ -422,5 +455,10 @@ export class VideosService {
 }
 
 function filesOf(video: Video): VideoFilesCleanup {
-  return { videoId: video.id, rawKey: video.rawKey, uploadId: video.uploadId };
+  return { videoId: video.id, rawKey: video.rawKey, uploadId: video.uploadId, ...(video.coverKey ? { coverKey: video.coverKey } : {}) };
+}
+
+// Job de transcodage : la couverture choisie (ADR-065) devient la miniature.
+function transcodingJob(video: Video): TranscodingJob {
+  return { videoId: video.id, rawKey: video.rawKey, ...(video.coverKey ? { coverKey: video.coverKey } : {}) };
 }
