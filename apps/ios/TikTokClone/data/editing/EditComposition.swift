@@ -7,7 +7,7 @@ import CoreImage
 //   (`scaleTimeRange`, sur toutes les pistes) ;
 // - volume de chaque clip par un mixage audio (son d'origine coupé : volume nul partout) ;
 // - une instruction par clip, pour le compositeur (`EditCompositor`) : rotation de la piste et du clip, cadre, image
-//   ajustée en 9:16, filtre, textes.
+//   ajustée en 9:16, filtre et son intensité, effets sur leurs plages (ADR-063), textes et autocollants.
 struct EditComposition {
     // Image finale en 9:16, petit côté de 1080 px au plus (jamais agrandie au-delà du plus grand clip).
     static let maxShortSide: CGFloat = 1080
@@ -26,7 +26,7 @@ struct EditComposition {
         var end: CMTime { start + duration }
     }
 
-    // `includeTexts` faux pour l'aperçu : les textes y sont dessinés par SwiftUI, déplaçables au doigt.
+    // `includeTexts` faux pour l'aperçu : textes et autocollants y sont dessinés par SwiftUI, déplaçables au doigt.
     static func make(_ plan: EditPlan, includeTexts: Bool) async throws -> sending EditComposition {
         let composition = AVMutableComposition()
         guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
@@ -74,7 +74,7 @@ struct EditComposition {
 
         let total = composition.duration
         let renderSize = renderSize(shortSide: largestShortSide)
-        let overlay = includeTexts ? TextOverlayRenderer.image(plan.texts, size: renderSize) : nil
+        let overlay = includeTexts ? TextOverlayRenderer.image(plan.texts, stickers: plan.stickers, size: renderSize) : nil
         var instructions: [EditInstruction] = []
         for (index, piece) in pieces.enumerated() {
             // Bornes jointives : la dernière finit avec la composition.
@@ -84,7 +84,7 @@ struct EditComposition {
                 EditInstruction(
                     timeRange: CMTimeRange(start: piece.start, end: end), trackID: videoTrack.trackID, transform: piece.transform,
                     quarterTurns: piece.clip.quarterTurns, crop: piece.clip.crop, renderSize: renderSize, filter: plan.filter,
-                    overlay: overlay))
+                    filterIntensity: plan.filterIntensity, effects: plan.effects, overlay: overlay))
         }
 
         let videoComposition = AVMutableVideoComposition()
@@ -132,11 +132,14 @@ final class EditInstruction: NSObject, AVVideoCompositionInstructionProtocol, @u
     let crop: CropRect
     let renderSize: CGSize
     let filter: VideoFilter
+    let filterIntensity: Double
+    // Plages d'effets, en temps de la vidéo finale (= temps de la composition).
+    let effects: [TimedEffect]
     let overlay: CIImage?
 
     init(
         timeRange: CMTimeRange, trackID: CMPersistentTrackID, transform: CGAffineTransform, quarterTurns: Int, crop: CropRect,
-        renderSize: CGSize, filter: VideoFilter, overlay: CIImage?
+        renderSize: CGSize, filter: VideoFilter, filterIntensity: Double = 1, effects: [TimedEffect] = [], overlay: CIImage?
     ) {
         self.timeRange = timeRange
         self.trackID = trackID
@@ -145,12 +148,15 @@ final class EditInstruction: NSObject, AVVideoCompositionInstructionProtocol, @u
         self.crop = crop
         self.renderSize = renderSize
         self.filter = filter
+        self.filterIntensity = filterIntensity
+        self.effects = effects
         self.overlay = overlay
         requiredSourceTrackIDs = [NSNumber(value: trackID)]
     }
 }
 
-// Compositeur (Core Image) : rotation de la piste et du clip, cadre, image ajustée en 9:16, filtre, textes.
+// Compositeur (Core Image) : rotation de la piste et du clip, cadre, image ajustée en 9:16, filtre, effets, textes et
+// autocollants.
 final class EditCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let colorSpace = CGColorSpace(name: CGColorSpace.itur_709)
@@ -176,9 +182,12 @@ final class EditCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
         let bounds = CGRect(origin: .zero, size: instruction.renderSize)
         let image: CIImage
         if let frame = request.sourceFrame(byTrackID: instruction.trackID) {
+            let seconds = request.compositionTime.seconds
+            let effects = EffectTrack.active(instruction.effects, at: .seconds(seconds))
             image = EditRendering.render(
                 CIImage(cvPixelBuffer: frame), transform: instruction.transform, quarterTurns: instruction.quarterTurns,
-                crop: instruction.crop, renderSize: instruction.renderSize, filter: instruction.filter, overlay: instruction.overlay)
+                crop: instruction.crop, renderSize: instruction.renderSize, filter: instruction.filter,
+                filterIntensity: instruction.filterIntensity, effects: effects, time: seconds, overlay: instruction.overlay)
         } else {
             image = CIImage(color: .black).cropped(to: bounds)
         }

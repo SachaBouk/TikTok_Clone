@@ -260,6 +260,61 @@ struct EditingTests {
         #expect(model.plan.texts.isEmpty)
     }
 
+    @Test("filtres, autocollants, effets : intensité en un geste, autocollant daté, séance d'effets enregistrée en un pas")
+    func looks() throws {
+        let editor = FakeVideoEditor(store: store)
+        let clip = try temporaryClip(6)
+        let model = VideoEditorViewModel(
+            request: EditorRequest(plan: EditPlan(clips: [clip], kind: .video), source: .camera),
+            exportVideo: ExportEditedVideoUseCase(editor: editor), makeThumbnails: { _, _ in [] })
+
+        model.setFilter(.chill)
+        let afterFilter = model.previewVersion
+        model.setFilterIntensity(0.8)
+        model.setFilterIntensity(0.3)
+        model.endInteraction()
+        #expect(model.plan.filterIntensity == 0.3 && model.previewVersion == afterFilter + 1)
+        model.undo()
+        #expect(model.plan.filterIntensity == 1 && model.plan.filter == .chill)
+
+        // Autocollants : dessinés par SwiftUI, l'aperçu n'est pas relu.
+        let version = model.previewVersion
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 16, minute: 42)))
+        #expect(model.addSticker(.time, now: now))
+        #expect(model.addSticker(.emoji, emoji: "🔥"))
+        #expect(model.plan.stickers.map(\.text) == ["16:42", "🔥"] && model.previewVersion == version)
+        let fire = model.plan.stickers[1]
+        model.scaleSticker(fire.id, to: 2)
+        model.moveSticker(fire.id, to: CGPoint(x: 0.3, y: 0.7))
+        #expect(model.plan.stickers[1].scale == 2 && model.plan.stickers[1].center == CGPoint(x: 0.3, y: 0.7))
+        model.removeSticker(fire.id)
+        #expect(model.plan.stickers.count == 1)
+
+        // Séance d'effets : annuler / rétablir dans la séance, puis un seul pas dans l'éditeur.
+        let session = EffectsSession(effects: model.plan.effects, duration: model.plan.outputDuration)
+        #expect(!session.hasChanges)
+        #expect(session.add(.negative, at: .seconds(1)))
+        let negative = try #require(session.selected)
+        #expect(negative.start == .seconds(1) && negative.end == .seconds(3))
+        session.setEnd(.seconds(4))
+        session.setEnd(.seconds(5))
+        session.endInteraction()
+        #expect(session.effects[0].end == .seconds(5))
+        session.undo()
+        #expect(session.effects[0].end == .seconds(3))
+        session.redo()
+        session.add(.mirror, at: .seconds(5))
+        session.removeSelected()
+        #expect(session.effects.map(\.effect) == [.negative] && session.selected == nil && session.hasChanges)
+        let beforeEffects = model.previewVersion
+        model.setEffects(session.effects)
+        #expect(model.plan.effects.count == 1 && model.previewVersion == beforeEffects + 1)
+        model.undo()
+        #expect(model.plan.effects.isEmpty)
+    }
+
     @Test("éditeur : vidéos ajoutées par « + », supprimées à l'abandon ; clips retirés supprimés à l'export")
     func appendedClips() async throws {
         let clip = try temporaryClip(4)

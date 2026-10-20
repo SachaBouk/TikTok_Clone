@@ -65,3 +65,4 @@ Sons et musique (ADR-052), effets, modèles (« Template »), AutoCut, « Magic 
 - ADR-052 — Enregistrement et édition vidéo dans l'app
 - ADR-060 — Commentaires façon TikTok
 - ADR-061 — Vidéos privées
+- Complété par [ADR-063](ADR-063-filtres-autocollants-effets.md) — Éditeur vidéo : filtres en catégories, autocollants, effets

@@ -183,7 +183,7 @@ final class VideoEditorViewModel {
         guard let base = interactionBase else { return }
         interactionBase = nil
         history.record(base, current: plan)
-        if base != plan { previewVersion += 1 }
+        if Self.renderChanged(base, plan) { previewVersion += 1 }
     }
 
     func undo() {
@@ -224,6 +224,49 @@ final class VideoEditorViewModel {
 
     func setFilter(_ filter: VideoFilter) {
         perform { $0.filter = filter }
+    }
+
+    // Curseur d'intensité du filtre (0 à 1) : un seul pas d'annulation par geste (`endInteraction`).
+    func setFilterIntensity(_ intensity: Double) {
+        beginInteraction()
+        plan.setFilterIntensity(intensity)
+    }
+
+    // MARK: Autocollants et effets (ADR-063)
+
+    var canAddSticker: Bool { plan.stickers.count < EditPlan.maxStickers }
+
+    // Autocollant ajouté au centre ; la date et l'heure sont celles de l'ajout.
+    @discardableResult
+    func addSticker(_ kind: StickerOverlay.Kind, emoji: String = "", now: Date = .now) -> Bool {
+        let text = kind == .emoji ? emoji : StickerOverlay.text(for: kind, at: now)
+        var added = false
+        perform { added = $0.addSticker(kind, text: text) != nil }
+        if !added { errorMessage = "\(EditPlan.maxStickers) autocollants au plus." }
+        return added
+    }
+
+    func moveSticker(_ id: UUID, to center: CGPoint) {
+        perform { $0.moveSticker(id, to: center) }
+    }
+
+    func scaleSticker(_ id: UUID, to scale: Double) {
+        perform { $0.scaleSticker(id, to: scale) }
+    }
+
+    func removeSticker(_ id: UUID) {
+        perform { $0.removeSticker(id) }
+    }
+
+    // « Enregistrer » de l'éditeur d'effets : un seul pas d'annulation pour toute la séance.
+    func setEffects(_ effects: [TimedEffect]) {
+        perform { $0.setEffects(effects) }
+    }
+
+    // Image de la vidéo (début du premier clip) pour les vignettes des filtres et des effets.
+    func previewFrame() async -> UIImage? {
+        guard let clip = plan.clips.first else { return nil }
+        return await makeFrame(clip.source, clip.start)
     }
 
     // Faux (avec un message) si le texte est vide, trop long, ou s'il y en a déjà 5.
@@ -310,14 +353,20 @@ final class VideoEditorViewModel {
         let before = plan
         change(&plan)
         history.record(before, current: plan)
-        if before.clips != plan.clips || before.filter != plan.filter || before.isMuted != plan.isMuted { previewVersion += 1 }
+        if Self.renderChanged(before, plan) { previewVersion += 1 }
     }
 
     private func restore(_ state: EditPlan) {
-        let renderChanged = state.clips != plan.clips || state.filter != plan.filter || state.isMuted != plan.isMuted
+        let renderChanged = Self.renderChanged(state, plan)
         plan = state
         if let id = selectedClipID, plan.clip(id) == nil { deselect() }
         if renderChanged { previewVersion += 1 }
+    }
+
+    // Changement du rendu de la composition (pas des textes ni des autocollants, dessinés par SwiftUI).
+    private static func renderChanged(_ old: EditPlan, _ new: EditPlan) -> Bool {
+        old.clips != new.clips || old.filter != new.filter || old.filterIntensity != new.filterIntensity || old.isMuted != new.isMuted
+            || old.effects != new.effects
     }
 
     private func textProblem(_ text: String) -> String {

@@ -111,8 +111,9 @@ struct EditorFlowView: View {
     }
 }
 
-// Aperçu, comme TikTok : la vidéo en grand, outils à droite (Réglages, Modifier, Texte, Filtres ; ⌄ affiche leurs noms),
-// « Ta story » et « Suivant » en bas. Les textes se déplacent au doigt et se modifient d'un toucher.
+// Aperçu, comme TikTok : la vidéo en grand, outils à droite (Réglages, Modifier, Texte, Autocollants, Effets, Filtres ;
+// ⌄ affiche leurs noms), « Ta story » et « Suivant » en bas. Textes et autocollants se déplacent au doigt ; un texte se
+// modifie d'un toucher. Le panneau des filtres s'ouvre en bas, par-dessus (ADR-063).
 struct EditorPreviewView: View {
     let model: VideoEditorViewModel
     let preview: EditorPreviewPlayer
@@ -125,6 +126,10 @@ struct EditorPreviewView: View {
     @State private var editingText: TextDraft?
     @State private var isDraggingText = false
     @State private var isPickingFilter = false
+    @State private var isPickingSticker = false
+    @State private var isEditingEffects = false
+    @State private var flashFilter: VideoFilter?
+    @State private var thumbnails = LookThumbnailStore()
     @State private var isShowingSettings = false
     @State private var showsToolNames = false
     @State private var confirmingDiscard = false
@@ -137,7 +142,13 @@ struct EditorPreviewView: View {
                     overlay in editingText = TextDraft(overlay: overlay)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onTapGesture { preview.togglePlayback() }
+                .onTapGesture {
+                    // Panneau des filtres ouvert : un toucher sur la vidéo le ferme.
+                    if isPickingFilter { isPickingFilter = false } else { preview.togglePlayback() }
+                }
+                .overlay {
+                    if let flashFilter { FilterFlash(filter: flashFilter) }
+                }
                 HStack(alignment: .top) {
                     backButton
                     Spacer()
@@ -165,22 +176,41 @@ struct EditorPreviewView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if isPickingFilter {
+                FilterPanel(model: model, thumbnails: thumbnails)
+                    .transition(.move(edge: .bottom))
+            }
+        }
         .animation(.easeOut(duration: 0.15), value: isDraggingText)
+        .animation(.snappy(duration: 0.25), value: isPickingFilter)
+        .animation(.easeOut(duration: 0.3), value: flashFilter)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { preview.play() } else { preview.pause() }
         }
-        .sheet(isPresented: $isPickingFilter) {
-            FilterPickerSheet(model: model)
-                .presentationDetents([.height(170)])
-                .presentationBackground(.black.opacity(0.85))
+        .onChange(of: model.plan.filter) { _, filter in
+            if isPickingFilter, filter != .none { flashFilter = filter }
+        }
+        .task(id: flashFilter) {
+            guard flashFilter != nil else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            if !Task.isCancelled { flashFilter = nil }
+        }
+        .sheet(isPresented: $isPickingSticker) {
+            StickerPickerView { kind, text in model.addSticker(kind, emoji: text) }
+                .presentationDetents([.fraction(0.75), .large])
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $isEditingEffects) {
+            EffectsEditorView(model: model, preview: preview, thumbnails: thumbnails)
         }
         .sheet(isPresented: $isShowingSettings) {
             PostSettingsSheet(draft: draft)
         }
     }
 
-    // Boutons masqués pendant la saisie ou le déplacement d'un texte, comme TikTok.
-    private var showsControls: Bool { editingText == nil && !isDraggingText }
+    // Boutons masqués pendant la saisie ou le déplacement d'un texte, et sous le panneau des filtres, comme TikTok.
+    private var showsControls: Bool { editingText == nil && !isDraggingText && !isPickingFilter }
 
     private var backButton: some View {
         Button("Retour", systemImage: "chevron.left") { confirmingDiscard = true }
@@ -208,7 +238,16 @@ struct EditorPreviewView: View {
             tool("Texte", systemImage: "textformat", identifier: "editor.addText") {
                 if model.canAddText { editingText = TextDraft(overlay: nil) } else { model.errorMessage = "\(EditPlan.maxTexts) textes au plus." }
             }
-            tool("Filtres", systemImage: "camera.filters", identifier: "editor.filters") { isPickingFilter = true }
+            tool("Autocollants", systemImage: "face.smiling", identifier: "editor.stickers") {
+                if model.canAddSticker { isPickingSticker = true } else { model.errorMessage = "\(EditPlan.maxStickers) autocollants au plus." }
+            }
+            tool("Effets", systemImage: "sparkles", identifier: "editor.effects", badge: !model.plan.effects.isEmpty) {
+                preview.pause()
+                isEditingEffects = true
+            }
+            tool("Filtres", systemImage: "camera.filters", identifier: "editor.filters", badge: model.plan.filter != .none) {
+                isPickingFilter = true
+            }
             Button(showsToolNames ? "Masquer les noms" : "Afficher les noms", systemImage: showsToolNames ? "chevron.up" : "chevron.down") {
                 withAnimation(.snappy) { showsToolNames.toggle() }
             }
@@ -221,7 +260,10 @@ struct EditorPreviewView: View {
         }
     }
 
-    private func tool(_ title: String, systemImage: String, identifier: String, action: @escaping () -> Void) -> some View {
+    // `badge` : coche rose quand l'outil est utilisé (effets posés, filtre choisi), comme TikTok.
+    private func tool(_ title: String, systemImage: String, identifier: String, badge: Bool = false, action: @escaping () -> Void)
+        -> some View
+    {
         Button(action: action) {
             HStack(spacing: 10) {
                 if showsToolNames {
@@ -230,11 +272,22 @@ struct EditorPreviewView: View {
                 Image(systemName: systemImage)
                     .font(.title2.weight(.semibold))
                     .frame(width: 44, height: 36)
+                    .overlay(alignment: .bottomTrailing) {
+                        if badge {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8, weight: .heavy))
+                                .foregroundStyle(.white)
+                                .frame(width: 15, height: 15)
+                                .background(Color.brandPink, in: Circle())
+                                .offset(x: -2, y: 2)
+                        }
+                    }
             }
             .foregroundStyle(.white)
             .shadow(radius: 3)
         }
         .accessibilityLabel(title)
+        .accessibilityValue(badge ? "Utilisé" : "")
         .accessibilityIdentifier(identifier)
     }
 
@@ -325,6 +378,10 @@ struct EditorCanvas: View {
                         if let drag {
                             TextDragGuides(onGuide: drag.onGuide, overTrash: drag.overTrash)
                         }
+                        // Autocollants sous les textes, comme à l'export.
+                        ForEach(model.plan.stickers) { sticker in
+                            self.sticker(sticker, size: geometry.size)
+                        }
                         ForEach(model.plan.texts.filter { $0.id != hiddenTextID }) { overlay in
                             text(overlay, size: geometry.size)
                         }
@@ -344,15 +401,17 @@ struct EditorCanvas: View {
     }
 
     private func text(_ overlay: TextOverlay, size: CGSize) -> some View {
-        DraggableText(overlay: overlay, size: size) { center, finger in
-            drag = DragState(onGuide: abs(center.x - 0.5) < 0.0001, overTrash: TextDragRules.isOverTrash(finger))
-            isDraggingText = true
+        DraggableOverlay(
+            center: overlay.center, scale: overlay.scale, size: size, label: overlay.text,
+            hint: "Touche pour modifier le texte, glisse-le pour le déplacer", identifier: "editor.text"
+        ) { scale in
+            StyledTextBox(text: overlay.text, layout: EditorTextStyle(style: overlay.style, scale: scale, width: size.width))
+        } onDragChanged: { center, finger in
+            dragChanged(center: center, finger: finger)
         } onDragEnded: { center, finger in
-            drag = nil
-            isDraggingText = false
-            if TextDragRules.isOverTrash(finger) {
+            dragEnded(finger: finger) {
                 model.removeText(overlay.id)
-            } else {
+            } move: {
                 model.moveText(overlay.id, to: center)
             }
         } onScale: { scale in
@@ -361,38 +420,36 @@ struct EditorCanvas: View {
             onEditText(overlay)
         }
     }
-}
 
-// Filtres : une rangée de pastilles, appliqués à toute la vidéo (aperçu et éditeur par clips).
-struct FilterPickerSheet: View {
-    let model: VideoEditorViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Filtres").font(.headline).foregroundStyle(.white).padding(.horizontal, 16)
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(VideoFilter.allCases) { filter in
-                        let selected = model.plan.filter == filter
-                        Button {
-                            model.setFilter(filter)
-                        } label: {
-                            Text(filter.title)
-                                .font(.subheadline.weight(selected ? .bold : .regular))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .background(selected ? Color.white : Color.white.opacity(0.15), in: Capsule())
-                                .foregroundStyle(selected ? .black : .white)
-                        }
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                        .accessibilityIdentifier("editor.filter.\(filter.rawValue)")
-                    }
-                }
-                .padding(.horizontal, 16)
+    private func sticker(_ sticker: StickerOverlay, size: CGSize) -> some View {
+        DraggableOverlay(
+            center: sticker.center, scale: sticker.scale, size: size,
+            label: sticker.kind == .emoji ? sticker.text : "\(sticker.kind.title) \(sticker.text)",
+            hint: "Glisse-le pour le déplacer, pince-le pour changer sa taille", identifier: "editor.sticker"
+        ) { scale in
+            StickerView(sticker: sticker, scale: scale, width: size.width)
+        } onDragChanged: { center, finger in
+            dragChanged(center: center, finger: finger)
+        } onDragEnded: { center, finger in
+            dragEnded(finger: finger) {
+                model.removeSticker(sticker.id)
+            } move: {
+                model.moveSticker(sticker.id, to: center)
             }
-            .scrollIndicators(.hidden)
+        } onScale: { scale in
+            model.scaleSticker(sticker.id, to: scale)
         }
-        .padding(.top, 20)
-        .environment(\.colorScheme, .dark)
+    }
+
+    private func dragChanged(center: CGPoint, finger: CGPoint) {
+        drag = DragState(onGuide: abs(center.x - 0.5) < 0.0001, overTrash: TextDragRules.isOverTrash(finger))
+        isDraggingText = true
+    }
+
+    // Lâché sur la corbeille : supprimé ; ailleurs : déplacé.
+    private func dragEnded(finger: CGPoint, remove: () -> Void, move: () -> Void) {
+        drag = nil
+        isDraggingText = false
+        if TextDragRules.isOverTrash(finger) { remove() } else { move() }
     }
 }

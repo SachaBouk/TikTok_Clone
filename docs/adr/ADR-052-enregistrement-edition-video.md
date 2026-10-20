@@ -147,3 +147,4 @@ Choix du développeur, parmi les options proposées :
 - ADR-047 — Tone mapping HDR
 - ADR-051 — Stories
 - Complété par [ADR-062](ADR-062-creation-video-facon-tiktok.md) — Création vidéo façon TikTok : caméra, galerie, éditeur par clips, commentaires désactivables
+- Complété par [ADR-063](ADR-063-filtres-autocollants-effets.md) — Éditeur vidéo : filtres en catégories, autocollants, effets

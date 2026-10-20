@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 import Testing
 import UIKit
@@ -116,6 +117,66 @@ struct VideoEditorTests {
         let warm = try await background(.warm)
         let cool = try await background(.cool)
         #expect(Int(warm.red) - Int(warm.blue) > Int(cool.red) - Int(cool.blue))
+    }
+
+    @Test("intensité du filtre : 0 = image d'origine, 50 % entre l'origine et le filtre entier")
+    func filterIntensity() throws {
+        let blue = CIImage(color: CIColor(red: 0.1, green: 0.2, blue: 0.9)).cropped(to: CGRect(x: 0, y: 0, width: 4, height: 4))
+        func spread(_ image: CIImage) throws -> Int {
+            let pixel = try Self.pixel(image)
+            return abs(Int(pixel.blue) - Int(pixel.red))
+        }
+        let original = try spread(blue)
+        #expect(try spread(EditRendering.filtered(blue, .mono, intensity: 0)) == original)
+        let half = try spread(EditRendering.filtered(blue, .mono, intensity: 0.5))
+        let full = try spread(EditRendering.filtered(blue, .mono, intensity: 1))
+        #expect(full < 12 && half > full + 30 && half < original - 30)
+        // Chaque filtre garde la taille de l'image.
+        for filter in VideoFilter.allCases {
+            #expect(EditRendering.filtered(blue, filter).extent == blue.extent)
+        }
+    }
+
+    @Test("effets : chacun garde la taille de l'image ; négatif inversé seulement sur sa plage à l'export")
+    func effects() async throws {
+        let gradient = CIFilter.linearGradient()
+        gradient.point0 = .zero
+        gradient.point1 = CGPoint(x: 64, y: 64)
+        gradient.color0 = CIColor(red: 1, green: 0, blue: 0)
+        gradient.color1 = CIColor(red: 0, green: 0, blue: 1)
+        let image = try #require(gradient.outputImage).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+        for effect in VideoEffect.allCases {
+            let output = EditRendering.effected(image, effect, time: 1)
+            #expect(output.extent == image.extent, "\(effect.rawValue)")
+            #expect(LookThumbnails.effected(image, effect) != nil, "\(effect.rawValue)")
+        }
+
+        let directory = try TestVideos.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appending(path: "source.mov")
+        try await TestVideos.write(to: source, width: 96, height: 160, seconds: 2)
+        var plan = EditPlan(clips: [try await clip(source)], kind: .video)
+        plan.setEffects([TimedEffect(id: UUID(), effect: .negative, start: .zero, end: .seconds(1))])
+        let output = try await editor.export(plan)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let inverted = try await TestVideos.color(in: output, at: 0.4, x: 0.75, y: 0.75)
+        let normal = try await TestVideos.color(in: output, at: 1.5, x: 0.75, y: 0.75)
+        #expect(normal.blue > 150 && normal.red < 80)
+        // Inversé : le rouge monte et le bleu baisse nettement (255 - valeur).
+        #expect(inverted.red > Int(normal.red) + 80 && inverted.blue < Int(normal.blue) - 40, "\(inverted) / \(normal)")
+    }
+
+    @Test("autocollants incrustés à leur place")
+    func stickerOverlay() throws {
+        var plan = EditPlan(clips: [SourceClip(file: URL(filePath: "/tmp/x.mov"), duration: .seconds(1))], kind: .video)
+        let added = plan.addSticker(.time, text: "88:88")
+        let sticker = try #require(added)
+        plan.moveSticker(sticker.id, to: CGPoint(x: 0.5, y: 0.25))
+        let size = CGSize(width: 360, height: 640)
+        let image = try #require(TextOverlayRenderer.image([], stickers: plan.stickers, size: size))
+        let cgImage = try #require(CIContext().createCGImage(image, from: CGRect(origin: .zero, size: size)))
+        #expect(try Self.whiteShare(in: cgImage, rows: 0.22...0.28) > 0.03)
+        #expect(try Self.whiteShare(in: cgImage, rows: 0.6...0.7) == 0)
     }
 
     @Test("textes incrustés à leur place, absents ailleurs")
@@ -282,6 +343,14 @@ struct VideoEditorTests {
     }
 
     // Part des pixels presque blancs dans une bande horizontale de l'image (lignes en proportion de la hauteur).
+    private static func pixel(_ image: CIImage) throws -> (red: UInt8, green: UInt8, blue: UInt8) {
+        var bytes = [UInt8](repeating: 0, count: 4)
+        CIContext().render(
+            image, toBitmap: &bytes, rowBytes: 4, bounds: CGRect(x: image.extent.midX, y: image.extent.midY, width: 1, height: 1), format: .RGBA8,
+            colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return (bytes[0], bytes[1], bytes[2])
+    }
+
     private static func opaqueShare(in image: CGImage, rows: ClosedRange<Double>) throws -> Double {
         let width = image.width
         let height = image.height

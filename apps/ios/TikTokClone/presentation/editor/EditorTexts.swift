@@ -1,7 +1,8 @@
 import SwiftUI
 
-// Textes posés sur la vidéo, comme TikTok (ADR-052, ADR-062) : éditeur plein écran (police, couleur, fond, alignement),
-// puis texte déplacé au doigt sur l'aperçu (repère central, corbeille « Supprimer »), pincé pour changer sa taille.
+// Textes et autocollants posés sur la vidéo, comme TikTok (ADR-052, ADR-062, ADR-063) : éditeur de texte plein écran
+// (police, couleur, fond, alignement), puis texte ou autocollant déplacé au doigt sur l'aperçu (repère central, corbeille
+// « Supprimer »), pincé pour changer sa taille.
 
 // Texte en cours de saisie : nouveau (`overlay` nil) ou existant.
 struct TextDraft: Identifiable {
@@ -62,28 +63,32 @@ struct StyledTextBox: View {
     }
 }
 
-// Texte de l'aperçu : glisser le déplace (repère central et corbeille affichés par `EditorCanvas`), pincer change sa
-// taille, toucher le rouvre dans l'éditeur. Positions relatives à l'image.
-struct DraggableText: View {
-    let overlay: TextOverlay
+// Texte ou autocollant de l'aperçu : glisser le déplace (repère central et corbeille affichés par `EditorCanvas`), pincer
+// change sa taille, toucher le rouvre (texte). Positions relatives à l'image ; `content` reçoit l'échelle en cours.
+struct DraggableOverlay<Content: View>: View {
+    let center: CGPoint
+    let scale: Double
     let size: CGSize
+    let label: String
+    let hint: String
+    let identifier: String
+    @ViewBuilder let content: (Double) -> Content
     // Centre (aimanté) et position du doigt pendant le glissement.
     let onDragChanged: (CGPoint, CGPoint) -> Void
     let onDragEnded: (CGPoint, CGPoint) -> Void
     let onScale: (Double) -> Void
-    let onTap: () -> Void
+    var onTap: (() -> Void)?
     @State private var dragOffset: CGSize = .zero
     @State private var magnification: CGFloat = 1
     @State private var isOverTrash = false
 
     var body: some View {
-        let layout = EditorTextStyle(style: overlay.style, scale: overlay.scale * magnification, width: size.width)
-        let center = currentCenter
-        StyledTextBox(text: overlay.text, layout: layout)
+        let current = currentCenter
+        content(scale * magnification)
             .scaleEffect(isOverTrash ? 0.6 : 1)
             .opacity(isOverTrash ? 0.5 : 1)
             .animation(.snappy(duration: 0.15), value: isOverTrash)
-            .position(x: center.x * size.width, y: center.y * size.height)
+            .position(x: current.x * size.width, y: current.y * size.height)
             .gesture(
                 DragGesture(coordinateSpace: .named(EditorCanvas.coordinateSpace))
                     .onChanged { value in
@@ -108,25 +113,41 @@ struct DraggableText: View {
                     .onChanged { magnification = $0.magnification }
                     .onEnded { value in
                         magnification = 1
-                        onScale(overlay.scale * value.magnification)
+                        onScale(scale * value.magnification)
                     }
             )
-            .onTapGesture(perform: onTap)
+            .onTapGesture { onTap?() }
             .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(overlay.text)
-            .accessibilityHint("Touche pour modifier le texte, glisse-le pour le déplacer")
-            .accessibilityIdentifier("editor.text")
+            .accessibilityLabel(label)
+            .accessibilityHint(hint)
+            .accessibilityIdentifier(identifier)
     }
 
-    // Centre du texte pendant le glissement, aimanté au repère vertical.
+    // Centre pendant le glissement, aimanté au repère vertical.
     private var currentCenter: CGPoint {
-        let moved = CGPoint(
-            x: overlay.center.x + dragOffset.width / max(size.width, 1), y: overlay.center.y + dragOffset.height / max(size.height, 1))
-        return dragOffset == .zero ? overlay.center : TextDragRules.snapped(moved).center
+        let moved = CGPoint(x: center.x + dragOffset.width / max(size.width, 1), y: center.y + dragOffset.height / max(size.height, 1))
+        return dragOffset == .zero ? center : TextDragRules.snapped(moved).center
     }
 
     private func relative(_ point: CGPoint) -> CGPoint {
         CGPoint(x: point.x / max(size.width, 1), y: point.y / max(size.height, 1))
+    }
+}
+
+// Autocollant mis en page comme à l'export (`StickerStyle`).
+struct StickerView: View {
+    let sticker: StickerOverlay
+    let scale: Double
+    let width: CGFloat
+
+    var body: some View {
+        let style = StickerStyle(kind: sticker.kind, scale: scale, width: width)
+        Text(sticker.text)
+            .font(Font(style.font as CTFont))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+            .shadow(color: sticker.kind == .emoji ? .clear : .black.opacity(0.5), radius: style.shadowRadius)
     }
 }
 

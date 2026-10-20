@@ -307,6 +307,83 @@ struct EditingRulesTests {
         #expect(!TextDragRules.isOverTrash(CGPoint(x: 0.1, y: 0.05)))
     }
 
+    @Test("filtres : chacun dans sa catégorie (sauf « aucun »), intensité de 0 à 1, sans réencodage à 0")
+    func filterCatalog() {
+        #expect(VideoFilter.none.category == nil)
+        for category in VideoFilter.Category.allCases { #expect(category.filters.count >= 4) }
+        #expect(VideoFilter.Category.allCases.flatMap(\.filters).count == VideoFilter.allCases.count - 1)
+        #expect(VideoFilter.mono.category == .mood && VideoFilter.chill.category == .landscape)
+        var plan = EditPlan(clips: [clip("a", 10)], kind: .video)
+        plan.filter = .chill
+        #expect(plan.needsReencoding)
+        plan.setFilterIntensity(-1)
+        #expect(plan.filterIntensity == 0 && !plan.needsReencoding)
+        plan.setFilterIntensity(3)
+        #expect(plan.filterIntensity == 1)
+    }
+
+    @Test("autocollants : date et heure figées, 10 au plus, déplacés dans l'image, taille bornée, réencodage")
+    func stickers() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 9, minute: 5)))
+        #expect(StickerOverlay.text(for: .dateSlash, at: date, calendar: calendar) == "07/03")
+        #expect(StickerOverlay.text(for: .dateDash, at: date, calendar: calendar) == "07-03-26")
+        #expect(StickerOverlay.text(for: .time, at: date, calendar: calendar) == "09:05")
+
+        var plan = EditPlan(clips: [clip("a", 10)], kind: .video)
+        #expect(plan.addSticker(.emoji, text: "") == nil)
+        let added = plan.addSticker(.emoji, text: "🔥")
+        let sticker = try #require(added)
+        #expect(plan.needsReencoding)
+        plan.moveSticker(sticker.id, to: CGPoint(x: 2, y: -1))
+        #expect(plan.stickers[0].center == CGPoint(x: 0.95, y: 0.05))
+        plan.scaleSticker(sticker.id, to: 99)
+        #expect(plan.stickers[0].scale == StickerOverlay.scaleRange.upperBound)
+        for _ in 2...EditPlan.maxStickers { plan.addSticker(.time, text: "09:05") }
+        let extra = plan.addSticker(.emoji, text: "✨")
+        #expect(extra == nil && plan.stickers.count == EditPlan.maxStickers)
+        plan.removeSticker(sticker.id)
+        #expect(plan.stickers.count == EditPlan.maxStickers - 1)
+        #expect(EmojiCatalog.sections.allSatisfy { !$0.emojis.isEmpty })
+    }
+
+    @Test("effets : posés à la tête de lecture pour 2 s, bornés à la vidéo, bords de 0,2 s au moins, 20 au plus, actifs par plage")
+    func effects() throws {
+        var track = EffectTrack(effects: [], duration: .seconds(5))
+        let firstAdded = track.add(.negative, at: .seconds(1))
+        let first = try #require(firstAdded)
+        #expect(first.start == .seconds(1) && first.end == .seconds(3))
+        let lastAdded = track.add(.blur, at: .seconds(10))
+        let last = try #require(lastAdded)
+        #expect(last.start == .seconds(5) - EffectTrack.minDuration && last.end == .seconds(5))
+        track.setStart(.seconds(4), of: first.id)
+        #expect(track.effects[0].start == .seconds(3) - EffectTrack.minDuration)
+        track.setStart(.seconds(-2), of: first.id)
+        #expect(track.effects[0].start == .zero)
+        track.setEnd(.zero, of: first.id)
+        #expect(track.effects[0].end == EffectTrack.minDuration)
+        track.setEnd(.seconds(9), of: first.id)
+        #expect(track.effects[0].end == .seconds(5))
+        #expect(EffectTrack.active(track.effects, at: .seconds(4.9)) == [.negative, .blur])
+        #expect(EffectTrack.active(track.effects, at: .seconds(5)).isEmpty)
+        track.remove(first.id)
+        #expect(track.effects.map(\.effect) == [.blur])
+        for _ in 2...EffectTrack.maxEffects { track.add(.glow, at: .zero) }
+        let extra = track.add(.glow, at: .zero)
+        #expect(extra == nil)
+
+        // Plan raccourci : les plages au-delà de la fin sont coupées ou retirées.
+        var plan = EditPlan(clips: [clip("a", 3)], kind: .video)
+        plan.setEffects([
+            TimedEffect(id: UUID(), effect: .mirror, start: .seconds(2), end: .seconds(6)),
+            TimedEffect(id: UUID(), effect: .twirl, start: .seconds(4), end: .seconds(6)),
+        ])
+        #expect(plan.effects.count == 1 && plan.effects[0].end == .seconds(3))
+        #expect(plan.needsReencoding)
+        for category in VideoEffect.Category.allCases { #expect(!category.effects.isEmpty) }
+    }
+
     @Test("mesure d'audience : source et modifications, jamais le texte")
     func details() {
         var plan = EditPlan(clips: [clip("a", 10), clip("b", 5)], kind: .video)
@@ -315,11 +392,15 @@ struct EditingRulesTests {
         plan.setSpeedForAll(1.5)
         plan.setCrop(CropRect(x: 0, y: 0, width: 0.5, height: 0.5), ratio: .free, of: plan.clips[0].id)
         plan.addText("Secret")
+        plan.setFilterIntensity(0.42)
+        plan.addSticker(.emoji, text: "🔥")
+        plan.setEffects([TimedEffect(id: UUID(), effect: .negative, start: .zero, end: .seconds(1))])
         let properties = PublicationDetails(source: .camera, plan: plan).properties(photo: false)
         #expect(
             properties == [
                 "source": .string("camera"), "segments": .int(2), "trimmed": .bool(true), "filter": .string("warm"), "text_count": .int(1),
-                "speed": .double(1.5), "cropped": .bool(true), "rotated": .bool(false),
+                "speed": .double(1.5), "cropped": .bool(true), "rotated": .bool(false), "filter_intensity": .int(42),
+                "sticker_count": .int(1), "effect_count": .int(1),
             ])
         #expect(PublicationDetails().properties(photo: true) == ["source": .string("gallery")])
         let story = AnalyticsEvent.storyUploadStarted(photo: true, details: PublicationDetails(source: .camera))

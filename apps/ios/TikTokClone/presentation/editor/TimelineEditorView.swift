@@ -15,6 +15,7 @@ struct TimelineEditorView: View {
     @State private var editingText: TextDraft?
     @State private var isDraggingText = false
     @State private var isPickingFilter = false
+    @State private var thumbnails = LookThumbnailStore()
     @State private var isAddingVideos = false
     @State private var isAddingClips = false
     @State private var cropping: CropRequest?
@@ -37,6 +38,7 @@ struct TimelineEditorView: View {
             ) { overlay in editingText = TextDraft(overlay: overlay) }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 8)
+            .onTapGesture { isPickingFilter = false }
             controls
             timeline
                 .frame(height: Self.rulerHeight + Self.stripHeight + 40)
@@ -58,17 +60,19 @@ struct TimelineEditorView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if isPickingFilter {
+                FilterPanel(model: model, thumbnails: thumbnails)
+                    .transition(.move(edge: .bottom))
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: isPickingFilter)
         .overlay {
             if isAddingClips {
                 ProgressView("Préparation…")
                     .padding(24)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
-        }
-        .sheet(isPresented: $isPickingFilter) {
-            FilterPickerSheet(model: model)
-                .presentationDetents([.height(170)])
-                .presentationBackground(.black.opacity(0.85))
         }
         .sheet(isPresented: $isAddingVideos) {
             GalleryPickerView(model: container.makeGallery(kind: .video)) { assets in

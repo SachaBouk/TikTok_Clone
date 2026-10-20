@@ -93,33 +93,6 @@ struct RecordingSession: Equatable, Sendable {
     }
 }
 
-// Filtres de couleur (Core Image, dans l'adaptateur d'export) ; l'identifiant sert aussi à la mesure d'audience.
-enum VideoFilter: String, CaseIterable, Identifiable, Equatable, Sendable {
-    case none
-    case mono
-    case warm
-    case cool
-    case vivid
-    case vintage
-    case fade
-    case instant
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .none: "Aucun"
-        case .mono: "Noir et blanc"
-        case .warm: "Chaud"
-        case .cool: "Froid"
-        case .vivid: "Vif"
-        case .vintage: "Vintage"
-        case .fade: "Fondu"
-        case .instant: "Instantané"
-        }
-    }
-}
-
 // Texte posé sur la vidéo, visible pendant toute sa durée, comme TikTok : police, couleur, fond, alignement, taille
 // (pincer). Position du centre et taille relatives à l'image : le rendu est le même en aperçu et à l'export, quelle que
 // soit la résolution.
@@ -551,19 +524,25 @@ struct EditClip: Identifiable, Equatable, Sendable {
     var isTransformed: Bool { speed != 1 || volume != 1 || !crop.isFull || quarterTurns != 0 }
 }
 
-// Plan d'édition (ADR-052, ADR-062) : clips mis bout à bout, filtre et textes communs à toute la vidéo, son d'origine
-// coupé pour tous. Réouvrir l'éditeur repart de ce plan et des fichiers d'origine : jamais de double réencodage.
+// Plan d'édition (ADR-052, ADR-062, ADR-063) : clips mis bout à bout, filtre, textes et autocollants communs à toute la
+// vidéo, effets sur des plages, son d'origine coupé pour tous. Réouvrir l'éditeur repart de ce plan et des fichiers d'origine : jamais de double réencodage.
 struct EditPlan: Equatable, Sendable {
     static let minDuration: Duration = .seconds(1)
     static let maxTexts = 5
     static let maxTextLength = 80
+    static let maxStickers = 10
 
     let kind: PublicationKind
     private(set) var clips: [EditClip]
     var filter: VideoFilter = .none
+    // Intensité du filtre, de 0 à 1 (ADR-063).
+    private(set) var filterIntensity: Double = 1
     // Son d'origine coupé pour tous les clips (icône haut-parleur de la frise).
     var isMuted = false
     private(set) var texts: [TextOverlay] = []
+    private(set) var stickers: [StickerOverlay] = []
+    // Effets posés sur des plages de la vidéo finale (ADR-063).
+    private(set) var effects: [TimedEffect] = []
 
     // Une vidéo trop longue est raccourcie à la durée maximale (la fin est retirée) : le passage à garder se choisit
     // ensuite dans la frise. À une seconde près (ADR-040), elle est gardée entière.
@@ -596,7 +575,8 @@ struct EditPlan: Equatable, Sendable {
 
     // Un seul clip seulement découpé : l'export recopie sans réencodage (qualité et HDR gardés).
     var needsReencoding: Bool {
-        clips.count > 1 || clips.contains(where: \.isTransformed) || isMuted || filter != .none || !texts.isEmpty
+        clips.count > 1 || clips.contains(where: \.isTransformed) || isMuted || (filter != .none && filterIntensity > 0) || !texts.isEmpty
+            || !stickers.isEmpty || !effects.isEmpty
     }
 
     // Raison pour laquelle la vidéo ne peut pas être exportée ; nil si elle peut l'être.
@@ -754,6 +734,39 @@ struct EditPlan: Equatable, Sendable {
         texts.removeAll { $0.id == id }
     }
 
+    mutating func setFilterIntensity(_ intensity: Double) {
+        filterIntensity = min(max(intensity, 0), 1)
+    }
+
+    // Autocollant ajouté au centre ; nil s'il y en a déjà 10 ou si son texte est vide.
+    @discardableResult
+    mutating func addSticker(_ kind: StickerOverlay.Kind, text: String, id: UUID = UUID()) -> StickerOverlay? {
+        guard stickers.count < Self.maxStickers, !text.isEmpty else { return nil }
+        let sticker = StickerOverlay(id: id, kind: kind, text: text)
+        stickers.append(sticker)
+        return sticker
+    }
+
+    // Déplacé au doigt : le centre reste dans l'image (marge de 5 %).
+    mutating func moveSticker(_ id: UUID, to center: CGPoint) {
+        guard let index = stickers.firstIndex(where: { $0.id == id }) else { return }
+        stickers[index].center = CGPoint(x: min(max(center.x, 0.05), 0.95), y: min(max(center.y, 0.05), 0.95))
+    }
+
+    mutating func scaleSticker(_ id: UUID, to scale: Double) {
+        guard let index = stickers.firstIndex(where: { $0.id == id }) else { return }
+        stickers[index].scale = min(max(scale, StickerOverlay.scaleRange.lowerBound), StickerOverlay.scaleRange.upperBound)
+    }
+
+    mutating func removeSticker(_ id: UUID) {
+        stickers.removeAll { $0.id == id }
+    }
+
+    // Plages d'effets de l'éditeur d'effets, ramenées à la durée de la vidéo.
+    mutating func setEffects(_ effects: [TimedEffect]) {
+        self.effects = EffectTrack(effects: effects, duration: outputDuration).effects
+    }
+
     // Texte nettoyé (espaces de bord retirés) ; nil s'il est vide ou dépasse 80 caractères.
     static func sanitizedText(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -804,7 +817,11 @@ struct PublicationDetails: Equatable, Sendable {
     var segments = 1
     var trimmed = false
     var filter: VideoFilter = .none
+    // Intensité du filtre, de 0 à 100 (ADR-063).
+    var filterIntensity = 100
     var textCount = 0
+    var stickerCount = 0
+    var effectCount = 0
     // Vitesse commune ; 0 si les clips ont des vitesses différentes.
     var speed: Double = 1
     var cropped = false
@@ -816,7 +833,10 @@ struct PublicationDetails: Equatable, Sendable {
         segments = plan.clips.count
         trimmed = plan.isTrimmed
         filter = plan.filter
+        filterIntensity = Int((plan.filterIntensity * 100).rounded())
         textCount = plan.texts.count
+        stickerCount = plan.stickers.count
+        effectCount = plan.effects.count
         speed = plan.commonSpeed ?? 0
         cropped = plan.clips.contains { !$0.crop.isFull }
         rotated = plan.clips.contains { $0.quarterTurns != 0 }
