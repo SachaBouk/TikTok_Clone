@@ -577,6 +577,45 @@ describe('FeedService', () => {
     });
   });
 
+  describe('sons repris (ADR-064)', () => {
+    // Vidéo publiée avec son son, comme après un transcodage.
+    async function publishWithSound(userId: string, description = 'balade') {
+      const id = await publish(userId);
+      Object.assign(videoRepository.videos.get(id)!, { description });
+      const stored = { id: `${id}-son`, videoId: id, userId, audioUrl: `https://cdn/${id}/sound.m4a`, durationMs: 9_000, createdAt: new Date() };
+      videoRepository.sounds.set(stored.id, stored);
+      return stored.id;
+    }
+
+    it('recommandés : auteurs masqués retirés, favori indiqué, pages par position', async () => {
+      const bobs = await publishWithSound('bob');
+      const daves = await Promise.all([publishWithSound('dave'), publishWithSound('dave')]);
+      await feed.setSoundFavorite('alice', bobs, true);
+
+      const first = await feed.listSounds('alice', 'recommended', undefined, 2);
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).toBe('2');
+      const second = await feed.listSounds('alice', 'recommended', first.nextCursor!, 2);
+      expect(second.nextCursor).toBeNull();
+      const all = [...first.items, ...second.items];
+      expect(all.map((item) => item.sound.id).sort()).toEqual([bobs, ...daves].sort());
+      expect(all.find((item) => item.sound.id === bobs)).toMatchObject({ favorited: true, author: { username: 'bob' } });
+
+      await interactions.setBlock('alice', 'bob', true);
+      expect((await feed.listSounds('alice', 'recommended', undefined, 10)).items.map((item) => item.sound.id).sort()).toEqual([...daves].sort());
+      expect((await feed.listSounds('alice', 'favorites', undefined, 10)).items).toEqual([]);
+      await expect(feed.listSounds('alice', 'recommended', 'abc', 10)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    });
+
+    it('recherche par description ou par auteur ; sons demandés dans l’ordre, un son disparu omis', async () => {
+      const bobs = await publishWithSound('bob', 'plage au coucher');
+      const daves = await publishWithSound('dave', 'montagne');
+      expect((await feed.searchSounds('alice', 'PLAGE', undefined, 10)).items.map((item) => item.sound.id)).toEqual([bobs]);
+      expect((await feed.searchSounds('alice', '@dave', undefined, 10)).items.map((item) => item.sound.id)).toEqual([daves]);
+      expect((await feed.getSounds('alice', [daves, 'inconnu', bobs])).map((item) => item.sound.id)).toEqual([daves, bobs]);
+    });
+  });
+
   describe('blocage', () => {
     const ids = (page: { items: { video: { id: string } }[] }) => page.items.map((i) => i.video.id);
 

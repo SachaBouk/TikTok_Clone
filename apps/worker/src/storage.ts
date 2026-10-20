@@ -18,6 +18,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.m3u8': 'application/vnd.apple.mpegurl',
   '.ts': 'video/mp2t',
   '.jpg': 'image/jpeg',
+  // Son extrait d'une vidéo (ADR-064).
+  '.m4a': 'audio/mp4',
 };
 // Chaque vidéo a son propre préfixe (videoId) et ses fichiers ne changent plus : cache CDN maximal.
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';

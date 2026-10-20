@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CLEANUP_DELAY_MS } from '../domain/cleanup-queue';
@@ -5,6 +6,7 @@ import { TranscodingQueue, type TranscodingJob } from '../domain/transcoding-que
 import { MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
 import {
   InvalidHashtagError,
+  SoundNotFoundError,
   TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
@@ -371,6 +373,92 @@ describe('VideosService', () => {
       await expect(service.setCommentsEnabled(BOB, video.id, false)).rejects.toBeInstanceOf(VideoNotFoundError);
       await expect(service.setCommentsEnabled(ALICE, video.id, false)).resolves.toMatchObject({ commentsEnabled: false });
       await expect(service.setCommentsEnabled(ALICE, video.id, true)).resolves.toMatchObject({ commentsEnabled: true });
+    });
+  });
+
+  describe('sons repris (ADR-064)', () => {
+    async function published(
+      userId: string,
+      options: { sound?: boolean; soundShared?: boolean; soundId?: string; visibility?: 'public' | 'private' } = {},
+    ) {
+      const { video } = await service.createUpload(userId, {
+        contentType: 'video/mp4',
+        fileSize: 1000,
+        description: 'route #été',
+        visibility: options.visibility,
+        soundShared: options.soundShared,
+        soundId: options.soundId,
+      });
+      await service.completeUpload(userId, video.id, uploadAllParts(video.uploadId!, 1000, 1));
+      await service.applyTranscodeResult(video.id, {
+        status: 'ready',
+        hlsUrl: 'a',
+        thumbnailUrl: `https://cdn/${video.id}/thumbnail.jpg`,
+        ...(options.sound === false ? {} : { sound: { audioUrl: `https://cdn/${video.id}/sound.m4a`, durationMs: 12_000 } }),
+      });
+      return video.id;
+    }
+    const recommended = (excluded: string[] = []) => service.listSounds({ kind: 'recommended' }, excluded, 0, 20);
+
+    it('un son par vidéo publiée avec du son, proposé tant qu’elle est publique et le permet', async () => {
+      const source = await published(ALICE);
+      await published(ALICE, { sound: false });
+      const [sound] = await recommended();
+      expect(sound).toMatchObject({ videoId: source, userId: ALICE, durationMs: 12_000, usesCount: 0 });
+      expect(await recommended()).toHaveLength(1);
+      // Résultat rejoué : pas de second son.
+      await service.applyTranscodeResult(source, { status: 'ready', hlsUrl: 'a', thumbnailUrl: 'b', sound: { audioUrl: 'x', durationMs: 1 } });
+      expect(await recommended()).toHaveLength(1);
+
+      await expect(service.setSoundShared(BOB, source, false)).rejects.toBeInstanceOf(VideoNotFoundError);
+      await expect(service.setSoundShared(ALICE, source, false)).resolves.toMatchObject({ soundShared: false });
+      expect(await recommended()).toEqual([]);
+      await service.setSoundShared(ALICE, source, true);
+      await service.setVisibility(ALICE, source, 'private');
+      expect(await recommended()).toEqual([]);
+      await service.setVisibility(ALICE, source, 'public');
+      expect(await recommended([ALICE])).toEqual([]);
+      expect(await recommended()).toHaveLength(1);
+    });
+
+    it('reprendre un son : il doit être proposé ; les publications le comptent ; supprimer la source retire le son', async () => {
+      const source = await published(ALICE);
+      const [sound] = await recommended();
+      await expect(service.createUpload(BOB, { contentType: 'video/mp4', fileSize: 1000, soundId: randomUUID() })).rejects.toBeInstanceOf(
+        SoundNotFoundError,
+      );
+      const reuse = await published(BOB, { soundId: sound.id, sound: false });
+      await published(BOB, { soundId: sound.id, sound: false, visibility: 'private' });
+      expect((await service.getVideo(reuse, BOB)).soundId).toBe(sound.id);
+      expect((await recommended())[0].usesCount).toBe(1);
+
+      await service.setSoundShared(ALICE, source, false);
+      await expect(service.createUpload(BOB, { contentType: 'video/mp4', fileSize: 1000, soundId: sound.id })).rejects.toBeInstanceOf(
+        SoundNotFoundError,
+      );
+      await service.setSoundShared(ALICE, source, true);
+      await service.deleteVideo(ALICE, source);
+      expect(await recommended()).toEqual([]);
+      expect((await service.getVideo(reuse, BOB)).soundId).toBeNull();
+    });
+
+    it('recherche, sons demandés, favoris (un son qui n’est plus proposé ne peut qu’être retiré)', async () => {
+      const first = await published(ALICE);
+      await published(BOB);
+      const sounds = await recommended();
+      const alices = sounds.find((s) => s.videoId === first)!;
+      expect((await service.listSounds({ kind: 'search', text: 'ROUTE', authorIds: [] }, [], 0, 20)).length).toBe(2);
+      expect((await service.listSounds({ kind: 'search', text: 'zzz', authorIds: [BOB] }, [], 0, 20)).map((s) => s.userId)).toEqual([BOB]);
+      expect(await service.listSounds({ kind: 'ids', ids: [] }, [], 0, 20)).toEqual([]);
+      expect((await service.listSounds({ kind: 'ids', ids: [alices.id] }, [], 0, 20)).map((s) => s.id)).toEqual([alices.id]);
+
+      await service.setSoundFavorite(BOB, alices.id, true, []);
+      await service.setSoundFavorite(BOB, alices.id, true, []);
+      expect((await service.listSounds({ kind: 'favorites', userId: BOB }, [], 0, 20)).map((s) => s.id)).toEqual([alices.id]);
+      expect(await service.favoritedSoundIds(BOB, [alices.id])).toEqual(new Set([alices.id]));
+      await expect(service.setSoundFavorite(BOB, alices.id, true, [ALICE])).rejects.toBeInstanceOf(SoundNotFoundError);
+      await service.setSoundFavorite(BOB, alices.id, false, [ALICE]);
+      expect(await service.favoritedSoundIds(BOB, [alices.id])).toEqual(new Set());
     });
   });
 

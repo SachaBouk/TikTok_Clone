@@ -62,7 +62,7 @@ struct EditComposition {
                 composition.scaleTimeRange(CMTimeRange(start: cursor, duration: duration), toDuration: scaled)
                 duration = scaled
             }
-            audioParameters.setVolume(plan.isMuted ? 0 : Float(clip.volume), at: cursor)
+            audioParameters.setVolume(plan.isMuted ? 0 : Float(clip.volume * plan.originalVolume), at: cursor)
             let oriented = EditRendering.orientedSize(naturalSize, transform: transform)
             largestShortSide = max(largestShortSide, min(oriented.width, oriented.height))
             if pieces.isEmpty, nominalFrameRate > 0 { frameRate = min(nominalFrameRate.rounded(), maxFrameRate) }
@@ -73,6 +73,21 @@ struct EditComposition {
         guard !pieces.isEmpty, largestShortSide > 0 else { throw CocoaError(.fileReadCorruptFile) }
 
         let total = composition.duration
+        // Son ajouté (ADR-064) : son repris à partir de son passage choisi, puis voix off (avec leur effet) à leur place.
+        var mixParameters = hasAudio ? [audioParameters] : []
+        if let sound = plan.sound {
+            mixParameters += try await insertAudio(
+                from: sound.file, start: time(sound.start), at: .zero, duration: total, into: composition, volume: plan.addedVolume)
+        }
+        for voiceover in plan.voiceovers.sorted(by: { $0.start < $1.start }) {
+            let file = try await VoiceEffectRenderer.render(voiceover.file, effect: plan.voiceEffect)
+            let at = time(voiceover.start)
+            guard at < total else { continue }
+            mixParameters += try await insertAudio(
+                from: file, start: time(voiceover.offset), at: at, duration: min(time(voiceover.duration), total - at), into: composition,
+                volume: plan.addedVolume)
+        }
+
         let renderSize = renderSize(shortSide: largestShortSide)
         let overlay = includeTexts ? TextOverlayRenderer.image(plan.texts, stickers: plan.stickers, size: renderSize) : nil
         var instructions: [EditInstruction] = []
@@ -97,10 +112,10 @@ struct EditComposition {
         videoComposition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
         videoComposition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
         var audioMix: AVMutableAudioMix?
-        if hasAudio {
+        if !mixParameters.isEmpty {
             audioParameters.audioTimePitchAlgorithm = .spectral
             let mix = AVMutableAudioMix()
-            mix.inputParameters = [audioParameters]
+            mix.inputParameters = mixParameters
             audioMix = mix
         }
         return EditComposition(composition: composition, videoComposition: videoComposition, audioMix: audioMix, renderSize: renderSize)
@@ -111,6 +126,24 @@ struct EditComposition {
         let width = min(maxShortSide, shortSide)
         func even(_ value: CGFloat) -> CGFloat { max(2, (value / 2).rounded() * 2) }
         return CGSize(width: even(width), height: even(width * 16 / 9))
+    }
+
+    // Piste son d'un fichier, de `start` dans le fichier, posée à `at` pendant `duration` au plus, à son volume. Aucune
+    // piste si le fichier n'a pas de son.
+    private static func insertAudio(
+        from file: URL, start: CMTime, at: CMTime, duration: CMTime, into composition: AVMutableComposition, volume: Double
+    ) async throws -> [AVMutableAudioMixInputParameters] {
+        let asset = AVURLAsset(url: file)
+        guard let source = try await asset.loadTracks(withMediaType: .audio).first else { return [] }
+        let available = try await source.load(.timeRange)
+        let range = CMTimeRange(start: start, duration: duration).intersection(available)
+        guard range.duration > .zero,
+            let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { return [] }
+        try track.insertTimeRange(range, of: source, at: at)
+        let parameters = AVMutableAudioMixInputParameters(track: track)
+        parameters.setVolume(Float(volume), at: .zero)
+        return [parameters]
     }
 
     private static func time(_ duration: Duration) -> CMTime {

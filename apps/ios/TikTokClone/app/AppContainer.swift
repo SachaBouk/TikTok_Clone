@@ -26,6 +26,8 @@ final class AppContainer {
     let wallet: WalletModel
     // Historique des recherches (ADR-049), sur l'appareil.
     let searchHistory: SearchHistoryModel
+    // Sons repris des vidéos, pour l'éditeur (ADR-064) ; « Récents » sur l'appareil.
+    let sounds: SoundLibraryModel
     // Comptes suggérés de l'onglet Messages (ADR-058).
     let suggestions: SuggestionsModel
     // « Je n'aime pas » sur les commentaires, sur l'appareil (ADR-060).
@@ -80,6 +82,7 @@ final class AppContainer {
         search = RemoteSearchRepository(client: client)
         gifts = RemoteGiftRepository(client: client)
         searchHistory = SearchHistoryModel(store: UserDefaultsPreferencesStore())
+        sounds = SoundLibraryModel(repository: RemoteSoundRepository(client: client), store: UserDefaultsPreferencesStore())
         let videos = RemoteVideoPublishingRepository(client: client)
         let storyRepository = RemoteStoryRepository(client: client)
         self.storyRepository = storyRepository
@@ -192,6 +195,7 @@ final class AppContainer {
         if session.state != .restoring {
             if let lastSignedIn, lastSignedIn != signedIn {
                 searchHistory.clear()
+                sounds.reset()
                 suggestions.reset()
                 commentDislikes.reset()
             }
@@ -377,6 +381,11 @@ final class AppContainer {
             makeFrame: { source, time in
                 await EditThumbnails.images(of: source, at: [time], maxSize: CGSize(width: 1080, height: 1080), exact: true).first
             })
+    }
+
+    // Micro de la voix off (ADR-064).
+    func makeVoiceRecorder() -> any VoiceRecorder {
+        AVFoundationVoiceRecorder()
     }
 
     // Visionneuse de stories (ADR-051).

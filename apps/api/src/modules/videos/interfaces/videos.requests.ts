@@ -10,6 +10,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -51,6 +52,22 @@ export class CreateUploadRequest {
   @IsOptional()
   @IsBoolean()
   commentsEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: "« Autoriser l'utilisation de mon son » (ADR-064), vrai par défaut." })
+  @IsOptional()
+  @IsBoolean()
+  soundShared?: boolean;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Son repris d'une autre vidéo (ADR-064)." })
+  @IsOptional()
+  @IsUUID()
+  soundId?: string;
+}
+
+export class SetSoundSettingsRequest {
+  @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
+  @IsBoolean()
+  soundShared!: boolean;
 }
 
 export class SetVideoVisibilityRequest {

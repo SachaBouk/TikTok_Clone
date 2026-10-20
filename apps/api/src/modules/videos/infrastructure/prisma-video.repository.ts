@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../../generated/prisma/client';
+import { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
 import type {
+  Sound,
+  SoundQuery,
   NewVideo,
   PublishedVideo,
   TranscodeOutcome,
@@ -25,6 +27,8 @@ const videoSelect = {
   status: true,
   visibility: true,
   commentsEnabled: true,
+  soundShared: true,
+  soundId: true,
   hlsUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -65,10 +69,21 @@ export class PrismaVideoRepository extends VideoRepository {
         ? { status: 'ready' as const, hlsUrl: outcome.hlsUrl, thumbnailUrl: outcome.thumbnailUrl }
         : { status: 'failed' as const };
     return this.prisma.$transaction(async (tx) => {
-      const [updated] = await tx.video.updateManyAndReturn({ where: { id, status: 'processing' }, data, select: { visibility: true } });
+      const [updated] = await tx.video.updateManyAndReturn({
+        where: { id, status: 'processing' },
+        data,
+        select: { visibility: true, userId: true },
+      });
       if (!updated) return false;
       // Une vidéo privée n'est rangée sous aucun hashtag (ADR-061).
       if (outcome.status === 'ready' && updated.visibility === 'public') await tagVideo(tx, id, hashtags);
+      // Son réutilisable (ADR-064), gardé même pour une vidéo privée : il est filtré à la lecture.
+      if (outcome.status === 'ready' && outcome.sound) {
+        await tx.sound.createMany({
+          data: [{ videoId: id, userId: updated.userId, audioUrl: outcome.sound.audioUrl, durationMs: outcome.sound.durationMs }],
+          skipDuplicates: true,
+        });
+      }
       return true;
     });
   }
@@ -87,6 +102,59 @@ export class PrismaVideoRepository extends VideoRepository {
   async setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null> {
     const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { commentsEnabled: enabled }, select: videoSelect });
     return video ?? null;
+  }
+
+  async setSoundShared(id: string, shared: boolean): Promise<Video | null> {
+    const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { soundShared: shared }, select: videoSelect });
+    return video ?? null;
+  }
+
+  // Sons proposés (ADR-064) : vidéo d'origine publiée, publique, qui le permet, auteur non exclu. Le nombre de
+  // publications compte les vidéos publiques publiées qui reprennent le son (index `videos(sound_id)`).
+  findSounds(query: SoundQuery, excludedAuthorIds: string[], offset: number, limit: number): Promise<Sound[]> {
+    const excluded = excludedAuthorIds.length > 0 ? excludedAuthorIds : ['00000000-0000-0000-0000-000000000000'];
+    const select = Prisma.sql`
+      SELECT s.sound_id AS id, s.video_id AS "videoId", s.user_id AS "userId", s.audio_url AS "audioUrl",
+        s.duration_ms AS "durationMs", v.thumbnail_url AS "coverUrl", s.created_at AS "createdAt",
+        (SELECT count(*)::int FROM videos u WHERE u.sound_id = s.sound_id AND u.status = 'ready' AND u.visibility = 'public') AS "usesCount"
+      FROM sounds s JOIN videos v ON v.video_id = s.video_id`;
+    const available = Prisma.sql`v.status = 'ready' AND v.visibility = 'public' AND v.sound_shared
+      AND v.thumbnail_url IS NOT NULL AND NOT (s.user_id = ANY(${excluded}::uuid[]))`;
+    switch (query.kind) {
+      case 'recommended':
+        return this.prisma.$queryRaw<Sound[]>`${select} WHERE ${available}
+          ORDER BY "usesCount" DESC, s.created_at DESC, s.sound_id DESC OFFSET ${offset} LIMIT ${limit}`;
+      case 'search': {
+        // `ILIKE` : « % », « _ » et « \ » sont des jokers, échappés.
+        const pattern = `%${query.text.replace(/[\\%_]/g, '\\$&')}%`;
+        const authors = query.authorIds.length > 0 ? query.authorIds : ['00000000-0000-0000-0000-000000000000'];
+        return this.prisma.$queryRaw<Sound[]>`${select} WHERE ${available}
+          AND (v.description ILIKE ${pattern} OR s.user_id = ANY(${authors}::uuid[]))
+          ORDER BY "usesCount" DESC, s.created_at DESC, s.sound_id DESC OFFSET ${offset} LIMIT ${limit}`;
+      }
+      case 'favorites':
+        return this.prisma.$queryRaw<Sound[]>`${select} JOIN sound_favorites f ON f.sound_id = s.sound_id AND f.user_id = ${query.userId}::uuid
+          WHERE ${available} ORDER BY f.created_at DESC, s.sound_id DESC OFFSET ${offset} LIMIT ${limit}`;
+      case 'ids':
+        return this.prisma.$queryRaw<Sound[]>`${select} WHERE ${available} AND s.sound_id = ANY(${query.ids}::uuid[])
+          ORDER BY s.sound_id LIMIT ${limit}`;
+    }
+  }
+
+  async setSoundFavorite(userId: string, soundId: string, active: boolean): Promise<boolean> {
+    if (!active) {
+      await this.prisma.soundFavorite.deleteMany({ where: { userId, soundId } });
+      return true;
+    }
+    const exists = await this.prisma.sound.findUnique({ where: { id: soundId }, select: { id: true } });
+    if (!exists) return false;
+    await this.prisma.soundFavorite.createMany({ data: [{ userId, soundId }], skipDuplicates: true });
+    return true;
+  }
+
+  async findFavoritedSoundIds(userId: string, soundIds: string[]): Promise<Set<string>> {
+    const rows = await this.prisma.soundFavorite.findMany({ where: { userId, soundId: { in: soundIds } }, select: { soundId: true } });
+    return new Set(rows.map((row) => row.soundId));
   }
 
   findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]> {
@@ -256,6 +324,7 @@ const detailsSelect = {
   status: true,
   visibility: true,
   commentsEnabled: true,
+  soundShared: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,
@@ -273,6 +342,7 @@ const publishedSelect = {
   description: true,
   visibility: true,
   commentsEnabled: true,
+  soundShared: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,

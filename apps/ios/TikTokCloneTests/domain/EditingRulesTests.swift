@@ -384,6 +384,70 @@ struct EditingRulesTests {
         for category in VideoEffect.Category.allCases { #expect(!category.effects.isEmpty) }
     }
 
+    @Test("voix off : à la tête de lecture, sans chevauchement, jusqu'à la voix suivante ou la fin, 0,3 s au moins")
+    func voiceovers() {
+        func clip(_ start: Double, _ duration: Double) -> VoiceoverClip {
+            VoiceoverClip(id: UUID(), file: URL(filePath: "/tmp/\(start).m4a"), start: .seconds(start), duration: .seconds(duration))
+        }
+        var track = VoiceoverTrack(clips: [], duration: .seconds(10))
+        #expect(track.available(at: .seconds(2)) == .seconds(8))
+        let first = track.add(clip(2, 3))
+        #expect(first)
+        #expect(track.available(at: .seconds(3)) == nil)
+        #expect(track.available(at: .seconds(0)) == .seconds(2))
+        // Raccourcie à la place disponible (voix suivante à 2 s).
+        let second = track.add(clip(0.5, 5))
+        #expect(second)
+        #expect(track.clips.last?.duration == .seconds(1.5))
+        let tooLate = track.add(clip(9.9, 1))
+        #expect(!tooLate)
+        #expect(track.sorted.map(\.start) == [.seconds(0.5), .seconds(2)])
+        let removed = track.removeLast()
+        #expect(removed?.start == .seconds(0.5))
+        // Plan raccourci : les voix au-delà de la fin sont coupées ou retirées ; plus de voix, plus d'effet.
+        let trimmed = VoiceoverTrack(clips: [clip(1, 3), clip(4.8, 2)], duration: .seconds(5))
+        #expect(trimmed.clips.map(\.duration) == [.seconds(3)])
+        var plan = EditPlan(clips: [self.clip("a", 6)], kind: .video)
+        plan.setVoiceovers([clip(1, 2)])
+        plan.voiceEffect = .robot
+        #expect(plan.voiceovers.count == 1 && plan.needsReencoding)
+        plan.setVoiceovers([])
+        #expect(plan.voiceEffect == .none)
+        for category in VoiceEffect.Category.allCases { #expect(!category.effects.isEmpty) }
+        #expect(VoiceEffect.allCases.filter { $0.category == nil } == [.none])
+    }
+
+    @Test("son repris : coupe le son d'origine, passage borné à la vidéo, « Récents » sans doublon")
+    func chosenSound() {
+        let author = UserSummary(id: "u", username: "lea", displayName: "Léa", avatarURL: nil)
+        let sound = Sound(
+            id: "s1", videoID: "v1", author: author, audioURL: URL(string: "https://cdn/v1/sound.m4a")!, duration: .seconds(30),
+            coverURL: URL(string: "https://cdn/v1/thumbnail.jpg")!, usesCount: 3, favorited: false)
+        #expect(sound.title == "Son original - lea")
+        var plan = EditPlan(clips: [clip("a", 10)], kind: .video)
+        plan.setSound(ChosenSound(sound: sound, file: URL(filePath: "/tmp/s1.m4a"), start: .seconds(25)))
+        #expect(plan.isMuted && plan.sound?.start == .seconds(20) && plan.needsReencoding)
+        plan.setSoundStart(.seconds(-3))
+        #expect(plan.sound?.start == .zero)
+        plan.setSoundStart(.seconds(12))
+        #expect(plan.sound?.start == .seconds(12))
+        plan.setSound(nil)
+        #expect(!plan.isMuted && plan.sound == nil)
+        #expect(ChosenSound.maxStart(soundDuration: .seconds(5), videoDuration: .seconds(10)) == .zero)
+        plan.setOriginalVolume(2)
+        plan.setAddedVolume(-1)
+        #expect(plan.originalVolume == 1 && plan.addedVolume == 0)
+        plan.setOriginalVolume(0.5)
+        #expect(plan.needsReencoding)
+
+        var recent = RecentSounds(ids: ["a", "b", "a"])
+        #expect(recent.ids == ["a", "b"])
+        recent.use("b")
+        #expect(recent.ids == ["b", "a"])
+        for index in 0..<40 { recent.use("x\(index)") }
+        #expect(recent.ids.count == RecentSounds.limit && recent.ids.first == "x39")
+    }
+
     @Test("mesure d'audience : source et modifications, jamais le texte")
     func details() {
         var plan = EditPlan(clips: [clip("a", 10), clip("b", 5)], kind: .video)
@@ -400,7 +464,8 @@ struct EditingRulesTests {
             properties == [
                 "source": .string("camera"), "segments": .int(2), "trimmed": .bool(true), "filter": .string("warm"), "text_count": .int(1),
                 "speed": .double(1.5), "cropped": .bool(true), "rotated": .bool(false), "filter_intensity": .int(42),
-                "sticker_count": .int(1), "effect_count": .int(1),
+                "sticker_count": .int(1), "effect_count": .int(1), "voiceover_count": .int(0), "voice_effect": .string("none"),
+                "sound_used": .bool(false), "sound_shared": .bool(true),
             ])
         #expect(PublicationDetails().properties(photo: true) == ["source": .string("gallery")])
         let story = AnalyticsEvent.storyUploadStarted(photo: true, details: PublicationDetails(source: .camera))

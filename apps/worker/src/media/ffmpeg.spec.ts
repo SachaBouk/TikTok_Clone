@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createThumbnail, InvalidMediaError, probe, supportsToneMapping, transcodeToHls, type FfmpegOptions } from './ffmpeg';
+import { createThumbnail, extractSound, InvalidMediaError, probe, supportsToneMapping, transcodeToHls, type FfmpegOptions } from './ffmpeg';
 import { renditionsFor } from './ladder';
 
 const options: FfmpegOptions = { ffmpegPath: 'ffmpeg', ffprobePath: 'ffprobe', x264Preset: 'ultrafast', timeoutMs: 60_000, toneMapping: true };
@@ -232,6 +232,25 @@ describe('createThumbnail', () => {
     expect(readFileSync(output).subarray(0, 2).toString('hex')).toBe('ffd8'); // signature JPEG
     const image = ffprobeJson(output).streams[0];
     expect(`${image.width}x${image.height}`).toBe('720x1280');
+  });
+});
+
+describe('extractSound (ADR-064)', () => {
+  it('extrait la piste son seule, en AAC stéréo, sans position', async () => {
+    const located = join(dir, 'located-sound.mov');
+    ffmpeg('-i', iphoneLike, '-c', 'copy', '-movflags', 'use_metadata_tags', '-metadata', 'location=+48.8566+002.3522/', located);
+    const output = join(dir, 'sound.m4a');
+    await extractSound(located, output, options);
+
+    const streams = (
+      JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', output]).toString()) as {
+        streams: { codec_type: string; codec_name: string; channels?: number }[];
+      }
+    ).streams;
+    expect(streams.map((stream) => stream.codec_type)).toEqual(['audio']);
+    expect(streams[0].codec_name).toBe('aac');
+    expect(streams[0].channels).toBe(2);
+    expect(readFileSync(output).includes('48.8566')).toBe(false);
   });
 });
 

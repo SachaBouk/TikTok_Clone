@@ -4,9 +4,9 @@ import type { VideoReaction } from '../../interactions/domain/interaction';
 import type { StoriesService } from '../../stories/application/stories.service';
 import type { User } from '../../users/domain/user';
 import type { UsersService } from '../../users/application/users.service';
-import type { PublishedVideo } from '../../videos/domain/video';
+import { MAX_SOUND_RESULTS, type PublishedVideo, type Sound } from '../../videos/domain/video';
 import type { VideosService } from '../../videos/application/videos.service';
-import { decodeCursor, encodeCursor, type FeedPosition } from '../domain/feed-cursor';
+import { decodeCursor, encodeCursor, InvalidFeedCursorError, type FeedPosition } from '../domain/feed-cursor';
 import { FeedItemNotFoundError } from '../domain/feed.errors';
 import { decodeListCursor, encodeListCursor } from '../domain/list-cursor';
 import { CATALOG_LIMIT, PAGE_FILL_ROUNDS, SNAPSHOT_REFRESH_SECONDS, SNAPSHOT_TTL_SECONDS } from '../domain/feed-rules';
@@ -30,6 +30,21 @@ export interface FeedItem {
   // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo par le compte.
   viewedAt?: Date;
 }
+
+// Son proposé (ADR-064), avec son auteur et l'état du favori pour le compte connecté.
+export interface SoundItem {
+  sound: Sound;
+  author: User;
+  favorited: boolean;
+}
+
+export interface SoundPage {
+  items: SoundItem[];
+  nextCursor: string | null;
+}
+
+// Listes de sons de l'éditeur (ADR-064).
+export type SoundList = 'recommended' | 'favorites';
 
 export interface FeedPage {
   items: FeedItem[];
@@ -56,6 +71,62 @@ export class FeedService {
     private readonly interactions: InteractionsService,
     private readonly stories: StoriesService,
   ) {}
+
+  // Sons proposés (ADR-064) : comptes masqués exclus (suspendus, blocages dans un sens ou l'autre). Curseur = position
+  // dans la liste ; les recommandés et la recherche s'arrêtent à 200 sons.
+  async listSounds(viewerId: string, list: SoundList, cursor: string | undefined, limit: number): Promise<SoundPage> {
+    const offset = decodeSoundCursor(cursor);
+    const hidden = [...(await this.interactions.getHiddenAccountIds(viewerId))];
+    const query = list === 'favorites' ? ({ kind: 'favorites', userId: viewerId } as const) : ({ kind: 'recommended' } as const);
+    return this.soundPage(viewerId, await this.videos.listSounds(query, hidden, offset, limit + 1), offset, limit, list !== 'favorites');
+  }
+
+  // Recherche (ADR-064) : description de la vidéo d'origine, ou pseudo et nom de son auteur.
+  async searchSounds(viewerId: string, text: string, cursor: string | undefined, limit: number): Promise<SoundPage> {
+    const offset = decodeSoundCursor(cursor);
+    const hidden = [...(await this.interactions.getHiddenAccountIds(viewerId))];
+    const authors = await this.users.searchProfiles(text.replace(/^@/, ''), hidden, 0, 50);
+    const query = { kind: 'search', text, authorIds: authors.map((author) => author.id) } as const;
+    return this.soundPage(viewerId, await this.videos.listSounds(query, hidden, offset, limit + 1), offset, limit, true);
+  }
+
+  // Sons demandés par l'app (« Récents »), dans l'ordre demandé ; un son qui n'est plus proposé est omis.
+  async getSounds(viewerId: string, ids: string[]): Promise<SoundItem[]> {
+    const hidden = [...(await this.interactions.getHiddenAccountIds(viewerId))];
+    const unique = [...new Set(ids)];
+    const sounds = await this.videos.listSounds({ kind: 'ids', ids: unique }, hidden, 0, unique.length);
+    const items = await this.soundItems(viewerId, sounds);
+    const byId = new Map(items.map((item) => [item.sound.id, item]));
+    return unique.flatMap((id) => byId.get(id) ?? []);
+  }
+
+  async setSoundFavorite(viewerId: string, soundId: string, active: boolean): Promise<void> {
+    const hidden = [...(await this.interactions.getHiddenAccountIds(viewerId))];
+    await this.videos.setSoundFavorite(viewerId, soundId, active, hidden);
+  }
+
+  private async soundPage(viewerId: string, sounds: Sound[], offset: number, limit: number, capped: boolean): Promise<SoundPage> {
+    const end = offset + Math.min(limit, sounds.length);
+    const more = sounds.length > limit && (!capped || end < MAX_SOUND_RESULTS);
+    const kept = sounds.slice(0, capped ? Math.max(0, Math.min(limit, MAX_SOUND_RESULTS - offset)) : limit);
+    return { items: await this.soundItems(viewerId, kept), nextCursor: more ? String(end) : null };
+  }
+
+  private async soundItems(viewerId: string, sounds: Sound[]): Promise<SoundItem[]> {
+    if (sounds.length === 0) return [];
+    const [authors, favorited] = await Promise.all([
+      this.users.getByIds(sounds.map((sound) => sound.userId)),
+      this.videos.favoritedSoundIds(
+        viewerId,
+        sounds.map((sound) => sound.id),
+      ),
+    ]);
+    const byId = new Map(authors.map((author) => [author.id, author]));
+    return sounds.flatMap((sound) => {
+      const author = byId.get(sound.userId);
+      return author ? [{ sound, author, favorited: favorited.has(sound.id) }] : [];
+    });
+  }
 
   // Lève InvalidFeedCursorError si le curseur n'a pas été produit par l'API.
   // `viewerId` : utilisateur connecté, pour l'état des boutons (liké, suivi…) ; null en mode invité.
@@ -292,4 +363,11 @@ export class FeedService {
       return [{ video, author, viewer, authorStory: rings.get(author.id) ?? null }];
     });
   }
+}
+
+// Curseur des listes de sons : la position dans la liste, en chiffres. Lève InvalidFeedCursorError sinon.
+function decodeSoundCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0;
+  if (!/^\d{1,4}$/.test(cursor)) throw new InvalidFeedCursorError();
+  return Number(cursor);
 }

@@ -57,3 +57,11 @@ export class InvalidHashtagError extends VideoError {
     this.name = 'InvalidHashtagError';
   }
 }
+
+// Son introuvable ou plus proposé (ADR-064 : vidéo d'origine supprimée, privée, ou qui ne le permet plus) : 404.
+export class SoundNotFoundError extends VideoError {
+  constructor(id: string) {
+    super(`Son introuvable : ${id}`);
+    this.name = 'SoundNotFoundError';
+  }
+}

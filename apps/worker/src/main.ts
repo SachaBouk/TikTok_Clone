@@ -50,7 +50,7 @@ async function main() {
   // Vidéos (3 min au plus, ADR-040) et stories vidéo (60 s au plus, ADR-051) : même traitement, files séparées, pour que
   // chaque résultat revienne au module de l'API concerné. Chaque file a sa propre concurrence (`TRANSCODE_CONCURRENCY`).
   const consumers = [
-    startConsumer(TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, MAX_VIDEO_DURATION_SECONDS, { connection, config, storage, toneMapping }),
+    startConsumer(TRANSCODE_QUEUE, TRANSCODE_RESULTS_QUEUE, MAX_VIDEO_DURATION_SECONDS, { connection, config, storage, toneMapping }, true),
     startConsumer(STORY_TRANSCODE_QUEUE, STORY_TRANSCODE_RESULTS_QUEUE, MAX_STORY_DURATION_SECONDS, { connection, config, storage, toneMapping }),
   ];
   await Promise.all(consumers.map(({ worker }) => worker.waitUntilReady()));
@@ -80,6 +80,8 @@ function startConsumer(
   resultsQueue: string,
   maxDurationSeconds: number,
   { connection, config, storage, toneMapping }: ConsumerContext,
+  // Son réutilisable extrait (ADR-064) : file des vidéos seulement.
+  extractSound = false,
 ) {
   const results = new Queue<TranscodeResult>(resultsQueue, { connection });
   // jobId dérivé de la vidéo : un résultat publié deux fois (tentative rejouée) n'est pris qu'une fois.
@@ -92,7 +94,7 @@ function startConsumer(
       const started = Date.now();
       let output;
       try {
-        output = await transcode(job.data, config, storage, { toneMapping, maxDurationSeconds });
+        output = await transcode(job.data, config, storage, { toneMapping, maxDurationSeconds, extractSound });
       } catch (error) {
         // Fichier illisible, trop long ou disparu : les nouvelles tentatives échoueraient de la même façon.
         if (error instanceof InvalidMediaError || error instanceof RawVideoNotFoundError) {

@@ -166,6 +166,61 @@ struct VideoEditorTests {
         #expect(inverted.red > Int(normal.red) + 80 && inverted.blue < Int(normal.blue) - 40, "\(inverted) / \(normal)")
     }
 
+    @Test("effets de voix : chaque effet rend la voix (un peu plus longue : queue de réverbération)")
+    func voiceEffects() async throws {
+        let directory = try TestVideos.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let voice = try Self.tone(seconds: 1, in: directory)
+        #expect(try await VoiceEffectRenderer.render(voice, effect: .none) == voice)
+        for effect in VoiceEffect.allCases where effect != .none {
+            let output = try await VoiceEffectRenderer.render(voice, effect: effect)
+            let file = try AVAudioFile(forReading: output)
+            let seconds = Double(file.length) / file.processingFormat.sampleRate
+            #expect(seconds > 0.99 && seconds < 2.1, "\(effect.rawValue) : \(seconds) s")
+            try? FileManager.default.removeItem(at: output)
+        }
+    }
+
+    @Test("son repris et voix off mêlés à l'export, sans allonger la vidéo")
+    func addedSound() async throws {
+        let directory = try TestVideos.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appending(path: "silent.mov")
+        try await TestVideos.write(to: source, width: 96, height: 160, seconds: 2)
+        let soundFile = directory.appending(path: "sound.mov")
+        try await TestVideos.write(to: soundFile, width: 32, height: 32, seconds: 4, audio: true)
+        #expect(!(try await TestVideos.hasAudio(source)))
+
+        var plan = EditPlan(clips: [try await clip(source)], kind: .video)
+        let author = UserSummary(id: "u", username: "lea", displayName: "Léa", avatarURL: nil)
+        let sound = Sound(
+            id: "s", videoID: "v", author: author, audioURL: soundFile, duration: .seconds(4), coverURL: soundFile, usesCount: 0, favorited: false)
+        plan.setSound(ChosenSound(sound: sound, file: soundFile, start: .seconds(1)))
+        plan.setVoiceovers([
+            VoiceoverClip(id: UUID(), file: try Self.tone(seconds: 0.5, in: directory), start: .seconds(0.5), duration: .seconds(0.5))
+        ])
+        plan.voiceEffect = .robot
+        plan.setAddedVolume(0.8)
+        let output = try await editor.export(plan)
+        defer { try? FileManager.default.removeItem(at: output) }
+        #expect(try await TestVideos.hasAudio(output))
+        #expect(abs(try await TestVideos.duration(of: output) - 2) < 0.15)
+    }
+
+    // Son de 440 Hz, PCM mono, écrit pour le test.
+    private static func tone(seconds: Double, in directory: URL) throws -> URL {
+        let url = directory.appending(path: "tone-\(UUID().uuidString).caf")
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1))
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        let frames = AVAudioFrameCount(seconds * 44_100)
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+        buffer.frameLength = frames
+        let samples = try #require(buffer.floatChannelData?[0])
+        for index in 0..<Int(frames) { samples[index] = 0.3 * sin(2 * .pi * 440 * Float(index) / 44_100) }
+        try file.write(from: buffer)
+        return url
+    }
+
     @Test("autocollants incrustés à leur place")
     func stickerOverlay() throws {
         var plan = EditPlan(clips: [SourceClip(file: URL(filePath: "/tmp/x.mov"), duration: .seconds(1))], kind: .video)

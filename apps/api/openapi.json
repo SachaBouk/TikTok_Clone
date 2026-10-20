@@ -888,6 +888,16 @@
               }
             }
           },
+          "404": {
+            "description": "Son repris introuvable ou plus proposé (ADR-064).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Trop d’envois de vidéos démarrés récemment (ADR-039) : réessayer après le délai de l’en-tête Retry-After (secondes).",
             "headers": {
@@ -1072,6 +1082,66 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetCommentSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}/sound-settings": {
+      "patch": {
+        "operationId": "setVideoSoundSettings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSoundSettingsRequest"
               }
             }
           }
@@ -4916,6 +4986,334 @@
           "feed"
         ],
         "security": []
+      }
+    },
+    "/sounds/recommended": {
+      "get": {
+        "operationId": "listRecommendedSounds",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Les plus utilisés, puis les plus récents ; 200 au plus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoundPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
+      }
+    },
+    "/sounds/favorites": {
+      "get": {
+        "operationId": "listFavoriteSounds",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sons favoris, du plus récemment ajouté au plus ancien.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoundPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
+      }
+    },
+    "/sounds/search": {
+      "get": {
+        "operationId": "searchSounds",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` de la page précédente, tel quel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "Pseudo, nom ou description de la vidéo d’origine.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 50,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pseudo, nom ou description de la vidéo d’origine ; 200 au plus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoundPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Texte, curseur ou taille de page invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
+      }
+    },
+    "/sounds": {
+      "get": {
+        "operationId": "getSounds",
+        "parameters": [
+          {
+            "name": "ids",
+            "required": true,
+            "in": "query",
+            "description": "Sons « Récents » de l’app.",
+            "schema": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sons demandés, dans l’ordre ; un son qui n’est plus proposé est omis.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoundListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identifiants invalides (1 à 50).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
+      }
+    },
+    "/sounds/{id}/favorite": {
+      "put": {
+        "operationId": "favoriteSound",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Son ajouté aux favoris (idempotent)."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Son introuvable ou plus proposé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
+      },
+      "delete": {
+        "operationId": "unfavoriteSound",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Son retiré des favoris (idempotent)."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sounds"
+        ]
       }
     },
     "/search/users": {
@@ -8937,6 +9335,15 @@
           "commentsEnabled": {
             "type": "boolean",
             "description": "Commentaires autorisés (ADR-062), vrai par défaut."
+          },
+          "soundShared": {
+            "type": "boolean",
+            "description": "« Autoriser l'utilisation de mon son » (ADR-064), vrai par défaut."
+          },
+          "soundId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Son repris d'une autre vidéo (ADR-064)."
           }
         },
         "required": [
@@ -8979,6 +9386,10 @@
             "type": "boolean",
             "description": "Commentaires autorisés (ADR-062)."
           },
+          "soundShared": {
+            "type": "boolean",
+            "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
+          },
           "hlsUrl": {
             "type": "string",
             "nullable": true,
@@ -9002,6 +9413,7 @@
           "status",
           "visibility",
           "commentsEnabled",
+          "soundShared",
           "hlsUrl",
           "thumbnailUrl",
           "createdAt"
@@ -9109,6 +9521,18 @@
         },
         "required": [
           "commentsEnabled"
+        ]
+      },
+      "SetSoundSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "soundShared": {
+            "type": "boolean",
+            "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
+          }
+        },
+        "required": [
+          "soundShared"
         ]
       },
       "PendingVideosResponse": {
@@ -10527,6 +10951,10 @@
             "type": "boolean",
             "description": "Commentaires autorisés (ADR-062)."
           },
+          "soundShared": {
+            "type": "boolean",
+            "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -10577,6 +11005,7 @@
           "thumbnailUrl",
           "visibility",
           "commentsEnabled",
+          "soundShared",
           "createdAt",
           "viewsCount",
           "likesCount",
@@ -10626,6 +11055,103 @@
         "required": [
           "items",
           "nextCursor"
+        ]
+      },
+      "SoundViewerStateResponse": {
+        "type": "object",
+        "properties": {
+          "favorited": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "favorited"
+        ]
+      },
+      "SoundResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "videoId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Vidéo d'où vient le son."
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          },
+          "audioUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Fichier AAC du son."
+          },
+          "duration": {
+            "type": "number",
+            "description": "Durée, en secondes."
+          },
+          "coverUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Miniature de la vidéo d'origine."
+          },
+          "usesCount": {
+            "type": "integer",
+            "description": "Vidéos publiques publiées qui utilisent ce son."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/SoundViewerStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "videoId",
+          "author",
+          "audioUrl",
+          "duration",
+          "coverUrl",
+          "usesCount",
+          "createdAt"
+        ]
+      },
+      "SoundPageResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoundResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "À renvoyer tel quel pour la page suivante ; nul à la fin."
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "SoundListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoundResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "AccountSearchItemResponse": {

@@ -1,3 +1,5 @@
+import type { UserSummaryDto } from './users.js';
+
 // Cycle de vie d'une vidéo (ADR-008).
 export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
 
@@ -12,6 +14,8 @@ export interface VideoDto {
   visibility: VideoVisibility;
   // Commentaires autorisés (ADR-062).
   commentsEnabled: boolean;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  soundShared: boolean;
   // Renseignés quand la vidéo est `ready` (ADR-008).
   hlsUrl: string | null;
   thumbnailUrl: string | null;
@@ -37,4 +41,36 @@ export interface VideoUploadDto {
 export interface PendingVideosDto {
   // De la plus récente à la plus ancienne (50 au plus).
   items: VideoDto[];
+}
+
+// Son repris d'une vidéo publiée (ADR-064) : « Son original - @pseudo ».
+export interface SoundDto {
+  id: string;
+  // Vidéo d'où vient le son.
+  videoId: string;
+  author: UserSummaryDto;
+  // Fichier AAC du son (CDN, bucket HLS en local).
+  audioUrl: string;
+  // Durée, en secondes.
+  duration: number;
+  // Miniature de la vidéo d'origine.
+  coverUrl: string;
+  // Vidéos publiques publiées qui l'utilisent.
+  usesCount: number;
+  createdAt: string;
+  // Absent en invité.
+  viewer?: SoundViewerStateDto;
+}
+
+export interface SoundViewerStateDto {
+  favorited: boolean;
+}
+
+export interface SoundPageDto {
+  items: SoundDto[];
+  nextCursor: string | null;
+}
+
+export interface SoundListDto {
+  items: SoundDto[];
 }

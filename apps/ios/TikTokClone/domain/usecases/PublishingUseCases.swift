@@ -28,7 +28,7 @@ struct CreatePublicationUseCase: Sendable {
 
     func callAsFunction(
         file: URL, description: String, userID: String, kind: PublicationKind = .video, visibility: VideoVisibility = .everyone,
-        commentsEnabled: Bool = true
+        commentsEnabled: Bool = true, soundShared: Bool = true, soundID: String? = nil
     ) throws -> PendingUpload {
         guard let contentType = MediaContentType(fileExtension: file.pathExtension), contentType.isVideo || kind == .story else {
             throw AppError.rejected("Format non pris en charge : choisis une vidéo MP4 ou MOV.")
@@ -53,7 +53,9 @@ struct CreatePublicationUseCase: Sendable {
             createdAt: now(),
             kind: kind,
             visibility: kind == .story ? .everyone : visibility,
-            commentsEnabled: kind == .story || commentsEnabled
+            commentsEnabled: kind == .story || commentsEnabled,
+            soundShared: kind == .story || soundShared,
+            soundID: kind == .story ? nil : soundID
         )
         try store.save(upload)
         return upload
@@ -152,7 +154,7 @@ struct UploadVideoUseCase: Sendable {
             case .video:
                 try await videos.createUpload(
                     contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility,
-                    commentsEnabled: request.commentsEnabled)
+                    commentsEnabled: request.commentsEnabled, soundShared: request.soundShared, soundID: request.soundID)
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
         }

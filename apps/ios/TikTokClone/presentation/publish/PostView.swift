@@ -63,7 +63,9 @@ struct PostView: View {
                             ? "Toi uniquement peux voir cette publication" : "Tout le monde peut voir cette publication",
                         subtitle: nil, systemImage: draft.visibility == .onlyMe ? "lock" : "globe", identifier: "publish.visibility")
                     settingsRow(
-                        title: "Plus d’options", subtitle: draft.commentsEnabled ? "Commentaires autorisés." : "Commentaires désactivés.",
+                        title: "Plus d’options",
+                        subtitle: (draft.commentsEnabled ? "Commentaires autorisés." : "Commentaires désactivés.")
+                            + (draft.soundShared ? "" : " Son non partagé."),
                         systemImage: "ellipsis", identifier: "publish.moreOptions")
                 }
             }
@@ -157,7 +159,7 @@ struct PostView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.title3).multilineTextAlignment(.leading)
                     if let subtitle {
-                        Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+                        Text(subtitle).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                     }
                 }
                 Spacer()
@@ -238,6 +240,19 @@ struct PostSettingsSheet: View {
                         .padding(20)
                         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                         .accessibilityIdentifier("settings.comments")
+                    // ADR-064 : décoché, le son de la vidéo n'est pas proposé aux autres.
+                    Toggle(isOn: $draft.soundShared) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Autoriser l'utilisation de mon son").font(.headline)
+                            Text("Les autres pourront reprendre le son de cette vidéo dans les leurs.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(Color.brandCyan)
+                    .padding(20)
+                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("settings.sound")
                 }
                 .padding(.horizontal, 16)
             }

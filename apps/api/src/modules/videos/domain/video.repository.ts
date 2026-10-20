@@ -2,6 +2,8 @@ import type { Hashtag, HashtagVideoPosition } from './hashtags';
 import type {
   NewVideo,
   PublishedVideo,
+  Sound,
+  SoundQuery,
   TranscodeOutcome,
   Video,
   VideoDetails,
@@ -27,6 +29,13 @@ export abstract class VideoRepository {
   abstract setVisibility(id: string, visibility: VideoVisibility, hashtags: string[]): Promise<Video | null>;
   // Commentaires autorisés ou coupés (ADR-062). Null si la vidéo n'existe plus.
   abstract setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null>;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  abstract setSoundShared(id: string, shared: boolean): Promise<Video | null>;
+  // Sons proposés (ADR-064), auteurs `excludedAuthorIds` exclus, à partir de la position `offset`.
+  abstract findSounds(query: SoundQuery, excludedAuthorIds: string[], offset: number, limit: number): Promise<Sound[]>;
+  // Favori ajouté ou retiré ; faux si le son n'existe pas.
+  abstract setSoundFavorite(userId: string, soundId: string, active: boolean): Promise<boolean>;
+  abstract findFavoritedSoundIds(userId: string, soundIds: string[]): Promise<Set<string>>;
   // Vidéos restées en `uploading` depuis avant `createdBefore` (uploads abandonnés).
   abstract findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]>;
   // Vidéos en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu).

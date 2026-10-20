@@ -168,6 +168,36 @@ export async function createThumbnail(input: string, output: string, media: Medi
   );
 }
 
+// Son d'une vidéo, réutilisable par les autres (ADR-064) : piste son seule, AAC stéréo, sans métadonnées.
+export async function extractSound(input: string, output: string, options: FfmpegOptions) {
+  await run(
+    options.ffmpegPath,
+    [
+      '-nostdin',
+      '-y',
+      '-loglevel',
+      'error',
+      '-i',
+      input,
+      '-vn',
+      '-map',
+      '0:a:0',
+      '-map_metadata',
+      '-1',
+      '-c:a',
+      'aac',
+      '-b:a',
+      `${AUDIO_KBPS}k`,
+      '-ac',
+      '2',
+      '-movflags',
+      '+faststart',
+      output,
+    ],
+    options.timeoutMs,
+  );
+}
+
 function run(command: string, args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {

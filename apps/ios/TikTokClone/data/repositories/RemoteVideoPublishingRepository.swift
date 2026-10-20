@@ -6,7 +6,8 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     let client: Client
 
     func createUpload(
-        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
+        soundShared: Bool, soundID: String?
     ) async throws -> UploadTicket {
         // Une photo n'est publiée qu'en story (ADR-051).
         guard let type = Components.Schemas.CreateUploadRequest.ContentTypePayload(contentType) else {
@@ -14,9 +15,10 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
         }
         let body = Components.Schemas.CreateUploadRequest(
             contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility),
-            commentsEnabled: commentsEnabled)
+            commentsEnabled: commentsEnabled, soundShared: soundShared, soundId: soundID)
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
+        case .notFound: throw AppError.rejected("Ce son n'est plus disponible. Choisis-en un autre.")
         case .tooManyRequests(let error): throw AppError.tooManyActions(.uploads, retryAfter: max(1, error.headers.retryAfter ?? 60))
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
         case .unauthorized: throw AppError.sessionExpired

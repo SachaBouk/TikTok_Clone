@@ -41,6 +41,9 @@ export class FeedItemResponse implements FeedItemDto {
   @ApiProperty({ description: 'Commentaires autorisés (ADR-062).' })
   commentsEnabled!: boolean;
 
+  @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
+  soundShared!: boolean;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -110,6 +113,7 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     thumbnailUrl: video.thumbnailUrl,
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
+    soundShared: video.soundShared,
     createdAt: video.createdAt.toISOString(),
     viewsCount: video.viewsCount,
     likesCount: video.likesCount,

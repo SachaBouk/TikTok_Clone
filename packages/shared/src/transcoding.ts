@@ -21,6 +21,8 @@ export interface TranscodeJobData {
 }
 
 export type TranscodeResult =
-  | { videoId: string; status: 'ready'; hlsUrl: string; thumbnailUrl: string }
+  // `soundUrl` / `soundDurationSeconds` : piste son extraite en AAC (ADR-064), seulement pour une vidéo (pas une
+  // story) qui a du son.
+  | { videoId: string; status: 'ready'; hlsUrl: string; thumbnailUrl: string; soundUrl?: string; soundDurationSeconds?: number }
   // Publié après la dernière tentative en échec.
   | { videoId: string; status: 'failed'; reason: string };

@@ -19,8 +19,12 @@ export interface Video {
   visibility: VideoVisibility;
   // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
   commentsEnabled: boolean;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  soundShared: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
+  // Son repris d'une autre vidéo (ADR-064), nul sinon ou s'il a disparu.
+  soundId: string | null;
   createdAt: Date;
 }
 
@@ -32,6 +36,8 @@ export interface PublishedVideo {
   visibility: VideoVisibility;
   // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
   commentsEnabled: boolean;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  soundShared: boolean;
   hlsUrl: string;
   thumbnailUrl: string;
   viewsCount: number;
@@ -52,6 +58,8 @@ export interface VideoDetails {
   visibility: VideoVisibility;
   // Commentaires autorisés (ADR-062) : coupés, ils sont cachés à tous sauf à l'auteur.
   commentsEnabled: boolean;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  soundShared: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -80,7 +88,9 @@ export interface VideoPosition {
 }
 
 // Résultat du transcodage renvoyé par le worker (ADR-008, ADR-012).
-export type TranscodeOutcome = { status: 'ready'; hlsUrl: string; thumbnailUrl: string } | { status: 'failed' };
+// `sound` : piste son extraite (ADR-064), pour une vidéo qui a du son.
+export type TranscodeOutcome =
+  { status: 'ready'; hlsUrl: string; thumbnailUrl: string; sound?: { audioUrl: string; durationMs: number } } | { status: 'failed' };
 
 export interface NewVideo {
   userId: string;
@@ -92,4 +102,40 @@ export interface NewVideo {
   visibility?: VideoVisibility;
   // Autorisés par défaut (ADR-062).
   commentsEnabled?: boolean;
+  // Autorisé par défaut (ADR-064).
+  soundShared?: boolean;
+  // Son repris d'une autre vidéo (ADR-064).
+  soundId?: string | null;
 }
+
+// Son d'une vidéo publiée, réutilisable par les autres (ADR-064) : « Son original - @pseudo ».
+export interface Sound {
+  id: string;
+  // Vidéo d'où vient le son, et son auteur.
+  videoId: string;
+  userId: string;
+  audioUrl: string;
+  durationMs: number;
+  // Miniature de la vidéo d'origine.
+  coverUrl: string;
+  // Vidéos publiques publiées qui l'utilisent.
+  usesCount: number;
+  createdAt: Date;
+}
+
+// Sons proposés (ADR-064) : seulement ceux d'une vidéo publique, publiée, qui le permet, dont l'auteur n'est pas masqué.
+export type SoundQuery =
+  // Les plus utilisés, puis les plus récents.
+  | { kind: 'recommended' }
+  // Description de la vidéo contenant le texte (sans casse), ou auteur parmi `authorIds`.
+  | { kind: 'search'; text: string; authorIds: string[] }
+  // Favoris d'un compte, du plus récemment ajouté au plus ancien.
+  | { kind: 'favorites'; userId: string }
+  // Sons demandés (« Récents » de l'app), dans un ordre quelconque.
+  | { kind: 'ids'; ids: string[] };
+
+// Nombre de sons d'une page, et nombre de sons lisibles en tout dans une liste (comme la recherche de comptes).
+export const SOUND_PAGE_SIZE = 20;
+export const MAX_SOUND_PAGE_SIZE = 50;
+export const MAX_SOUND_RESULTS = 200;
+export const MAX_SOUND_IDS = 50;

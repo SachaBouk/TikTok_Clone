@@ -36,5 +36,11 @@ export class TranscodeResultsConsumer implements OnModuleInit, OnModuleDestroy {
 }
 
 function toOutcome(result: TranscodeResult): TranscodeOutcome {
-  return result.status === 'ready' ? { status: 'ready', hlsUrl: result.hlsUrl, thumbnailUrl: result.thumbnailUrl } : { status: 'failed' };
+  if (result.status === 'failed') return { status: 'failed' };
+  // Son réutilisable (ADR-064) : présent pour une vidéo qui a du son.
+  const sound =
+    result.soundUrl && result.soundDurationSeconds && result.soundDurationSeconds > 0
+      ? { audioUrl: result.soundUrl, durationMs: Math.round(result.soundDurationSeconds * 1000) }
+      : undefined;
+  return { status: 'ready', hlsUrl: result.hlsUrl, thumbnailUrl: result.thumbnailUrl, ...(sound ? { sound } : {}) };
 }

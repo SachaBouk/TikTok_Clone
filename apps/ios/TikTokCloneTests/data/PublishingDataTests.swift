@@ -6,7 +6,7 @@ import TikTokAPI
 
 private let videoJSON = """
     {"id":"0192f3a0-0000-7000-8000-00000000000a","userId":"0192f3a0-0000-7000-8000-000000000001","description":"Ma vidéo",\
-    "status":"processing","visibility":"public","commentsEnabled":true,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
+    "status":"processing","visibility":"public","commentsEnabled":true,"soundShared":true,"hlsUrl":null,"thumbnailUrl":null,"createdAt":"2026-09-25T12:00:00.123Z"}
     """
 
 @Suite("RemoteVideoPublishingRepository")

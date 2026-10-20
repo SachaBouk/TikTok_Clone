@@ -16,7 +16,13 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/curre
 import { Public } from '../../auth/interfaces/public.decorator';
 import { VideosService, type VideoUpload } from '../application/videos.service';
 import { VideoErrorFilter } from './video-error.filter';
-import { CompleteUploadRequest, CreateUploadRequest, SetCommentSettingsRequest, SetVideoVisibilityRequest } from './videos.requests';
+import {
+  CompleteUploadRequest,
+  CreateUploadRequest,
+  SetCommentSettingsRequest,
+  SetSoundSettingsRequest,
+  SetVideoVisibilityRequest,
+} from './videos.requests';
 import { toVideoDto, VideoResponse, VideoUploadResponse } from './videos.responses';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
@@ -37,6 +43,7 @@ export class VideosController {
   })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Format non pris en charge ou fichier trop volumineux.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Son repris introuvable ou plus proposé (ADR-064).' })
   @ApiTooManyRequests('Trop d’envois de vidéos démarrés récemment (ADR-039)')
   async createUpload(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateUploadRequest): Promise<VideoUploadDto> {
     return toUploadDto(
@@ -46,6 +53,8 @@ export class VideosController {
         description: body.description,
         visibility: body.visibility,
         commentsEnabled: body.commentsEnabled,
+        soundShared: body.soundShared,
+        soundId: body.soundId,
       }),
     );
   }
@@ -91,6 +100,20 @@ export class VideosController {
     @Body() body: SetCommentSettingsRequest,
   ): Promise<VideoDto> {
     return toVideoDto(await this.videos.setCommentsEnabled(user.userId, id, body.commentsEnabled));
+  }
+
+  // « Autoriser l'utilisation de mon son » (ADR-064), par son auteur, quel que soit son statut.
+  @Patch(':id/sound-settings')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
+  async setVideoSoundSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SetSoundSettingsRequest,
+  ): Promise<VideoDto> {
+    return toVideoDto(await this.videos.setSoundShared(user.userId, id, body.soundShared));
   }
 
   // Par son auteur, quel que soit le statut. Likes, commentaires, favoris, republications et notifications

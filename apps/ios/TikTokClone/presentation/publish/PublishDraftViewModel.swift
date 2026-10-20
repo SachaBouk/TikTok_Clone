@@ -59,6 +59,8 @@ final class PublishDraftViewModel {
     var visibility: VideoVisibility = .everyone
     // « Autoriser les commentaires » (ADR-062).
     var commentsEnabled = true
+    // « Autoriser l'utilisation de mon son » (ADR-064).
+    var soundShared = true
     // Audience choisie par « Définir comme audience par défaut » (gardée sur l'iPhone).
     private(set) var defaultVisibility: VideoVisibility = .everyone
     var description = "" {
@@ -287,10 +289,12 @@ final class PublishDraftViewModel {
     @discardableResult
     func publish() -> Bool {
         guard canPublish, case .ready(let draft) = state else { return false }
-        let details = PublicationDetails(source: draft.source, plan: draft.isPhoto ? nil : draft.plan)
+        var details = PublicationDetails(source: draft.source, plan: draft.isPhoto ? nil : draft.plan)
+        details.soundShared = mode == .story || soundShared
         if let message = publishing.publish(
             file: draft.file, description: mode == .story ? "" : description, preview: draft.preview, kind: kind, details: details,
-            visibility: mode == .story ? .everyone : visibility, commentsEnabled: mode == .story || commentsEnabled)
+            visibility: mode == .story ? .everyone : visibility, commentsEnabled: mode == .story || commentsEnabled,
+            soundShared: mode == .story || soundShared, soundID: draft.isPhoto ? nil : draft.plan?.sound?.id)
         {
             errorMessage = message
             return false
@@ -312,6 +316,7 @@ final class PublishDraftViewModel {
         description = ""
         visibility = defaultVisibility
         commentsEnabled = true
+        soundShared = true
     }
 
     // Segments filmés : l'éditeur s'ouvre (ADR-052).

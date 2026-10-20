@@ -13,11 +13,12 @@ import { RedisFeedSnapshotStore } from './infrastructure/redis-feed-snapshot.sto
 import { FeedController } from './interfaces/feed.controller';
 import { HashtagVideosController } from './interfaces/hashtag-videos.controller';
 import { ProfileVideosController } from './interfaces/profile-videos.controller';
+import { SoundsController } from './interfaces/sounds.controller';
 
-// Feed principal (ADR-016), cache Redis (ADR-014), feed des abonnements (ADR-048), grille d'un hashtag (ADR-049) et grilles du profil (vidéos, republications, favoris). Lit vidéos, auteurs, état du lecteur et anneaux de story (ADR-051) via les services exportés (ADR-003).
+// Feed principal (ADR-016), cache Redis (ADR-014), feed des abonnements (ADR-048), grille d'un hashtag (ADR-049), sons de l'éditeur (ADR-064) et grilles du profil (vidéos, republications, favoris). Lit vidéos, auteurs, état du lecteur et anneaux de story (ADR-051) via les services exportés (ADR-003).
 @Module({
   imports: [VideosModule, UsersModule, InteractionsModule, StoriesModule],
-  controllers: [FeedController, ProfileVideosController, HashtagVideosController],
+  controllers: [FeedController, ProfileVideosController, HashtagVideosController, SoundsController],
   providers: [
     { provide: FeedSnapshotStore, useClass: RedisFeedSnapshotStore },
     {

@@ -3,8 +3,11 @@ import Foundation
 // Port des vidéos du compte connecté, côté API (module videos).
 protocol VideoPublishingRepository: Sendable {
     // Crée la vidéo en `uploading` et renvoie une URL signée par partie. `.rejected` : format ou taille refusés.
+    // `soundShared` : « Autoriser l'utilisation de mon son » ; `soundID` : son repris d'une autre vidéo (ADR-064).
+    // `.notFound` : ce son n'est plus proposé.
     func createUpload(
-        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
+        soundShared: Bool, soundID: String?
     ) async throws -> UploadTicket
     // Assemble les parties et lance le transcodage : la vidéo passe en `processing`.
     // Lève UploadFailure.alreadyConfirmed si l'API l'a déjà fait (réponse perdue), .restartNeeded si l'envoi
@@ -48,4 +51,15 @@ enum UploadFailure: Error, Equatable, Sendable {
     case restartNeeded
     // L'API a déjà assemblé l'envoi (réponse à la confirmation perdue) : lire la vidéo.
     case alreadyConfirmed
+}
+
+extension VideoPublishingRepository {
+    // Sans son repris, son partagé (avant l'ADR-064).
+    func createUpload(
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+    ) async throws -> UploadTicket {
+        try await createUpload(
+            contentType: contentType, fileSize: fileSize, description: description, visibility: visibility, commentsEnabled: commentsEnabled,
+            soundShared: true, soundID: nil)
+    }
 }

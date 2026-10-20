@@ -24,6 +24,9 @@ export class VideoResponse implements VideoDto {
   @ApiProperty({ description: 'Commentaires autorisés (ADR-062).' })
   commentsEnabled!: boolean;
 
+  @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
+  soundShared!: boolean;
+
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
 
@@ -71,6 +74,7 @@ export function toVideoDto(video: Video): VideoDto {
     status: video.status,
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
+    soundShared: video.soundShared,
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     createdAt: video.createdAt.toISOString(),

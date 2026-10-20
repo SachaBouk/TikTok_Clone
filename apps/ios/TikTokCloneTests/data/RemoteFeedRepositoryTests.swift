@@ -8,7 +8,7 @@ import TikTokAPI
 @Suite("RemoteFeedRepository")
 struct RemoteFeedRepositoryTests {
     static let item = """
-        {"id":"v1","description":null,"visibility":"public","commentsEnabled":true,"hlsUrl":"http://localhost:9000/videos-hls/v1/master.m3u8",\
+        {"id":"v1","description":null,"visibility":"public","commentsEnabled":true,"soundShared":true,"hlsUrl":"http://localhost:9000/videos-hls/v1/master.m3u8",\
         "thumbnailUrl":"http://localhost:9000/videos-hls/v1/thumbnail.jpg","createdAt":"2026-09-25T10:00:00.000Z",\
         "viewsCount":10,"likesCount":2,"commentsCount":1,"favoritesCount":0,"sharesCount":3,"repostsCount":4,\
         "author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null}

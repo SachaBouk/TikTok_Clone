@@ -543,6 +543,13 @@ struct EditPlan: Equatable, Sendable {
     private(set) var stickers: [StickerOverlay] = []
     // Effets posés sur des plages de la vidéo finale (ADR-063).
     private(set) var effects: [TimedEffect] = []
+    // Voix off, leur effet, son repris et volumes (ADR-064) : `isMuted` est le contraire de « Son d'origine ».
+    private(set) var voiceovers: [VoiceoverClip] = []
+    var voiceEffect: VoiceEffect = .none
+    private(set) var sound: ChosenSound?
+    // Volume du son d'origine (en plus de celui de chaque clip) et du son ajouté (voix off et son repris), de 0 à 1.
+    private(set) var originalVolume: Double = 1
+    private(set) var addedVolume: Double = 1
 
     // Une vidéo trop longue est raccourcie à la durée maximale (la fin est retirée) : le passage à garder se choisit
     // ensuite dans la frise. À une seconde près (ADR-040), elle est gardée entière.
@@ -576,7 +583,7 @@ struct EditPlan: Equatable, Sendable {
     // Un seul clip seulement découpé : l'export recopie sans réencodage (qualité et HDR gardés).
     var needsReencoding: Bool {
         clips.count > 1 || clips.contains(where: \.isTransformed) || isMuted || (filter != .none && filterIntensity > 0) || !texts.isEmpty
-            || !stickers.isEmpty || !effects.isEmpty
+            || !stickers.isEmpty || !effects.isEmpty || !voiceovers.isEmpty || sound != nil || originalVolume != 1
     }
 
     // Raison pour laquelle la vidéo ne peut pas être exportée ; nil si elle peut l'être.
@@ -767,6 +774,34 @@ struct EditPlan: Equatable, Sendable {
         self.effects = EffectTrack(effects: effects, duration: outputDuration).effects
     }
 
+    // Voix off de l'écran « Voix off », ramenées à la durée de la vidéo (ADR-064).
+    mutating func setVoiceovers(_ clips: [VoiceoverClip]) {
+        voiceovers = VoiceoverTrack(clips: clips, duration: outputDuration).clips
+        if voiceovers.isEmpty { voiceEffect = .none }
+    }
+
+    // Son repris : le son d'origine est coupé, comme TikTok (« Son d'origine » se recoche) ; retiré, il revient.
+    mutating func setSound(_ sound: ChosenSound?) {
+        var sound = sound
+        if let chosen = sound { sound?.start = chosen.clampedStart(chosen.start, videoDuration: outputDuration) }
+        self.sound = sound
+        isMuted = sound != nil
+    }
+
+    mutating func setSoundStart(_ start: Duration) {
+        guard var sound else { return }
+        sound.start = sound.clampedStart(start, videoDuration: outputDuration)
+        self.sound = sound
+    }
+
+    mutating func setOriginalVolume(_ volume: Double) {
+        originalVolume = min(max(volume, 0), 1)
+    }
+
+    mutating func setAddedVolume(_ volume: Double) {
+        addedVolume = min(max(volume, 0), 1)
+    }
+
     // Texte nettoyé (espaces de bord retirés) ; nil s'il est vide ou dépasse 80 caractères.
     static func sanitizedText(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -822,6 +857,11 @@ struct PublicationDetails: Equatable, Sendable {
     var textCount = 0
     var stickerCount = 0
     var effectCount = 0
+    // Voix off, effet de voix, son repris (ADR-064) et « Autoriser l'utilisation de mon son ».
+    var voiceoverCount = 0
+    var voiceEffect: VoiceEffect = .none
+    var soundUsed = false
+    var soundShared = true
     // Vitesse commune ; 0 si les clips ont des vitesses différentes.
     var speed: Double = 1
     var cropped = false
@@ -837,6 +877,9 @@ struct PublicationDetails: Equatable, Sendable {
         textCount = plan.texts.count
         stickerCount = plan.stickers.count
         effectCount = plan.effects.count
+        voiceoverCount = plan.voiceovers.count
+        voiceEffect = plan.voiceEffect
+        soundUsed = plan.sound != nil
         speed = plan.commonSpeed ?? 0
         cropped = plan.clips.contains { !$0.crop.isFull }
         rotated = plan.clips.contains { $0.quarterTurns != 0 }

@@ -15,6 +15,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let searchHistory = "searchHistory"
         static let dismissedSuggestions = "dismissedSuggestions"
         static let dislikedComments = "dislikedComments"
+        static let recentSounds = "recentSounds"
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
         static let defaultVideoVisibility = "defaultVideoVisibility"
@@ -110,5 +111,20 @@ extension UserDefaultsPreferencesStore: PublishingPreferences {
 
     func setDefaultVisibility(_ visibility: VideoVisibility) {
         defaults.set(visibility.rawValue, forKey: Key.defaultVideoVisibility)
+    }
+}
+
+// Sons « Récents » de l'éditeur (ADR-064) : sur l'appareil seulement.
+extension UserDefaultsPreferencesStore: RecentSoundsStore {
+    var recentSounds: [String] {
+        defaults.stringArray(forKey: Key.recentSounds) ?? []
+    }
+
+    func setRecentSounds(_ ids: [String]) {
+        if ids.isEmpty {
+            defaults.removeObject(forKey: Key.recentSounds)
+        } else {
+            defaults.set(ids, forKey: Key.recentSounds)
+        }
     }
 }

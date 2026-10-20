@@ -263,6 +263,39 @@ final class VideoEditorViewModel {
         perform { $0.setEffects(effects) }
     }
 
+    // MARK: Voix off, effets de voix, son (ADR-064)
+
+    // « Terminé » de l'écran « Voix off » : un seul pas d'annulation pour toute la séance.
+    func setVoiceovers(_ clips: [VoiceoverClip], originalSound: Bool) {
+        perform {
+            $0.setVoiceovers(clips)
+            $0.isMuted = !originalSound
+        }
+    }
+
+    func setVoiceEffect(_ effect: VoiceEffect) {
+        perform { $0.voiceEffect = effect }
+    }
+
+    func setSound(_ sound: ChosenSound?) {
+        perform { $0.setSound(sound) }
+    }
+
+    func setSoundStart(_ start: Duration) {
+        perform { $0.setSoundStart(start) }
+    }
+
+    // Curseurs de la feuille « Volume » : un seul pas d'annulation par geste (`endInteraction`).
+    func setOriginalVolume(_ volume: Double) {
+        beginInteraction()
+        plan.setOriginalVolume(volume)
+    }
+
+    func setAddedVolume(_ volume: Double) {
+        beginInteraction()
+        plan.setAddedVolume(volume)
+    }
+
     // Image de la vidéo (début du premier clip) pour les vignettes des filtres et des effets.
     func previewFrame() async -> UIImage? {
         guard let clip = plan.clips.first else { return nil }
@@ -366,7 +399,8 @@ final class VideoEditorViewModel {
     // Changement du rendu de la composition (pas des textes ni des autocollants, dessinés par SwiftUI).
     private static func renderChanged(_ old: EditPlan, _ new: EditPlan) -> Bool {
         old.clips != new.clips || old.filter != new.filter || old.filterIntensity != new.filterIntensity || old.isMuted != new.isMuted
-            || old.effects != new.effects
+            || old.effects != new.effects || old.voiceovers != new.voiceovers || old.voiceEffect != new.voiceEffect || old.sound != new.sound
+            || old.originalVolume != new.originalVolume || old.addedVolume != new.addedVolume
     }
 
     private func textProblem(_ text: String) -> String {

@@ -3,6 +3,8 @@ import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
 import type {
   NewVideo,
   PublishedVideo,
+  Sound,
+  SoundQuery,
   TranscodeOutcome,
   Video,
   VideoDetails,
@@ -15,11 +17,15 @@ import { VideoRepository } from '../domain/video.repository';
 
 type Counter = 'viewsCount' | 'likesCount' | 'commentsCount' | 'favoritesCount' | 'sharesCount' | 'repostsCount';
 // `hashtags` : écrits au passage en `ready` (ADR-049), avec la date de publication.
+type StoredSound = Omit<Sound, 'coverUrl' | 'usesCount'>;
 type StoredVideo = Video & { updatedAt: Date; counters: Record<Counter, number>; hashtags?: { names: string[]; taggedAt: Date } };
 
 // Adaptateur en mémoire pour les tests. `now` permet de dater les écritures (tests de maintenance).
 export class InMemoryVideoRepository extends VideoRepository {
   readonly videos = new Map<string, StoredVideo>();
+  // Sons extraits (ADR-064) et favoris (« compte:son », avec leur date).
+  readonly sounds = new Map<string, StoredSound>();
+  readonly soundFavorites = new Map<string, Date>();
 
   constructor(private readonly now: () => Date = () => new Date()) {
     super();
@@ -30,6 +36,8 @@ export class InMemoryVideoRepository extends VideoRepository {
       ...video,
       visibility: video.visibility ?? 'public',
       commentsEnabled: video.commentsEnabled ?? true,
+      soundShared: video.soundShared ?? true,
+      soundId: video.soundId ?? null,
       id: randomUUID(),
       status: 'uploading',
       hlsUrl: null,
@@ -62,7 +70,12 @@ export class InMemoryVideoRepository extends VideoRepository {
   async finishTranscoding(id: string, outcome: TranscodeOutcome, hashtags: string[]): Promise<boolean> {
     const video = this.videos.get(id);
     if (!video || video.status !== 'processing') return false;
-    Object.assign(video, outcome, { updatedAt: this.now() });
+    const { sound, ...state } = outcome.status === 'ready' ? outcome : { ...outcome, sound: undefined };
+    Object.assign(video, state, { updatedAt: this.now() });
+    if (sound && ![...this.sounds.values()].some((stored) => stored.videoId === id)) {
+      const created = { id: randomUUID(), videoId: id, userId: video.userId, ...sound, createdAt: this.now() };
+      this.sounds.set(created.id, created);
+    }
     if (outcome.status === 'ready' && video.visibility === 'public' && hashtags.length > 0)
       video.hashtags = { names: hashtags, taggedAt: this.now() };
     return true;
@@ -75,6 +88,62 @@ export class InMemoryVideoRepository extends VideoRepository {
     if (visibility === 'private') video.hashtags = undefined;
     else if (video.status === 'ready' && hashtags.length > 0) video.hashtags = { names: hashtags, taggedAt: this.now() };
     return toVideo(video);
+  }
+
+  async setSoundShared(id: string, shared: boolean): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { soundShared: shared, updatedAt: this.now() });
+    return toVideo(video);
+  }
+
+  async findSounds(query: SoundQuery, excludedAuthorIds: string[], offset: number, limit: number): Promise<Sound[]> {
+    const available = [...this.sounds.values()].flatMap((stored) => {
+      const video = this.videos.get(stored.videoId);
+      if (!video || video.status !== 'ready' || video.visibility !== 'public' || !video.soundShared || !video.thumbnailUrl) return [];
+      if (excludedAuthorIds.includes(stored.userId)) return [];
+      const usesCount = [...this.videos.values()].filter(
+        (other) => other.soundId === stored.id && other.status === 'ready' && other.visibility === 'public',
+      ).length;
+      return [{ ...stored, coverUrl: video.thumbnailUrl, usesCount, description: video.description ?? '' }];
+    });
+    const popular = (a: Sound, b: Sound) => b.usesCount - a.usesCount || b.createdAt.getTime() - a.createdAt.getTime();
+    let sounds: Sound[];
+    switch (query.kind) {
+      case 'recommended':
+        sounds = available.sort(popular);
+        break;
+      case 'search': {
+        const text = query.text.toLowerCase();
+        sounds = available.filter((s) => s.description.toLowerCase().includes(text) || query.authorIds.includes(s.userId)).sort(popular);
+        break;
+      }
+      case 'favorites':
+        sounds = available
+          .filter((s) => this.soundFavorites.has(`${query.userId}:${s.id}`))
+          .sort(
+            (a, b) => this.soundFavorites.get(`${query.userId}:${b.id}`)!.getTime() - this.soundFavorites.get(`${query.userId}:${a.id}`)!.getTime(),
+          );
+        break;
+      case 'ids':
+        sounds = available.filter((s) => query.ids.includes(s.id));
+        break;
+    }
+    return sounds.slice(offset, offset + limit).map(({ description: _description, ...sound }: Sound & { description?: string }) => sound);
+  }
+
+  async setSoundFavorite(userId: string, soundId: string, active: boolean): Promise<boolean> {
+    if (!active) {
+      this.soundFavorites.delete(`${userId}:${soundId}`);
+      return true;
+    }
+    if (!this.sounds.has(soundId)) return false;
+    if (!this.soundFavorites.has(`${userId}:${soundId}`)) this.soundFavorites.set(`${userId}:${soundId}`, this.now());
+    return true;
+  }
+
+  async findFavoritedSoundIds(userId: string, soundIds: string[]): Promise<Set<string>> {
+    return new Set(soundIds.filter((id) => this.soundFavorites.has(`${userId}:${id}`)));
   }
 
   async setCommentsEnabled(id: string, enabled: boolean): Promise<Video | null> {
@@ -98,8 +167,13 @@ export class InMemoryVideoRepository extends VideoRepository {
       .map(toVideo);
   }
 
+  // Comme la base : le son de la vidéo part avec elle, les vidéos qui l'utilisaient perdent le lien.
   async delete(id: string): Promise<void> {
     this.videos.delete(id);
+    for (const sound of [...this.sounds.values()].filter((stored) => stored.videoId === id)) {
+      this.sounds.delete(sound.id);
+      for (const video of this.videos.values()) if (video.soundId === sound.id) video.soundId = null;
+    }
   }
 
   async findAllByAuthor(userId: string): Promise<Video[]> {
@@ -267,6 +341,7 @@ function toDetails(v: StoredVideo): VideoDetails {
     status: v.status,
     visibility: v.visibility,
     commentsEnabled: v.commentsEnabled,
+    soundShared: v.soundShared,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,
@@ -282,6 +357,7 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     description: v.description,
     visibility: v.visibility,
     commentsEnabled: v.commentsEnabled,
+    soundShared: v.soundShared,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,

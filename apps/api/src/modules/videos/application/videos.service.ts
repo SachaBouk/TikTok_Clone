@@ -25,6 +25,8 @@ import {
 import {
   MAX_UNPUBLISHED_VIDEOS,
   type PublishedVideo,
+  type Sound,
+  type SoundQuery,
   type TranscodeOutcome,
   type Video,
   type VideoDetails,
@@ -35,6 +37,7 @@ import {
 } from '../domain/video';
 import {
   InvalidHashtagError,
+  SoundNotFoundError,
   TooManyUploadsError,
   UnsupportedVideoTypeError,
   UploadIncompleteError,
@@ -54,6 +57,9 @@ export interface CreateUploadInput {
   visibility?: VideoVisibility;
   // Autorisés par défaut (ADR-062).
   commentsEnabled?: boolean;
+  // « Autoriser l'utilisation de mon son », autorisé par défaut, et son repris d'une autre vidéo (ADR-064).
+  soundShared?: boolean;
+  soundId?: string;
 }
 
 export interface VideoUpload {
@@ -83,6 +89,10 @@ export class VideosService {
   async createUpload(userId: string, input: CreateUploadInput): Promise<VideoUpload> {
     if (!isSupportedVideoType(input.contentType)) throw new UnsupportedVideoTypeError(input.contentType);
     if (input.fileSize > MAX_VIDEO_SIZE_BYTES) throw new VideoTooLargeError();
+    // Son repris (ADR-064) : il doit être proposé (vidéo d'origine publique, publiée, qui le permet).
+    if (input.soundId && (await this.videos.findSounds({ kind: 'ids', ids: [input.soundId] }, [], 0, 1)).length === 0) {
+      throw new SoundNotFoundError(input.soundId);
+    }
     // Limite de débit (ADR-039), après les contrôles de la requête : une requête invalide ne compte pas.
     const retryAfter = await this.rateLimiter.consume(uploadRateLimitKey(userId), UPLOAD_RATE_LIMITS);
     if (retryAfter !== null) throw new TooManyUploadsError(retryAfter);
@@ -101,6 +111,8 @@ export class VideosService {
         rawSize: input.fileSize,
         visibility: input.visibility ?? 'public',
         commentsEnabled: input.commentsEnabled ?? true,
+        soundShared: input.soundShared ?? true,
+        soundId: input.soundId ?? null,
       });
     } catch (error) {
       await this.storage.abortMultipartUpload(rawKey, uploadId);
@@ -285,6 +297,36 @@ export class VideosService {
     const updated = await this.videos.setCommentsEnabled(videoId, enabled);
     if (!updated) throw new VideoNotFoundError(videoId);
     return updated;
+  }
+
+  // « Autoriser l'utilisation de mon son » (ADR-064), par l'auteur, quel que soit le statut. Refusé, le son n'est plus
+  // proposé aux autres ; les vidéos qui l'ont déjà repris le gardent.
+  async setSoundShared(userId: string, videoId: string, shared: boolean): Promise<Video> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
+    if (video.soundShared === shared) return video;
+    const updated = await this.videos.setSoundShared(videoId, shared);
+    if (!updated) throw new VideoNotFoundError(videoId);
+    return updated;
+  }
+
+  // Sons proposés (ADR-064, module feed) : auteurs masqués exclus, page à partir de `offset`.
+  listSounds(query: SoundQuery, excludedAuthorIds: string[], offset: number, limit: number): Promise<Sound[]> {
+    if (query.kind === 'ids' && query.ids.length === 0) return Promise.resolve([]);
+    return this.videos.findSounds(query, [...new Set(excludedAuthorIds)], offset, limit);
+  }
+
+  // Favori ajouté ou retiré ; un son qui n'est plus proposé ne peut qu'être retiré.
+  async setSoundFavorite(userId: string, soundId: string, active: boolean, excludedAuthorIds: string[]): Promise<void> {
+    if (active && (await this.listSounds({ kind: 'ids', ids: [soundId] }, excludedAuthorIds, 0, 1)).length === 0) {
+      throw new SoundNotFoundError(soundId);
+    }
+    await this.videos.setSoundFavorite(userId, soundId, active);
+  }
+
+  favoritedSoundIds(userId: string, soundIds: string[]): Promise<Set<string>> {
+    if (soundIds.length === 0) return Promise.resolve(new Set());
+    return this.videos.findFavoritedSoundIds(userId, [...new Set(soundIds)]);
   }
 
   // Vidéos de l'auteur pas encore publiées (en traitement) ou en échec, visibles de lui seul, en tête de sa grille.

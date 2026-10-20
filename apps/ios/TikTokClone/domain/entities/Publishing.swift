@@ -102,6 +102,9 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var visibility: VideoVisibility = .everyone
     // « Autoriser les commentaires » (ADR-062) ; une story n'en a pas.
     var commentsEnabled = true
+    // « Autoriser l'utilisation de mon son » et son repris d'une autre vidéo (ADR-064).
+    var soundShared = true
+    var soundID: String?
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -119,10 +122,12 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
         case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
+        case soundShared, soundID
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
-    // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés.
+    // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés ; avant l'ADR-064, son
+    // partagé, sans son repris.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -137,7 +142,9 @@ extension PendingUpload {
             sentParts: try container.decodeIfPresent([Int: String].self, forKey: .sentParts) ?? [:],
             kind: try container.decodeIfPresent(PublicationKind.self, forKey: .kind) ?? .video,
             visibility: try container.decodeIfPresent(VideoVisibility.self, forKey: .visibility) ?? .everyone,
-            commentsEnabled: try container.decodeIfPresent(Bool.self, forKey: .commentsEnabled) ?? true
+            commentsEnabled: try container.decodeIfPresent(Bool.self, forKey: .commentsEnabled) ?? true,
+            soundShared: try container.decodeIfPresent(Bool.self, forKey: .soundShared) ?? true,
+            soundID: try container.decodeIfPresent(String.self, forKey: .soundID)
         )
     }
 }

@@ -23,6 +23,8 @@ export interface FeedItemDto {
   visibility: VideoVisibility;
   // Commentaires autorisés (ADR-062) : coupés, la liste est vide pour tous sauf l'auteur.
   commentsEnabled: boolean;
+  // « Autoriser l'utilisation de mon son » (ADR-064).
+  soundShared: boolean;
   createdAt: string;
   viewsCount: number;
   likesCount: number;

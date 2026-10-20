@@ -99,6 +99,8 @@ model User {
   lives                    Live[]
   liveMessages             LiveMessage[]
   interests                UserInterest[]
+  sounds                   Sound[]
+  soundFavorites           SoundFavorite[]
 
   // Comptes suspendus : relus en entier au démarrage de l'API (registre Redis), comptés par le tableau de bord.
   @@index([suspendedAt], map: "users_suspended_idx", where: raw("suspended_at IS NOT NULL"))
@@ -178,6 +180,10 @@ model Video {
   visibility      VideoVisibility @default(public)
   // Commentaires autorisés (ADR-062) ; coupés, ils sont gardés mais cachés.
   commentsEnabled Boolean         @default(true) @map("comments_enabled")
+  // « Autoriser l'utilisation de mon son » (ADR-064) : refusé, son son n'est plus proposé aux autres.
+  soundShared     Boolean         @default(true) @map("sound_shared")
+  // Son repris d'une autre vidéo (ADR-064) ; NULL si ce son a disparu (le son reste dans le fichier publié).
+  soundId         String?         @map("sound_id") @db.Uuid
   // Compteurs dénormalisés, maintenus par les services applicatifs.
   viewsCount      Int             @default(0) @map("views_count")
   likesCount      Int             @default(0) @map("likes_count")
@@ -197,11 +203,49 @@ model Video {
   notifications Notification[]
   hashtags      VideoHashtag[]
   gifts         GiftSent[]
+  // Son extrait de cette vidéo (ADR-064).
+  sound         Sound?         @relation("SoundSource")
+  // Son repris d'une autre vidéo.
+  usedSound     Sound?         @relation("SoundUses", fields: [soundId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([soundId])
   // Le feed ne sert que les vidéos `ready`.
   @@index([status])
   @@map("videos")
+}
+
+// Son d'une vidéo publiée, réutilisable par les autres (ADR-064) : piste AAC extraite par le worker. Supprimé avec la
+// vidéo. Proposé seulement si la vidéo est publique, publiée, le permet (`sound_shared`) et que son auteur n'est pas
+// masqué (filtré à la lecture).
+model Sound {
+  id         String   @id @default(uuid(7)) @map("sound_id") @db.Uuid
+  videoId    String   @unique @map("video_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  audioUrl   String   @map("audio_url")
+  durationMs Int      @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  video     Video           @relation("SoundSource", fields: [videoId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usedBy    Video[]         @relation("SoundUses")
+  favorites SoundFavorite[]
+
+  @@map("sounds")
+}
+
+// Sons favoris d'un compte (ADR-064).
+model SoundFavorite {
+  userId    String   @map("user_id") @db.Uuid
+  soundId   String   @map("sound_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sound Sound @relation(fields: [soundId], references: [id], onDelete: Cascade)
+
+  @@id([userId, soundId])
+  @@index([userId, createdAt])
+  @@map("sound_favorites")
 }
 
 // Hashtag extrait des descriptions (ADR-049) : nom sans « # », en minuscules, 1 à 50 caractères (CHECK écrit à la

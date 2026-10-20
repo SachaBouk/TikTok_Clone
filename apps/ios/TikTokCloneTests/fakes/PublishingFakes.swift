@@ -19,6 +19,8 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         // Visibilité demandée à la création, puis changée (ADR-061), par vidéo.
         var visibilities: [String: VideoVisibility] = [:]
         var commentsEnabled: [String: Bool] = [:]
+        // « Autoriser l'utilisation de mon son » et son repris, par vidéo créée (ADR-064).
+        var sounds: [String: (shared: Bool, soundID: String?)] = [:]
         var visibilityError: AppError?
     }
 
@@ -30,6 +32,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
 
     func visibility(of id: String) -> VideoVisibility? { state.withLock { $0.visibilities[id] } }
     func commentsEnabled(of id: String) -> Bool? { state.withLock { $0.commentsEnabled[id] } }
+    func sound(of id: String) -> (shared: Bool, soundID: String?)? { state.withLock { $0.sounds[id] } }
 
     func setCommentsEnabled(videoID: String, enabled: Bool) async throws {
         try state.withLock { state in
@@ -46,7 +49,8 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
     }
 
     func createUpload(
-        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool
+        contentType: MediaContentType, fileSize: Int, description: String?, visibility: VideoVisibility, commentsEnabled: Bool,
+        soundShared: Bool, soundID: String?
     ) async throws -> UploadTicket {
         try state.withLock { state in
             if let error = state.createError { throw error }
@@ -54,6 +58,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
             state.created.append(id)
             state.visibilities[id] = visibility
             state.commentsEnabled[id] = commentsEnabled
+            state.sounds[id] = (soundShared, soundID)
             state.videos[id] = OwnVideo(id: id, description: description, status: .uploading, thumbnailURL: nil, createdAt: .now)
             let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
             let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }

@@ -111,8 +111,8 @@ struct EditorFlowView: View {
     }
 }
 
-// Aperçu, comme TikTok : la vidéo en grand, outils à droite (Réglages, Modifier, Texte, Autocollants, Effets, Filtres ;
-// ⌄ affiche leurs noms), « Ta story » et « Suivant » en bas. Textes et autocollants se déplacent au doigt ; un texte se
+// Aperçu, comme TikTok : la vidéo en grand, « ♫ Ajouter un son » en haut (ADR-064), outils à droite (Réglages, Modifier,
+// Texte, Autocollants, Effets, Filtres, Voix ; ⌄ affiche leurs noms), « Ta story » et « Suivant » en bas. Textes et autocollants se déplacent au doigt ; un texte se
 // modifie d'un toucher. Le panneau des filtres s'ouvre en bas, par-dessus (ADR-063).
 struct EditorPreviewView: View {
     let model: VideoEditorViewModel
@@ -128,6 +128,11 @@ struct EditorPreviewView: View {
     @State private var isPickingFilter = false
     @State private var isPickingSticker = false
     @State private var isEditingEffects = false
+    // Sons et voix (ADR-064).
+    @State private var isPickingSound = false
+    @State private var isShowingVolume = false
+    @State private var isTrimmingSound = false
+    @State private var isEditingVoice = false
     @State private var flashFilter: VideoFilter?
     @State private var thumbnails = LookThumbnailStore()
     @State private var isShowingSettings = false
@@ -143,8 +148,14 @@ struct EditorPreviewView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onTapGesture {
-                    // Panneau des filtres ouvert : un toucher sur la vidéo le ferme.
-                    if isPickingFilter { isPickingFilter = false } else { preview.togglePlayback() }
+                    // Panneau ouvert (filtres, sons, volume) : un toucher sur la vidéo le ferme.
+                    if isPickingFilter || isPickingSound || isShowingVolume {
+                        isPickingFilter = false
+                        isPickingSound = false
+                        isShowingVolume = false
+                    } else {
+                        preview.togglePlayback()
+                    }
                 }
                 .overlay {
                     if let flashFilter { FilterFlash(filter: flashFilter) }
@@ -160,6 +171,13 @@ struct EditorPreviewView: View {
                 notice
                     .padding(.top, 64)
                     .opacity(showsControls ? 1 : 0)
+                // Son repris (ADR-064) : vidéos seulement, pas les stories.
+                if draft.mode == .video {
+                    SoundPill(model: model) { isPickingSound = true }
+                        .padding(.top, 10)
+                        .opacity(showsControls || isPickingSound ? 1 : 0)
+                        .allowsHitTesting(showsControls)
+                }
             }
             bottomBar
                 .opacity(showsControls ? 1 : 0)
@@ -180,7 +198,26 @@ struct EditorPreviewView: View {
             if isPickingFilter {
                 FilterPanel(model: model, thumbnails: thumbnails)
                     .transition(.move(edge: .bottom))
+            } else if isShowingVolume {
+                SoundVolumePanel(model: model) { isShowingVolume = false }
+                    .transition(.move(edge: .bottom))
+            } else if isPickingSound {
+                SoundPanel(model: model, library: container.sounds) {
+                    isPickingSound = false
+                    isShowingVolume = true
+                } onTrim: {
+                    isTrimmingSound = true
+                }
+                .transition(.move(edge: .bottom))
             }
+        }
+        .animation(.snappy(duration: 0.25), value: isPickingSound)
+        .animation(.snappy(duration: 0.25), value: isShowingVolume)
+        .sheet(isPresented: $isTrimmingSound) {
+            SoundTrimSheet(model: model).presentationDetents([.height(280)])
+        }
+        .fullScreenCover(isPresented: $isEditingVoice) {
+            VoiceEffectsView(model: model, preview: preview, makeRecorder: { container.makeVoiceRecorder() })
         }
         .animation(.easeOut(duration: 0.15), value: isDraggingText)
         .animation(.snappy(duration: 0.25), value: isPickingFilter)
@@ -210,7 +247,7 @@ struct EditorPreviewView: View {
     }
 
     // Boutons masqués pendant la saisie ou le déplacement d'un texte, et sous le panneau des filtres, comme TikTok.
-    private var showsControls: Bool { editingText == nil && !isDraggingText && !isPickingFilter }
+    private var showsControls: Bool { editingText == nil && !isDraggingText && !isPickingFilter && !isPickingSound && !isShowingVolume }
 
     private var backButton: some View {
         Button("Retour", systemImage: "chevron.left") { confirmingDiscard = true }
@@ -247,6 +284,12 @@ struct EditorPreviewView: View {
             }
             tool("Filtres", systemImage: "camera.filters", identifier: "editor.filters", badge: model.plan.filter != .none) {
                 isPickingFilter = true
+            }
+            if draft.mode == .video {
+                tool("Voix", systemImage: "waveform.and.mic", identifier: "editor.voice", badge: !model.plan.voiceovers.isEmpty) {
+                    preview.pause()
+                    isEditingVoice = true
+                }
             }
             Button(showsToolNames ? "Masquer les noms" : "Afficher les noms", systemImage: showsToolNames ? "chevron.up" : "chevron.down") {
                 withAnimation(.snappy) { showsToolNames.toggle() }
