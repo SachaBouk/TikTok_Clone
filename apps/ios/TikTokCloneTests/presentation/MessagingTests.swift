@@ -454,6 +454,104 @@ struct SendVideoTests {
         #expect(repository.sentVideoIDs == ["v1"])
         #expect(interactions.display(video).stats.shares == video.stats.shares + 1)
     }
+
+    // Bob a une conversation (et suit en retour : ami) ; abonnements : Bob, Éloïse, zoé, 42club.
+    private func makeSelection(_ repository: FakeMessagingRepository) async -> (SendVideoViewModel, VideoInteractionsModel, FeedVideo) {
+        repository.add(.sample("c1", lastMessage: .sample("m10")))
+        let (messaging, session) = await makeMessaging(repository)
+        let relationships = FakeRelationshipRepository()
+        let user = { (name: String, display: String) in UserSummary(id: "\(name)-id", username: name, displayName: display, avatarURL: nil) }
+        relationships.state.withLock {
+            $0.follows[.following] = [
+                FollowEntry(user: .bob, followedAt: .now, viewer: FollowViewer(following: true, followedBy: true)),
+                FollowEntry(user: user("eloise", "Éloïse"), followedAt: .now, viewer: FollowViewer(following: true, followedBy: false)),
+                FollowEntry(user: user("zoe", "zoé"), followedAt: .now, viewer: FollowViewer(following: true, followedBy: true)),
+                FollowEntry(user: user("club42", "42club"), followedAt: .now, viewer: FollowViewer(following: true, followedBy: false)),
+            ]
+        }
+        let interactionRepository = FakeInteractionRepository()
+        let interactions = VideoInteractionsModel(
+            setReaction: SetReactionUseCase(interactions: interactionRepository),
+            setFollow: SetFollowUseCase(interactions: interactionRepository),
+            recordShare: ShareVideoUseCase(interactions: interactionRepository),
+            deleteVideo: DeleteVideoUseCase(videos: FakeVideoPublishingRepository()),
+            session: session,
+            analytics: makeAnalytics()
+        )
+        let video = FeedVideo.sample("v1")
+        let viewModel = SendVideoViewModel(
+            video: video,
+            messaging: messaging,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            share: ShareVideoByMessageUseCase(messaging: repository),
+            interactions: interactions,
+            session: session
+        )
+        await viewModel.load()
+        return (viewModel, interactions, video)
+    }
+
+    @Test("destinataires choisis puis « Envoyer » : la vidéo et le message partent ensemble, à chacun")
+    func sendSelected() async {
+        let repository = FakeMessagingRepository()
+        let (viewModel, interactions, video) = await makeSelection(repository)
+        let eloise = viewModel.others.first { $0.username == "eloise" }!
+        viewModel.toggle(viewModel.recent[0])
+        viewModel.toggle(eloise)
+        #expect(repository.sentVideoIDs.isEmpty)
+        #expect(viewModel.selected.map(\.label) == ["@bob", "@eloise"])
+        viewModel.toggle(eloise)
+        viewModel.toggle(eloise)
+        viewModel.message = "  Regarde ça "
+        viewModel.appendEmoji("😂")
+
+        #expect(await viewModel.sendSelected())
+        #expect(repository.sentVideoIDs == ["v1", "v1"])
+        #expect(repository.sentContents == ["Regarde ça 😂", "Regarde ça 😂"])
+        #expect(repository.sentClientMessageIDs.allSatisfy { $0 != nil })
+        #expect(viewModel.selected.isEmpty)
+        #expect(viewModel.message.isEmpty)
+        #expect(viewModel.deliveries["eloise-id"] == .sent)
+        #expect(interactions.display(video).stats.shares == video.stats.shares + 2)
+    }
+
+    @Test("sans message : la vidéo seule ; un échec garde le destinataire choisi, et le même identifiant au nouvel essai")
+    func sendSelectedFailure() async {
+        let repository = FakeMessagingRepository()
+        let (viewModel, _, _) = await makeSelection(repository)
+        viewModel.toggle(viewModel.recent[0])
+        #expect(viewModel.canSendSelected)
+        repository.failSending(with: .network)
+        #expect(await viewModel.sendSelected() == false)
+        #expect(viewModel.selected.map(\.label) == ["@bob"])
+        #expect(viewModel.errorMessage != nil)
+        #expect(viewModel.deliveries["bob-id"] == nil)
+
+        repository.failSending(with: nil)
+        #expect(await viewModel.sendSelected())
+        #expect(repository.sentContents == [nil, nil])
+        let ids = repository.sentClientMessageIDs
+        #expect(ids.count == 2 && ids[0] != nil && ids[0] == ids[1])
+    }
+
+    @Test("liste complète : chats récents, amis, puis suivis de A à Z ; recherche sans casse ni accents, sans doublon")
+    func sectionsAndSearch() async {
+        let repository = FakeMessagingRepository()
+        let (viewModel, _, _) = await makeSelection(repository)
+        await viewModel.loadAllFollowing()
+        #expect(viewModel.hasLoadedAllFollowing)
+        let sections = viewModel.sections
+        #expect(sections.map(\.kind) == [.recent, .friends, .letter("B"), .letter("E"), .letter("Z"), .letter("#")])
+        #expect(sections[1].recipients.map(\.label) == ["@bob", "@zoe"])
+        #expect(viewModel.isFriend(viewModel.recent[0]))
+
+        viewModel.query = "ELOISE"
+        #expect(viewModel.searchResults.map(\.label) == ["@eloise"])
+        viewModel.query = "@bo"
+        #expect(viewModel.searchResults.map(\.label) == ["@bob"])
+        viewModel.query = "  "
+        #expect(!viewModel.isSearching)
+    }
 }
 
 // Horloge des tests : avancée à la main.

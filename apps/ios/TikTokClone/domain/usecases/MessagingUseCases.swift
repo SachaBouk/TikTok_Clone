@@ -63,14 +63,20 @@ struct SendMessageUseCase: Sendable {
 struct ShareVideoByMessageUseCase: Sendable {
     let messaging: any MessagingRepository
 
-    func callAsFunction(videoID: String, to username: String) async throws -> DirectMessage {
+    // `message` : texte envoyé avec la vidéo, dans le même message ; `clientMessageID` : identifiant d'envoi (ADR-044),
+    // le même à chaque essai pour ne pas envoyer deux fois après une réponse perdue.
+    func callAsFunction(videoID: String, to username: String, message: String? = nil, clientMessageID: String? = nil) async throws
+        -> DirectMessage
+    {
         let conversation = try await messaging.open(username: username)
-        return try await messaging.send(conversationID: conversation.id, content: nil, videoID: videoID, clientMessageID: nil)
+        return try await messaging.send(conversationID: conversation.id, content: message, videoID: videoID, clientMessageID: clientMessageID)
     }
 
     // Dans une conversation déjà ouverte (un groupe, ADR-059).
-    func callAsFunction(videoID: String, inConversation conversationID: String) async throws -> DirectMessage {
-        try await messaging.send(conversationID: conversationID, content: nil, videoID: videoID, clientMessageID: nil)
+    func callAsFunction(videoID: String, inConversation conversationID: String, message: String? = nil, clientMessageID: String? = nil)
+        async throws -> DirectMessage
+    {
+        try await messaging.send(conversationID: conversationID, content: message, videoID: videoID, clientMessageID: clientMessageID)
     }
 }
 

@@ -3,8 +3,11 @@ import SwiftUI
 import UIKit
 
 // Feuille « Envoyer à » d'une vidéo, comme TikTok (choix du développeur : version réduite) :
-// - ligne 1 : « Republier » (rond jaune), puis ses conversations récentes et ses abonnements : un toucher envoie la vidéo
-//   par message (compté comme un partage par l'API) ; compte connecté seulement pour les destinataires ;
+// - ligne 1 : « Republier » (rond jaune), puis ses conversations récentes et ses abonnements : un toucher **choisit** le
+//   destinataire (coche rose) ; une fois des destinataires choisis, les lignes suivantes laissent place au message
+//   (« Écrire un message… », emojis) et à « Envoyer », qui envoie la vidéo et le message à chacun (compté comme un partage
+//   par l'API) ; la loupe en haut à gauche ouvre la liste complète et la recherche (`SendVideoRecipientsView`) ; compte
+//   connecté seulement pour les destinataires ;
 // - ligne 2 : « Copier le lien », SMS, Email, « Plus » (feuille système) ; un partage envoyé est compté ;
 // - ligne 3 : « Signaler » (vidéo d'un autre), ou « Rendre privée / publique » (ADR-061), « Désactiver / Activer les
 //   commentaires » (ADR-062) et « Supprimer » (la sienne, confirmation attachée au bouton).
@@ -25,6 +28,9 @@ struct VideoShareSheet: View {
     @State private var isConfirmingDelete = false
     @State private var copied = false
     @State private var unavailableMessage: String?
+    @State private var isShowingAllRecipients = false
+    // Envoi fait depuis la liste complète : la feuille se ferme à son tour.
+    @State private var sentFromList = false
     @Environment(\.dismiss) private var dismiss
 
     // SMS ou email pré-rempli (MessageUI).
@@ -50,9 +56,14 @@ struct VideoShareSheet: View {
                     .padding(.vertical, 12)
                     .accessibilityIdentifier("share.privateNotice")
             } else {
-                shareRows
+                recipientsRow
+                if let recipients, !recipients.selected.isEmpty {
+                    ShareMessageComposer(model: recipients) { dismiss() }
+                } else {
+                    linksRow
+                }
             }
-            ownerRow
+            if recipients?.selected.isEmpty ?? true { ownerRow }
             Spacer(minLength: 0)
         }
         .task {
@@ -60,6 +71,20 @@ struct VideoShareSheet: View {
             let model = recipients ?? container.makeSendVideoViewModel(video: video)
             recipients = model
             await model.load()
+        }
+        .sheet(
+            isPresented: $isShowingAllRecipients,
+            onDismiss: { if sentFromList { dismiss() } }
+        ) {
+            if let recipients {
+                SendVideoRecipientsView(model: recipients) {
+                    sentFromList = true
+                    isShowingAllRecipients = false
+                }
+                .presentationDetents([.large])
+                .presentationCornerRadius(16)
+                .presentationBackground(.white)
+            }
         }
         .sheet(item: $composer) { composer in
             MessageComposer(kind: composer, content: content) { sent in
@@ -94,8 +119,8 @@ struct VideoShareSheet: View {
         }
     }
 
-    // Lignes 1 et 2 : republier, destinataires, puis copier le lien, SMS, Email, « Plus ».
-    private var shareRows: some View {
+    // Ligne 1 : republier, puis les destinataires.
+    private var recipientsRow: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 14) {
@@ -115,6 +140,12 @@ struct VideoShareSheet: View {
             }
             .scrollIndicators(.hidden)
             .padding(.vertical, 12)
+        }
+    }
+
+    // Ligne 2 : copier le lien, SMS, Email, « Plus ».
+    private var linksRow: some View {
+        VStack(spacing: 0) {
             Divider()
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 14) {
@@ -191,6 +222,14 @@ struct VideoShareSheet: View {
         ZStack {
             Text("Envoyer à").font(.headline)
             HStack {
+                // Liste complète et recherche (compte connecté, vidéo publique).
+                if recipients != nil, current.visibility != .onlyMe {
+                    Button("Rechercher", systemImage: "magnifyingglass") { isShowingAllRecipients = true }
+                        .labelStyle(.iconOnly)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .accessibilityIdentifier("share.search")
+                }
                 Spacer()
                 Button("Fermer", systemImage: "xmark") { dismiss() }
                     .labelStyle(.iconOnly)
@@ -218,25 +257,24 @@ struct VideoShareSheet: View {
     }
 
     private func recipientTarget(_ recipient: SendVideoViewModel.Recipient, model: SendVideoViewModel) -> some View {
-        Button {
-            Task { await model.send(to: recipient) }
+        let isSelected = model.isSelected(recipient)
+        return Button {
+            model.toggle(recipient)
         } label: {
             VStack(spacing: 6) {
                 ConversationAvatar(users: recipient.avatars, size: 64)
+                    .opacity(isSelected ? 0.6 : 1)
                     .overlay(alignment: .bottomTrailing) {
-                        switch model.deliveries[recipient.id] {
-                        case .sending:
-                            ProgressView().frame(width: 22, height: 22).background(.background, in: Circle())
-                        case .sent:
+                        if model.deliveries[recipient.id] == .sending {
+                            ProgressView().frame(width: 24, height: 24).background(.white, in: Circle())
+                        } else if isSelected || model.deliveries[recipient.id] == .sent {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.system(size: 24))
                                 .foregroundStyle(.white, Color.brandPink)
-                                .background(.background, in: Circle())
-                        case nil:
-                            EmptyView()
+                                .background(.white, in: Circle())
                         }
                     }
-                Text(model.deliveries[recipient.id] == .sent ? "Envoyé" : recipient.title)
+                Text(model.deliveries[recipient.id] == .sent && !isSelected ? "Envoyé" : recipient.title)
                     .font(.footnote)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -244,8 +282,9 @@ struct VideoShareSheet: View {
             .frame(width: 76)
         }
         .buttonStyle(.plain)
-        .disabled(model.deliveries[recipient.id] != nil)
+        .disabled(model.isSending)
         .accessibilityLabel("Envoyer à \(recipient.label)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("share.recipient")
     }
 

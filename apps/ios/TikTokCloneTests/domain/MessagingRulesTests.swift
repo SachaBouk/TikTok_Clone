@@ -79,3 +79,29 @@ struct MessagingRulesTests {
         #expect(repository.sentContents.last == .some(nil))
     }
 }
+
+@Suite("Feuille « Envoyer à » : règles")
+struct ShareRecipientRulesTests {
+    @Test("section : lettre sans accent ni casse, « # » pour le reste")
+    func section() {
+        #expect(ShareRecipientRules.section(for: "Éloïse") == "E")
+        #expect(ShareRecipientRules.section(for: "zoé") == "Z")
+        #expect(ShareRecipientRules.section(for: "42club") == "#")
+        #expect(ShareRecipientRules.section(for: "😎 Max") == "#")
+        #expect(ShareRecipientRules.section(for: "") == "#")
+    }
+
+    @Test("recherche : nom ou pseudo, « @ » ignoré, sans casse ni accents")
+    func matches() {
+        #expect(ShareRecipientRules.matches("ines", title: "Inès Moreau", username: "ines.m"))
+        #expect(ShareRecipientRules.matches("@INES.", title: "Inès", username: "ines.m"))
+        #expect(!ShareRecipientRules.matches("bob", title: "Inès", username: "ines"))
+        #expect(ShareRecipientRules.matches("calamar", title: "le jeu du calamar", username: nil))
+    }
+
+    @Test("ordre alphabétique : sans accents, les noms sans lettre en dernier")
+    func order() {
+        let names = ["zoé", "42club", "Éloïse", "adri", "Baetsuji", "baberekn"]
+        #expect(names.sorted(by: ShareRecipientRules.precedes) == ["adri", "baberekn", "Baetsuji", "Éloïse", "zoé", "42club"])
+    }
+}

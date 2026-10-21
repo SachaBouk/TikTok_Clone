@@ -115,7 +115,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Affichage **optimiste** partagé par tous les écrans (`VideoInteractionsModel`) : l'état change tout de suite, puis suit le compteur renvoyé par l'API ; une erreur rétablit l'état d'avant et s'affiche.
 - En invité, toute action ouvre la connexion.
 - Commentaires, façon TikTok (ADR-060) : feuille blanche aux trois quarts, « N commentaires ». Chaque commentaire : nom, badge « Créateur » pour l'auteur de la vidéo, mentions et hashtags cliquables, date courte, « Répondre », photo de l'auteur de la vidéo avec un cœur s'il l'a aimé, cœur et compteur, « Je n'aime pas » (replie le commentaire, sur l'appareil seulement). Fils de réponses repliés (« Afficher N réponses », « Masquer »), réponse avec le bandeau « Réponse à @pseudo ». Barre d'emojis, « @ » pour mentionner un compte (suggestions : abonnements, puis recherche), flèche rose d'envoi. Glisser vers la gauche pour supprimer le sien ; sur sa propre vidéo, aussi ceux des autres, avec leurs réponses (confirmation, sans prévenir leur auteur, ADR-042).
-- Partage : feuille « Envoyer à », comme TikTok : « Republier » et tes contacts (un toucher envoie la vidéo par message), puis « Copier le lien », SMS, Email et « Plus » (feuille système), puis « Signaler » ou, sur ta vidéo, « Supprimer ». Lien `tiktokclone://videos/<id>` ; un partage n'est compté que s'il est réellement envoyé. « Copier » copie le message avec le lien, en une seule entrée. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
+- Partage : feuille « Envoyer à », comme TikTok : « Republier » et tes contacts (touche un ou plusieurs contacts pour les choisir, écris un message facultatif, puis « Envoyer » : la vidéo et le message partent ensemble ; la loupe en haut à gauche ouvre tous tes chats récents, amis et suivis de A à Z, avec une recherche), puis « Copier le lien », SMS, Email et « Plus » (feuille système), puis « Signaler » ou, sur ta vidéo, « Supprimer ». Lien `tiktokclone://videos/<id>` ; un partage n'est compté que s'il est réellement envoyé. « Copier » copie le message avec le lien, en une seule entrée. Un lien reçu ouvre la vidéo en plein écran (`getFeedItem`). Pour tester en simulateur : `xcrun simctl openurl booted "tiktokclone://videos/<id>"`.
 
 ## Publication
 
@@ -191,7 +191,7 @@ Création façon TikTok (ADR-062) : le bouton « + » de la barre d'onglets ouvr
 - Message non envoyé (coupure, limite, refus ; ADR-044) : la bulle reste affichée « Non envoyé · Toucher pour réessayer ». Un toucher ouvre « Réessayer », « Copier », « Supprimer ». Chaque essai porte le même identifiant d'envoi (`clientMessageId`) : un renvoi ne crée pas de doublon si le premier était arrivé. Gardé pendant la session de l'app, même conversation fermée.
 - Limite d'envoi atteinte : l'envoi et le renvoi sont bloqués, avec un compte à rebours.
 - Écrire à un compte : bouton « Message » de son profil, ou la recherche de l'onglet.
-- Partager une vidéo par message : « Partager », puis toucher un contact dans la première ligne de la feuille « Envoyer à » (conversations récentes, puis abonnements).
+- Partager une vidéo par message : « Partager », puis choisir un ou plusieurs contacts dans la première ligne de la feuille « Envoyer à » (conversations récentes, puis abonnements) ou par la loupe (liste complète et recherche), écrire un message si l'on veut, puis « Envoyer ».
 
 ## Centre d'activité
 
