@@ -22,6 +22,9 @@ import {
   LiveEndedEvent,
   LiveGiftEvent,
   LiveHeartsEvent,
+  LiveSharedEvent,
+  LiveViewerJoinedEvent,
+  LiveViewerLikedEvent,
 } from '../modules/live/interfaces/live.events';
 import { StoryProcessedEvent } from '../modules/stories/interfaces/stories.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
@@ -60,6 +63,9 @@ const LIVE_ROOM_EVENTS = {
   hearts: LiveHeartsEvent,
   gift: LiveGiftEvent,
   liveEnded: LiveEndedEvent,
+  viewerJoined: LiveViewerJoinedEvent,
+  viewerLiked: LiveViewerLikedEvent,
+  liveShared: LiveSharedEvent,
 };
 
 // Contrat d'API (ADR-005) : source unique pour le client iOS (swift-openapi-generator) et la doc.

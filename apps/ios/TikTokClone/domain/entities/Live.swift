@@ -44,6 +44,8 @@ struct LiveStream: Identifiable, Equatable, Sendable {
     let endReason: LiveEndReason?
     // Pour l'auteur seulement.
     var stats: LiveStats? = nil
+    // J'aime (cœurs) reçus depuis le début, pour tous (ADR-066).
+    var heartsCount = 0
 
     var isLive: Bool { status == .live }
 }
@@ -80,6 +82,49 @@ enum LiveRoomEvent: Equatable, Sendable {
     case hearts(count: Int, total: Int)
     case gift(sender: UserSummary, gift: GiftInfo, amount: Int, giftsCount: Int, giftsAmount: Int)
     case ended(LiveEndReason)
+    // Lignes d'événement du chat (ADR-066) : un compte a rejoint, aimé ou partagé le live (une fois par live).
+    case viewer(LiveChatEvent.Kind, UserSummary)
+}
+
+// Ligne d'événement du chat (ADR-066) : « Inès a rejoint », « a aimé le LIVE », « a partagé le LIVE ».
+struct LiveChatEvent: Identifiable, Equatable, Sendable {
+    enum Kind: String, Equatable, Sendable {
+        case joined, liked, shared
+    }
+
+    let kind: Kind
+    let user: UserSummary
+
+    // Une ligne par compte et par sorte : une annonce reçue deux fois n'en ajoute pas une seconde.
+    var id: String { "\(kind.rawValue)-\(user.id)" }
+
+    var text: String {
+        switch kind {
+        case .joined: "a rejoint"
+        case .liked: "a aimé le LIVE"
+        case .shared: "a partagé le LIVE"
+        }
+    }
+}
+
+// Ligne du chat : un message, ou une ligne d'événement.
+enum LiveChatEntry: Identifiable, Equatable, Sendable {
+    case message(LiveChatMessage)
+    case event(LiveChatEvent)
+
+    var id: String {
+        switch self {
+        case .message(let message): "message-\(message.id)"
+        case .event(let event): "event-\(event.id)"
+        }
+    }
+
+    var user: UserSummary {
+        switch self {
+        case .message(let message): message.user
+        case .event(let event): event.user
+        }
+    }
 }
 
 // Règles du live (mêmes valeurs que l'API, `live/domain/live.ts`).
@@ -106,28 +151,53 @@ enum LiveRules {
     }
 }
 
-// Chat affiché : messages dans l'ordre, sans doublon (réponse à l'envoi et écho de la salle), retraits appliqués, les
-// plus anciens oubliés au-delà de la limite.
+// Chat affiché : messages et lignes d'événement (ADR-066) dans l'ordre, sans doublon (réponse à l'envoi et écho de la
+// salle, annonce reçue deux fois), retraits appliqués, les plus anciens oubliés au-delà de la limite.
 struct LiveChat: Equatable, Sendable {
-    private(set) var messages: [LiveChatMessage] = []
+    private(set) var entries: [LiveChatEntry] = []
 
     init(_ messages: [LiveChatMessage] = []) {
         for message in messages { append(message) }
     }
 
+    var messages: [LiveChatMessage] {
+        entries.compactMap { if case .message(let message) = $0 { message } else { nil } }
+    }
+
     mutating func append(_ message: LiveChatMessage) {
-        guard !messages.contains(where: { $0.id == message.id }) else { return }
-        messages.append(message)
-        if messages.count > LiveRules.maxChatMessages { messages.removeFirst(messages.count - LiveRules.maxChatMessages) }
+        append(.message(message))
+    }
+
+    mutating func append(_ event: LiveChatEvent) {
+        append(.event(event))
+    }
+
+    private mutating func append(_ entry: LiveChatEntry) {
+        guard !entries.contains(where: { $0.id == entry.id }) else { return }
+        entries.append(entry)
+        if entries.count > LiveRules.maxChatMessages { entries.removeFirst(entries.count - LiveRules.maxChatMessages) }
     }
 
     mutating func remove(id: String) {
-        messages.removeAll { $0.id == id }
+        entries.removeAll { if case .message(let message) = $0 { message.id == id } else { false } }
     }
 
-    // Messages des comptes bloqués par l'app, retirés de l'affichage (le chat est diffusé à toute la salle).
-    func hiding(_ userIDs: Set<String>) -> [LiveChatMessage] {
-        userIDs.isEmpty ? messages : messages.filter { !userIDs.contains($0.user.id) }
+    // Lignes des comptes bloqués par l'app, retirées de l'affichage (le chat est diffusé à toute la salle).
+    func hiding(_ userIDs: Set<String>) -> [LiveChatEntry] {
+        userIDs.isEmpty ? entries : entries.filter { !userIDs.contains($0.user.id) }
+    }
+}
+
+// Sondage de fin d'un live (ADR-066), envoyé à la mesure d'audience seulement.
+enum LiveFeedback: String, CaseIterable, Equatable, Sendable {
+    case neutral, positive, negative
+
+    var label: String {
+        switch self {
+        case .neutral: "Ni positif ni négatif"
+        case .positive: "Positif"
+        case .negative: "Négatif"
+        }
     }
 }
 
@@ -168,6 +238,8 @@ enum LiveLink {
 
 // D'où un live a été ouvert (mesure d'audience, ADR-013).
 enum LiveSource: String, Equatable, Sendable {
+    // Lives à faire défiler, ouverts par l'icône « LIVE » de l'accueil (ADR-066).
+    case discover
     case tray
     case profile
     case activity

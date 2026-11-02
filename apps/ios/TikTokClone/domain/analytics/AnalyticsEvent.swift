@@ -226,6 +226,18 @@ extension AnalyticsEvent {
 
     static let liveMessageSent = AnalyticsEvent(name: "live_message_sent", properties: [:])
 
+    // J'aime envoyés en touchant l'écran d'un live (un lot, ADR-066).
+    static func liveLiked(count: Int) -> AnalyticsEvent {
+        AnalyticsEvent(name: "live_liked", properties: ["count": .int(count)])
+    }
+
+    static let liveRoseSent = AnalyticsEvent(name: "live_rose_sent", properties: [:])
+
+    // Sondage de fin d'un live (ADR-066) : jamais envoyé à l'API.
+    static func liveFeedback(_ answer: LiveFeedback) -> AnalyticsEvent {
+        AnalyticsEvent(name: "live_feedback", properties: ["answer": .string(answer.rawValue)])
+    }
+
     static func liveShared(byMessage: Bool) -> AnalyticsEvent {
         AnalyticsEvent(name: "live_shared", properties: ["method": .string(byMessage ? "message" : "system")])
     }

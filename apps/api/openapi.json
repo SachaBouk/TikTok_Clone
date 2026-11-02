@@ -3896,6 +3896,26 @@
         "tags": [
           "live"
         ]
+      },
+      "get": {
+        "operationId": "listLives",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverLivesResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ],
+        "security": []
       }
     },
     "/lives/following": {
@@ -4217,6 +4237,59 @@
           },
           "404": {
             "description": "Live ou message inconnu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/lives/{id}/share": {
+      "post": {
+        "operationId": "shareLive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Partage annoncé dans la salle (une fois par compte et par live)."
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Live inconnu, ou masqué (blocage, auteur suspendu).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Live terminé.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10806,6 +10879,11 @@
           "endReason": {
             "$ref": "#/components/schemas/LiveEndReason"
           },
+          "heartsCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "J’aime (cœurs) reçus depuis le début du live, pour tous."
+          },
           "host": {
             "$ref": "#/components/schemas/UserSummaryResponse"
           },
@@ -10820,6 +10898,7 @@
           "status",
           "startedAt",
           "endedAt",
+          "heartsCount",
           "host"
         ]
       },
@@ -10891,6 +10970,21 @@
           "url",
           "token",
           "recentMessages"
+        ]
+      },
+      "DiscoverLivesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Lives en cours (50 au plus) : comptes suivis d’abord, puis les plus regardés, puis les plus récents.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveResponse"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "FollowingLivesResponse": {
@@ -13753,6 +13847,71 @@
           "data"
         ]
       },
+      "LiveViewerEventResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "LiveViewerJoinedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "viewerJoined"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveViewerEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveViewerLikedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "viewerLiked"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveViewerEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
+      "LiveSharedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "liveShared"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveViewerEventResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "RealtimeEvent": {
         "description": "Message envoyé par le serveur sur le WebSocket `/realtime` (ADR-011).",
         "oneOf": [
@@ -13846,6 +14005,15 @@
           },
           {
             "$ref": "#/components/schemas/LiveEndedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveViewerJoinedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveViewerLikedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LiveSharedEvent"
           }
         ],
         "discriminator": {
@@ -13855,7 +14023,10 @@
             "chatMessageDeleted": "#/components/schemas/LiveChatMessageDeletedEvent",
             "hearts": "#/components/schemas/LiveHeartsEvent",
             "gift": "#/components/schemas/LiveGiftEvent",
-            "liveEnded": "#/components/schemas/LiveEndedEvent"
+            "liveEnded": "#/components/schemas/LiveEndedEvent",
+            "viewerJoined": "#/components/schemas/LiveViewerJoinedEvent",
+            "viewerLiked": "#/components/schemas/LiveViewerLikedEvent",
+            "liveShared": "#/components/schemas/LiveSharedEvent"
           }
         }
       }

@@ -61,6 +61,15 @@ export class PrismaLiveRepository extends LiveRepository {
     });
   }
 
+  findInProgressRanked(excludedUserIds: string[], limit: number): Promise<Live[]> {
+    return this.prisma.live.findMany({
+      where: { status: 'live', userId: { notIn: excludedUserIds } },
+      orderBy: [{ viewers: { _count: 'desc' } }, { startedAt: 'desc' }],
+      take: limit,
+      select: liveSelect,
+    });
+  }
+
   // Transition atomique `live` → `ended` : deux fins simultanées n'en enregistrent qu'une.
   async end(id: string, reason: LiveEndReason, at: Date): Promise<Live | null> {
     const { count } = await this.prisma.live.updateMany({

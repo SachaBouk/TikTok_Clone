@@ -9,6 +9,9 @@ final class FakeLiveRepository: LiveRepository {
         var connection: LiveConnection?
         var lives: [String: LiveStream] = [:]
         var following: [LiveStream] = []
+        var discover: [LiveStream] = []
+        var discoverError: AppError?
+        var shared: [String] = []
         var userLives: [String: LiveStream] = [:]
         var startError: AppError?
         var joinError: AppError?
@@ -90,6 +93,18 @@ final class FakeLiveRepository: LiveRepository {
 
     func userLive(username: String) async throws -> LiveStream? {
         state.withLock { $0.userLives[username] }
+    }
+
+    func discoverLives() async throws -> [LiveStream] {
+        try state.withLock { state in
+            state.calls.append("discover")
+            if let error = state.discoverError { throw error }
+            return state.discover
+        }
+    }
+
+    func share(liveID: String) async throws {
+        state.withLock { $0.shared.append(liveID) }
     }
 }
 

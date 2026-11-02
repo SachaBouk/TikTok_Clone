@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { LiveChatMessageDeletedDto, LiveEndedEventDto, LiveEndReason, LiveGiftEventDto, LiveHeartsEventDto } from '@repo/shared';
+import type {
+  LiveChatMessageDeletedDto,
+  LiveEndedEventDto,
+  LiveEndReason,
+  LiveGiftEventDto,
+  LiveHeartsEventDto,
+  LiveViewerEventDto,
+} from '@repo/shared';
 import { UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import { GiftResponse } from '../../wallet/interfaces/wallet.responses';
 import { LIVE_END_REASONS } from '../domain/live';
@@ -81,4 +88,34 @@ export class LiveEndedEvent {
 
   @ApiProperty({ type: LiveEndedEventResponse })
   data!: LiveEndedEventResponse;
+}
+
+// Ligne d'événement du chat (ADR-066) : « a rejoint », « a aimé le LIVE », « a partagé le LIVE ».
+export class LiveViewerEventResponse implements LiveViewerEventDto {
+  @ApiProperty({ type: UserSummaryResponse })
+  user!: UserSummaryResponse;
+}
+
+export class LiveViewerJoinedEvent {
+  @ApiProperty({ enum: ['viewerJoined'] })
+  event!: 'viewerJoined';
+
+  @ApiProperty({ type: LiveViewerEventResponse })
+  data!: LiveViewerEventResponse;
+}
+
+export class LiveViewerLikedEvent {
+  @ApiProperty({ enum: ['viewerLiked'] })
+  event!: 'viewerLiked';
+
+  @ApiProperty({ type: LiveViewerEventResponse })
+  data!: LiveViewerEventResponse;
+}
+
+export class LiveSharedEvent {
+  @ApiProperty({ enum: ['liveShared'] })
+  event!: 'liveShared';
+
+  @ApiProperty({ type: LiveViewerEventResponse })
+  data!: LiveViewerEventResponse;
 }

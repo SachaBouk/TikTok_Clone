@@ -23,6 +23,8 @@ export abstract class LiveRepository {
   abstract findInProgressByUser(userId: string): Promise<Live | null>;
   // Lives en cours de ces comptes, du plus récent au plus ancien.
   abstract findInProgressByUsers(userIds: string[]): Promise<Live[]>;
+  // Lives en cours sauf ceux de ces comptes : les plus regardés (spectateurs distincts) puis les plus récents (ADR-066).
+  abstract findInProgressRanked(excludedUserIds: string[], limit: number): Promise<Live[]>;
   // Termine le live s'il est en cours (atomique) ; null s'il était déjà terminé.
   abstract end(id: string, reason: LiveEndReason, at: Date): Promise<Live | null>;
 

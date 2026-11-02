@@ -67,6 +67,7 @@
 | [ADR-063](ADR-063-filtres-autocollants-effets.md) | Éditeur vidéo : filtres en catégories, autocollants, effets (complète ADR-062 et ADR-052) | Accepté |
 | [ADR-064](ADR-064-voix-off-sons.md) | Éditeur vidéo : voix off, effets de voix, sons repris des vidéos (complète ADR-062, ADR-052 et ADR-016) | Proposé |
 | [ADR-065](ADR-065-ecran-publication.md) | Écran de publication : couverture, lieu, mentions, étiquette IA, brouillons (complète ADR-062, ADR-060 et ADR-035) | Proposé |
+| [ADR-066](ADR-066-lives-facon-tiktok.md) | Lives façon TikTok : icône « LIVE », lives à faire défiler, écran redessiné (complète ADR-053 et ADR-016) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

@@ -54,6 +54,10 @@ export const RECENT_LIVE_MESSAGES = 50;
 export const MAX_HEARTS_PER_BATCH = 30;
 // Lives en cours des comptes suivis (rangée) : au plus.
 export const MAX_FOLLOWING_LIVES = 100;
+// Lives à faire défiler (icône « LIVE », ADR-066) : au plus.
+export const MAX_DISCOVER_LIVES = 50;
+// Lignes « a rejoint », « a aimé », « a partagé » (ADR-066) : une fois par compte et par live, pendant la durée d'un live.
+export const LIVE_ANNOUNCE_SECONDS = LIVE_MAX_DURATION_MS / 1000;
 // Jetons d'accès à la salle : valables le temps d'un live, plus une marge.
 export const LIVE_TOKEN_TTL_SECONDS = 3 * 3600;
 // Maintenance : lives en cours relus par passe.

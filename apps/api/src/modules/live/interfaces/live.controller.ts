@@ -12,7 +12,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { FollowingLivesDto, LiveChatMessageDto, LiveConnectionDto, LiveHeartsDto, LiveItemDto } from '@repo/shared';
+import type { DiscoverLivesDto, FollowingLivesDto, LiveChatMessageDto, LiveConnectionDto, LiveHeartsDto, LiveItemDto } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
@@ -23,6 +23,7 @@ import { LiveService } from '../application/live.service';
 import { LiveErrorFilter } from './live-error.filter';
 import { SendLiveHeartsRequest, SendLiveMessageRequest, StartLiveRequest } from './live.requests';
 import {
+  DiscoverLivesResponse,
   FollowingLivesResponse,
   LiveChatMessageResponse,
   LiveConnectionResponse,
@@ -63,6 +64,14 @@ export class LiveController {
   @ApiTooManyRequests('Trop de lives lancés récemment (10 par jour)')
   async startLive(@CurrentUser() user: AuthenticatedUser, @Body() body: StartLiveRequest): Promise<LiveConnectionDto> {
     return toLiveConnectionDto(await this.lives.start(user.userId, { title: body.title ?? null }));
+  }
+
+  // Public : lives à faire défiler (icône « LIVE » de l'accueil, ADR-066).
+  @Public()
+  @Get()
+  @ApiOkResponse({ type: DiscoverLivesResponse })
+  async listLives(@CurrentUser() user: AuthenticatedUser | undefined): Promise<DiscoverLivesDto> {
+    return { items: (await this.lives.listLives(user?.userId ?? null)).map(toLiveItemDto) };
   }
 
   @Get('following')
@@ -131,6 +140,17 @@ export class LiveController {
     @Param('messageId', new ParseUUIDPipe()) messageId: string,
   ): Promise<void> {
     await this.lives.deleteMessage(user.userId, id, messageId);
+  }
+
+  // Partage envoyé par l'app (feuille système ou message) : « a partagé le LIVE » dans la salle, une fois (ADR-066).
+  @Post(':id/share')
+  @HttpCode(204)
+  @ApiNoContentResponse({ description: 'Partage annoncé dans la salle (une fois par compte et par live).' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(NOT_FOUND)
+  @ApiConflictResponse(ENDED)
+  async shareLive(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string): Promise<void> {
+    await this.lives.recordShare(user.userId, id);
   }
 
   @Post(':id/hearts')

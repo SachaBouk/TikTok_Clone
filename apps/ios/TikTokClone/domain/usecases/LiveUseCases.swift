@@ -92,3 +92,21 @@ struct ShareLiveByMessageUseCase: Sendable {
         try await messaging.shareLive(conversationID: conversationID, liveID: liveID)
     }
 }
+
+// Lives à faire défiler (icône « LIVE » de l'accueil, ADR-066).
+struct LoadDiscoverLivesUseCase: Sendable {
+    let lives: any LiveRepository
+
+    func callAsFunction() async throws -> [LiveStream] {
+        try await lives.discoverLives()
+    }
+}
+
+// Partage d'un live envoyé (feuille système ou message), annoncé dans la salle (ADR-066).
+struct RecordLiveShareUseCase: Sendable {
+    let lives: any LiveRepository
+
+    func callAsFunction(liveID: String) async throws {
+        try await lives.share(liveID: liveID)
+    }
+}

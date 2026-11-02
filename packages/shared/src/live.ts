@@ -17,6 +17,8 @@ export interface LiveDto {
   endedAt: string | null;
   // Absente tant que le live est en cours.
   endReason?: LiveEndReason;
+  // J'aime (cœurs) reçus depuis le début, pour tous (pastille de l'auteur, ADR-066).
+  heartsCount: number;
 }
 
 // Chiffres d'un live, pour son auteur seulement.
@@ -78,6 +80,11 @@ export interface FollowingLivesDto {
   items: LiveItemDto[];
 }
 
+// Lives en cours à faire défiler (icône « LIVE » de l'accueil, ADR-066).
+export interface DiscoverLivesDto {
+  items: LiveItemDto[];
+}
+
 // ─── Événements diffusés dans la salle (messages de données de LiveKit, sujet `live`) ───
 
 export interface LiveChatMessageDeletedDto {
@@ -103,12 +110,20 @@ export interface LiveEndedEventDto {
   reason: LiveEndReason;
 }
 
+// Lignes d'événement du chat (ADR-066) : un compte a rejoint, aimé ou partagé le live. Une fois par compte et par live.
+export interface LiveViewerEventDto {
+  user: UserSummaryDto;
+}
+
 export type LiveRoomEvent =
   | { event: 'chatMessage'; data: LiveChatMessageDto }
   | { event: 'chatMessageDeleted'; data: LiveChatMessageDeletedDto }
   | { event: 'hearts'; data: LiveHeartsEventDto }
   | { event: 'gift'; data: LiveGiftEventDto }
-  | { event: 'liveEnded'; data: LiveEndedEventDto };
+  | { event: 'liveEnded'; data: LiveEndedEventDto }
+  | { event: 'viewerJoined'; data: LiveViewerEventDto }
+  | { event: 'viewerLiked'; data: LiveViewerEventDto }
+  | { event: 'liveShared'; data: LiveViewerEventDto };
 
 // Sujet des messages de données de LiveKit qui portent ces événements.
 export const LIVE_ROOM_TOPIC = 'live';

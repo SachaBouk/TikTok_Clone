@@ -16,6 +16,10 @@ protocol LiveRepository: Sendable {
     func sendHearts(liveID: String, count: Int) async throws -> Int
     // Lives en cours des comptes suivis (rangée).
     func followingLives() async throws -> [LiveStream]
+    // Lives en cours à faire défiler (icône « LIVE », ADR-066) : comptes suivis d'abord, puis les plus regardés.
+    func discoverLives() async throws -> [LiveStream]
+    // Partage envoyé : « a partagé le LIVE » dans la salle (une fois par compte et par live).
+    func share(liveID: String) async throws
     // Live en cours d'un compte (anneau du profil) ; nil s'il n'en a pas.
     func userLive(username: String) async throws -> LiveStream?
 }

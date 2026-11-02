@@ -55,6 +55,15 @@ export class InMemoryLiveRepository extends LiveRepository {
       .map((live) => ({ ...live }));
   }
 
+  async findInProgressRanked(excludedUserIds: string[], limit: number): Promise<Live[]> {
+    const viewers = (live: Live) => this.viewers.get(live.id)?.size ?? 0;
+    return [...this.lives.values()]
+      .filter((live) => live.status === 'live' && !excludedUserIds.includes(live.userId))
+      .sort((a, b) => viewers(b) - viewers(a) || b.startedAt.getTime() - a.startedAt.getTime())
+      .slice(0, limit)
+      .map((live) => ({ ...live }));
+  }
+
   async end(id: string, reason: LiveEndReason, at: Date): Promise<Live | null> {
     const live = this.lives.get(id);
     if (!live || live.status !== 'live') return null;
@@ -158,7 +167,8 @@ export type RoomEvent =
   | { type: 'chatMessageDeleted'; liveId: string; messageId: string }
   | { type: 'hearts'; liveId: string; count: number; total: number }
   | { type: 'gift'; liveId: string; sender: string; code: string; amount: number; giftsCount: number; giftsAmount: number }
-  | { type: 'liveEnded'; liveId: string; reason: LiveEndReason };
+  | { type: 'liveEnded'; liveId: string; reason: LiveEndReason }
+  | { type: 'viewerJoined' | 'viewerLiked' | 'liveShared'; liveId: string; user: string };
 
 export class InMemoryLiveRoomPublisher extends LiveRoomPublisher {
   readonly events: RoomEvent[] = [];
@@ -181,6 +191,18 @@ export class InMemoryLiveRoomPublisher extends LiveRoomPublisher {
 
   async liveEnded(liveId: string, reason: LiveEndReason): Promise<void> {
     this.events.push({ type: 'liveEnded', liveId, reason });
+  }
+
+  async viewerJoined(liveId: string, user: User): Promise<void> {
+    this.events.push({ type: 'viewerJoined', liveId, user: user.id });
+  }
+
+  async viewerLiked(liveId: string, user: User): Promise<void> {
+    this.events.push({ type: 'viewerLiked', liveId, user: user.id });
+  }
+
+  async liveShared(liveId: string, user: User): Promise<void> {
+    this.events.push({ type: 'liveShared', liveId, user: user.id });
   }
 }
 

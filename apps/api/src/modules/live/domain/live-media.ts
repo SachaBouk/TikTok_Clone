@@ -33,6 +33,10 @@ export abstract class LiveRoomPublisher {
   abstract hearts(liveId: string, count: number, total: number): Promise<void>;
   abstract gift(liveId: string, sender: User, gift: GiftDetails, totals: { giftsCount: number; giftsAmount: number }): Promise<void>;
   abstract liveEnded(liveId: string, reason: LiveEndReason): Promise<void>;
+  // Lignes d'événement du chat (ADR-066).
+  abstract viewerJoined(liveId: string, user: User): Promise<void>;
+  abstract viewerLiked(liveId: string, user: User): Promise<void>;
+  abstract liveShared(liveId: string, user: User): Promise<void>;
 }
 
 // Jobs différés du live (BullMQ, produits et consommés par l'API).

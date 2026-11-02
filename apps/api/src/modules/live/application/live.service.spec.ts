@@ -250,6 +250,65 @@ describe('LiveService (ADR-053)', () => {
     });
   });
 
+  describe('lives à faire défiler et lignes d’événement (ADR-066)', () => {
+    it('tous les lives en cours : suivis d’abord, puis les plus regardés, puis les plus récents ; ni masqués, ni le sien', async () => {
+      await interactions.setFollow('bob', 'erin', true);
+      const alice = await live.service.start('alice', {});
+      advance(1000);
+      const carol = await live.service.start('carol', {});
+      advance(1000);
+      const dave = await live.service.start('dave', {});
+      advance(1000);
+      const erin = await live.service.start('erin', {});
+      advance(1000);
+      const own = await live.service.start('bob', {});
+      await live.repository.recordViewer(alice.item.live.id, 'user:carol');
+      await live.repository.recordViewer(alice.item.live.id, 'guest:x');
+      await live.repository.recordViewer(carol.item.live.id, 'user:dave');
+
+      const ids = (items: { live: { id: string } }[]) => items.map((entry) => entry.live.id);
+      expect(ids(await live.service.listLives('bob'))).toEqual([erin.item.live.id, alice.item.live.id, carol.item.live.id, dave.item.live.id]);
+      // Invité : tous, le live de bob compris, sans ordre des suivis.
+      expect(ids(await live.service.listLives(null))).toEqual([
+        alice.item.live.id,
+        carol.item.live.id,
+        own.item.live.id,
+        erin.item.live.id,
+        dave.item.live.id,
+      ]);
+      await interactions.setBlock('dave', 'bob', true);
+      await suspended.add('carol');
+      expect(ids(await live.service.listLives('bob'))).toEqual([erin.item.live.id, alice.item.live.id]);
+      await live.service.stop('erin', erin.item.live.id);
+      expect(ids(await live.service.listLives('bob'))).toEqual([alice.item.live.id]);
+    });
+
+    it('« a rejoint » une fois par compte et par live ; ni les invités ni l’auteur', async () => {
+      const { item } = await live.service.start('alice', {});
+      await live.service.join(item.live.id, 'bob');
+      await live.service.join(item.live.id, 'bob');
+      await live.service.join(item.live.id, null);
+      await live.service.join(item.live.id, 'alice');
+      expect(roomEvents('viewerJoined')).toEqual([{ type: 'viewerJoined', liveId: item.live.id, user: 'bob' }]);
+    });
+
+    it('« a aimé le LIVE » aux premiers cœurs seulement ; « a partagé » une fois, live en cours seulement', async () => {
+      const { item } = await live.service.start('alice', {});
+      await live.service.sendHearts('bob', item.live.id, 3);
+      await live.service.sendHearts('bob', item.live.id, 5);
+      expect(roomEvents('viewerLiked')).toEqual([{ type: 'viewerLiked', liveId: item.live.id, user: 'bob' }]);
+      expect(roomEvents('hearts')).toHaveLength(2);
+
+      await live.service.recordShare('carol', item.live.id);
+      await live.service.recordShare('carol', item.live.id);
+      expect(roomEvents('liveShared')).toEqual([{ type: 'liveShared', liveId: item.live.id, user: 'carol' }]);
+      await interactions.setBlock('alice', 'dave', true);
+      await expect(live.service.recordShare('dave', item.live.id)).rejects.toBeInstanceOf(LiveNotFoundError);
+      await live.service.stop('alice', item.live.id);
+      await expect(live.service.recordShare('erin', item.live.id)).rejects.toBeInstanceOf(LiveEndedError);
+    });
+  });
+
   describe('chat et cœurs', () => {
     it('message diffusé dans la salle, nettoyé ; longueur et limite de débit', async () => {
       const { item } = await live.service.start('alice', {});

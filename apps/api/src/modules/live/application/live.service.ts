@@ -16,6 +16,7 @@ import {
   type Live,
   type LiveEndReason,
   type LiveMessage,
+  LIVE_ANNOUNCE_SECONDS,
   LIVE_HEARTS_RATE_LIMITS,
   LIVE_MAINTENANCE_BATCH_SIZE,
   LIVE_MAX_DURATION_MS,
@@ -23,6 +24,7 @@ import {
   LIVE_START_RATE_LIMITS,
   LIVE_TOKEN_TTL_SECONDS,
   type LiveStats,
+  MAX_DISCOVER_LIVES,
   MAX_FOLLOWING_LIVES,
   MAX_HEARTS_PER_BATCH,
   MAX_LIVE_MESSAGE_LENGTH,
@@ -157,7 +159,28 @@ export class LiveService {
     const recent = await this.recentMessages(live, viewerId);
     if (viewerId === live.userId) return this.connection(live, host, 'host', userIdentity(viewerId), recent);
     const identity = viewerId ? userIdentity(viewerId) : guestIdentity(this.makeGuestId());
-    return this.connection(live, host, 'viewer', identity, recent);
+    const connection = await this.connection(live, host, 'viewer', identity, recent);
+    // « a rejoint » (ADR-066) : comptes connectés seulement, une fois par live.
+    if (viewerId) await this.announce('joined', live.id, viewerId, (user) => this.room.viewerJoined(live.id, user));
+    return connection;
+  }
+
+  // Lives à faire défiler (icône « LIVE », ADR-066) : ceux des comptes suivis d'abord, puis les plus regardés et les
+  // plus récents ; ni ceux des comptes masqués, ni le sien.
+  async listLives(viewerId: string | null): Promise<LiveItem[]> {
+    const hidden = await this.interactions.getHiddenAccountIds(viewerId);
+    const excluded = viewerId ? [...hidden, viewerId] : [...hidden];
+    const lives = await this.lives.findInProgressRanked(excluded, MAX_DISCOVER_LIVES);
+    const following = viewerId ? new Set(await this.interactions.listVisibleFollowingIds(viewerId)) : new Set<string>();
+    const ordered = [...lives.filter((live) => following.has(live.userId)), ...lives.filter((live) => !following.has(live.userId))];
+    return this.withHosts(ordered);
+  }
+
+  // Partage envoyé (feuille système ou message, ADR-066) : annoncé dans la salle, une fois par compte et par live.
+  async recordShare(userId: string, liveId: string): Promise<void> {
+    const live = await this.visibleLive(liveId, userId);
+    if (!isInProgress(live)) throw new LiveEndedError();
+    await this.announce('shared', live.id, userId, (user) => this.room.liveShared(live.id, user));
   }
 
   // Lives en cours des comptes suivis (rangée de la boîte de réception), du plus récent au plus ancien.
@@ -213,6 +236,7 @@ export class LiveService {
     if (retryAfter !== null) throw new TooManyLiveActionsError(retryAfter, 'hearts');
     const total = await this.lives.addHearts(live.id, count);
     await this.broadcast(() => this.room.hearts(live.id, count, total));
+    await this.announce('liked', live.id, userId, (user) => this.room.viewerLiked(live.id, user));
     return total;
   }
 
@@ -452,6 +476,17 @@ export class LiveService {
       }
     } catch {
       // Abonnés non prévenus : le live est lancé quand même, et visible dans leur rangée.
+    }
+  }
+
+  // Ligne d'événement du chat (ADR-066) : une seule fois par compte et par live (dédoublonnage), au mieux.
+  private async announce(kind: 'joined' | 'liked' | 'shared', liveId: string, userId: string, send: (user: User) => Promise<void>): Promise<void> {
+    if (!(await this.rateLimiter.once(`live-${kind}:${liveId}:${userId}`, LIVE_ANNOUNCE_SECONDS))) return;
+    try {
+      const user = await this.users.getById(userId);
+      await send(user);
+    } catch {
+      // Ligne perdue : rien n'est rejoué.
     }
   }
 

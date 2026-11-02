@@ -137,6 +137,18 @@ export class LiveKitRoomPublisher extends LiveRoomPublisher {
     return this.send(liveId, { event: 'liveEnded', data: { reason } });
   }
 
+  viewerJoined(liveId: string, user: User): Promise<void> {
+    return this.send(liveId, { event: 'viewerJoined', data: { user: toUserSummary(user) } });
+  }
+
+  viewerLiked(liveId: string, user: User): Promise<void> {
+    return this.send(liveId, { event: 'viewerLiked', data: { user: toUserSummary(user) } });
+  }
+
+  liveShared(liveId: string, user: User): Promise<void> {
+    return this.send(liveId, { event: 'liveShared', data: { user: toUserSummary(user) } });
+  }
+
   private async send(liveId: string, event: LiveRoomEvent): Promise<void> {
     try {
       await this.media.send(liveId, event);

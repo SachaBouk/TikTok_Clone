@@ -33,7 +33,7 @@ private struct LivePresenter: ViewModifier {
 }
 
 // Un plein écran créé dans le contenu d'un `fullScreenCover` est recréé à chaque mise à jour : la salle et son modèle
-// sont créés une fois, à l'apparition.
+// sont créés une fois, à l'apparition. Lives à faire défiler (icône « LIVE », ADR-066) : `LiveFeedScreen`.
 private struct LiveScreen: View {
     let route: AppRouter.LiveRoute
     let container: AppContainer
@@ -42,25 +42,44 @@ private struct LiveScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let setup {
-                LiveView(model: setup.model, room: setup.room, container: container)
+            switch route.content {
+            case .discover:
+                LiveFeedScreen(container: container)
+            case .room(let mode):
+                if let setup {
+                    LiveView(model: setup.model, room: setup.room, container: container)
+                }
+                Color.clear.onAppear {
+                    if setup == nil { setup = container.makeLiveRoom(mode: mode) }
+                }
             }
-        }
-        .onAppear {
-            if setup == nil { setup = container.makeLiveRoom(route) }
         }
     }
 }
 
+// Écran d'un live, façon TikTok (ADR-066) : pastille de l'auteur en haut (photo, nom, j'aime, « + Suivre »), spectateurs,
+// chat avec ses lignes d'événement, barre du bas (« Commenter », Rose, Cadeau, Partager), j'aime en touchant l'écran.
 struct LiveView: View {
     let model: LiveRoomModel
     let room: LiveKitRoom
     let container: AppContainer
+    // Dans les lives à faire défiler : × sur l'écran de fin et « Balaie vers le haut pour le live suivant ».
+    var hasNextLive = false
+    var isInFeed = false
+    // Marges de la zone de sécurité, données par les lives à faire défiler (leur `ScrollView` l'ignore).
+    var insets = EdgeInsets()
+    // Lives à faire défiler : la saisie est affichée par l'écran des lives, au-dessus du clavier (les pages, elles,
+    // ignorent le clavier pour garder leur taille). Nil : la saisie est dans cet écran.
+    var feedComposer: Binding<Bool>? = nil
     @State private var isConfirmingEnd = false
     @State private var isSharing = false
     @State private var chosenForMessage = false
+    // Envoi par message : le modèle reste après la fermeture, pour savoir si un message est parti.
+    @State private var sendByMessage: SendVideoViewModel?
     @State private var isSendingByMessage = false
     @State private var isGiving = false
+    @State private var isShowingHost = false
+    @State private var showsComposer = false
     @State private var reportTarget: ReportTarget?
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
@@ -77,7 +96,7 @@ struct LiveView: View {
             .sheet(
                 isPresented: $isSharing,
                 onDismiss: {
-                    if chosenForMessage { isSendingByMessage = true }
+                    if chosenForMessage { openSendByMessage() }
                     chosenForMessage = false
                 }
             ) {
@@ -85,11 +104,13 @@ struct LiveView: View {
                     ActivityShareSheet(items: LiveShareContent(live: live).activityItems, allowsSendByMessage: container.session.isSignedIn) {
                         outcome in
                         switch outcome {
-                        case .shared: container.analytics.track(.liveShared(byMessage: false))
+                        case .shared:
+                            container.analytics.track(.liveShared(byMessage: false))
+                            Task { await model.shared() }
                         // Même piège que pour une vidéo : UIKit ferme parfois la feuille avant ce gestionnaire.
                         case .sendByMessage:
                             container.analytics.track(.liveShared(byMessage: true))
-                            if isSharing { chosenForMessage = true } else { isSendingByMessage = true }
+                            if isSharing { chosenForMessage = true } else { openSendByMessage() }
                         case .cancelled: break
                         }
                         isSharing = false
@@ -98,9 +119,16 @@ struct LiveView: View {
                     .ignoresSafeArea()
                 }
             }
-            .sheet(isPresented: $isSendingByMessage) {
-                if let live = model.live {
-                    SendVideoView(viewModel: container.makeSendLiveViewModel(live: live))
+            .sheet(
+                isPresented: $isSendingByMessage,
+                onDismiss: {
+                    // Un envoi par message est aussi un partage : annoncé dans la salle.
+                    if sendByMessage?.deliveries.values.contains(.sent) == true { Task { await model.shared() } }
+                    sendByMessage = nil
+                }
+            ) {
+                if let sendByMessage {
+                    SendVideoView(viewModel: sendByMessage)
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
                 }
@@ -113,7 +141,25 @@ struct LiveView: View {
                     .presentationDetents([.medium, .large])
                 }
             }
+            .sheet(isPresented: $isShowingHost) {
+                if let live = model.live {
+                    LiveHostSheet(model: container.makeLiveHostModel(username: live.host.username), host: live.host, container: container) {
+                        guard container.session.isSignedIn else { return container.session.requestSignIn() }
+                        reportTarget = .live(id: live.id)
+                    }
+                    .presentationDetents([.medium])
+                    .presentationCornerRadius(16)
+                    .presentationBackground(.white)
+                }
+            }
             .reportSheet($reportTarget, container: container)
+            // Rose sans assez de jetons : la feuille des cadeaux, avec « Recharger ».
+            .onChange(of: model.needsRecharge) { _, needed in
+                if needed {
+                    model.needsRecharge = false
+                    isGiving = true
+                }
+            }
             .alert(
                 "Action impossible",
                 isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
@@ -124,18 +170,18 @@ struct LiveView: View {
             }
     }
 
+    private func openSendByMessage() {
+        guard let live = model.live else { return }
+        sendByMessage = container.makeSendLiveViewModel(live: live)
+        isSendingByMessage = true
+    }
+
     @ViewBuilder
     private var content: some View {
         switch model.phase {
         case .connecting:
-            ZStack {
-                LiveVideoView(room: room).ignoresSafeArea()
-                VStack(spacing: 12) {
-                    ProgressView().tint(.white)
-                    Text(model.isHost ? "Lancement du live…" : "Connexion au live…").foregroundStyle(.white)
-                }
-            }
-            .overlay(alignment: .topTrailing) { closeButton(confirm: false) }
+            LiveLoadingView(host: model.live?.host)
+                .overlay(alignment: .topTrailing) { closeButton(confirm: false).padding(.horizontal, 12).padding(.top, insets.top) }
         case .failed(let message):
             ContentUnavailableView {
                 Label("Live indisponible", systemImage: "video.slash")
@@ -146,7 +192,13 @@ struct LiveView: View {
             }
             .foregroundStyle(.white)
         case .ended(let live, let reason):
-            LiveEndedView(live: live, reason: reason, isHost: model.isHost) { dismiss() }
+            if model.isHost {
+                LiveEndedView(live: live, reason: reason, isHost: true) { dismiss() }
+            } else {
+                LiveFeedbackView(
+                    model: model, live: live ?? model.live, reason: reason, hasNextLive: hasNextLive, isInFeed: isInFeed, insets: insets
+                ) { dismiss() }
+            }
         case .live:
             liveContent
         }
@@ -157,33 +209,59 @@ struct LiveView: View {
             LiveVideoView(room: room)
                 .ignoresSafeArea()
                 .overlay {
-                    if !model.hasVideo {
-                        Text(model.isHost ? "" : "En attente de l’image…").foregroundStyle(.white.opacity(0.7))
-                    }
+                    if !model.hasVideo && !model.isHost { LiveLoadingView(host: model.live?.host) }
                 }
-            // La vue vidéo de LiveKit garde les touchers : une couche transparente au-dessus ferme le clavier.
+            // La vue vidéo de LiveKit garde les touchers : une couche transparente au-dessus reçoit les j'aime (ADR-066),
+            // ou ferme le clavier.
             Color.clear
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
-                .onTapGesture { isComposing = false }
+                .gesture(
+                    SpatialTapGesture(coordinateSpace: .named(Self.screenSpace)).onEnded { value in
+                        if isComposing {
+                            isComposing = false
+                        } else if let feedComposer, feedComposer.wrappedValue {
+                            feedComposer.wrappedValue = false
+                        } else {
+                            model.like(x: value.location.x, y: value.location.y)
+                        }
+                    }
+                )
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Envoyer un j’aime")
+                .accessibilityIdentifier("live.likeArea")
             VStack(spacing: 0) {
-                LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
+                LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
                 Spacer()
-                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom).frame(height: 320)
+                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom).frame(height: 360)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
-            VStack(spacing: 10) {
-                header
+            VStack(spacing: 8) {
+                header.padding(.horizontal, 12)
                 Spacer()
-                gifts
-                chat
-                composer
+                VStack(spacing: 8) {
+                    gifts
+                    chat
+                }
+                .padding(.horizontal, 12)
+                if showsComposer {
+                    composer
+                } else {
+                    bottomBar.padding(.horizontal, 12).padding(.bottom, 6)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.top, insets.top)
+            .padding(.bottom, showsComposer ? 0 : insets.bottom)
+            LiveTapHeartsView(model: model)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             FloatingHeartsView(model: model)
                 .allowsHitTesting(false)
+        }
+        .coordinateSpace(.named(Self.screenSpace))
+        .onChange(of: isComposing) { _, composing in
+            if !composing { showsComposer = false }
         }
         .confirmationDialog("Terminer le live ?", isPresented: $isConfirmingEnd, titleVisibility: .visible) {
             Button("Terminer le live", role: .destructive) { Task { await model.end() } }
@@ -192,38 +270,85 @@ struct LiveView: View {
         }
     }
 
-    // ─── En-tête : auteur, titre, « EN DIRECT », spectateurs, fermer ───
+    private static let screenSpace = "live.screen"
+
+    // ─── En-tête : pastille de l'auteur, spectateurs, fermer ───
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if let live = model.live {
-                AvatarView(url: live.host.avatarURL, name: live.host.displayName, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(live.host.displayName).font(.subheadline.bold()).lineLimit(1)
-                    if let title = live.title {
-                        Text(title).font(.caption).lineLimit(2).opacity(0.85)
-                    }
-                    HStack(spacing: 8) {
-                        LiveBadge()
-                        Label("\(model.viewersCount)", systemImage: "eye").font(.caption.bold())
-                            .accessibilityLabel("\(model.viewersCount) spectateurs")
-                        Label("\(model.heartsTotal)", systemImage: "heart.fill").font(.caption.bold())
-                            .accessibilityLabel("\(model.heartsTotal) cœurs")
-                    }
-                }
-                .foregroundStyle(.white)
-                .shadow(radius: 2)
-            }
-            Spacer()
+        HStack(spacing: 8) {
+            if let live = model.live { hostPill(live.host) }
+            Spacer(minLength: 4)
             if model.isHost {
                 Button("Changer de caméra", systemImage: "arrow.triangle.2.circlepath.camera") { Task { await model.switchCamera() } }
                     .labelStyle(.iconOnly)
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
             }
+            Label("\(model.viewersCount)", systemImage: "person.fill")
+                .font(.footnote.weight(.semibold))
+                .monospacedDigit()
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(.black.opacity(0.35), in: Capsule())
+                .foregroundStyle(.white)
+                .accessibilityLabel("\(model.viewersCount) spectateurs")
             closeButton(confirm: model.isHost)
         }
+    }
+
+    // Photo, nom et j'aime du live ; « Tu as envoyé N j'aime » quelques secondes après ses propres touchers.
+    private func hostPill(_ host: UserSummary) -> some View {
+        let follows = container.videoInteractions.isFollowing(host.id, loaded: model.followsHost)
+        let showsFollow = !model.isHost && !follows && container.session.profile?.id != host.id
+        return HStack(spacing: 8) {
+            Button {
+                isShowingHost = true
+            } label: {
+                HStack(spacing: 8) {
+                    AvatarView(url: host.avatarURL, name: host.displayName, size: 36)
+                    if model.showsMyLikes {
+                        Text("Tu as envoyé \(model.myLikes) j’aime")
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+                            .contentTransition(.numericText())
+                            .padding(.trailing, 10)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(host.displayName).font(.subheadline.bold()).lineLimit(1)
+                            Label(model.heartsTotal.formatted(.number.notation(.compactName)), systemImage: "heart.fill")
+                                .font(.caption2.weight(.semibold))
+                                .labelStyle(LivePillLabelStyle())
+                                .opacity(0.85)
+                        }
+                        .frame(maxWidth: 130, alignment: .leading)
+                        .padding(.trailing, showsFollow ? 0 : 12)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Auteur du live : \(host.displayName)")
+            .accessibilityIdentifier("live.host")
+            if showsFollow && !model.showsMyLikes {
+                Button {
+                    Task { _ = await container.videoInteractions.setFollowing(host, active: true, wasFollowing: false) }
+                } label: {
+                    Label("Suivre", systemImage: "plus")
+                        .font(.subheadline.bold())
+                        .labelStyle(LivePillLabelStyle())
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(Color.brandPink, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 3)
+                .accessibilityIdentifier("live.follow")
+            }
+        }
+        .padding(3)
+        .foregroundStyle(.white)
+        .background(model.showsMyLikes ? Color.brandPink : Color.black.opacity(0.35), in: Capsule())
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: model.showsMyLikes)
     }
 
     private func closeButton(confirm: Bool) -> some View {
@@ -231,9 +356,10 @@ struct LiveView: View {
             if confirm { isConfirmingEnd = true } else { dismiss() }
         }
         .labelStyle(.iconOnly)
-        .font(.title3.bold())
+        .font(.title2.weight(.semibold))
         .foregroundStyle(.white)
-        .frame(width: 44, height: 44)
+        .frame(width: 40, height: 40)
+        .shadow(radius: 2)
         .disabled(model.isEnding)
         .accessibilityIdentifier("live.close")
     }
@@ -265,109 +391,266 @@ struct LiveView: View {
     private var chat: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(model.messages) { message in
-                        LiveChatRow(message: message, isHost: message.user.id == model.live?.host.id)
-                            .contextMenu {
-                                Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
-                                if model.canDelete(message) {
-                                    Button("Supprimer", systemImage: "trash", role: .destructive) { Task { await model.delete(message) } }
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(model.entries) { entry in
+                        switch entry {
+                        case .message(let message):
+                            LiveChatRow(message: message, isHost: message.user.id == model.live?.host.id)
+                                .contextMenu {
+                                    Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                                    if model.canDelete(message) {
+                                        Button("Supprimer", systemImage: "trash", role: .destructive) { Task { await model.delete(message) } }
+                                    }
                                 }
-                            }
-                            .id(message.id)
+                                .id(entry.id)
+                        case .event(let event):
+                            LiveChatEventRow(event: event).id(entry.id)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
-            .frame(maxHeight: 220)
+            .frame(maxHeight: 260)
             .defaultScrollAnchor(.bottom)
             .mask(LinearGradient(colors: [.clear, .black, .black], startPoint: .top, endPoint: .init(x: 0.5, y: 0.25)))
-            .onChange(of: model.messages.last?.id) { _, id in
+            .onChange(of: model.entries.last?.id) { _, id in
                 if let id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } }
             }
         }
     }
 
-    // ─── Saisie et actions ───
+    // ─── Barre du bas et saisie ───
 
-    private var composer: some View {
-        HStack(spacing: 10) {
-            if container.session.isSignedIn {
-                TextField("Ajouter un commentaire…", text: Binding(get: { model.draft }, set: { model.draft = $0 }))
-                    .focused($isComposing)
-                    .submitLabel(.send)
-                    .onSubmit { Task { await model.send() } }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.white.opacity(0.18), in: Capsule())
-                    .foregroundStyle(.white)
-                    .accessibilityIdentifier("live.message")
-                if isComposing || !model.draft.isEmpty {
-                    Button("Envoyer", systemImage: "arrow.up.circle.fill") { Task { await model.send() } }
-                        .labelStyle(.iconOnly)
-                        .font(.title)
-                        .disabled(!model.canSend)
+    private var bottomBar: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button {
+                guard container.session.isSignedIn else { return container.session.requestSignIn() }
+                if let feedComposer { feedComposer.wrappedValue = true } else { showsComposer = true }
+            } label: {
+                HStack {
+                    Text("Commenter").foregroundStyle(.white.opacity(0.75))
+                    Spacer(minLength: 4)
+                    Image(systemName: "face.smiling").font(.title3).foregroundStyle(.white)
                 }
-            } else {
-                Button("Connecte-toi pour écrire") { container.session.requestSignIn() }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.white.opacity(0.18), in: Capsule())
-                    .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 42)
+                .background(.white.opacity(0.18), in: Capsule())
             }
-            if !isComposing {
-                actionButton("Partager", systemImage: "arrowshape.turn.up.right.fill") { isSharing = true }
-                if !model.isHost {
-                    actionButton("Cadeau", systemImage: "gift.fill") {
-                        if container.session.isSignedIn { isGiving = true } else { container.session.requestSignIn() }
-                    }
-                    Menu {
-                        Button("Signaler", systemImage: "flag") {
-                            guard let live = model.live else { return }
-                            if container.session.isSignedIn { reportTarget = .live(id: live.id) } else { container.session.requestSignIn() }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis").font(.title3).foregroundStyle(.white).frame(width: 36, height: 44)
-                    }
-                    .accessibilityLabel("Plus d’options")
-                    actionButton("Cœur", systemImage: "heart.fill", tint: .pink) { model.tapHeart() }
-                        .accessibilityIdentifier("live.heart")
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("live.comment")
+            if !model.isHost {
+                barButton(title: "Rose", emoji: "🌹") { Task { await model.sendRose() } }
+                    .disabled(model.isSendingRose)
+                    .accessibilityIdentifier("live.rose")
+                barButton(title: "Cadeau", emoji: "🎁") {
+                    if container.session.isSignedIn { isGiving = true } else { container.session.requestSignIn() }
                 }
+                .accessibilityIdentifier("live.gift")
             }
+            barButton(title: "Partager", systemImage: "arrowshape.turn.up.right") { isSharing = true }
+                .accessibilityIdentifier("live.share")
         }
     }
 
-    private func actionButton(_ title: String, systemImage: String, tint: Color = .white, action: @escaping () -> Void) -> some View {
-        Button(title, systemImage: systemImage, action: action)
-            .labelStyle(.iconOnly)
-            .font(.title2)
-            .foregroundStyle(tint)
-            .frame(width: 40, height: 44)
+    private func barButton(title: String, emoji: String? = nil, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Group {
+                    if let emoji {
+                        Text(emoji).font(.system(size: 26))
+                    } else if let systemImage {
+                        Image(systemName: systemImage).font(.system(size: 24, weight: .medium))
+                    }
+                }
+                .frame(height: 30)
+                Text(title).font(.caption2.weight(.medium)).lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .frame(minWidth: 44)
             .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(0.4), radius: 2)
+    }
+
+    private var composer: some View {
+        LiveComposer(model: model, isFocused: $isComposing)
     }
 }
 
-// Message du chat : pseudo en gras, puis le texte. L'auteur du live est marqué.
+// Saisie d'un commentaire, au-dessus du clavier, comme TikTok : champ gris sur fond blanc, flèche grise (rouge une fois
+// du texte écrit). Sous la barre, jusqu'en bas de l'écran, le gris du clavier : ses coins arrondis (iOS 26) ne laissent
+// voir ni le live ni de bord.
+// Focalisée à l'apparition ; le clavier fermé la retire (`isFocused` faux).
+struct LiveComposer: View {
+    // Fond du clavier système clair (relevé sur une capture).
+    static let keyboardGray = Color(red: 231 / 255, green: 232 / 255, blue: 236 / 255)
+
+    let model: LiveRoomModel
+    var isFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack {
+                TextField(
+                    "Commenter", text: Binding(get: { model.draft }, set: { model.draft = String($0.prefix(LiveRules.maxMessageLength)) }),
+                    axis: .vertical
+                )
+                .lineLimit(1...4)
+                .focused(isFocused)
+                .submitLabel(.send)
+                .onSubmit { Task { await model.send() } }
+                .accessibilityIdentifier("live.message")
+                Image(systemName: "face.smiling").font(.title3).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+            Button("Envoyer", systemImage: model.canSend ? "paperplane.fill" : "paperplane") { Task { await model.send() } }
+                .labelStyle(.iconOnly)
+                .font(.title2)
+                .foregroundStyle(model.canSend ? Color.brandPink : Color(.systemGray2))
+                .disabled(!model.canSend)
+                .accessibilityIdentifier("live.send")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            ZStack(alignment: .top) {
+                Self.keyboardGray.ignoresSafeArea(.all, edges: .bottom)
+                Color.white
+            }
+        }
+        .environment(\.colorScheme, .light)
+        .onAppear { isFocused.wrappedValue = true }
+    }
+}
+
+// Icône et texte serrés (pastille de l'auteur).
+private struct LivePillLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon
+            configuration.title
+        }
+    }
+}
+
+// En attendant l'image : photo floutée de l'auteur et les deux points rose et cyan (ADR-066).
+struct LiveLoadingView: View {
+    let host: UserSummary?
+
+    var body: some View {
+        ZStack {
+            Color.black
+            if let host {
+                AvatarView(url: host.avatarURL, name: host.displayName, size: 1100)
+                    .blur(radius: 50)
+                    .overlay(Color.black.opacity(0.3))
+            }
+            DotsLoader(size: 14)
+        }
+        .ignoresSafeArea()
+        .clipped()
+        .accessibilityElement()
+        .accessibilityLabel("Connexion au live…")
+    }
+}
+
+// Message du chat, comme TikTok : photo, pseudo en gris, texte dessous. L'auteur du live est marqué.
 private struct LiveChatRow: View {
     let message: LiveChatMessage
     let isHost: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            AvatarView(url: message.user.avatarURL, name: message.user.displayName, size: 24)
-            (Text(message.user.username).bold().foregroundStyle(.white.opacity(0.75))
-                + Text(isHost ? " · Créateur" : "").font(.caption2.bold()).foregroundStyle(.pink)
-                + Text("  ") + Text(message.content).foregroundStyle(.white))
-                .font(.subheadline)
-                .shadow(radius: 1)
+        HStack(alignment: .top, spacing: 10) {
+            AvatarView(url: message.user.avatarURL, name: message.user.displayName, size: 32)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(message.user.displayName).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                    if isHost {
+                        Text("Créateur")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.brandPink.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                            .foregroundStyle(.white)
+                    }
+                }
+                Text(message.content).font(.subheadline).foregroundStyle(.white)
+            }
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 8)
-        .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.5), radius: 2)
+    }
+}
+
+// Ligne d'événement du chat (ADR-066) : « Inès a rejoint », « a aimé le LIVE », « a partagé le LIVE ».
+private struct LiveChatEventRow: View {
+    let event: LiveChatEvent
+
+    private var symbol: String {
+        switch event.kind {
+        case .joined: "hand.wave.fill"
+        case .liked: "heart"
+        case .shared: "arrowshape.turn.up.right"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(.white.opacity(0.2), in: Circle())
+            (Text(event.user.displayName).foregroundStyle(.white.opacity(0.7)) + Text(" ") + Text(event.text).foregroundStyle(.white))
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+        }
+        .shadow(color: .black.opacity(0.5), radius: 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// Cœurs qui jaillissent à l'endroit touché (ADR-066).
+private struct LiveTapHeartsView: View {
+    let model: LiveRoomModel
+
+    var body: some View {
+        ZStack {
+            ForEach(model.tapHearts) { heart in
+                TapHeartView(heart: heart) { model.tapHeartFinished(heart) }
+                    .position(x: heart.x, y: heart.y)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct TapHeartView: View {
+    let heart: LiveRoomModel.TapHeart
+    let onFinish: () -> Void
+    @State private var popped = false
+    @State private var gone = false
+
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 76))
+            .foregroundStyle(.red.gradient)
+            .shadow(color: .black.opacity(0.25), radius: 6)
+            .rotationEffect(.degrees(heart.tilt))
+            .scaleEffect(gone ? 1.4 : popped ? 1 : 0.3)
+            .offset(y: gone ? -90 : 0)
+            .opacity(gone ? 0 : 1)
+            .onAppear {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.55)) { popped = true }
+                withAnimation(.easeIn(duration: 0.5).delay(0.45)) {
+                    gone = true
+                } completion: {
+                    onFinish()
+                }
+            }
     }
 }
 
@@ -379,7 +662,7 @@ private struct FloatingHeartsView: View {
         GeometryReader { geometry in
             ForEach(model.floatingHearts) { heart in
                 FloatingHeart(heart: heart, height: geometry.size.height * 0.45) { model.heartFinished(heart) }
-                    .position(x: geometry.size.width - 34, y: geometry.size.height - 90)
+                    .position(x: geometry.size.width - 34, y: geometry.size.height - 110)
             }
         }
     }
@@ -393,8 +676,8 @@ private struct FloatingHeart: View {
 
     var body: some View {
         Image(systemName: "heart.fill")
-            .font(.title)
-            .foregroundStyle(.pink)
+            .font(.largeTitle)
+            .foregroundStyle(.red)
             .offset(x: rising ? heart.drift : 0, y: rising ? -height : 0)
             .opacity(rising ? 0 : 1)
             .scaleEffect(rising ? 1.3 : 0.6)
@@ -422,7 +705,7 @@ struct LiveBadge: View {
     }
 }
 
-// Fin du live : chiffres pour son auteur, raison pour un spectateur.
+// Fin du live : chiffres pour son auteur (un spectateur voit le sondage, `LiveFeedbackView`).
 private struct LiveEndedView: View {
     let live: LiveStream?
     let reason: LiveEndReason?

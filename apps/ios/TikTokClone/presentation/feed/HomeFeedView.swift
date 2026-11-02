@@ -43,6 +43,20 @@ struct HomeFeedView: View {
         }
         .background(.black)
         .overlay(alignment: .top) { FeedSelector(selection: $selection) }
+        // Lives à faire défiler (ADR-066).
+        .overlay(alignment: .topLeading) {
+            Button {
+                container.router.openLiveFeed()
+            } label: {
+                LiveIcon()
+                    .frame(width: 44, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 8)
+            .accessibilityLabel("Lives")
+            .accessibilityIdentifier("feed.lives")
+        }
         // Recherche de comptes et hashtags (ADR-049).
         .overlay(alignment: .topTrailing) {
             Group {
@@ -184,5 +198,60 @@ private struct FeedSelector: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier(identifier)
         .animation(.snappy, value: isSelected)
+    }
+}
+
+// Icône « LIVE » de l'accueil (ADR-066), comme celle de TikTok : un cadre aux coins arrondis, ouvert sur les côtés
+// autour de « LIVE », et une antenne en V posée sur le bord du haut.
+struct LiveIcon: View {
+    private static let width: CGFloat = 30
+    private static let height: CGFloat = 24
+    private static let antenna: CGFloat = 6
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            LiveIconFrame()
+                .stroke(.white, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                .frame(width: Self.width, height: Self.height + Self.antenna)
+            Text("LIVE")
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .tracking(-0.2)
+                .foregroundStyle(.white)
+                .frame(width: Self.width + 4, height: Self.height)
+                .offset(y: Self.antenna)
+        }
+        .frame(width: Self.width + 4, height: Self.height + Self.antenna)
+        .shadow(color: .black.opacity(0.5), radius: 2)
+    }
+}
+
+// Tracé de l'icône « LIVE » : antenne en V, haut et bas du cadre avec des bouts de côtés (le texte occupe le milieu).
+private struct LiveIconFrame: Shape {
+    func path(in rect: CGRect) -> Path {
+        let antenna: CGFloat = 6
+        let radius: CGFloat = 5
+        let side: CGFloat = 4
+        let top = rect.minY + antenna
+        let bottom = rect.maxY
+        var path = Path()
+        // Antenne : deux traits qui se rejoignent sur le bord du haut.
+        path.move(to: CGPoint(x: rect.midX - 5, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: top))
+        path.addLine(to: CGPoint(x: rect.midX + 5, y: rect.minY))
+        // Haut du cadre.
+        path.move(to: CGPoint(x: rect.minX, y: top + radius + side))
+        path.addLine(to: CGPoint(x: rect.minX, y: top + radius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + radius, y: top), control: CGPoint(x: rect.minX, y: top))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: top))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: top + radius), control: CGPoint(x: rect.maxX, y: top))
+        path.addLine(to: CGPoint(x: rect.maxX, y: top + radius + side))
+        // Bas du cadre.
+        path.move(to: CGPoint(x: rect.minX, y: bottom - radius - side))
+        path.addLine(to: CGPoint(x: rect.minX, y: bottom - radius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + radius, y: bottom), control: CGPoint(x: rect.minX, y: bottom))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: bottom))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: bottom - radius), control: CGPoint(x: rect.maxX, y: bottom))
+        path.addLine(to: CGPoint(x: rect.maxX, y: bottom - radius - side))
+        return path
     }
 }

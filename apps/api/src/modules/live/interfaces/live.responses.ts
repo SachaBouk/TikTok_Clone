@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type {
+  DiscoverLivesDto,
   FollowingLivesDto,
   LiveChatMessageDto,
   LiveConnectionDto,
@@ -59,6 +60,9 @@ export class LiveResponse implements LiveItemDto {
   // Raison de la fin ; absente tant que le live est en cours (un enum nommé nullable produirait un `allOf`).
   @ApiPropertyOptional({ enum: LIVE_END_REASONS, enumName: 'LiveEndReason' })
   endReason?: LiveEndReason;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'J’aime (cœurs) reçus depuis le début du live, pour tous.' })
+  heartsCount!: number;
 
   @ApiProperty({ type: UserSummaryResponse })
   host!: UserSummaryResponse;
@@ -128,6 +132,14 @@ export class FollowingLivesResponse implements FollowingLivesDto {
   items!: LiveResponse[];
 }
 
+export class DiscoverLivesResponse implements DiscoverLivesDto {
+  @ApiProperty({
+    type: [LiveResponse],
+    description: 'Lives en cours (50 au plus) : comptes suivis d’abord, puis les plus regardés, puis les plus récents.',
+  })
+  items!: LiveResponse[];
+}
+
 // Mapping explicite (ADR-003), partagé par le controller et les événements de la salle.
 export function toLiveDto(live: Live): LiveDto {
   const dto: LiveDto = {
@@ -137,6 +149,7 @@ export function toLiveDto(live: Live): LiveDto {
     status: live.status,
     startedAt: live.startedAt.toISOString(),
     endedAt: live.endedAt?.toISOString() ?? null,
+    heartsCount: live.heartsCount,
   };
   if (live.endReason) dto.endReason = live.endReason;
   return dto;

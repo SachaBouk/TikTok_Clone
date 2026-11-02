@@ -86,6 +86,23 @@ struct RemoteLiveRepository: LiveRepository {
         }
     }
 
+    func discoverLives() async throws -> [LiveStream] {
+        switch try await mappingErrors({ try await client.listLives() }) {
+        case .ok(let ok): return try ok.body.json.items.map(LiveStream.init)
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func share(liveID: String) async throws {
+        switch try await mappingErrors({ try await client.shareLive(path: .init(id: liveID)) }) {
+        case .noContent: return
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .conflict(let error): throw AppError.rejected(try error.body.json.text)
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func userLive(username: String) async throws -> LiveStream? {
         switch try await mappingErrors({ try await client.getUserLive(path: .init(username: username)) }) {
         case .ok(let ok): return try ok.body.json.live.map(LiveStream.init)
@@ -110,7 +127,8 @@ extension LiveStream {
                 LiveStats(
                     durationSeconds: $0.durationSeconds, peakViewers: $0.peakViewers, viewersCount: $0.viewersCount, heartsCount: $0.heartsCount,
                     giftsCount: $0.giftsCount, giftsAmount: $0.giftsAmount)
-            }
+            },
+            heartsCount: dto.heartsCount
         )
     }
 }
@@ -168,6 +186,9 @@ extension LiveRoomEvent {
                 sender: UserSummary(event.data.sender), gift: GiftInfo(event.data.gift), amount: event.data.amount,
                 giftsCount: event.data.giftsCount, giftsAmount: event.data.giftsAmount)
         case .liveEnded(let event): self = .ended(LiveEndReason(event.data.reason))
+        case .viewerJoined(let event): self = .viewer(.joined, UserSummary(event.data.user))
+        case .viewerLiked(let event): self = .viewer(.liked, UserSummary(event.data.user))
+        case .liveShared(let event): self = .viewer(.shared, UserSummary(event.data.user))
         }
     }
 }

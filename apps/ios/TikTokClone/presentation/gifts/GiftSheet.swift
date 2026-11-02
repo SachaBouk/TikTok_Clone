@@ -1,6 +1,8 @@
 import SwiftUI
 
-// Feuille de cadeaux (ADR-050), ouverte par le bouton 🎁 du lecteur : solde, « Recharger », catalogue, « Envoyer ».
+// Feuille de cadeaux (ADR-050), ouverte par le bouton 🎁 du lecteur ou d'un live, façon TikTok (ADR-066) : fond sombre,
+// destinataire et solde en haut, catalogue sur 4 colonnes (cadeau choisi : « Envoyer » dans sa case, « Recharger »
+// sans assez de jetons), « Cadeaux » et « Recharger › » en bas.
 struct GiftSheet: View {
     @State private var viewModel: GiftSheetViewModel
     let container: AppContainer
@@ -14,36 +16,29 @@ struct GiftSheet: View {
         self.onSent = onSent
     }
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+    static let background = Color(red: 0.14, green: 0.14, blue: 0.14)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 4)
 
     var body: some View {
         NavigationStack {
-            // Défilant : en demi-hauteur, l'avertissement « Solde insuffisant » faisait remonter le solde contre le titre.
-            ScrollView {
-                VStack(spacing: 16) {
-                    balanceBar
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(.white.opacity(0.12))
+                ScrollView {
                     content
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 12)
                 }
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                bottomBar
             }
-            .safeAreaInset(edge: .bottom) {
-                sendButton
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-            }
-            .navigationTitle("Offrir un cadeau à @\(viewModel.target.recipient.username)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer", systemImage: "xmark") { dismiss() }
-                }
-            }
+            .background(Self.background)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $isShowingWallet) {
                 WalletView(source: .gift, container: container)
             }
         }
+        .environment(\.colorScheme, .dark)
+        .presentationBackground(Self.background)
         .task { await viewModel.load() }
         // Retour du paywall : le solde a peut-être changé.
         .onChange(of: viewModel.balance) {
@@ -59,22 +54,35 @@ struct GiftSheet: View {
         }
     }
 
-    private var balanceBar: some View {
-        HStack {
-            Label {
-                Text(viewModel.balance.map { "\($0.formatted()) jeton\($0 > 1 ? "s" : "")" } ?? "—")
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-            } icon: {
-                Image(systemName: "bitcoinsign.circle.fill").foregroundStyle(.yellow)
+    // Destinataire et solde ; × pour fermer.
+    private var header: some View {
+        let recipient = viewModel.target.recipient
+        return HStack(spacing: 10) {
+            AvatarView(url: recipient.avatarURL, name: recipient.displayName, size: 40)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Offrir un cadeau à \(recipient.displayName)").font(.subheadline.weight(.semibold)).lineLimit(1)
+                HStack(spacing: 4) {
+                    TokenCoin(size: 14)
+                    Text(viewModel.balance.map { "\($0.formatted()) jeton\($0 > 1 ? "s" : "")" } ?? "—")
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                }
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("gift.balance")
             }
-            .font(.headline)
-            .accessibilityIdentifier("gift.balance")
             Spacer()
-            Button("Recharger") { isShowingWallet = true }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("gift.topUp")
+            Button("Fermer", systemImage: "xmark") { dismiss() }
+                .labelStyle(.iconOnly)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 36, height: 36)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        .foregroundStyle(.white)
     }
 
     @ViewBuilder
@@ -91,52 +99,58 @@ struct GiftSheet: View {
                 Button("Réessayer") { Task { await viewModel.load() } }
             }
         case .loaded:
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(viewModel.catalog) { item in
                     giftCell(item)
                 }
             }
-            if viewModel.needsTopUp {
-                Label("Solde insuffisant pour ce cadeau.", systemImage: "exclamationmark.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.orange)
-                    .accessibilityIdentifier("gift.insufficient")
-            }
         }
     }
 
+    // Case d'un cadeau : emoji, nom, prix ; choisie, fond plus sombre et « Envoyer » (ou « Recharger ») à la place du nom.
     private func giftCell(_ item: GiftCatalogItem) -> some View {
         let isSelected = viewModel.selected == item
-        return Button {
-            viewModel.select(item)
-        } label: {
-            VStack(spacing: 6) {
-                Text(item.info.emoji).font(.system(size: 40))
-                Text(item.info.name).font(.subheadline.weight(.semibold))
-                Text(item.priceLabel).font(.caption).foregroundStyle(.secondary)
+        return VStack(spacing: 4) {
+            Button {
+                viewModel.select(item)
+            } label: {
+                VStack(spacing: 4) {
+                    Text(item.info.emoji).font(.system(size: 50)).frame(height: 62)
+                    if !isSelected {
+                        Text(item.info.name).font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                    }
+                    HStack(spacing: 3) {
+                        TokenCoin(size: 13)
+                        Text("\(item.price)").font(.subheadline).foregroundStyle(.white.opacity(0.75))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .padding(.bottom, isSelected ? 4 : 8)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2))
-            .opacity(viewModel.isAffordable(item) ? 1 : 0.5)
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(item.info.name), \(item.priceLabel)")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityIdentifier("gift.item.\(item.info.code)")
+            if isSelected { sendButton }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(item.info.name), \(item.priceLabel)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityIdentifier("gift.item.\(item.info.code)")
+        .background(isSelected ? Color.black.opacity(0.35) : .clear, in: RoundedRectangle(cornerRadius: 10))
     }
 
+    // « Envoyer » dans la case choisie ; « Recharger » si le solde ne suffit pas.
     @ViewBuilder
     private var sendButton: some View {
         if viewModel.needsTopUp {
             Button {
                 isShowingWallet = true
             } label: {
-                Label("Recharger des jetons", systemImage: "plus.circle.fill").frame(maxWidth: .infinity)
+                Text("Recharger").font(.subheadline.bold()).frame(maxWidth: .infinity).frame(height: 34)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(Color.brandPink, in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityIdentifier("gift.insufficient")
         } else {
             Button {
                 Task {
@@ -147,19 +161,42 @@ struct GiftSheet: View {
                 }
             } label: {
                 Group {
-                    if viewModel.isSending {
-                        ProgressView()
-                    } else {
-                        Text(viewModel.selected.map { "Envoyer \($0.info.label) · \($0.priceLabel)" } ?? "Choisis un cadeau")
-                    }
+                    if viewModel.isSending { ProgressView().tint(.white) } else { Text("Envoyer").font(.subheadline.bold()) }
                 }
                 .frame(maxWidth: .infinity)
+                .frame(height: 34)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(Color.brandPink, in: RoundedRectangle(cornerRadius: 8))
             .disabled(!viewModel.canSend)
             .accessibilityIdentifier("gift.send")
         }
+    }
+
+    // « Cadeaux » à gauche, « Recharger › » à droite, comme TikTok.
+    private var bottomBar: some View {
+        HStack {
+            Text("Cadeaux").font(.title3.weight(.semibold)).foregroundStyle(.white)
+            Spacer()
+            Button {
+                isShowingWallet = true
+            } label: {
+                HStack(spacing: 8) {
+                    TokenCoin(size: 22)
+                    Text("Recharger").font(.title3.weight(.medium))
+                    Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 46)
+                .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("gift.topUp")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }
 

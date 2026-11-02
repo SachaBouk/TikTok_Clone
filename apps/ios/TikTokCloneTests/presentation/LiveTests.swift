@@ -359,7 +359,7 @@ struct LiveRoomTests {
 struct LiveDataTests {
     static let live = """
         {"id":"0192f3a0-0000-7000-8000-000000000042","userId":"0192f3a0-0000-7000-8000-000000000002",\
-        "title":"Mon live","status":"live","startedAt":"2026-10-09T10:00:00.000Z","endedAt":null,\
+        "title":"Mon live","status":"live","startedAt":"2026-10-09T10:00:00.000Z","endedAt":null,"heartsCount":12,\
         "host":{"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null}}
         """
 
@@ -374,6 +374,7 @@ struct LiveDataTests {
         #expect(connection.role == .viewer)
         #expect(connection.live.title == "Mon live")
         #expect(connection.live.isLive)
+        #expect(connection.live.heartsCount == 12)
         #expect(connection.url.absoluteString == "ws://localhost:7880")
 
         let missing = RemoteLiveRepository(client: makeClient(transport: MockTransport { _, _ in json(.notFound, errorJSON(404, "x")) }))
@@ -420,5 +421,176 @@ struct LiveDataTests {
         #expect(chat.content == "Salut")
         #expect(LiveRoomEvent(data: Data(#"{"event":"inconnu","data":{}}"#.utf8)) == nil)
         #expect(LiveRoomEvent(data: Data("pas du json".utf8)) == nil)
+    }
+}
+
+@MainActor
+@Suite("Live façon TikTok : lives à faire défiler, j'aime au toucher, Rose, lignes d'événement, sondage (ADR-066)")
+struct LiveTikTokTests {
+    let repository = FakeLiveRepository()
+    let gifts = FakeGiftRepository()
+    let relationships = FakeRelationshipRepository()
+    let analyticsService = FakeAnalyticsService()
+
+    func makeSession(signedIn: Bool = true) async -> SessionStore {
+        let session = TikTokCloneTests.makeSession(auth: FakeAuthRepository(hasSession: signedIn))
+        await session.restore()
+        return session
+    }
+
+    func makeModel(
+        session: SessionStore, preview: LiveStream? = nil, hidden: Set<String> = [], onGiftSent: @escaping @MainActor (Int) -> Void = { _ in }
+    ) -> LiveRoomModel {
+        LiveRoomModel(
+            mode: .viewer(liveID: "live-1", source: .discover), room: FakeLiveRoom(), startLive: StartLiveUseCase(lives: repository),
+            joinLive: JoinLiveUseCase(lives: repository), loadLive: LoadLiveUseCase(lives: repository), endLive: EndLiveUseCase(lives: repository),
+            sendMessage: SendLiveMessageUseCase(lives: repository), deleteMessage: DeleteLiveMessageUseCase(lives: repository),
+            sendHearts: SendLiveHeartsUseCase(lives: repository),
+            lives: LiveModel(
+                loadFollowing: LoadFollowingLivesUseCase(lives: repository), loadUserLive: LoadUserLiveUseCase(lives: repository), session: session),
+            session: session, analytics: makeAnalytics(analyticsService), hiddenUserIDs: { hidden }, sendGift: SendGiftUseCase(gifts: gifts),
+            recordShare: RecordLiveShareUseCase(lives: repository), loadRelationship: LoadRelationshipUseCase(relationships: relationships),
+            onGiftSent: onGiftSent, preview: preview, sleep: { _ in })
+    }
+
+    @Test("lignes d'événement : une par compte et par sorte, dans l'ordre avec les messages, masquées pour un compte bloqué")
+    func chatEvents() {
+        var chat = LiveChat([.sample("m1")])
+        chat.append(LiveChatEvent(kind: .joined, user: .alice))
+        chat.append(LiveChatEvent(kind: .joined, user: .alice))
+        chat.append(LiveChatEvent(kind: .liked, user: .alice))
+        #expect(chat.entries.map(\.id) == ["message-m1", "event-joined-\(UserSummary.alice.id)", "event-liked-\(UserSummary.alice.id)"])
+        #expect(chat.messages.map(\.id) == ["m1"])
+        #expect(chat.hiding([UserSummary.alice.id]).map(\.id) == ["message-m1"])
+        #expect(LiveChatEvent(kind: .shared, user: .alice).text == "a partagé le LIVE")
+    }
+
+    @Test("pendant la connexion, l'auteur du live déjà connu ; « a rejoint » reçu de la salle ajouté au chat")
+    func previewAndEvents() async {
+        let live = LiveStream.sample(host: .alice)
+        repository.state.withLock { $0.connection = .sample(live) }
+        let model = makeModel(session: await makeSession(), preview: live)
+        #expect(model.phase == .connecting)
+        #expect(model.live?.host == .alice)
+        await model.start()
+        model.apply(.event(.viewer(.joined, .bob)))
+        model.apply(.event(.viewer(.joined, .bob)))
+        #expect(model.entries == [.event(LiveChatEvent(kind: .joined, user: .bob))])
+        #expect(analyticsService.events.contains(.liveViewed(source: .discover)))
+    }
+
+    @Test("j'aime en touchant l'écran : un cœur à l'endroit touché, compte des siens, envoyés par lot ; invité : connexion")
+    func tapLikes() async {
+        repository.state.withLock { $0.connection = .sample() }
+        let model = makeModel(session: await makeSession())
+        await model.start()
+        model.like(x: 100, y: 200)
+        model.like(x: 120, y: 240)
+        #expect(model.tapHearts.map(\.x) == [100, 120])
+        #expect(model.myLikes == 2)
+        await model.waitForHearts()
+        #expect(repository.hearts == [2])
+        #expect(analyticsService.events.contains(.liveLiked(count: 2)))
+        model.tapHeartFinished(model.tapHearts[0])
+        #expect(model.tapHearts.count == 1)
+
+        let guestSession = await makeSession(signedIn: false)
+        let guest = makeModel(session: guestSession)
+        await guest.start()
+        guest.like(x: 10, y: 10)
+        #expect(guestSession.isPresentingSignIn)
+        #expect(guest.tapHearts.isEmpty)
+        #expect(guest.myLikes == 0)
+    }
+
+    @Test("Rose en un toucher : solde mis à jour ; solde insuffisant : la feuille des cadeaux ; coupure : même identifiant d'envoi")
+    func rose() async {
+        repository.state.withLock { $0.connection = .sample() }
+        var balance: Int?
+        let model = makeModel(session: await makeSession(), onGiftSent: { balance = $0 })
+        await model.start()
+        gifts.enqueue(.success(SentGift(id: "g1", gift: GiftInfo(code: "rose", name: "Rose", emoji: "🌹"), amount: 1, balance: 9)))
+        await model.sendRose()
+        #expect(balance == 9)
+        #expect(gifts.sent.map(\.video) == ["live:live-1"])
+        #expect(gifts.sent.map(\.code) == ["rose"])
+        #expect(analyticsService.events.contains(.liveRoseSent))
+
+        gifts.enqueue(.failure(.network))
+        gifts.enqueue(.failure(.insufficientBalance))
+        await model.sendRose()
+        await model.sendRose()
+        #expect(gifts.sent[1].id == gifts.sent[2].id)
+        #expect(gifts.sent[0].id != gifts.sent[1].id)
+        #expect(model.needsRecharge)
+    }
+
+    @Test("partage annoncé ; relation avec l'auteur relue ; sondage envoyé une fois à la mesure d'audience")
+    func shareFollowFeedback() async {
+        repository.state.withLock { $0.connection = .sample(.sample(host: .alice)) }
+        relationships.state.withLock {
+            $0.relationships[UserSummary.alice.username] = Relationship(following: true, followedBy: false, blockedByMe: false)
+        }
+        let model = makeModel(session: await makeSession())
+        await model.start()
+        #expect(model.followsHost)
+        await model.shared()
+        #expect(repository.state.withLock { $0.shared } == ["live-1"])
+
+        model.submitFeedback()
+        #expect(!model.feedbackSent)
+        model.feedback = .positive
+        model.submitFeedback()
+        model.submitFeedback()
+        #expect(model.feedbackSent)
+        #expect(analyticsService.eventNames.filter { $0 == "live_feedback" }.count == 1)
+    }
+
+    @Test("lives à faire défiler : lus à l'ouverture, le premier affiché, vides ou en échec")
+    func feed() async {
+        repository.state.withLock { $0.discover = [.sample("l1"), .sample("l2", host: .alice)] }
+        let model = LiveFeedModel(load: LoadDiscoverLivesUseCase(lives: repository))
+        await model.start()
+        #expect(model.state == .loaded)
+        #expect(model.currentID == "l1")
+        #expect(model.hasNext(after: "l1"))
+        #expect(!model.hasNext(after: "l2"))
+
+        repository.state.withLock { $0.discover = [] }
+        await model.start()
+        #expect(model.state == .empty)
+        repository.state.withLock { $0.discoverError = .network }
+        await model.start()
+        #expect(model.state == .failed(AppError.network.message))
+    }
+
+    @Test("icône « LIVE » : les lives à faire défiler s'ouvrent par-dessus tout")
+    func router() {
+        let router = AppRouter()
+        router.openLiveFeed()
+        #expect(router.presentedLive?.content == .discover)
+        #expect(router.presentedLive?.mode == nil)
+    }
+
+    @Test("lives à faire défiler et partage : mapping des réponses")
+    func discoverAndShare() async throws {
+        let repository = RemoteLiveRepository(
+            client: makeClient(
+                transport: MockTransport { request, _ in
+                    request.path == "/lives" ? json(.ok, #"{"items":[\#(LiveDataTests.live)]}"#) : (HTTPResponse(status: .noContent), nil)
+                }))
+        let lives = try await repository.discoverLives()
+        #expect(lives.map(\.title) == ["Mon live"])
+        #expect(lives.first?.heartsCount == 12)
+        try await repository.share(liveID: "0192f3a0-0000-7000-8000-000000000042")
+    }
+
+    @Test("lignes d'événement décodées depuis la salle")
+    func decoding() {
+        let user = #"{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null}"#
+        let alice = UserSummary(id: "u1", username: "alice", displayName: "Alice", avatarURL: nil)
+        #expect(LiveRoomEvent(data: Data(#"{"event":"viewerJoined","data":{"user":\#(user)}}"#.utf8)) == .viewer(.joined, alice))
+        #expect(LiveRoomEvent(data: Data(#"{"event":"viewerLiked","data":{"user":\#(user)}}"#.utf8)) == .viewer(.liked, alice))
+        #expect(LiveRoomEvent(data: Data(#"{"event":"liveShared","data":{"user":\#(user)}}"#.utf8)) == .viewer(.shared, alice))
     }
 }

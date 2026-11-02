@@ -275,10 +275,11 @@ final class AppContainer {
     }
 
     // Écran d'un live (ADR-053) : sa salle LiveKit (une par ouverture) et son modèle.
-    func makeLiveRoom(_ route: AppRouter.LiveRoute) -> LiveRoomSetup {
+    // `preview` : live déjà connu (lives à faire défiler), affiché pendant la connexion.
+    func makeLiveRoom(mode: LiveRoomModel.Mode, preview: LiveStream? = nil) -> LiveRoomSetup {
         let room = LiveKitRoom()
         let model = LiveRoomModel(
-            mode: route.mode,
+            mode: mode,
             room: room,
             startLive: StartLiveUseCase(lives: liveRepository),
             joinLive: JoinLiveUseCase(lives: liveRepository),
@@ -290,9 +291,26 @@ final class AppContainer {
             lives: lives,
             session: session,
             analytics: analytics,
-            hiddenUserIDs: { [videoInteractions] in videoInteractions.blockedUserIDs }
+            hiddenUserIDs: { [videoInteractions] in videoInteractions.blockedUserIDs },
+            sendGift: SendGiftUseCase(gifts: gifts),
+            recordShare: RecordLiveShareUseCase(lives: liveRepository),
+            loadRelationship: LoadRelationshipUseCase(relationships: relationships),
+            onGiftSent: { [wallet] balance in wallet.giftSent(balance: balance) },
+            preview: preview
         )
         return LiveRoomSetup(model: model, room: room)
+    }
+
+    // Lives à faire défiler (icône « LIVE » de l'accueil, ADR-066).
+    func makeLiveFeedModel() -> LiveFeedModel {
+        LiveFeedModel(load: LoadDiscoverLivesUseCase(lives: liveRepository))
+    }
+
+    // Fiche de l'auteur d'un live (ADR-066) : profil public et relation.
+    func makeLiveHostModel(username: String) -> LiveHostModel {
+        LiveHostModel(
+            username: username, loadProfile: LoadProfileUseCase(profiles: profiles),
+            loadRelationship: LoadRelationshipUseCase(relationships: relationships), session: session)
     }
 
     // Historique des mouvements de jetons (paywall).
