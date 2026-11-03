@@ -13,7 +13,8 @@ export interface FfmpegOptions {
 }
 
 export interface MediaInfo {
-  // Dimensions affichées : rotation des métadonnées déjà appliquée (vidéos d'iPhone).
+  // Dimensions affichées : rotation des métadonnées déjà appliquée (vidéos d'iPhone), pixels non carrés corrigés
+  // (vidéo anamorphique).
   width: number;
   height: number;
   durationSeconds: number;
@@ -81,13 +82,22 @@ export async function probe(file: string, options: FfmpegOptions): Promise<Media
   // Rotation : matrice d'affichage (FFmpeg récent) ou ancien tag `rotate`.
   const rotation = Number(video.side_data_list?.find((d) => d.rotation !== undefined)?.rotation ?? video.tags?.rotate ?? 0);
   const quarterTurn = Math.abs(rotation) % 180 === 90;
+  // Pixels non carrés (vidéo anamorphique, par exemple sortie de HandBrake : 1920×1080 avec des pixels 9:16, affichée
+  // en 1080×1080) : la largeur affichée suit la forme des pixels. Sinon le HLS, à pixels carrés, était étiré.
+  const width = Math.round(video.width * pixelAspectRatio(video.sample_aspect_ratio));
   return {
-    width: quarterTurn ? video.height : video.width,
-    height: quarterTurn ? video.width : video.height,
+    width: quarterTurn ? video.height : width,
+    height: quarterTurn ? width : video.height,
     durationSeconds: duration,
     hasAudio: streams.some((s) => s.codec_type === 'audio'),
     hdr: HDR_TRANSFERS.has(video.color_transfer ?? ''),
   };
+}
+
+// Forme des pixels (`sample_aspect_ratio` de ffprobe, « 9:16 ») ; absente, nulle ou illisible : pixels carrés.
+export function pixelAspectRatio(sar: string | undefined): number {
+  const [num, den] = (sar ?? '').split(':').map(Number);
+  return num > 0 && den > 0 ? num / den : 1;
 }
 
 // Transcode en HLS multi-résolutions, en une seule passe de décodage :
@@ -156,9 +166,12 @@ export async function transcodeToHls(input: string, outDir: string, renditions: 
 export async function createThumbnail(input: string, output: string, media: MediaInfo, options: FfmpegOptions) {
   const at = Math.min(1, media.durationSeconds / 2);
   const portrait = media.height >= media.width;
-  const shortSide = Math.min(THUMBNAIL_SHORT_SIDE, media.width, media.height);
-  // -2 : l'autre côté suit le format, arrondi à un nombre pair.
-  const scale = portrait ? `scale=${shortSide}:-2` : `scale=-2:${shortSide}`;
+  const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
+  const shortSide = even(Math.min(THUMBNAIL_SHORT_SIDE, media.width, media.height));
+  // Dimensions explicites, d'après les dimensions affichées (et non `-2`, qui suivrait la taille enregistrée et
+  // étirerait une vidéo anamorphique) ; pixels carrés en sortie.
+  const longSide = even((shortSide * Math.max(media.width, media.height)) / Math.min(media.width, media.height));
+  const scale = portrait ? `scale=${shortSide}:${longSide},setsar=1` : `scale=${longSide}:${shortSide},setsar=1`;
   // Vidéo HDR : même tone mapping que le HLS, pour que la miniature ait les mêmes couleurs.
   const filter = toneMapped(media, options) ? `${TONE_MAPPING_FILTER},${scale}` : scale;
   await run(
@@ -241,6 +254,7 @@ interface FfprobeOutput {
     width?: number;
     height?: number;
     duration?: string;
+    sample_aspect_ratio?: string;
     color_transfer?: string;
     disposition?: { attached_pic?: number };
     tags?: { rotate?: string };

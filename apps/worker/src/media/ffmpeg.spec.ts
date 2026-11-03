@@ -9,6 +9,7 @@ import {
   createThumbnail,
   extractSound,
   InvalidMediaError,
+  pixelAspectRatio,
   probe,
   supportsToneMapping,
   transcodeToHls,
@@ -27,6 +28,8 @@ let dir: string;
 // Comme un iPhone : image enregistrée en 1280×720 avec une rotation de 90° dans les métadonnées → affichée en 720×1280.
 let iphoneLike: string;
 let landscapeNoAudio: string;
+// Vidéo anamorphique, comme une sortie de HandBrake : 640×360 enregistrée avec des pixels 9:16 → affichée 360×360.
+let anamorphic: string;
 let corrupted: string;
 // HDR (ADR-047) : la même mire SDR, convertie en BT.2020 10 bits, blanc à 203 nits (BT.2408, comme un iPhone), en PQ et en
 // HLG. Un bon tone mapping doit rendre des couleurs proches de la mire d'origine.
@@ -95,6 +98,22 @@ beforeAll(() => {
   ffmpeg('-display_rotation:v:0', '90', '-i', raw, '-c', 'copy', iphoneLike);
   landscapeNoAudio = join(dir, 'landscape.mp4');
   ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-t', '3', '-c:v', 'libx264', '-preset', 'ultrafast', landscapeNoAudio);
+  anamorphic = join(dir, 'anamorphic.mp4');
+  ffmpeg(
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=640x360:rate=30',
+    '-t',
+    '3',
+    '-vf',
+    'setsar=9/16',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'ultrafast',
+    anamorphic,
+  );
   corrupted = join(dir, 'corrupted.mp4');
   writeFileSync(corrupted, Buffer.alloc(4096, 42));
 
@@ -129,6 +148,15 @@ describe('probe', () => {
     const info = await probe(iphoneLike, options);
     expect(info).toMatchObject({ width: 720, height: 1280, hasAudio: true });
     expect(info.durationSeconds).toBeCloseTo(5, 0);
+  });
+
+  it('corrige les pixels non carrés (vidéo anamorphique) : dimensions affichées', async () => {
+    await expect(probe(anamorphic, options)).resolves.toMatchObject({ width: 360, height: 360 });
+    expect(pixelAspectRatio('9:16')).toBe(0.5625);
+    expect(pixelAspectRatio('1:1')).toBe(1);
+    expect(pixelAspectRatio('0:1')).toBe(1);
+    expect(pixelAspectRatio('N/A')).toBe(1);
+    expect(pixelAspectRatio(undefined)).toBe(1);
   });
 
   it('détecte une vidéo sans piste audio', async () => {
@@ -229,6 +257,34 @@ describe('transcodeToHls', () => {
     expect(master.match(/RESOLUTION=\d+x\d+/g)).toEqual(['RESOLUTION=640x360']);
     expect(master).not.toContain('mp4a');
     expect(readdirSync(join(out, '360p')).filter((f) => f.endsWith('.ts')).length).toBeGreaterThan(0);
+  });
+});
+
+describe('vidéo anamorphique', () => {
+  it('HLS et miniature à pixels carrés, au format affiché (pas étirés)', async () => {
+    const out = join(dir, 'hls-anamorphic');
+    const media = await probe(anamorphic, options);
+    await transcodeToHls(anamorphic, out, renditionsFor(media), media, options);
+    expect(readFileSync(join(out, 'master.m3u8'), 'utf8').match(/RESOLUTION=\d+x\d+/g)).toEqual(['RESOLUTION=360x360']);
+    const segment = JSON.parse(
+      execFileSync('ffprobe', [
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_entries',
+        'stream=width,height,sample_aspect_ratio',
+        '-of',
+        'json',
+        join(out, '360p', 'seg_000.ts'),
+      ]).toString(),
+    ) as { streams: { width: number; height: number; sample_aspect_ratio?: string }[] };
+    expect(segment.streams[0]).toMatchObject({ width: 360, height: 360, sample_aspect_ratio: '1:1' });
+
+    const thumbnail = join(dir, 'anamorphic.jpg');
+    await createThumbnail(anamorphic, thumbnail, media, options);
+    const image = ffprobeJson(thumbnail).streams[0];
+    expect(`${image.width}x${image.height}`).toBe('360x360');
   });
 });
 
