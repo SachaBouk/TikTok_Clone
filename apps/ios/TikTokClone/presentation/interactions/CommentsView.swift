@@ -19,9 +19,17 @@ struct CommentsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isLandscapePlayer) private var isLandscapePlayer
 
-    init(viewModel: CommentsViewModel, container: AppContainer) {
+    // Fermeture du panneau des commentaires du lecteur plein écran ; nil : la feuille se ferme.
+    private let onClose: (() -> Void)?
+
+    init(viewModel: CommentsViewModel, container: AppContainer, onClose: (() -> Void)? = nil) {
         _viewModel = State(initialValue: viewModel)
         self.container = container
+        self.onClose = onClose
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     // Dans le lecteur plein écran en paysage, la connexion passe par la session : le plein écran se ferme et elle
@@ -43,7 +51,7 @@ struct CommentsView: View {
                         Text(title).font(.subheadline.weight(.semibold))
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Fermer", systemImage: "xmark") { dismiss() }
+                        Button("Fermer", systemImage: "xmark") { close() }
                             .accessibilityIdentifier("comments.close")
                     }
                 }
@@ -61,7 +69,7 @@ struct CommentsView: View {
         // Blocage de l'auteur de la vidéo : la feuille se ferme (la vidéo quitte les écrans) ; d'un autre compte :
         // ses commentaires disparaissent.
         .onChange(of: container.videoInteractions.blockedUserIDs) { _, ids in
-            if ids.contains(viewModel.video.author.id) { dismiss() } else { viewModel.removeComments(byAuthors: ids) }
+            if ids.contains(viewModel.video.author.id) { close() } else { viewModel.removeComments(byAuthors: ids) }
         }
         .sheet(isPresented: $isPresentingSignIn) {
             AuthFlowView(container: container)

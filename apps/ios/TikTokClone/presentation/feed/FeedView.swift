@@ -912,7 +912,13 @@ struct PlayerLayerView: UIViewRepresentable {
         // Le lecteur bouclé (`AVPlayerLooper`) change d'élément à chaque tour : la taille est relue sur chacun.
         func attach(_ player: AVPlayer?) {
             playerLayer.player = player
-            videoSize = .zero
+            // Lecteur déjà prêt (vidéo voisine préchargée) : sa taille est connue tout de suite, la vidéo arrive cadrée
+            // (sinon elle remplissait l'écran le temps d'une image, puis se resserrait).
+            videoSize = player?.currentItem?.presentationSize ?? .zero
+            if videoSize != .zero {
+                let size = videoSize
+                Task { @MainActor in self.onVideoSize?(size) }
+            }
             sizeObservation = nil
             itemObservation = player?.observe(\.currentItem, options: [.initial, .new]) { [weak self] _, _ in
                 Task { @MainActor in self?.observeCurrentItemSize() }
@@ -934,7 +940,12 @@ struct PlayerLayerView: UIViewRepresentable {
         func applyGravity() {
             let fills = adaptsToVideo ? VideoFraming.fills(width: videoSize.width, height: videoSize.height) : prefersFill
             let gravity: AVLayerVideoGravity = fills ? .resizeAspectFill : .resizeAspect
-            if playerLayer.videoGravity != gravity { playerLayer.videoGravity = gravity }
+            guard playerLayer.videoGravity != gravity else { return }
+            // Sans animation : la couche animerait le changement, et la vidéo paraîtrait étirée le temps de la transition.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.videoGravity = gravity
+            CATransaction.commit()
         }
 
         override init(frame: CGRect) {

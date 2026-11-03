@@ -34,29 +34,29 @@ struct LandscapePlayerView: View {
     @State private var activity = 0
     @State private var scrubbing = false
     @State private var expanded = false
-    @State private var commentsVideo: FeedVideo?
+    // Panneau des commentaires à droite, comme TikTok en plein écran (la vidéo se range à gauche).
+    @State private var comments: CommentsViewModel?
     @State private var shareVideo: FeedVideo?
     @State private var reportedVideo: FeedVideo?
     @State private var menuVideo: FeedVideo?
     @State private var alertMessage: String?
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            PlayerLayerView(player: player, fills: false)
-                .ignoresSafeArea()
-                .accessibilityIdentifier("landscape.video")
-            // Toucher la vidéo : commandes affichées ou masquées.
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture { setControls(!controlsShown) }
-            if controlsShown {
-                controls.transition(.opacity)
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                videoArea
+                if let comments {
+                    CommentsView(viewModel: comments, container: container, onClose: closeComments)
+                        .environment(\.colorScheme, .light)
+                        .frame(width: geometry.size.width * Self.commentsWidthRatio)
+                        .background(Color.white.ignoresSafeArea())
+                        .transition(.move(edge: .trailing))
+                        .accessibilityIdentifier("landscape.commentsPanel")
+                }
             }
-            // Téléchargement lancé du menu (ADR-067) : sa progression, par-dessus le plein écran.
-            VideoDownloadOverlay(model: container.downloads)
         }
+        .background(Color.black.ignoresSafeArea())
+        .animation(.easeInOut(duration: 0.25), value: comments == nil)
         .animation(.easeInOut(duration: 0.2), value: controlsShown)
         .statusBarHidden(!controlsShown)
         .persistentSystemOverlays(.hidden)
@@ -74,11 +74,48 @@ struct LandscapePlayerView: View {
             if removed { actions.close() }
         }
         .videoInteractionSheets(
-            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, menu: $menuVideo,
+            comments: .constant(nil), share: $shareVideo, report: $reportedVideo, alert: $alertMessage, menu: $menuVideo,
             interactions: interactions, container: container
         )
         .environment(\.isLandscapePlayer, true)
         .preferredColorScheme(.dark)
+    }
+
+    // Part de la largeur prise par le panneau des commentaires.
+    static let commentsWidthRatio = 0.42
+
+    // Vidéo, toucher (commandes, ou fermeture du panneau des commentaires) et commandes.
+    private var videoArea: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            PlayerLayerView(player: player, fills: false)
+                .ignoresSafeArea(edges: comments == nil ? .all : .vertical)
+                .accessibilityIdentifier("landscape.video")
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture {
+                    if comments != nil { closeComments() } else { setControls(!controlsShown) }
+                }
+            // Panneau ouvert : seule la vidéo reste, comme TikTok.
+            if controlsShown && comments == nil {
+                controls.transition(.opacity)
+            }
+            // Téléchargement lancé du menu (ADR-067) : sa progression, par-dessus le plein écran.
+            VideoDownloadOverlay(model: container.downloads)
+        }
+    }
+
+    private func openComments() {
+        let shown = video
+        comments = container.makeCommentsViewModel(video: shown) { delta in
+            interactions.commentsChanged(on: shown, by: delta)
+        }
+    }
+
+    private func closeComments() {
+        comments = nil
+        setControls(true)
     }
 
     private func react(_ kind: ReactionKind) {
@@ -219,7 +256,7 @@ struct LandscapePlayerView: View {
                     identifier: "landscape.like"
                 ) { react(.like) }
                 counter("ellipsis.bubble.fill", count: video.stats.comments, tint: .white, label: "Commentaires", identifier: "landscape.comments") {
-                    commentsVideo = video
+                    openComments()
                 }
                 counter(
                     "bookmark.fill", count: video.stats.favorites, tint: video.viewer?.favorited == true ? .yellow : .white,
