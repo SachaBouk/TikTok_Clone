@@ -31,54 +31,13 @@ struct VideoDetailView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            GeometryReader { geometry in
-                content(bottomInset: geometry.safeAreaInsets.bottom)
-                    .ignoresSafeArea()
-            }
-            .background(.black)
-            // Balayage vers la gauche : profil de l'auteur, poussé dans la pile de la vidéo seule.
-            .authorProfileSwipe(author: swipeAuthor, container: container) { path.append(ProfileRoute(username: $0.username)) }
-            // Vitesse ×2 : bandeau en bas pendant l'appui, message du verrouillage en haut.
-            .overlay { FastPlaybackBottomBar(model: container.playbackOptions) }
-            .overlay { VideoDownloadOverlay(model: container.downloads) }
-            .overlay(alignment: .top) {
-                FastPlaybackNoticeView(model: container.playbackOptions).padding(.top, 12)
-            }
-            .toolbar {
-                // Masqué pendant l'appui long de la vitesse ×2.
-                if !container.playbackOptions.isHolding && !container.playbackOptions.isClearMode && !container.router.isSwipingToProfile {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Fermer", systemImage: "xmark") { dismiss() }
-                            .accessibilityIdentifier("video.close")
-                    }
-                }
-            }
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .onAppear { viewModel.resume() }
-            .onDisappear {
-                viewModel.stop()
-                // Affichage allégé (ADR-067) : quitté avec la vidéo seule.
-                container.playbackOptions.setClearMode(false)
-            }
-            // Profils ouverts depuis la vidéo, dans la même pile.
-            .appDestinations(container)
+            stackRoot
+                // Profils ouverts depuis la vidéo, dans la même pile.
+                .appDestinations(container)
         }
         .providesNavigationPath($path)
         .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
-        .landscapePlayer(video: $fullScreenVideo) { video, close in
-            LandscapePlayerView(
-                loadedVideo: video,
-                player: pool.player(for: video.id),
-                isPaused: viewModel.isPaused,
-                actions: .init(
-                    togglePause: { viewModel.togglePause() },
-                    progress: { pool.progress(of: video.id) },
-                    seek: { pool.seek(video.id, to: $0) },
-                    close: close
-                ),
-                options: container.playbackOptions, interactions: interactions, container: container
-            )
-        }
+        .landscapePlayer(video: $fullScreenVideo, content: landscapePlayer)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in
@@ -107,9 +66,67 @@ struct VideoDetailView: View {
         }
     }
 
+    // Racine de la pile : la page de la vidéo, ses bandeaux et sa barre d'outils.
+    private var stackRoot: some View {
+        GeometryReader { geometry in
+            content(bottomInset: geometry.safeAreaInsets.bottom)
+                .ignoresSafeArea()
+        }
+        .background(.black)
+        // Balayage vers la gauche : profil de l'auteur, poussé dans la pile de la vidéo seule.
+        .authorProfileSwipe(author: swipeAuthor, container: container, open: openAuthorProfile)
+        // Vitesse ×2 : bandeau en bas pendant l'appui, message du verrouillage en haut.
+        .overlay { FastPlaybackBottomBar(model: container.playbackOptions) }
+        .overlay { VideoDownloadOverlay(model: container.downloads) }
+        .overlay(alignment: .top) {
+            FastPlaybackNoticeView(model: container.playbackOptions).padding(.top, 12)
+        }
+        .toolbar {
+            // Masqué pendant l'appui long de la vitesse ×2, l'affichage allégé et le balayage vers le profil.
+            if showsCloseButton {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Fermer", systemImage: "xmark") { dismiss() }
+                        .accessibilityIdentifier("video.close")
+                }
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .onAppear { viewModel.resume() }
+        .onDisappear {
+            viewModel.stop()
+            // Affichage allégé (ADR-067) : quitté avec la vidéo seule.
+            container.playbackOptions.setClearMode(false)
+        }
+    }
+
+    // Plein écran en paysage de la vidéo (horizontale).
+    private func landscapePlayer(_ video: FeedVideo, close: @escaping () -> Void) -> some View {
+        LandscapePlayerView(
+            loadedVideo: video,
+            player: pool.player(for: video.id),
+            isPaused: viewModel.isPaused,
+            actions: .init(
+                togglePause: { viewModel.togglePause() },
+                progress: { pool.progress(of: video.id) },
+                seek: { pool.seek(video.id, to: $0) },
+                close: close
+            ),
+            options: container.playbackOptions, interactions: interactions, container: container
+        )
+    }
+
+    private var showsCloseButton: Bool {
+        let options = container.playbackOptions
+        return !options.isHolding && !options.isClearMode && !container.router.isSwipingToProfile
+    }
+
+    private func openAuthorProfile(_ author: UserSummary) {
+        path.append(ProfileRoute(username: author.username))
+    }
+
     private var swipeAuthor: UserSummary? {
         let options = container.playbackOptions
-        guard path.isEmpty, container.router.presentedStories == nil, !options.isHolding, !options.isClearMode,
+        guard path.isEmpty, container.router.presentedStories == nil, !options.isHolding, !options.isClearMode, !options.isScrubbing,
             case .loaded(let video) = viewModel.state
         else { return nil }
         return video.author
@@ -147,6 +164,7 @@ struct VideoDetailView: View {
                 revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil,
                 options: container.playbackOptions,
                 seek: { pool.seek(video.id, to: $0) },
+                scrubbing: { pool.setScrubbing($0, videoID: video.id) },
                 // Plein écran : seulement quand la vidéo est affichée (pas sous une page poussée ni des stories).
                 openFullScreen: path.isEmpty && container.router.presentedStories == nil
                     ? { withoutAnimation { fullScreenVideo = video } } : nil

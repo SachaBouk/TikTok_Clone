@@ -18,6 +18,12 @@ private struct AuthorProfileSwipe: ViewModifier {
     @State private var width: CGFloat = 0
     // Profil montré pendant le balayage ; repris par la page poussée (`AppContainer.preparedProfile`).
     @State private var preview: (author: UserSummary, model: ProfileViewModel)?
+    // Profil de l'auteur de la vidéo affichée, chargé d'avance (profil, relation, première page de la grille) : sur un
+    // balayage rapide, il arrive complet au lieu de se remplir pendant la transition puis de se vider une fois poussé.
+    @State private var prefetched: (username: String, model: ProfileViewModel)?
+
+    // Temps passé sur une vidéo avant de charger le profil de son auteur (pas pendant un défilement rapide du feed).
+    static let prefetchDelay = Duration.milliseconds(600)
 
     // Recul de la page pendant que le profil arrive (comme la navigation d'iOS).
     static let parallax = 0.3
@@ -48,11 +54,23 @@ private struct AuthorProfileSwipe: ViewModifier {
                 width = $0
             }
             .onChange(of: progress > 0) { _, swiping in container.router.isSwipingToProfile = swiping }
+            .task(id: author?.username) {
+                guard let author, prefetched?.username != author.username else { return }
+                try? await Task.sleep(for: Self.prefetchDelay)
+                guard !Task.isCancelled else { return }
+                let model = container.makeProfileViewModel(username: author.username)
+                await model.load()
+                guard !Task.isCancelled else { return }
+                prefetched = (author.username, model)
+                // Miniatures de la première page de la grille : affichées aussitôt pendant le balayage.
+                await ThumbnailCache.shared.preload(model.grid(model.selectedGrid).items.prefix(12).map(\.thumbnailURL))
+            }
     }
 
     private func begin() {
         guard let author else { return }
-        preview = (author, container.makeProfileViewModel(username: author.username))
+        let model = prefetched?.username == author.username ? prefetched?.model : nil
+        preview = (author, model ?? container.makeProfileViewModel(username: author.username))
     }
 
     private func end(velocity: Double) {
@@ -63,6 +81,7 @@ private struct AuthorProfileSwipe: ViewModifier {
             } completion: {
                 // Page du profil poussée sans animation à la place de l'aperçu, avec son modèle déjà chargé.
                 container.preparedProfile = preview.model
+                prefetched = nil
                 withoutAnimation {
                     open(preview.author)
                     progress = 0

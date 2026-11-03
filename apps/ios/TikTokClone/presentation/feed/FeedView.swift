@@ -210,6 +210,7 @@ struct FeedView: View {
                             ? { interactions.showReported(videoID: entry.video.id) } : nil,
                         options: container.playbackOptions,
                         seek: { pool.seek(entry.video.id, to: $0) },
+                        scrubbing: { pool.setScrubbing($0, videoID: entry.video.id) },
                         openFullScreen: entry.id == viewModel.currentEntryID && isTabActive && isOnScreen
                             ? { withoutAnimation { fullScreenVideo = entry.video } } : nil
                     )
@@ -239,7 +240,8 @@ struct FeedView: View {
 
     private var swipeAuthor: UserSummary? {
         let options = container.playbackOptions
-        guard isTabActive, isOnScreen, !options.isHolding, !options.isClearMode, let video = viewModel.currentVideo else { return nil }
+        guard isTabActive, isOnScreen, !options.isHolding, !options.isClearMode, !options.isScrubbing, let video = viewModel.currentVideo
+        else { return nil }
         return video.author
     }
 
@@ -334,6 +336,8 @@ struct FeedPageView: View {
     var options: PlaybackOptionsModel? = nil
     // Barre de progression de l'affichage allégé (ADR-067) : déplace la lecture (fraction de la vidéo).
     var seek: ((Double) -> Void)? = nil
+    // Début et fin d'un glissement sur la barre de progression (lecture suspendue pendant ce temps).
+    var scrubbing: ((Bool) -> Void)? = nil
     // Plein écran en paysage d'une vidéo horizontale : bouton sous la vidéo, ou iPhone tourné. Nil : la page n'est pas
     // celle qu'on regarde (autre page, feed caché ou recouvert).
     var openFullScreen: (() -> Void)? = nil
@@ -514,12 +518,20 @@ struct FeedPageView: View {
     private var scrubGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                if scrubFraction == nil {
+                    options?.isScrubbing = true
+                    scrubbing?(true)
+                }
                 let inset = PlaybackProgressBar.scrubInset
                 let fraction = PlaybackScrub.fraction(x: value.location.x - inset, width: width - 2 * inset)
                 scrubFraction = fraction
                 seek?(fraction)
             }
-            .onEnded { _ in scrubFraction = nil }
+            .onEnded { _ in
+                scrubFraction = nil
+                options?.isScrubbing = false
+                scrubbing?(false)
+            }
     }
 
     // Pseudo et description, avec une ombre pour rester lisibles sur une vidéo claire.

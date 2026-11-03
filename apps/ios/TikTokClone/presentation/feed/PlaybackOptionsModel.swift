@@ -19,6 +19,8 @@ final class PlaybackOptionsModel {
     private(set) var bottomInset: CGFloat = 0
     private(set) var autoScroll = false
     private(set) var isClearMode = false
+    // Doigt posé sur la barre de progression d'une vidéo : le balayage vers le profil de l'auteur est coupé.
+    var isScrubbing = false
 
     private let playback: any VideoPlayback
     private let analytics: AnalyticsModel?

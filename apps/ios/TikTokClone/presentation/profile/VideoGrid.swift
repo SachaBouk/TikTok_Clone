@@ -93,11 +93,7 @@ struct VideoGridCell: View {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFill()
                 } else if let thumbnailURL {
-                    AsyncImage(url: thumbnailURL) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Color(.secondarySystemBackground)
-                    }
+                    CachedThumbnail(url: thumbnailURL)
                 }
             }
             .clipped()

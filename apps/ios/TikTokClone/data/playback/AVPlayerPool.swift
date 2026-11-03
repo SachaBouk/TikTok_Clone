@@ -29,6 +29,11 @@ final class AVPlayerPool: VideoPlayback {
     private var rate: Float = 1
     // Dernière fin de boucle d'une vidéo chargée.
     private(set) var lastLoopEnd: LoopEnd?
+    // Recherche en cours par vidéo, et prochaine position à atteindre (`seek`).
+    @ObservationIgnored private var seekingIDs: Set<String> = []
+    @ObservationIgnored private var seekTargets: [String: CMTime] = [:]
+    // Vidéos qui jouaient au début d'un glissement sur la barre de progression.
+    @ObservationIgnored private var resumeAfterScrub: Set<String> = []
 
     init() {
         // Le son joue même en mode silencieux, comme une app vidéo.
@@ -95,12 +100,39 @@ final class AVPlayerPool: VideoPlayback {
         }
     }
 
-    // Barre de progression de l'affichage allégé (ADR-067) : `fraction` de la vidéo, entre 0 et 1.
+    // Barres de progression (feed, affichage allégé, plein écran) : `fraction` de la vidéo, entre 0 et 1. Une seule
+    // recherche à la fois, toujours vers la dernière position demandée : sous le doigt, des recherches empilées (chacune
+    // annule la précédente) figeaient l'image ; ainsi elle suit le doigt en continu.
     func seek(_ videoID: String, to fraction: Double) {
         guard let player = entries[videoID]?.player, let duration = player.currentItem?.duration.seconds, duration.isFinite, duration > 0
         else { return }
-        let time = CMTime(seconds: min(1, max(0, fraction)) * duration, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        seekTargets[videoID] = CMTime(seconds: min(1, max(0, fraction)) * duration, preferredTimescale: 600)
+        chaseSeek(videoID)
+    }
+
+    private func chaseSeek(_ videoID: String) {
+        guard !seekingIDs.contains(videoID), let player = entries[videoID]?.player, let target = seekTargets.removeValue(forKey: videoID)
+        else { return }
+        seekingIDs.insert(videoID)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                self?.seekingIDs.remove(videoID)
+                self?.chaseSeek(videoID)
+            }
+        }
+    }
+
+    // Glissement sur la barre de progression : lecture suspendue pendant le glissement, reprise ensuite si elle jouait.
+    func setScrubbing(_ scrubbing: Bool, videoID: String) {
+        guard let player = entries[videoID]?.player else { return }
+        if scrubbing {
+            if player.rate != 0 {
+                resumeAfterScrub.insert(videoID)
+                player.pause()
+            }
+        } else if resumeAfterScrub.remove(videoID) != nil {
+            player.play()
+        }
     }
 
     func progress(of videoID: String) -> PlaybackProgress? {
