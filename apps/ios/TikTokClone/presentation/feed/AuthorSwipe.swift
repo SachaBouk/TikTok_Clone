@@ -34,7 +34,12 @@ private struct AuthorProfileSwipe: ViewModifier {
             .scrollDisabled(preview != nil)
             .overlay {
                 if let preview {
+                    // L'aperçu glisse d'un seul bloc (`geometryGroup` : ses vignettes ne s'animent pas chacune de leur
+                    // côté) et rien n'en dépasse, barre d'état comprise : sinon, sur un balayage rapide, les vignettes
+                    // se décalaient et débordaient sur le feed.
                     ProfilePreview(author: preview.author, model: preview.model, container: container)
+                        .geometryGroup()
+                        .mask(Rectangle().ignoresSafeArea())
                         .offset(x: (1 - progress) * width)
                         .shadow(color: .black.opacity(0.25 * progress), radius: 12)
                         .allowsHitTesting(false)
@@ -125,8 +130,9 @@ private struct ProfilePreview: View {
             ProfileView(viewModel: model, container: container)
         }
         .foregroundStyle(.primary)
+        // Apparence du système (mode sombre compris), comme la page qui sera poussée : sinon le fond passait du blanc
+        // au noir à l'ouverture, et la barre d'onglets avec lui.
         .background(Color(.systemBackground).ignoresSafeArea())
-        .environment(\.colorScheme, .light)
     }
 }
 
