@@ -32,10 +32,18 @@ struct VideoDetailView: View {
                     .ignoresSafeArea()
             }
             .background(.black)
+            // Vitesse ×2 : bandeau en bas pendant l'appui, message du verrouillage en haut.
+            .overlay { FastPlaybackBottomBar(model: container.fastPlayback) }
+            .overlay(alignment: .top) {
+                FastPlaybackNoticeView(model: container.fastPlayback).padding(.top, 12)
+            }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Fermer", systemImage: "xmark") { dismiss() }
-                        .accessibilityIdentifier("video.close")
+                // Masqué pendant l'appui long de la vitesse ×2.
+                if !container.fastPlayback.isHolding {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Fermer", systemImage: "xmark") { dismiss() }
+                            .accessibilityIdentifier("video.close")
+                    }
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -98,7 +106,8 @@ struct VideoDetailView: View {
                     openStories: { container.router.openStories([video.author], source: .feed) }
                 ),
                 progress: { pool.progress(of: video.id) },
-                revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil
+                revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil,
+                fastPlayback: container.fastPlayback
             )
         }
     }

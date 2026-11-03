@@ -42,7 +42,7 @@ struct HomeFeedView: View {
             }
         }
         .background(.black)
-        .overlay(alignment: .top) { FeedSelector(selection: $selection) }
+        .overlay(alignment: .top) { FeedSelector(selection: $selection).opacity(barOpacity) }
         // Lives à faire défiler (ADR-066).
         .overlay(alignment: .topLeading) {
             Button {
@@ -56,6 +56,7 @@ struct HomeFeedView: View {
             .padding(.leading, 8)
             .accessibilityLabel("Lives")
             .accessibilityIdentifier("feed.lives")
+            .opacity(barOpacity)
         }
         // Recherche de comptes et hashtags (ADR-049).
         .overlay(alignment: .topTrailing) {
@@ -80,7 +81,9 @@ struct HomeFeedView: View {
                 }
             }
             .padding(.trailing, 8)
+            .opacity(barOpacity)
         }
+        .animation(.easeInOut(duration: 0.15), value: barOpacity)
         .onChange(of: container.router.homeRefreshRequests) { Task { await refreshShownFeed() } }
         .onChange(of: selection) { showFollowingIfSelected() }
         // Abonnement confirmé par l'API alors que le feed des abonnements est déjà affiché (toucher « Abonnements »
@@ -92,6 +95,9 @@ struct HomeFeedView: View {
             showFollowingIfSelected()
         }
     }
+
+    // Pendant l'appui long de la vitesse ×2 : sélecteur, « LIVE » et loupe masqués, seule la vidéo reste.
+    private var barOpacity: Double { container.fastPlayback.isHolding ? 0 : 1 }
 
     private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false) -> some View {
         FeedView(

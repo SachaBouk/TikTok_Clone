@@ -95,6 +95,11 @@ extension AnalyticsEvent {
             ])
     }
 
+    // Vitesse ×2 du lecteur verrouillée ou déverrouillée (glisser vers le bas pendant l'appui long).
+    static func playbackSpeedLocked(_ locked: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "playback_speed_locked", properties: ["locked": .bool(locked)])
+    }
+
     static func commentPosted(videoID: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "comment_posted", properties: ["video_id": .string(videoID)])
     }

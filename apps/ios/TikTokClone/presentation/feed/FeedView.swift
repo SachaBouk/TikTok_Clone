@@ -50,6 +50,11 @@ struct FeedView: View {
         GeometryReader { geometry in
             content(bottomInset: geometry.safeAreaInsets.bottom, topInset: geometry.safeAreaInsets.top)
         }
+        // Message du verrouillage de la vitesse ×2, sous la barre du haut.
+        .overlay(alignment: .top) {
+            FastPlaybackNoticeView(model: container.fastPlayback)
+                .padding(.top, 66)
+        }
         .background(.black)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
@@ -169,7 +174,8 @@ struct FeedView: View {
                         // Barre de progression : la vidéo courante seulement.
                         progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
                         revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
-                            ? { interactions.showReported(videoID: entry.video.id) } : nil
+                            ? { interactions.showReported(videoID: entry.video.id) } : nil,
+                        fastPlayback: container.fastPlayback
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
                     .id(entry.id)
@@ -271,7 +277,13 @@ struct FeedPageView: View {
     // Vidéo signalée (ADR-038) : voile « Merci pour ton signalement » par-dessus toute la page ; l'action l'enlève
     // (« Afficher la vidéo »). Nil : pas de voile.
     var revealReported: (() -> Void)? = nil
+    // Vitesse ×2 à l'appui long sur un côté (`FastPlayback`) ; nil : pas d'appui long.
+    var fastPlayback: FastPlaybackModel? = nil
     @State private var burst: HeartBurst?
+    @State private var width: CGFloat = 0
+
+    // Pendant l'appui long : seule la vidéo reste, comme TikTok.
+    private var hidesOverlays: Bool { fastPlayback?.isHolding == true }
 
     private struct HeartBurst: Identifiable, Equatable {
         let id = UUID()
@@ -298,6 +310,16 @@ struct FeedPageView: View {
                 }
                 .exclusively(before: TapGesture().onEnded { actions.togglePause() })
             )
+            .modifier(
+                FastPlaybackGestureIfAvailable(
+                    model: fastPlayback, width: width, bottomInset: bottomInset,
+                    isEnabled: !showsPauseIndicator && revealReported == nil)
+            )
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                width = $0
+            }
             .overlay {
                 // Grand triangle « lecture » semi-transparent, comme TikTok.
                 if showsPauseIndicator {
@@ -351,6 +373,7 @@ struct FeedPageView: View {
                         .frame(height: 280 + bottomInset)
                         .allowsHitTesting(false)
                 }
+                .opacity(hidesOverlays ? 0 : 1)
             }
             .overlay(alignment: .bottom) {
                 if let progress {
@@ -358,6 +381,7 @@ struct FeedPageView: View {
                     PlaybackProgressBar(progress: progress, isPaused: showsPauseIndicator)
                         .padding(.bottom, bottomInset + Self.progressBarGap)
                         .allowsHitTesting(false)
+                        .opacity(hidesOverlays ? 0 : 1)
                 }
             }
             .overlay {
@@ -369,6 +393,7 @@ struct FeedPageView: View {
             .foregroundStyle(.white)
             .animation(.easeOut(duration: 0.15), value: showsPauseIndicator)
             .animation(.easeInOut(duration: 0.25), value: revealReported == nil)
+            .animation(.easeInOut(duration: 0.15), value: hidesOverlays)
     }
 
     // Espace entre la barre de progression et la barre d'onglets.
@@ -412,6 +437,22 @@ struct FeedPageView: View {
             }
         }
         .shadow(color: .black.opacity(0.6), radius: 3)
+    }
+}
+
+// Appui long de la vitesse ×2, sur les pages qui en ont un modèle.
+private struct FastPlaybackGestureIfAvailable: ViewModifier {
+    let model: FastPlaybackModel?
+    let width: CGFloat
+    let bottomInset: CGFloat
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if let model {
+            content.gesture(FastPlaybackGesture(model: model, width: width, bottomInset: bottomInset, isEnabled: isEnabled))
+        } else {
+            content
+        }
     }
 }
 
@@ -779,6 +820,9 @@ struct PlayerLayerView: UIViewRepresentable {
             super.init(frame: frame)
             playerLayer.videoGravity = .resizeAspectFill
             backgroundColor = .clear
+            // Les touchers passent à la page dessous : sinon l'appui long de la vitesse ×2 (reconnaisseur d'UIKit) ne
+            // les reçoit pas.
+            isUserInteractionEnabled = false
         }
 
         required init?(coder: NSCoder) {

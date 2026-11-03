@@ -8,6 +8,8 @@ protocol VideoPlayback: AnyObject {
     // la vidéo déjà courante reprend là où elle s'était arrêtée.
     func play(_ videoID: String)
     func pauseAll()
+    // Vitesse de lecture de toutes les vidéos (1 ou ×2, `FastPlayback`) : la vidéo en cours change aussitôt.
+    func setRate(_ rate: Float)
     // Position de lecture et durée d'une vidéo chargée (mesure du visionnage, ADR-013) ; nil si elle ne l'est pas.
     func progress(of videoID: String) -> PlaybackProgress?
 }

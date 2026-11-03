@@ -90,6 +90,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 ## Feed et lecteur
 
 - Une vidéo par page, défilement vertical natif (`ScrollView` en pagination), toucher pour mettre en pause (grand triangle « lecture » au centre). Fine barre de progression de la lecture tout en bas, au-dessus de la barre d'onglets.
+- **Vitesse ×2** (`FastPlayback`, `FastPlaybackModel`) : appui long sur un côté de la vidéo (le milieu est réservé) → ×2 tant que le doigt reste posé, tout le reste masqué, bandeau « Glisse en bas pour garder la vitesse ×2 » sur la barre d'onglets recouverte de noir ; glisser vers le bas puis relâcher verrouille le ×2 pour toutes les vidéos (« Verrouillée à la vitesse accélérée ×2 »), même geste pour revenir à la vitesse normale. Tous les lecteurs vidéo, jusqu'à la relance de l'app (oubliée à la déconnexion). Port `VideoPlayback.setRate`.
 - Lecture HLS (`AVPlayerPool`) : 3 lecteurs au plus (vidéo courante, suivante, précédente), bouclés ; les voisines sont préchargées. La miniature s'affiche jusqu'à la première image.
 - Vue envoyée (`recordView`) après 1 s de lecture continue, une fois par vidéo et par session, pour un compte connecté seulement.
 - Fin de session du feed : l'app repart sans curseur, sur un nouvel ordre ; le feed est sans fin.

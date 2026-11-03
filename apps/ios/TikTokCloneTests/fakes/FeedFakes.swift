@@ -71,6 +71,8 @@ final class FakePlayback: VideoPlayback {
     func keepLoaded(_ videos: [FeedVideo]) { loaded.append(videos.map(\.id)) }
     func play(_ videoID: String) { played.append(videoID) }
     func pauseAll() { pauseCount += 1 }
+    private(set) var rates: [Float] = []
+    func setRate(_ rate: Float) { rates.append(rate) }
     func progress(of videoID: String) -> PlaybackProgress? { progress[videoID] }
 }
 

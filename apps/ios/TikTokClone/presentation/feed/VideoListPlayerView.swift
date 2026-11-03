@@ -18,5 +18,7 @@ struct VideoListPlayerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        // Pendant l'appui long de la vitesse ×2, seule la vidéo reste (bandeau en bas : `MainTabView`).
+        .navigationBarBackButtonHidden(container.fastPlayback.isHolding)
     }
 }

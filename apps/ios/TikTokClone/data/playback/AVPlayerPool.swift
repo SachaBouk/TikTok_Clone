@@ -17,6 +17,8 @@ final class AVPlayerPool: VideoPlayback {
 
     private var entries: [String: Entry] = [:]
     private var currentID: String?
+    // Vitesse de lecture (`FastPlayback`) : celle de chaque lecteur au démarrage (`defaultRate`).
+    private var rate: Float = 1
 
     init() {
         // Le son joue même en mode silencieux, comme une app vidéo.
@@ -40,6 +42,7 @@ final class AVPlayerPool: VideoPlayback {
             item.preferredForwardBufferDuration = Self.forwardBufferDuration
             let player = AVQueuePlayer()
             player.automaticallyWaitsToMinimizeStalling = true
+            player.defaultRate = rate
             entries[video.id] = Entry(player: player, looper: AVPlayerLooper(player: player, templateItem: item))
         }
         if let currentID, !keep.contains(currentID) { self.currentID = nil }
@@ -60,6 +63,17 @@ final class AVPlayerPool: VideoPlayback {
     func pauseAll() {
         for entry in entries.values {
             entry.player.pause()
+        }
+    }
+
+    func setRate(_ rate: Float) {
+        self.rate = rate
+        for entry in entries.values {
+            entry.player.defaultRate = rate
+        }
+        // La vidéo en cours (ou qui attend ses données pour jouer) change de vitesse aussitôt ; en pause, elle reste en pause.
+        if let currentID, let player = entries[currentID]?.player, player.rate != 0 {
+            player.rate = rate
         }
     }
 

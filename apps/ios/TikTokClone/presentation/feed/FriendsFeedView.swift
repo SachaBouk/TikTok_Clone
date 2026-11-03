@@ -41,6 +41,9 @@ struct FriendsFeedView: View {
                 .shadow(color: .black.opacity(0.6), radius: 3)
                 .padding(.top, 6)
                 .accessibilityAddTraits(.isHeader)
+                // Masqué pendant l'appui long de la vitesse ×2.
+                .opacity(container.fastPlayback.isHolding ? 0 : 1)
+                .animation(.easeInOut(duration: 0.15), value: container.fastPlayback.isHolding)
         }
         .overlay(alignment: .topTrailing) {
             if container.router.isFriendsRefreshing {
