@@ -156,7 +156,12 @@ final class FeedViewModel {
         let video = entries[index].video
         // Avant de changer de lecteur : la position de la vidéo quittée est lue ici (moment du swipe).
         watch.finish(.swipe)
-        playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
+        // Inactif (vidéo seule par-dessus, autre onglet), le feed ne touche pas aux lecteurs partagés : il retirerait
+        // celui de la vidéo seule (bug rencontré : lien ouvert pendant le chargement du feed, vidéo figée). Sa fenêtre
+        // est rechargée quand il redevient actif (`setActive`).
+        if isActive {
+            playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
+        }
         if isActive && !maskedVideoIDs.contains(video.id) {
             playback.play(video.id)
             watch.play(video)
@@ -237,8 +242,8 @@ final class FeedViewModel {
         if nextCursor == nil { generation += 1 }
         do {
             append(try await fetchPage(cursor: nextCursor))
-            // La fenêtre de préchargement peut maintenant inclure la vidéo suivante.
-            if let currentEntryID, let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
+            // La fenêtre de préchargement peut maintenant inclure la vidéo suivante (feed actif seulement, voir `show`).
+            if isActive, let currentEntryID, let index = entries.firstIndex(where: { $0.id == currentEntryID }) {
                 playback.keepLoaded(PreloadPolicy.window(around: index, count: entries.count).map { entries[$0].video })
             }
         } catch {

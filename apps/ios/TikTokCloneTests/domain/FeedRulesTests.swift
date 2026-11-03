@@ -71,3 +71,27 @@ struct VideoFramingTests {
         #expect(VideoFraming.fills(width: 1080, height: 0))
     }
 }
+
+@Suite("Plein écran d'une vidéo horizontale")
+struct FullScreenRulesTests {
+    @Test("proposé pour une vidéo 4:3 ou 16:9, pas pour une carrée, verticale ou de taille inconnue")
+    func offered() {
+        #expect(VideoFraming.offersFullScreen(width: 1920, height: 1080))
+        #expect(VideoFraming.offersFullScreen(width: 1440, height: 1080))
+        #expect(!VideoFraming.offersFullScreen(width: 1000, height: 1000))
+        #expect(!VideoFraming.offersFullScreen(width: 1000, height: 932))
+        #expect(!VideoFraming.offersFullScreen(width: 1080, height: 1920))
+        #expect(!VideoFraming.offersFullScreen(width: 0, height: 0))
+    }
+
+    @Test("iPhone tourné sur la vidéo affichée : plein écran ; remis droit : retour ; à plat : rien")
+    func rotation() {
+        #expect(LandscapeRotation.entersFullScreen(tilt: .landscape, offersFullScreen: true, isCurrent: true))
+        #expect(!LandscapeRotation.entersFullScreen(tilt: .landscape, offersFullScreen: false, isCurrent: true))
+        #expect(!LandscapeRotation.entersFullScreen(tilt: .landscape, offersFullScreen: true, isCurrent: false))
+        #expect(!LandscapeRotation.entersFullScreen(tilt: .other, offersFullScreen: true, isCurrent: true))
+        #expect(LandscapeRotation.leavesFullScreen(tilt: .portrait))
+        #expect(!LandscapeRotation.leavesFullScreen(tilt: .other))
+        #expect(!LandscapeRotation.leavesFullScreen(tilt: .landscape))
+    }
+}

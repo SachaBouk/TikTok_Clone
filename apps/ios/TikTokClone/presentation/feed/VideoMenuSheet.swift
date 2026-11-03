@@ -13,6 +13,7 @@ struct VideoMenuSheet: View {
     let notInterested: () -> Void
     let report: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isLandscapePlayer) private var isLandscapePlayer
 
     // Les autres ne téléchargent que si l'auteur l'autorise ; l'auteur, toujours.
     private var canDownload: Bool { isOwn || video.downloadsEnabled }
@@ -40,9 +41,12 @@ struct VideoMenuSheet: View {
                 }
                 card {
                     speedRow
-                    row("Alléger l'affichage", systemImage: "viewfinder", identifier: "menu.clearMode") {
-                        dismiss()
-                        options.setClearMode(true)
+                    // Sans objet dans le lecteur plein écran, déjà réduit à la vidéo.
+                    if !isLandscapePlayer {
+                        row("Alléger l'affichage", systemImage: "viewfinder", identifier: "menu.clearMode") {
+                            dismiss()
+                            options.setClearMode(true)
+                        }
                     }
                     autoScrollRow
                     castRow
@@ -164,4 +168,9 @@ private struct AirPlayPicker: UIViewRepresentable {
     }
 
     func updateUIView(_ view: AVRoutePickerView, context: Context) {}
+}
+
+extension EnvironmentValues {
+    // Vrai dans le lecteur plein écran en paysage (et ses feuilles).
+    @Entry var isLandscapePlayer = false
 }

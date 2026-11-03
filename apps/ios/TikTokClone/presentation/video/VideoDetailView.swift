@@ -17,6 +17,8 @@ struct VideoDetailView: View {
     @State private var giftBurst: GiftBurst?
     // Menu de la vidéo (ADR-067).
     @State private var menuVideo: FeedVideo?
+    // Vidéo horizontale en plein écran, en paysage.
+    @State private var fullScreenVideo: FeedVideo?
     @Environment(SessionStore.self) private var session
     @Environment(\.dismiss) private var dismiss
 
@@ -61,6 +63,20 @@ struct VideoDetailView: View {
         }
         .providesNavigationPath($path)
         .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
+        .landscapePlayer(video: $fullScreenVideo) { video, close in
+            LandscapePlayerView(
+                loadedVideo: video,
+                player: pool.player(for: video.id),
+                isPaused: viewModel.isPaused,
+                actions: .init(
+                    togglePause: { viewModel.togglePause() },
+                    progress: { pool.progress(of: video.id) },
+                    seek: { pool.seek(video.id, to: $0) },
+                    close: close
+                ),
+                options: container.playbackOptions, interactions: interactions, container: container
+            )
+        }
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in
@@ -120,7 +136,10 @@ struct VideoDetailView: View {
                 progress: { pool.progress(of: video.id) },
                 revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil,
                 options: container.playbackOptions,
-                seek: { pool.seek(video.id, to: $0) }
+                seek: { pool.seek(video.id, to: $0) },
+                // Plein écran : seulement quand la vidéo est affichée (pas sous une page poussée ni des stories).
+                openFullScreen: path.isEmpty && container.router.presentedStories == nil
+                    ? { withoutAnimation { fullScreenVideo = video } } : nil
             )
         }
     }

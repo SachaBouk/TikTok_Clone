@@ -147,6 +147,19 @@ struct FeedViewModelTests {
         #expect(playback.played == ["a", "a", "a"])
     }
 
+    @Test("inactif (vidéo seule par-dessus) : le feed ne touche pas aux lecteurs partagés, sa fenêtre revient à la reprise")
+    func inactiveKeepsSharedPlayers() async {
+        let (viewModel, _) = await makeViewModel([.success(page(["a", "b", "c"], next: nil))])
+        viewModel.setActive(false)
+        await viewModel.start()
+        viewModel.show(viewModel.entries[1].id)
+        #expect(playback.loaded.isEmpty)
+        #expect(playback.played.isEmpty)
+        viewModel.setActive(true)
+        #expect(playback.loaded == [["b", "c", "a"]])
+        #expect(playback.played == ["b"])
+    }
+
     @Test("vidéo signalée : arrêtée sous le voile, ni lue ni mise en pause au toucher, reprise une fois affichée")
     func maskedAfterReport() async {
         let (viewModel, _) = await makeViewModel([.success(page(["a", "b", "c"], next: nil))])

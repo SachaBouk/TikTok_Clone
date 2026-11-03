@@ -55,3 +55,35 @@ enum VideoFraming {
         return width / height <= maxFillAspectRatio
     }
 }
+
+// Plein écran d'une vidéo horizontale, comme TikTok : bouton « Plein écran » sous la vidéo, ou iPhone tourné sur elle ;
+// le lecteur passe alors en paysage, et remettre l'iPhone droit le referme.
+extension VideoFraming {
+    // Largeur / hauteur à partir de laquelle le plein écran est proposé : 4:3 (1,33) et 16:9 (1,78), pas un carré.
+    static let minFullScreenAspectRatio = 1.2
+
+    static func offersFullScreen(width: Double, height: Double) -> Bool {
+        guard width > 0, height > 0 else { return false }
+        return width / height >= minFullScreenAspectRatio
+    }
+}
+
+// Position de l'iPhone, d'après son capteur (indépendante de l'orientation de l'interface).
+enum DeviceTilt: Equatable {
+    case portrait
+    case landscape
+    // À plat, à l'envers, inconnue : ne change rien.
+    case other
+}
+
+enum LandscapeRotation {
+    // iPhone tourné sur la vidéo affichée, si elle se regarde en plein écran.
+    static func entersFullScreen(tilt: DeviceTilt, offersFullScreen: Bool, isCurrent: Bool) -> Bool {
+        tilt == .landscape && offersFullScreen && isCurrent
+    }
+
+    // iPhone remis droit pendant le plein écran.
+    static func leavesFullScreen(tilt: DeviceTilt) -> Bool {
+        tilt == .portrait
+    }
+}

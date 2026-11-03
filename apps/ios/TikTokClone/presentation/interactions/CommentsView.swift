@@ -17,10 +17,21 @@ struct CommentsView: View {
     @State private var removing: VideoComment?
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isLandscapePlayer) private var isLandscapePlayer
 
     init(viewModel: CommentsViewModel, container: AppContainer) {
         _viewModel = State(initialValue: viewModel)
         self.container = container
+    }
+
+    // Dans le lecteur plein écran en paysage, la connexion passe par la session : le plein écran se ferme et elle
+    // s'ouvre en portrait (sa feuille ne tient pas en paysage).
+    private func requestSignIn() {
+        if isLandscapePlayer {
+            container.session.requestSignIn()
+        } else {
+            isPresentingSignIn = true
+        }
     }
 
     var body: some View {
@@ -164,7 +175,7 @@ struct CommentsView: View {
                         reportedAuthor = comment.author
                         reportTarget = .comment(id: comment.id)
                     } else {
-                        isPresentingSignIn = true
+                        requestSignIn()
                     }
                 }
                 .tint(.orange)
@@ -224,7 +235,7 @@ struct CommentsView: View {
                 emojiBar
                 field
             } else {
-                Button("Connecte-toi pour commenter") { isPresentingSignIn = true }
+                Button("Connecte-toi pour commenter") { requestSignIn() }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.brandPink)
                     .frame(maxWidth: .infinity)

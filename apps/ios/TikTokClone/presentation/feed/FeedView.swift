@@ -28,6 +28,8 @@ struct FeedView: View {
     @State private var giftBurst: GiftBurst?
     // Menu de la vidéo (ADR-067), ouvert par un appui long au milieu.
     @State private var menuVideo: FeedVideo?
+    // Vidéo horizontale en plein écran, en paysage.
+    @State private var fullScreenVideo: FeedVideo?
     @Environment(\.navigationPath) private var navigationPath
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
@@ -84,7 +86,9 @@ struct FeedView: View {
         // Défilement automatique (ADR-067) : à la fin de la vidéo courante, la suivante ; jamais sous une feuille ouverte
         // (menu, commentaires, partage, signalement, cadeaux), qui porte sur la vidéo affichée.
         .onChange(of: pool.lastLoopEnd) { _, end in
-            let sheetOpen = menuVideo != nil || commentsVideo != nil || shareVideo != nil || reportedVideo != nil || giftVideo != nil
+            let sheetOpen =
+                menuVideo != nil || commentsVideo != nil || shareVideo != nil || reportedVideo != nil || giftVideo != nil
+                || fullScreenVideo != nil
             guard let end, container.playbackOptions.autoScroll, !sheetOpen, let next = viewModel.entryAfterEnd(of: end.videoID)
             else { return }
             withAnimation(.easeInOut(duration: 0.35)) { scrolledID = next }
@@ -106,6 +110,20 @@ struct FeedView: View {
             ProfileView(viewModel: container.makeProfileViewModel(username: route.username), container: container)
         }
         .giftSheet(video: $giftVideo, burst: $giftBurst, container: container)
+        .landscapePlayer(video: $fullScreenVideo) { video, close in
+            LandscapePlayerView(
+                loadedVideo: video,
+                player: pool.player(for: video.id),
+                isPaused: viewModel.isPaused,
+                actions: .init(
+                    togglePause: { viewModel.togglePause() },
+                    progress: { pool.progress(of: video.id) },
+                    seek: { pool.seek(video.id, to: $0) },
+                    close: close
+                ),
+                options: container.playbackOptions, interactions: interactions, container: container
+            )
+        }
     }
 
     // Cadeau (ADR-050) ; en invité, la connexion s'ouvre.
@@ -195,7 +213,9 @@ struct FeedView: View {
                         revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
                             ? { interactions.showReported(videoID: entry.video.id) } : nil,
                         options: container.playbackOptions,
-                        seek: { pool.seek(entry.video.id, to: $0) }
+                        seek: { pool.seek(entry.video.id, to: $0) },
+                        openFullScreen: entry.id == viewModel.currentEntryID && isTabActive && isOnScreen
+                            ? { withoutAnimation { fullScreenVideo = entry.video } } : nil
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
                     .id(entry.id)
@@ -303,8 +323,15 @@ struct FeedPageView: View {
     var options: PlaybackOptionsModel? = nil
     // Barre de progression de l'affichage allégé (ADR-067) : déplace la lecture (fraction de la vidéo).
     var seek: ((Double) -> Void)? = nil
+    // Plein écran en paysage d'une vidéo horizontale : bouton sous la vidéo, ou iPhone tourné. Nil : la page n'est pas
+    // celle qu'on regarde (autre page, feed caché ou recouvert).
+    var openFullScreen: (() -> Void)? = nil
     @State private var burst: HeartBurst?
     @State private var width: CGFloat = 0
+    // Taille affichée de la vidéo, lue sur le lecteur (zéro tant qu'elle n'est pas prête).
+    @State private var videoSize = CGSize.zero
+
+    private var offersFullScreen: Bool { VideoFraming.offersFullScreen(width: videoSize.width, height: videoSize.height) }
 
     // Pendant l'appui long, et en affichage allégé (ADR-067) : seule la vidéo reste, comme TikTok.
     private var hidesOverlays: Bool { options?.isHolding == true || options?.isClearMode == true }
@@ -321,7 +348,7 @@ struct FeedPageView: View {
             .overlay {
                 FramedThumbnail(url: video.thumbnailURL) { Color.black }
             }
-            .overlay { PlayerLayerView(player: player, adaptsToVideo: true) }
+            .overlay { PlayerLayerView(player: player, adaptsToVideo: true, onVideoSize: { videoSize = $0 }) }
             .clipped()
             .contentShape(Rectangle())
             .gesture(
@@ -351,6 +378,22 @@ struct FeedPageView: View {
                         .transition(.scale.combined(with: .opacity))
                         .allowsHitTesting(false)
                         .accessibilityLabel("En pause")
+                }
+            }
+            .overlay {
+                // « Plein écran » juste sous la vidéo horizontale, montrée entière au centre de la page.
+                if openFullScreen != nil, offersFullScreen, !hidesOverlays, revealReported == nil {
+                    GeometryReader { geometry in
+                        let videoHeight = min(geometry.size.height, geometry.size.width * videoSize.height / videoSize.width)
+                        FullScreenButton { openFullScreen?() }
+                            .position(x: geometry.size.width / 2, y: geometry.size.height / 2 + videoHeight / 2 + 34)
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                let tilt = DeviceTilt(UIDevice.current.orientation)
+                if let openFullScreen, LandscapeRotation.entersFullScreen(tilt: tilt, offersFullScreen: offersFullScreen, isCurrent: true) {
+                    openFullScreen()
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -840,6 +883,8 @@ struct PlayerLayerView: UIViewRepresentable {
     var fills = true
     // Vrai : le cadrage suit le format de la vidéo (`VideoFraming`), lu sur l'élément en cours ; `fills` est ignoré.
     var adaptsToVideo = false
+    // Taille affichée de la vidéo, dès qu'elle est connue (bouton « Plein écran » d'une vidéo horizontale).
+    var onVideoSize: ((CGSize) -> Void)? = nil
 
     func makeUIView(context: Context) -> PlayerUIView {
         PlayerUIView()
@@ -848,6 +893,7 @@ struct PlayerLayerView: UIViewRepresentable {
     func updateUIView(_ view: PlayerUIView, context: Context) {
         view.adaptsToVideo = adaptsToVideo
         view.prefersFill = fills
+        view.onVideoSize = onVideoSize
         if view.playerLayer.player !== player { view.attach(player) }
         view.applyGravity()
     }
@@ -857,6 +903,7 @@ struct PlayerLayerView: UIViewRepresentable {
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
         var adaptsToVideo = false
         var prefersFill = true
+        var onVideoSize: ((CGSize) -> Void)?
         // Taille affichée de l'élément en cours (rotation comprise), zéro tant qu'il n'est pas prêt.
         private var videoSize = CGSize.zero
         private var itemObservation: NSKeyValueObservation?
@@ -879,6 +926,7 @@ struct PlayerLayerView: UIViewRepresentable {
                     guard let self, size != .zero, size != self.videoSize else { return }
                     self.videoSize = size
                     self.applyGravity()
+                    self.onVideoSize?(size)
                 }
             }
         }

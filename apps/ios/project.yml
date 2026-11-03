@@ -74,8 +74,11 @@ targets:
         # Écran de lancement noir, comme l'attente de la reprise de session (LaunchView) et le feed.
         UILaunchScreen:
           UIColorName: LaunchBackground
+        # Portrait ; paysage pour le seul lecteur plein écran d’une vidéo horizontale (OrientationLock).
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         # En développement, l'API et MinIO sont en HTTP sur le réseau local (localhost, IP du Mac).

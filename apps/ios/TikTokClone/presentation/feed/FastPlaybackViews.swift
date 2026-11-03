@@ -226,8 +226,6 @@ struct ClearModeBar: View {
     let togglePause: () -> Void
     let cycleSpeed: () -> Void
     let close: () -> Void
-    // Position tenue sous le doigt pendant le glissement.
-    @State private var dragFraction: Double?
 
     private static let control = Color(white: 0.16)
 
@@ -273,6 +271,23 @@ struct ClearModeBar: View {
     }
 
     private var scrubber: some View {
+        PlaybackScrubber(progress: progress, isPaused: isPaused, seek: seek)
+            .accessibilityIdentifier("clearMode.progress")
+    }
+}
+
+// Barre de progression qu'on fait glisser (affichage allégé, lecteur plein écran) : fine ligne, point à la position,
+// plus gros sous le doigt ; relue à chaque image, figée en pause.
+struct PlaybackScrubber: View {
+    let progress: () -> PlaybackProgress?
+    let isPaused: Bool
+    let seek: (Double) -> Void
+    // Début et fin d'un glissement (le lecteur plein écran garde alors ses commandes affichées).
+    var onScrub: (Bool) -> Void = { _ in }
+    // Position tenue sous le doigt pendant le glissement.
+    @State private var dragFraction: Double?
+
+    var body: some View {
         TimelineView(.animation(paused: isPaused || dragFraction != nil)) { _ in
             let fraction = dragFraction ?? progress()?.fraction ?? 0
             GeometryReader { geometry in
@@ -288,18 +303,21 @@ struct ClearModeBar: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
+                            if dragFraction == nil { onScrub(true) }
                             let fraction = min(1, max(0, value.location.x / max(1, geometry.size.width)))
                             dragFraction = fraction
                             seek(fraction)
                         }
-                        .onEnded { _ in dragFraction = nil }
+                        .onEnded { _ in
+                            dragFraction = nil
+                            onScrub(false)
+                        }
                 )
             }
             .frame(height: 22)
         }
         .accessibilityElement()
         .accessibilityLabel("Progression de la vidéo")
-        .accessibilityIdentifier("clearMode.progress")
     }
 }
 

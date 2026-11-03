@@ -78,7 +78,15 @@ final class SessionStore {
         notice = AppError.sessionExpired.message
     }
 
+    // Écran qui ne peut pas laisser la feuille de connexion s'ouvrir par-dessus lui (lecteur plein écran en paysage) :
+    // il reçoit la demande à la place, se ferme, puis la renouvelle.
+    @ObservationIgnored var signInInterceptor: ((String?) -> Void)?
+
     func requestSignIn(message: String? = nil) {
+        if let signInInterceptor {
+            signInInterceptor(message)
+            return
+        }
         signInMessage = message
         isPresentingSignIn = true
     }
