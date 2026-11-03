@@ -42,3 +42,16 @@ enum RepostBadge: Equatable {
         return video.viewer?.reposted == true ? .reposted : .repost
     }
 }
+
+// Cadrage d'une vidéo dans le lecteur plein écran, comme TikTok : une vidéo verticale (9:16 à 2:3) remplit l'écran,
+// légèrement recadrée ; une vidéo carrée, en 3:4 ou horizontale est montrée entière, centrée sur fond noir, au lieu
+// d'être « zoomée ». Taille inconnue (pas encore chargée) : remplit, comme avant.
+enum VideoFraming {
+    // Largeur / hauteur au-delà de laquelle la vidéo est ajustée : entre le 2:3 (0,667) et le 3:4 (0,75).
+    static let maxFillAspectRatio = 0.7
+
+    static func fills(width: Double, height: Double) -> Bool {
+        guard width > 0, height > 0 else { return true }
+        return width / height <= maxFillAspectRatio
+    }
+}

@@ -113,14 +113,12 @@ struct StoryViewerView: View {
                 // En overlay : recadrée, l'image ne doit pas agrandir l'écran (même piège que le feed).
                 Color.black
                     .overlay {
-                        AsyncImage(url: story.mediaType == .photo ? story.mediaURL : story.thumbnailURL) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
+                        FramedThumbnail(url: story.mediaType == .photo ? story.mediaURL : story.thumbnailURL) {
                             ProgressView().tint(.white)
                         }
                     }
                     .overlay {
-                        if story.mediaType == .video { PlayerLayerView(player: player.player) }
+                        if story.mediaType == .video { PlayerLayerView(player: player.player, adaptsToVideo: true) }
                     }
                     .clipped()
                     .accessibilityElement()

@@ -316,15 +316,12 @@ struct FeedPageView: View {
 
     var body: some View {
         // La miniature et la vidéo sont en overlay : recadrées (scaledToFill), elles ne doivent pas agrandir la page.
+        // Cadrées selon leur format (`VideoFraming`) : une vidéo carrée ou horizontale est montrée entière.
         Color.black
             .overlay {
-                AsyncImage(url: video.thumbnailURL) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.black
-                }
+                FramedThumbnail(url: video.thumbnailURL) { Color.black }
             }
-            .overlay { PlayerLayerView(player: player) }
+            .overlay { PlayerLayerView(player: player, adaptsToVideo: true) }
             .clipped()
             .contentShape(Rectangle())
             .gesture(
@@ -841,20 +838,56 @@ struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer?
     // Faux : la vidéo est ajustée (bandes noires) au lieu de remplir le cadre.
     var fills = true
+    // Vrai : le cadrage suit le format de la vidéo (`VideoFraming`), lu sur l'élément en cours ; `fills` est ignoré.
+    var adaptsToVideo = false
 
     func makeUIView(context: Context) -> PlayerUIView {
         PlayerUIView()
     }
 
     func updateUIView(_ view: PlayerUIView, context: Context) {
-        if view.playerLayer.player !== player { view.playerLayer.player = player }
-        let gravity: AVLayerVideoGravity = fills ? .resizeAspectFill : .resizeAspect
-        if view.playerLayer.videoGravity != gravity { view.playerLayer.videoGravity = gravity }
+        view.adaptsToVideo = adaptsToVideo
+        view.prefersFill = fills
+        if view.playerLayer.player !== player { view.attach(player) }
+        view.applyGravity()
     }
 
     final class PlayerUIView: UIView {
         override static var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        var adaptsToVideo = false
+        var prefersFill = true
+        // Taille affichée de l'élément en cours (rotation comprise), zéro tant qu'il n'est pas prêt.
+        private var videoSize = CGSize.zero
+        private var itemObservation: NSKeyValueObservation?
+        private var sizeObservation: NSKeyValueObservation?
+
+        // Le lecteur bouclé (`AVPlayerLooper`) change d'élément à chaque tour : la taille est relue sur chacun.
+        func attach(_ player: AVPlayer?) {
+            playerLayer.player = player
+            videoSize = .zero
+            sizeObservation = nil
+            itemObservation = player?.observe(\.currentItem, options: [.initial, .new]) { [weak self] _, _ in
+                Task { @MainActor in self?.observeCurrentItemSize() }
+            }
+        }
+
+        private func observeCurrentItemSize() {
+            sizeObservation = playerLayer.player?.currentItem?.observe(\.presentationSize, options: [.initial, .new]) { [weak self] item, _ in
+                let size = item.presentationSize
+                Task { @MainActor in
+                    guard let self, size != .zero, size != self.videoSize else { return }
+                    self.videoSize = size
+                    self.applyGravity()
+                }
+            }
+        }
+
+        func applyGravity() {
+            let fills = adaptsToVideo ? VideoFraming.fills(width: videoSize.width, height: videoSize.height) : prefersFill
+            let gravity: AVLayerVideoGravity = fills ? .resizeAspectFill : .resizeAspect
+            if playerLayer.videoGravity != gravity { playerLayer.videoGravity = gravity }
+        }
 
         override init(frame: CGRect) {
             super.init(frame: frame)

@@ -51,3 +51,23 @@ struct FeedRulesTests {
         #expect(PlaybackProgress(position: .seconds(5), duration: .zero).fraction == nil)
     }
 }
+
+@Suite("Cadrage d'une vidéo plein écran")
+struct VideoFramingTests {
+    @Test("verticale (9:16, 2:3) : remplit ; carrée, 3:4 ou horizontale : ajustée sur fond noir")
+    func framing() {
+        #expect(VideoFraming.fills(width: 1080, height: 1920))
+        #expect(VideoFraming.fills(width: 720, height: 1080))
+        #expect(!VideoFraming.fills(width: 1000, height: 1000))
+        #expect(!VideoFraming.fills(width: 1000, height: 932))
+        #expect(!VideoFraming.fills(width: 836, height: 1000))
+        #expect(!VideoFraming.fills(width: 1080, height: 1440))
+        #expect(!VideoFraming.fills(width: 1920, height: 1080))
+    }
+
+    @Test("taille inconnue : remplit, comme avant")
+    func unknownSize() {
+        #expect(VideoFraming.fills(width: 0, height: 0))
+        #expect(VideoFraming.fills(width: 1080, height: 0))
+    }
+}
