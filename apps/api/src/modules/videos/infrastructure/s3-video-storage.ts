@@ -4,6 +4,7 @@ import {
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -81,6 +82,15 @@ export class S3VideoStorage extends VideoStorage {
     const command = new PutObjectCommand({ Bucket: this.config.rawBucket, Key: key, ContentType: contentType, ContentLength: size });
     // Comme la photo de profil : Content-Type et Content-Length signés, le stockage refuse (403) un autre fichier.
     return getSignedUrl(this.presigner, command, { expiresIn: expiresInSeconds, signableHeaders: new Set(['content-type', 'content-length']) });
+  }
+
+  presignGet(key: string, fileName: string, expiresInSeconds: number): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.config.rawBucket,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${fileName}"`,
+    });
+    return getSignedUrl(this.presigner, command, { expiresIn: expiresInSeconds });
   }
 
   async getObjectSize(key: string): Promise<number | null> {

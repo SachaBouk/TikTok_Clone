@@ -61,6 +61,7 @@ struct CreatePublicationUseCase: Sendable {
         )
         if kind == .video {
             upload.aiGenerated = extras.aiGenerated
+            upload.downloadsEnabled = extras.downloadsEnabled
             upload.location = extras.location
             if let (url, size) = cover, size > 0, size <= UploadRules.maxCoverFileSize, let name = try? store.adoptFile(at: url, id: "\(id)-cover") {
                 upload.coverFileName = name
@@ -187,7 +188,7 @@ struct UploadVideoUseCase: Sendable {
                     contentType: request.contentType, fileSize: request.fileSize, description: request.description, visibility: request.visibility,
                     commentsEnabled: request.commentsEnabled, soundShared: request.soundShared, soundID: request.soundID,
                     extras: UploadExtras(
-                        aiGenerated: request.aiGenerated, location: request.location,
+                        aiGenerated: request.aiGenerated, downloadsEnabled: request.downloadsEnabled, location: request.location,
                         coverSize: request.coverFileName == nil ? nil : request.coverSize))
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
@@ -295,6 +296,15 @@ struct SetVideoVisibilityUseCase: Sendable {
 
     func callAsFunction(videoID: String, visibility: VideoVisibility) async throws {
         try await videos.setVisibility(videoID: videoID, visibility: visibility)
+    }
+}
+
+// « Autoriser le téléchargement » (ADR-067), par l'auteur de la vidéo.
+struct SetDownloadsEnabledUseCase: Sendable {
+    let videos: any VideoPublishingRepository
+
+    func callAsFunction(videoID: String, enabled: Bool) async throws {
+        try await videos.setDownloadsEnabled(videoID: videoID, enabled: enabled)
     }
 }
 

@@ -40,10 +40,15 @@ final class VideoInteractionsModel {
     // comme TikTok, jusqu'à « Afficher la vidéo ». Sur l'appareil seulement, pendant la session de l'app (oubliées à
     // la déconnexion et à la relance) ; l'API ne masque rien avant la décision d'un administrateur.
     private(set) var reportedVideoIDs: Set<String> = []
+    // « Pas intéressé(e) » (ADR-067) : vidéos retirées des lecteurs, sur l'appareil seulement (pas d'algorithme), oubliées
+    // à la déconnexion et à la relance.
+    private(set) var notInterestedVideoIDs: Set<String> = []
     // Visibilité changée depuis l'app (ADR-061), par vidéo : superposée aux vidéos chargées.
     private var visibilityOverrides: [String: VideoVisibility] = [:]
     // Commentaires coupés ou rétablis depuis l'app (ADR-062), par vidéo.
     private var commentsOverrides: [String: Bool] = [:]
+    // Téléchargement autorisé ou refusé depuis l'app (ADR-067), par vidéo.
+    private var downloadsOverrides: [String: Bool] = [:]
     // Incrémenté à chaque changement de visibilité : les grilles « Vidéos » et « cadenas » du profil se rechargent.
     private(set) var visibilityVersion = 0
     // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
@@ -56,6 +61,7 @@ final class VideoInteractionsModel {
     private let deleteVideo: DeleteVideoUseCase
     private let setVisibility: SetVideoVisibilityUseCase?
     private let setCommentsEnabled: SetCommentsEnabledUseCase?
+    private let setDownloadsEnabled: SetDownloadsEnabledUseCase?
     private let session: SessionStore
     private let analytics: AnalyticsModel
 
@@ -66,11 +72,13 @@ final class VideoInteractionsModel {
         deleteVideo: DeleteVideoUseCase,
         setVisibility: SetVideoVisibilityUseCase? = nil,
         setCommentsEnabled: SetCommentsEnabledUseCase? = nil,
+        setDownloadsEnabled: SetDownloadsEnabledUseCase? = nil,
         session: SessionStore,
         analytics: AnalyticsModel
     ) {
         self.setVisibility = setVisibility
         self.setCommentsEnabled = setCommentsEnabled
+        self.setDownloadsEnabled = setDownloadsEnabled
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
@@ -88,6 +96,7 @@ final class VideoInteractionsModel {
         }
         if let visibility = visibilityOverrides[video.id] { result = result.with(viewer: result.viewer, visibility: visibility) }
         if let enabled = commentsOverrides[video.id] { result = result.with(viewer: result.viewer, commentsEnabled: enabled) }
+        if let enabled = downloadsOverrides[video.id] { result = result.with(viewer: result.viewer, downloadsEnabled: enabled) }
         return result
     }
 
@@ -180,9 +189,16 @@ final class VideoInteractionsModel {
         reportedVideoIDs.remove(videoID)
     }
 
+    // « Pas intéressé(e) » dans le menu de la vidéo : elle quitte les lecteurs, on passe à la suivante.
+    func notInterested(in video: FeedVideo) {
+        guard notInterestedVideoIDs.insert(video.id).inserted else { return }
+        analytics.track(.videoNotInterested(videoID: video.id))
+    }
+
     // Déconnexion : un autre compte ne doit pas hériter des vidéos masquées.
     func forgetReportedVideos() {
         reportedVideoIDs.removeAll()
+        notInterestedVideoIDs.removeAll()
     }
 
     // Suppression d'une de ses vidéos, quel que soit l'écran (feed, lecteur d'une grille, vidéo seule).
@@ -226,6 +242,22 @@ final class VideoInteractionsModel {
             return nil
         } catch {
             commentsOverrides[video.id] = before
+            return handle(error)
+        }
+    }
+
+    // Autoriser ou refuser le téléchargement de sa vidéo (ADR-067) : l'écran change tout de suite, et revient en cas d'erreur.
+    func setDownloadsEnabled(_ enabled: Bool, of video: FeedVideo) async -> String? {
+        guard isOwn(video), let setDownloadsEnabled else { return nil }
+        let before = display(video).downloadsEnabled
+        guard before != enabled, pending.insert("downloads-\(video.id)").inserted else { return nil }
+        defer { pending.remove("downloads-\(video.id)") }
+        downloadsOverrides[video.id] = enabled
+        do {
+            try await setDownloadsEnabled(videoID: video.id, enabled: enabled)
+            return nil
+        } catch {
+            downloadsOverrides[video.id] = before
             return handle(error)
         }
     }

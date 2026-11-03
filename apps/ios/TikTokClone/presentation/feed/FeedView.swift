@@ -26,6 +26,8 @@ struct FeedView: View {
     // Feuille de cadeaux et animation à l'envoi (ADR-050).
     @State private var giftVideo: FeedVideo?
     @State private var giftBurst: GiftBurst?
+    // Menu de la vidéo (ADR-067), ouvert par un appui long au milieu.
+    @State private var menuVideo: FeedVideo?
     @Environment(\.navigationPath) private var navigationPath
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
@@ -50,11 +52,13 @@ struct FeedView: View {
         GeometryReader { geometry in
             content(bottomInset: geometry.safeAreaInsets.bottom, topInset: geometry.safeAreaInsets.top)
         }
-        // Message du verrouillage de la vitesse ×2, sous la barre du haut.
+        // Message du verrouillage de la vitesse ×2 ou du défilement automatique, sous la barre du haut.
         .overlay(alignment: .top) {
-            FastPlaybackNoticeView(model: container.fastPlayback)
+            FastPlaybackNoticeView(model: container.playbackOptions)
                 .padding(.top, 66)
         }
+        // Téléchargement d'une vidéo dans Photos (ADR-067).
+        .overlay { VideoDownloadOverlay(model: container.downloads) }
         .background(.black)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.start() }
@@ -75,11 +79,25 @@ struct FeedView: View {
         .onChange(of: session.isSignedIn) { Task { await reload() } }
         .onChange(of: interactions.deletedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
         .onChange(of: interactions.blockedUserIDs) { _, ids in viewModel.remove(authorIDs: ids) }
+        // « Pas intéressé(e) » (ADR-067) : la vidéo quitte le lecteur, la suivante devient courante.
+        .onChange(of: interactions.notInterestedVideoIDs) { _, ids in viewModel.remove(videoIDs: ids) }
+        // Défilement automatique (ADR-067) : à la fin de la vidéo courante, la suivante ; jamais sous une feuille ouverte
+        // (menu, commentaires, partage, signalement, cadeaux), qui porte sur la vidéo affichée.
+        .onChange(of: pool.lastLoopEnd) { _, end in
+            let sheetOpen = menuVideo != nil || commentsVideo != nil || shareVideo != nil || reportedVideo != nil || giftVideo != nil
+            guard let end, container.playbackOptions.autoScroll, !sheetOpen, let next = viewModel.entryAfterEnd(of: end.videoID)
+            else { return }
+            withAnimation(.easeInOut(duration: 0.35)) { scrolledID = next }
+        }
+        // Affichage allégé (ADR-067) : quitté en quittant le lecteur (autre onglet, écran poussé par-dessus).
+        .onChange(of: isTabActive && isOnScreen) { wasShown, isShown in
+            if wasShown && !isShown { container.playbackOptions.setClearMode(false) }
+        }
         // Vidéo signalée : voile par-dessus, lecture arrêtée jusqu'à « Afficher la vidéo ».
         .onChange(of: interactions.reportedVideoIDs, initial: true) { _, ids in viewModel.setMasked(ids) }
         .videoInteractionSheets(
-            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
-            container: container
+            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, menu: $menuVideo,
+            interactions: interactions, container: container
         )
         .navigationDestination(item: $hashtagRoute) { route in
             HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
@@ -169,13 +187,15 @@ struct FeedView: View {
                             },
                             gift: { openGifts(entry.video) },
                             // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
-                            openStories: { container.router.openStories([entry.video.author], source: .feed) }
+                            openStories: { container.router.openStories([entry.video.author], source: .feed) },
+                            openMenu: { menuVideo = interactions.display(entry.video) }
                         ),
                         // Barre de progression : la vidéo courante seulement.
                         progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
                         revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
                             ? { interactions.showReported(videoID: entry.video.id) } : nil,
-                        fastPlayback: container.fastPlayback
+                        options: container.playbackOptions,
+                        seek: { pool.seek(entry.video.id, to: $0) }
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
                     .id(entry.id)
@@ -260,6 +280,8 @@ struct VideoPageActions {
     var gift: () -> Void = {}
     // Avatar entouré de l'anneau des stories (ADR-051) : ses stories. Nil : l'avatar ouvre toujours le profil.
     var openStories: (() -> Void)? = nil
+    // Appui long au milieu de la vidéo (ADR-067) : menu de la vidéo.
+    var openMenu: () -> Void = {}
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; pastille de republication, auteur, description
@@ -278,12 +300,14 @@ struct FeedPageView: View {
     // (« Afficher la vidéo »). Nil : pas de voile.
     var revealReported: (() -> Void)? = nil
     // Vitesse ×2 à l'appui long sur un côté (`FastPlayback`) ; nil : pas d'appui long.
-    var fastPlayback: FastPlaybackModel? = nil
+    var options: PlaybackOptionsModel? = nil
+    // Barre de progression de l'affichage allégé (ADR-067) : déplace la lecture (fraction de la vidéo).
+    var seek: ((Double) -> Void)? = nil
     @State private var burst: HeartBurst?
     @State private var width: CGFloat = 0
 
-    // Pendant l'appui long : seule la vidéo reste, comme TikTok.
-    private var hidesOverlays: Bool { fastPlayback?.isHolding == true }
+    // Pendant l'appui long, et en affichage allégé (ADR-067) : seule la vidéo reste, comme TikTok.
+    private var hidesOverlays: Bool { options?.isHolding == true || options?.isClearMode == true }
 
     private struct HeartBurst: Identifiable, Equatable {
         let id = UUID()
@@ -312,8 +336,8 @@ struct FeedPageView: View {
             )
             .modifier(
                 FastPlaybackGestureIfAvailable(
-                    model: fastPlayback, width: width, bottomInset: bottomInset,
-                    isEnabled: !showsPauseIndicator && revealReported == nil)
+                    model: options, width: width, bottomInset: bottomInset, isEnabled: revealReported == nil,
+                    allowsFast: !showsPauseIndicator, openMenu: actions.openMenu)
             )
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.width
@@ -384,6 +408,17 @@ struct FeedPageView: View {
                         .opacity(hidesOverlays ? 0 : 1)
                 }
             }
+            .overlay(alignment: .bottom) {
+                // Affichage allégé (ADR-067) : la vidéo courante a sa barre de lecture en bas.
+                if let options, options.isClearMode, !options.isHolding, let progress {
+                    ClearModeBar(
+                        progress: progress, isPaused: showsPauseIndicator, speed: options.speed, bottomInset: bottomInset,
+                        seek: { seek?($0) }, togglePause: actions.togglePause,
+                        cycleSpeed: { options.setSpeed(options.speed.next) }, close: { options.setClearMode(false) }
+                    )
+                    .transition(.opacity)
+                }
+            }
             .overlay {
                 if let revealReported {
                     ReportedVideoMask(bottomInset: bottomInset, reveal: revealReported)
@@ -394,6 +429,7 @@ struct FeedPageView: View {
             .animation(.easeOut(duration: 0.15), value: showsPauseIndicator)
             .animation(.easeInOut(duration: 0.25), value: revealReported == nil)
             .animation(.easeInOut(duration: 0.15), value: hidesOverlays)
+            .animation(.easeInOut(duration: 0.2), value: options?.isClearMode)
     }
 
     // Espace entre la barre de progression et la barre d'onglets.
@@ -442,14 +478,18 @@ struct FeedPageView: View {
 
 // Appui long de la vitesse ×2, sur les pages qui en ont un modèle.
 private struct FastPlaybackGestureIfAvailable: ViewModifier {
-    let model: FastPlaybackModel?
+    let model: PlaybackOptionsModel?
     let width: CGFloat
     let bottomInset: CGFloat
     let isEnabled: Bool
+    let allowsFast: Bool
+    let openMenu: () -> Void
 
     func body(content: Content) -> some View {
         if let model {
-            content.gesture(FastPlaybackGesture(model: model, width: width, bottomInset: bottomInset, isEnabled: isEnabled))
+            content.gesture(
+                FastPlaybackGesture(
+                    model: model, width: width, bottomInset: bottomInset, isEnabled: isEnabled, allowsFast: allowsFast, openMenu: openMenu))
         } else {
             content
         }

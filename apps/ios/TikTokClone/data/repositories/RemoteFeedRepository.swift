@@ -100,7 +100,8 @@ extension FeedVideo {
             visibility: VideoVisibility(dto.visibility),
             commentsEnabled: dto.commentsEnabled,
             location: dto.location.map { VideoLocation(name: $0.name, address: $0.address) },
-            aiGenerated: dto.aiGenerated
+            aiGenerated: dto.aiGenerated,
+            downloadsEnabled: dto.downloadsEnabled
         )
     }
 }

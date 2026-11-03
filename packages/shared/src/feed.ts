@@ -25,6 +25,8 @@ export interface FeedItemDto {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+  downloadsEnabled: boolean;
   // Étiquette « Contenu généré par l'IA » (ADR-065).
   aiGenerated: boolean;
   // Lieu (ADR-065), absent sans lieu.

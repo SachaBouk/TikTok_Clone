@@ -19,6 +19,7 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         // Visibilité demandée à la création, puis changée (ADR-061), par vidéo.
         var visibilities: [String: VideoVisibility] = [:]
         var commentsEnabled: [String: Bool] = [:]
+        var downloadsEnabled: [String: Bool] = [:]
         // « Autoriser l'utilisation de mon son » et son repris, par vidéo créée (ADR-064).
         var sounds: [String: (shared: Bool, soundID: String?)] = [:]
         // Réglages de l'écran de publication (ADR-065), par vidéo créée.
@@ -34,8 +35,16 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
 
     func visibility(of id: String) -> VideoVisibility? { state.withLock { $0.visibilities[id] } }
     func commentsEnabled(of id: String) -> Bool? { state.withLock { $0.commentsEnabled[id] } }
+    func downloadsEnabled(of id: String) -> Bool? { state.withLock { $0.downloadsEnabled[id] } }
     func sound(of id: String) -> (shared: Bool, soundID: String?)? { state.withLock { $0.sounds[id] } }
     func extras(of id: String) -> UploadExtras? { state.withLock { $0.extras[id] } }
+
+    func setDownloadsEnabled(videoID: String, enabled: Bool) async throws {
+        try state.withLock { state in
+            if let error = state.visibilityError { throw error }
+            state.downloadsEnabled[videoID] = enabled
+        }
+    }
 
     func setCommentsEnabled(videoID: String, enabled: Bool) async throws {
         try state.withLock { state in

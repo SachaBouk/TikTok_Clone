@@ -100,6 +100,27 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "playback_speed_locked", properties: ["locked": .bool(locked)])
     }
 
+    // Menu d'une vidéo (ADR-067) : ouvert (appui long au milieu), vitesse, défilement automatique, affichage allégé,
+    // « Pas intéressé(e) », téléchargement enregistré dans Photos.
+    static func videoMenuOpened(videoID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "video_menu_opened", properties: ["video_id": .string(videoID)])
+    }
+    static func playbackSpeedChanged(_ speed: PlaybackSpeed) -> AnalyticsEvent {
+        AnalyticsEvent(name: "playback_speed_changed", properties: ["speed": .double(speed.rawValue)])
+    }
+    static func autoScrollChanged(_ enabled: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "auto_scroll_changed", properties: ["enabled": .bool(enabled)])
+    }
+    static func clearModeChanged(_ enabled: Bool) -> AnalyticsEvent {
+        AnalyticsEvent(name: "clear_mode_changed", properties: ["enabled": .bool(enabled)])
+    }
+    static func videoNotInterested(videoID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "video_not_interested", properties: ["video_id": .string(videoID)])
+    }
+    static func videoDownloaded(videoID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "video_downloaded", properties: ["video_id": .string(videoID)])
+    }
+
     static func commentPosted(videoID: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "comment_posted", properties: ["video_id": .string(videoID)])
     }

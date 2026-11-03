@@ -45,6 +45,9 @@ export class FeedItemResponse implements FeedItemDto {
   @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
   soundShared!: boolean;
 
+  @ApiProperty({ description: '« Autoriser le téléchargement » (ADR-067).' })
+  downloadsEnabled!: boolean;
+
   @ApiProperty({ description: "Étiquette « Contenu généré par l'IA » (ADR-065)." })
   aiGenerated!: boolean;
 
@@ -122,6 +125,7 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
     soundShared: video.soundShared,
+    downloadsEnabled: video.downloadsEnabled,
     aiGenerated: video.aiGenerated,
     ...locationOf(video),
     createdAt: video.createdAt.toISOString(),

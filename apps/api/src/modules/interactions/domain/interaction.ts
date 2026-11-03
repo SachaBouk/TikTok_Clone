@@ -100,6 +100,11 @@ export const FOLLOW_RATE_LIMITS: RateLimitRule[] = [
   { limit: 30, windowSeconds: 60 },
   { limit: 200, windowSeconds: 24 * 3600 },
 ];
+// Téléchargements de vidéos (ADR-067) : chaque URL signée demandée compte, même pour ses propres vidéos.
+export const DOWNLOAD_RATE_LIMITS: RateLimitRule[] = [
+  { limit: 30, windowSeconds: 3600 },
+  { limit: 200, windowSeconds: 24 * 3600 },
+];
 // Vues : envoyées seules par l'app après 1 s de lecture. Au-delà, la vue est ignorée sans erreur (204), comme un
 // partage en double : ni comptée ni ajoutée à l'historique.
 export const VIEW_RATE_LIMITS: RateLimitRule[] = [{ limit: 600, windowSeconds: 3600 }];

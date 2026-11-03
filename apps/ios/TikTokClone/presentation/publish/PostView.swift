@@ -147,6 +147,7 @@ struct PostView: View {
     private var optionsSummary: String {
         var parts = [draft.commentsEnabled ? "Commentaires autorisés." : "Commentaires désactivés."]
         if !draft.soundShared { parts.append("Son non partagé.") }
+        if !draft.downloadsEnabled { parts.append("Téléchargement désactivé.") }
         if draft.aiGenerated { parts.append("Contenu généré par l’IA.") }
         if draft.saveToDevice { parts.append("Enregistrée sur l’iPhone.") }
         return parts.joined(separator: " ")
@@ -368,6 +369,11 @@ struct PostSettingsSheet: View {
                             toggleRow(
                                 "Autoriser l'utilisation de mon son", systemImage: "music.note", isOn: $draft.soundShared,
                                 detail: "Les autres pourront reprendre le son de cette vidéo dans les leurs.", identifier: "settings.sound")
+                            Divider().padding(.leading, 56)
+                            // ADR-067 : décoché, seul l'auteur télécharge la vidéo.
+                            toggleRow(
+                                "Autoriser le téléchargement", systemImage: "arrow.down.to.line", isOn: $draft.downloadsEnabled,
+                                detail: "Les autres pourront enregistrer cette vidéo sur leur appareil.", identifier: "settings.downloads")
                         }
                         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                         sectionTitle("Réglages avancés")

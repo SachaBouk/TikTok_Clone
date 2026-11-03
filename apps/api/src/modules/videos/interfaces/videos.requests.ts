@@ -82,6 +82,11 @@ export class CreateUploadRequest {
   @IsBoolean()
   soundShared?: boolean;
 
+  @ApiPropertyOptional({ description: '« Autoriser le téléchargement » (ADR-067), vrai par défaut.' })
+  @IsOptional()
+  @IsBoolean()
+  downloadsEnabled?: boolean;
+
   @ApiPropertyOptional({ format: 'uuid', description: "Son repris d'une autre vidéo (ADR-064)." })
   @IsOptional()
   @IsUUID()
@@ -110,6 +115,12 @@ export class SetSoundSettingsRequest {
   @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
   @IsBoolean()
   soundShared!: boolean;
+}
+
+export class SetDownloadSettingsRequest {
+  @ApiProperty({ description: '« Autoriser le téléchargement » (ADR-067).' })
+  @IsBoolean()
+  downloadsEnabled!: boolean;
 }
 
 export class SetVideoVisibilityRequest {

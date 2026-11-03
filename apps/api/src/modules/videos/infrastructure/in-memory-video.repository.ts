@@ -37,6 +37,7 @@ export class InMemoryVideoRepository extends VideoRepository {
       visibility: video.visibility ?? 'public',
       commentsEnabled: video.commentsEnabled ?? true,
       soundShared: video.soundShared ?? true,
+      downloadsEnabled: video.downloadsEnabled ?? true,
       soundId: video.soundId ?? null,
       coverKey: video.coverKey ?? null,
       aiGenerated: video.aiGenerated ?? false,
@@ -98,6 +99,13 @@ export class InMemoryVideoRepository extends VideoRepository {
     const video = this.videos.get(id);
     if (!video) return null;
     Object.assign(video, { soundShared: shared, updatedAt: this.now() });
+    return toVideo(video);
+  }
+
+  async setDownloadsEnabled(id: string, enabled: boolean): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { downloadsEnabled: enabled, updatedAt: this.now() });
     return toVideo(video);
   }
 
@@ -346,6 +354,7 @@ function toDetails(v: StoredVideo): VideoDetails {
     visibility: v.visibility,
     commentsEnabled: v.commentsEnabled,
     soundShared: v.soundShared,
+    downloadsEnabled: v.downloadsEnabled,
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,
@@ -365,6 +374,7 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     visibility: v.visibility,
     commentsEnabled: v.commentsEnabled,
     soundShared: v.soundShared,
+    downloadsEnabled: v.downloadsEnabled,
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,

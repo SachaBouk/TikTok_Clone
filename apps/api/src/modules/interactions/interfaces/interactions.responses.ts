@@ -17,6 +17,7 @@ import type {
   UserRelationshipDto,
   UserRelationshipEntryDto,
   UserRelationshipListDto,
+  VideoDownloadDto,
 } from '@repo/shared';
 import { UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 
@@ -33,6 +34,23 @@ export class InteractionStateResponse implements InteractionStateDto {
 export class ShareResultResponse implements ShareResultDto {
   @ApiProperty({ type: 'integer', minimum: 0 })
   sharesCount!: number;
+}
+
+export class VideoDownloadResponse implements VideoDownloadDto {
+  @ApiProperty({ description: 'URL signée du fichier d’origine (GET), servi en pièce jointe.' })
+  url!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  expiresAt!: string;
+
+  @ApiProperty({ example: 'video/mp4' })
+  contentType!: string;
+
+  @ApiProperty({ example: '0190f…c2.mp4' })
+  fileName!: string;
+
+  @ApiProperty({ type: 'integer', minimum: 0, description: 'Taille du fichier, en octets.' })
+  size!: number;
 }
 
 export class CommentViewerStateResponse implements CommentViewerStateDto {

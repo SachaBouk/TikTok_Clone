@@ -20,6 +20,7 @@ import {
   CompleteUploadRequest,
   CreateUploadRequest,
   SetCommentSettingsRequest,
+  SetDownloadSettingsRequest,
   SetSoundSettingsRequest,
   SetVideoVisibilityRequest,
 } from './videos.requests';
@@ -54,6 +55,7 @@ export class VideosController {
         visibility: body.visibility,
         commentsEnabled: body.commentsEnabled,
         soundShared: body.soundShared,
+        downloadsEnabled: body.downloadsEnabled,
         soundId: body.soundId,
         cover: body.cover ? { fileSize: body.cover.fileSize } : undefined,
         aiGenerated: body.aiGenerated,
@@ -117,6 +119,20 @@ export class VideosController {
     @Body() body: SetSoundSettingsRequest,
   ): Promise<VideoDto> {
     return toVideoDto(await this.videos.setSoundShared(user.userId, id, body.soundShared));
+  }
+
+  // « Autoriser le téléchargement » (ADR-067), par son auteur, quel que soit son statut.
+  @Patch(':id/download-settings')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
+  async setVideoDownloadSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SetDownloadSettingsRequest,
+  ): Promise<VideoDto> {
+    return toVideoDto(await this.videos.setDownloadsEnabled(user.userId, id, body.downloadsEnabled));
   }
 
   // Par son auteur, quel que soit le statut. Likes, commentaires, favoris, republications et notifications

@@ -58,6 +58,10 @@ export class InMemoryVideoStorage extends VideoStorage {
     return `memory://${key}`;
   }
 
+  async presignGet(key: string, fileName: string): Promise<string> {
+    return `memory://${key}?download=${fileName}`;
+  }
+
   // Ce que ferait l'app avec l'URL signée d'un seul PUT.
   putObject(key: string, size: number): void {
     this.objects.set(key, size);

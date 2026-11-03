@@ -21,6 +21,8 @@ export interface Video {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+  downloadsEnabled: boolean;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   // Son repris d'une autre vidéo (ADR-064), nul sinon ou s'il a disparu.
@@ -44,6 +46,8 @@ export interface PublishedVideo {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+  downloadsEnabled: boolean;
   // Étiquette « Contenu généré par l'IA » et lieu (nom, adresse affichée ; jamais de coordonnées), ADR-065.
   aiGenerated: boolean;
   locationName: string | null;
@@ -70,6 +74,8 @@ export interface VideoDetails {
   commentsEnabled: boolean;
   // « Autoriser l'utilisation de mon son » (ADR-064).
   soundShared: boolean;
+  // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+  downloadsEnabled: boolean;
   // Étiquette « Contenu généré par l'IA » et lieu (nom, adresse affichée ; jamais de coordonnées), ADR-065.
   aiGenerated: boolean;
   locationName: string | null;
@@ -118,6 +124,8 @@ export interface NewVideo {
   commentsEnabled?: boolean;
   // Autorisé par défaut (ADR-064).
   soundShared?: boolean;
+  // « Autoriser le téléchargement » (ADR-067).
+  downloadsEnabled?: boolean;
   // Son repris d'une autre vidéo (ADR-064).
   soundId?: string | null;
   // ADR-065 : couverture envoyée par l'app, étiquette IA (faux par défaut), lieu.

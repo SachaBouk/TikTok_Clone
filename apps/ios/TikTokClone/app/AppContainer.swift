@@ -39,7 +39,9 @@ final class AppContainer {
     // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
     let lives: LiveModel
     // Vitesse ×2 du lecteur vidéo, verrouillable (appui long sur un côté de la vidéo).
-    let fastPlayback: FastPlaybackModel
+    let playbackOptions: PlaybackOptionsModel
+    // Téléchargement d'une vidéo dans Photos (ADR-067), un à la fois.
+    let downloads: VideoDownloadModel
     // Onboarding du premier lancement (ADR-055).
     let onboarding = OnboardingModel(preferences: UserDefaultsPreferencesStore())
     private let auth: any AuthRepository
@@ -105,7 +107,11 @@ final class AppContainer {
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
         analytics = AnalyticsModel(service: analyticsService, preferences: UserDefaultsPreferencesStore())
-        fastPlayback = FastPlaybackModel(playback: playerPool, analytics: analytics)
+        playbackOptions = PlaybackOptionsModel(playback: playerPool, analytics: analytics)
+        downloads = VideoDownloadModel(
+            download: DownloadVideoUseCase(
+                links: RemoteInteractionRepository(client: client), files: URLSessionFileDownloader(), photos: PhotoKitLibrarySaver()),
+            session: session, analytics: analytics)
         videoInteractions = VideoInteractionsModel(
             setReaction: SetReactionUseCase(interactions: interactions),
             setFollow: SetFollowUseCase(interactions: interactions),
@@ -113,6 +119,7 @@ final class AppContainer {
             deleteVideo: DeleteVideoUseCase(videos: videos),
             setVisibility: SetVideoVisibilityUseCase(videos: videos),
             setCommentsEnabled: SetCommentsEnabledUseCase(videos: videos),
+            setDownloadsEnabled: SetDownloadsEnabledUseCase(videos: videos),
             session: session,
             analytics: analytics
         )
@@ -205,7 +212,7 @@ final class AppContainer {
                 suggestions.reset()
                 drafts.reset()
                 commentDislikes.reset()
-                fastPlayback.reset()
+                playbackOptions.reset()
             }
             lastSignedIn = signedIn
         }

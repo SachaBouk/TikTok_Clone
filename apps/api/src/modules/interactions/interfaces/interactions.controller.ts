@@ -20,6 +20,7 @@ import type {
   ShareResultDto,
   UserRelationshipDto,
   UserRelationshipListDto,
+  VideoDownloadDto,
 } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.decorator';
@@ -40,6 +41,7 @@ import {
   ShareResultResponse,
   UserRelationshipListResponse,
   UserRelationshipResponse,
+  VideoDownloadResponse,
 } from './interactions.responses';
 
 const VIDEO_ID = new ParseUUIDPipe();
@@ -162,6 +164,25 @@ export class InteractionsController {
     @Param('id', VIDEO_ID) id: string,
   ): Promise<ShareResultDto> {
     return { sharesCount: await this.interactions.share(id, user ? { userId: user.userId } : { ip: ip || 'inconnue' }) };
+  }
+
+  // Téléchargement de la vidéo d'origine (ADR-067) : URL signée de lecture, valable 15 min, à enregistrer dans Photos.
+  @Post('videos/:id/download')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoDownloadResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Téléchargement refusé par l’auteur de la vidéo (ADR-067).' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, pas encore publiée, privée ou d’un compte masqué.' })
+  @ApiTooManyRequests('Trop de téléchargements récents (ADR-067)')
+  async downloadVideo(@CurrentUser() user: AuthenticatedUser, @Param('id', VIDEO_ID) id: string): Promise<VideoDownloadDto> {
+    const download = await this.interactions.downloadVideo(user.userId, id);
+    return {
+      url: download.url,
+      expiresAt: download.expiresAt.toISOString(),
+      contentType: download.contentType,
+      fileName: download.fileName,
+      size: download.size,
+    };
   }
 
   // Public. Connecté : les commentaires des comptes bloqués (dans un sens ou dans l'autre) sont retirés.

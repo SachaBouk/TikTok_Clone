@@ -45,6 +45,15 @@ export function isSupportedVideoType(contentType: string): contentType is Suppor
   return Object.hasOwn(SUPPORTED_VIDEO_TYPES, contentType);
 }
 
+// Téléchargement de la vidéo d'origine (ADR-067) : URL signée de lecture du brut, courte.
+export const DOWNLOAD_URL_TTL_SECONDS = 15 * 60;
+
+// Type et nom du fichier téléchargé, d'après l'extension du brut (`<userId>/<uuid>.<ext>`).
+export function downloadFileOf(rawKey: string, videoId: string): { contentType: SupportedVideoType; fileName: string } {
+  const extension = rawKey.split('.').pop() === 'mov' ? 'mov' : 'mp4';
+  return { contentType: extension === 'mov' ? 'video/quicktime' : 'video/mp4', fileName: `${videoId}.${extension}` };
+}
+
 export function partCount(fileSize: number): number {
   return Math.max(1, Math.ceil(fileSize / UPLOAD_PART_SIZE_BYTES));
 }

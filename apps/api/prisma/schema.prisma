@@ -182,6 +182,8 @@ model Video {
   commentsEnabled Boolean         @default(true) @map("comments_enabled")
   // « Autoriser l'utilisation de mon son » (ADR-064) : refusé, son son n'est plus proposé aux autres.
   soundShared     Boolean         @default(true) @map("sound_shared")
+  // « Autoriser le téléchargement » (ADR-067).
+  downloadsEnabled Boolean        @default(true) @map("downloads_enabled")
   // Son repris d'une autre vidéo (ADR-064) ; NULL si ce son a disparu (le son reste dans le fichier publié).
   soundId         String?         @map("sound_id") @db.Uuid
   // Couverture choisie dans l'app (ADR-065) : JPEG dans le bucket des uploads, devenu la miniature. Jamais exposée.

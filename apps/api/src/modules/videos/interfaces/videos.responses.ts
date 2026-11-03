@@ -36,6 +36,9 @@ export class VideoResponse implements VideoDto {
   @ApiProperty({ description: "« Autoriser l'utilisation de mon son » (ADR-064)." })
   soundShared!: boolean;
 
+  @ApiProperty({ description: '« Autoriser le téléchargement » (ADR-067).' })
+  downloadsEnabled!: boolean;
+
   @ApiProperty({ description: "Étiquette « Contenu généré par l'IA » (ADR-065)." })
   aiGenerated!: boolean;
 
@@ -97,6 +100,7 @@ export function toVideoDto(video: Video): VideoDto {
     visibility: video.visibility,
     commentsEnabled: video.commentsEnabled,
     soundShared: video.soundShared,
+    downloadsEnabled: video.downloadsEnabled,
     aiGenerated: video.aiGenerated,
     ...locationOf(video),
     hlsUrl: video.hlsUrl,

@@ -84,6 +84,8 @@ struct HomeFeedView: View {
             .opacity(barOpacity)
         }
         .animation(.easeInOut(duration: 0.15), value: barOpacity)
+        // Affichage allégé (ADR-067) : sans barre d'onglets ; les barres du haut ne se touchent plus.
+        .toolbarVisibility(container.playbackOptions.isClearMode ? .hidden : .automatic, for: .tabBar)
         .onChange(of: container.router.homeRefreshRequests) { Task { await refreshShownFeed() } }
         .onChange(of: selection) { showFollowingIfSelected() }
         // Abonnement confirmé par l'API alors que le feed des abonnements est déjà affiché (toucher « Abonnements »
@@ -96,8 +98,9 @@ struct HomeFeedView: View {
         }
     }
 
-    // Pendant l'appui long de la vitesse ×2 : sélecteur, « LIVE » et loupe masqués, seule la vidéo reste.
-    private var barOpacity: Double { container.fastPlayback.isHolding ? 0 : 1 }
+    // Pendant l'appui long de la vitesse ×2 et en affichage allégé (ADR-067) : sélecteur, « LIVE » et loupe masqués,
+    // seule la vidéo reste.
+    private var barOpacity: Double { container.playbackOptions.isHolding || container.playbackOptions.isClearMode ? 0 : 1 }
 
     private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false) -> some View {
         FeedView(

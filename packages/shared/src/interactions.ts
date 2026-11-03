@@ -14,6 +14,16 @@ export interface ShareResultDto {
   sharesCount: number;
 }
 
+// Téléchargement de la vidéo d'origine (ADR-067) : URL signée de lecture (GET), valable peu de temps.
+export interface VideoDownloadDto {
+  url: string;
+  expiresAt: string;
+  contentType: string;
+  fileName: string;
+  // Taille du fichier, en octets.
+  size: number;
+}
+
 export interface CommentDto {
   id: string;
   videoId: string;

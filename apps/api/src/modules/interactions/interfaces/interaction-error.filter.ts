@@ -14,6 +14,7 @@ import {
   CannotBlockYourselfError,
   CommentsDisabledError,
   CannotFollowYourselfError,
+  DownloadsDisabledError,
   EmptyCommentError,
   InteractionError,
   InvalidFollowCursorError,
@@ -47,7 +48,12 @@ function toHttpException(error: InteractionError): HttpException {
   ) {
     return new BadRequestException(error.message);
   }
-  if (error instanceof NotCommentAuthorError || error instanceof BlockedError || error instanceof CommentsDisabledError)
+  if (
+    error instanceof NotCommentAuthorError ||
+    error instanceof BlockedError ||
+    error instanceof CommentsDisabledError ||
+    error instanceof DownloadsDisabledError
+  )
     return new ForbiddenException(error.message);
   // VideoNotAvailableError, TargetUserNotFoundError, CommentNotFoundError
   return new NotFoundException(error.message);

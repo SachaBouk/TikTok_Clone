@@ -13,7 +13,8 @@ extension VideoPageActions {
         openHashtag: @escaping (String) -> Void = { _ in },
         openMention: @escaping (String) -> Void = { _ in },
         gift: @escaping () -> Void = {},
-        openStories: (() -> Void)? = nil
+        openStories: (() -> Void)? = nil,
+        openMenu: @escaping () -> Void = {}
     ) {
         self.init(
             togglePause: togglePause,
@@ -25,7 +26,8 @@ extension VideoPageActions {
             openHashtag: openHashtag,
             openMention: openMention,
             gift: gift,
-            openStories: openStories
+            openStories: openStories,
+            openMenu: openMenu
         )
     }
 }
@@ -38,12 +40,14 @@ extension View {
         share: Binding<FeedVideo?>,
         report: Binding<FeedVideo?>,
         alert: Binding<String?>,
+        menu: Binding<FeedVideo?> = .constant(nil),
         interactions: VideoInteractionsModel,
         container: AppContainer
     ) -> some View {
         modifier(
             VideoInteractionSheets(
-                comments: comments, share: share, report: report, alert: alert, interactions: interactions, container: container
+                comments: comments, share: share, report: report, alert: alert, menu: menu, interactions: interactions,
+                container: container
             ))
     }
 }
@@ -53,6 +57,8 @@ private struct VideoInteractionSheets: ViewModifier {
     @Binding var share: FeedVideo?
     @Binding var report: FeedVideo?
     @Binding var alert: String?
+    // Menu de la vidéo (ADR-067), ouvert par un appui long au milieu.
+    @Binding var menu: FeedVideo?
     let interactions: VideoInteractionsModel
     let container: AppContainer
     // Suite choisie dans la feuille de partage, faite une fois celle-ci fermée (une feuille présentée pendant la
@@ -62,6 +68,7 @@ private struct VideoInteractionSheets: ViewModifier {
     private enum AfterShare {
         case report(FeedVideo)
         case signIn
+        case download(FeedVideo)
     }
 
     func body(content: Content) -> some View {
@@ -96,6 +103,22 @@ private struct VideoInteractionSheets: ViewModifier {
                 .presentationBackground(.white)
                 .environment(\.colorScheme, .light)
             }
+            // Menu de la vidéo (ADR-067), comme TikTok : feuille gris clair, à 60 % puis grande.
+            .sheet(item: $menu, onDismiss: runAfterShare) { video in
+                VideoMenuSheet(
+                    video: interactions.display(video),
+                    isOwn: interactions.isOwn(video),
+                    options: container.playbackOptions,
+                    download: { afterShare = .download(video) },
+                    notInterested: { interactions.notInterested(in: video) },
+                    report: { afterShare = container.session.isSignedIn ? .report(video) : .signIn }
+                )
+                .presentationDetents([.fraction(0.6), .large])
+                .presentationCornerRadius(16)
+                .presentationBackground(VideoMenuSheet.background)
+                .environment(\.colorScheme, .light)
+                .onAppear { container.analytics.track(.videoMenuOpened(videoID: video.id)) }
+            }
             // Vidéo d'un autre compte signalée depuis la feuille de partage (ADR-038) ; l'auteur est proposé au blocage.
             .reportSheet(
                 Binding(
@@ -120,6 +143,7 @@ private struct VideoInteractionSheets: ViewModifier {
         switch afterShare {
         case .report(let video): report = video
         case .signIn: container.session.requestSignIn()
+        case .download(let video): Task { await container.downloads.start(video) }
         case nil: break
         }
         afterShare = nil

@@ -193,6 +193,19 @@ struct VideoShareSheet: View {
                     }
                 }
                 .accessibilityIdentifier("share.comments")
+                // Téléchargement autorisé ou refusé (ADR-067).
+                let downloadsEnabled = current.downloadsEnabled
+                ShareTarget(
+                    title: downloadsEnabled ? "Désactiver le téléchargement" : "Activer le téléchargement",
+                    systemImage: downloadsEnabled ? "arrow.down.to.line" : "arrow.down.to.line.compact", color: Color(.systemGray5),
+                    iconColor: .primary
+                ) {
+                    dismiss()
+                    Task {
+                        if let message = await interactions.setDownloadsEnabled(!downloadsEnabled, of: video) { onAlert(message) }
+                    }
+                }
+                .accessibilityIdentifier("share.downloads")
                 ShareTarget(title: "Supprimer", systemImage: "trash.fill", color: Color(.systemGray5), iconColor: .red) {
                     isConfirmingDelete = true
                 }

@@ -20,6 +20,8 @@ export abstract class VideoStorage {
   abstract abortMultipartUpload(key: string, uploadId: string): Promise<void>;
   // URL signée d'un seul PUT (couverture, ADR-065) : type et taille signés, le stockage refuse tout autre fichier.
   abstract presignPut(key: string, contentType: string, size: number, expiresInSeconds: number): Promise<string>;
+  // URL signée d'un GET du brut (téléchargement, ADR-067), servi en pièce jointe sous `fileName`.
+  abstract presignGet(key: string, fileName: string, expiresInSeconds: number): Promise<string>;
   // Taille de l'objet en octets, ou null s'il n'existe pas.
   abstract getObjectSize(key: string): Promise<number | null>;
   abstract deleteObject(key: string): Promise<void>;

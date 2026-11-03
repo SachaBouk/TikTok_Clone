@@ -27,6 +27,7 @@ import {
   TooManyActionsError,
   VideoNotAvailableError,
   CommentsDisabledError,
+  DownloadsDisabledError,
 } from '../domain/interaction.errors';
 import { InMemoryInteractionRepository } from '../infrastructure/in-memory-interaction.repository';
 import { InteractionsService } from './interactions.service';
@@ -55,6 +56,7 @@ const user = (id: string): User => ({
 
 describe('InteractionsService', () => {
   let videoRepository: InMemoryVideoRepository;
+  let videoStorage: InMemoryVideoStorage;
   let users: UsersService;
   let service: InteractionsService;
   let clock: number;
@@ -85,9 +87,10 @@ describe('InteractionsService', () => {
       suspended,
       new InMemoryReceivedLikesCounter(),
     );
+    videoStorage = new InMemoryVideoStorage();
     const videos = new VideosService(
       videoRepository,
-      new InMemoryVideoStorage(),
+      videoStorage,
       new NoopTranscodingQueue(),
       new InMemoryVideoEventPublisher(),
       new InMemoryVideoCleanupQueue(),
@@ -438,6 +441,46 @@ describe('InteractionsService', () => {
       });
       // Historique des commentaires d'alice : le commentaire sur une vidéo devenue privée n'y est plus.
       expect((await service.listCommentHistory('alice', null, 10)).items).toEqual([]);
+    });
+  });
+
+  describe('téléchargement (ADR-067)', () => {
+    it('URL signée du fichier d’origine ; refusée si l’auteur l’interdit (sauf pour lui), masquée si bloquée ou privée', async () => {
+      videoStorage.putObject('k', 1234);
+      await expect(service.downloadVideo('alice', video)).resolves.toMatchObject({
+        url: 'memory://k?download=' + video + '.mp4',
+        contentType: 'video/mp4',
+        fileName: `${video}.mp4`,
+        size: 1234,
+      });
+
+      Object.assign(videoRepository.videos.get(video)!, { downloadsEnabled: false });
+      await expect(service.downloadVideo('alice', video)).rejects.toBeInstanceOf(DownloadsDisabledError);
+      await expect(service.downloadVideo('bob', video)).resolves.toMatchObject({ size: 1234 });
+      Object.assign(videoRepository.videos.get(video)!, { downloadsEnabled: true });
+
+      await service.setBlock('bob', 'alice', true);
+      await expect(service.downloadVideo('alice', video)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await service.setBlock('bob', 'alice', false);
+      await suspended.add('bob');
+      await expect(service.downloadVideo('alice', video)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await suspended.remove('bob');
+
+      Object.assign(videoRepository.videos.get(video)!, { visibility: 'private' });
+      await expect(service.downloadVideo('alice', video)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.downloadVideo('bob', video)).resolves.toMatchObject({ size: 1234 });
+      Object.assign(videoRepository.videos.get(video)!, { visibility: 'public' });
+
+      // Brut disparu, vidéo en traitement : introuvable.
+      videoStorage.objects.delete('k');
+      await expect(service.downloadVideo('alice', video)).rejects.toBeInstanceOf(VideoNotAvailableError);
+      await expect(service.downloadVideo('alice', await createVideo('processing'))).rejects.toBeInstanceOf(VideoNotAvailableError);
+    });
+
+    it('limite : 30 téléchargements par heure (ADR-067)', async () => {
+      videoStorage.putObject('k', 1);
+      for (let i = 0; i < 30; i++) await service.downloadVideo('alice', video);
+      await expect(service.downloadVideo('alice', video)).rejects.toMatchObject({ name: 'TooManyActionsError', action: 'download' });
     });
   });
 

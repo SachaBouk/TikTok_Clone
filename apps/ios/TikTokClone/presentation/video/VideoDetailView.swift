@@ -15,6 +15,8 @@ struct VideoDetailView: View {
     // Feuille de cadeaux et animation à l'envoi (ADR-050).
     @State private var giftVideo: FeedVideo?
     @State private var giftBurst: GiftBurst?
+    // Menu de la vidéo (ADR-067).
+    @State private var menuVideo: FeedVideo?
     @Environment(SessionStore.self) private var session
     @Environment(\.dismiss) private var dismiss
 
@@ -33,13 +35,14 @@ struct VideoDetailView: View {
             }
             .background(.black)
             // Vitesse ×2 : bandeau en bas pendant l'appui, message du verrouillage en haut.
-            .overlay { FastPlaybackBottomBar(model: container.fastPlayback) }
+            .overlay { FastPlaybackBottomBar(model: container.playbackOptions) }
+            .overlay { VideoDownloadOverlay(model: container.downloads) }
             .overlay(alignment: .top) {
-                FastPlaybackNoticeView(model: container.fastPlayback).padding(.top, 12)
+                FastPlaybackNoticeView(model: container.playbackOptions).padding(.top, 12)
             }
             .toolbar {
                 // Masqué pendant l'appui long de la vitesse ×2.
-                if !container.fastPlayback.isHolding {
+                if !container.playbackOptions.isHolding && !container.playbackOptions.isClearMode {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Fermer", systemImage: "xmark") { dismiss() }
                             .accessibilityIdentifier("video.close")
@@ -48,7 +51,11 @@ struct VideoDetailView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .onAppear { viewModel.resume() }
-            .onDisappear { viewModel.stop() }
+            .onDisappear {
+                viewModel.stop()
+                // Affichage allégé (ADR-067) : quitté avec la vidéo seule.
+                container.playbackOptions.setClearMode(false)
+            }
             // Profils ouverts depuis la vidéo, dans la même pile.
             .appDestinations(container)
         }
@@ -68,9 +75,13 @@ struct VideoDetailView: View {
             viewModel.setMasked(masked)
         }
         .videoInteractionSheets(
-            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, interactions: interactions,
-            container: container
+            comments: $commentsVideo, share: $shareVideo, report: $reportedVideo, alert: $alertMessage, menu: $menuVideo,
+            interactions: interactions, container: container
         )
+        // « Pas intéressé(e) » (ADR-067) : la vidéo seule se ferme.
+        .onChange(of: interactions.notInterestedVideoIDs) { _, ids in
+            if ids.contains(viewModel.videoID) { dismiss() }
+        }
         // Stories de l'auteur (ADR-051), présentées par-dessus la vidéo seule, mise en pause pendant ce temps.
         .storiesPresenter(container) { true }
         .onChange(of: container.router.presentedStories == nil) { _, closed in
@@ -103,11 +114,13 @@ struct VideoDetailView: View {
                     openHashtag: { path.append(HashtagRoute(name: $0)) },
                     openMention: { path.append(ProfileRoute(username: $0)) },
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
-                    openStories: { container.router.openStories([video.author], source: .feed) }
+                    openStories: { container.router.openStories([video.author], source: .feed) },
+                    openMenu: { menuVideo = interactions.display(video) }
                 ),
                 progress: { pool.progress(of: video.id) },
                 revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil,
-                fastPlayback: container.fastPlayback
+                options: container.playbackOptions,
+                seek: { pool.seek(video.id, to: $0) }
             )
         }
     }

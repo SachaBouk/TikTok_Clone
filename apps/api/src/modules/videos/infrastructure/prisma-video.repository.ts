@@ -28,6 +28,7 @@ const videoSelect = {
   visibility: true,
   commentsEnabled: true,
   soundShared: true,
+  downloadsEnabled: true,
   soundId: true,
   coverKey: true,
   aiGenerated: true,
@@ -110,6 +111,10 @@ export class PrismaVideoRepository extends VideoRepository {
 
   async setSoundShared(id: string, shared: boolean): Promise<Video | null> {
     const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { soundShared: shared }, select: videoSelect });
+    return video ?? null;
+  }
+  async setDownloadsEnabled(id: string, enabled: boolean): Promise<Video | null> {
+    const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { downloadsEnabled: enabled }, select: videoSelect });
     return video ?? null;
   }
 
@@ -329,6 +334,7 @@ const detailsSelect = {
   visibility: true,
   commentsEnabled: true,
   soundShared: true,
+  downloadsEnabled: true,
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
@@ -350,6 +356,7 @@ const publishedSelect = {
   visibility: true,
   commentsEnabled: true,
   soundShared: true,
+  downloadsEnabled: true,
   aiGenerated: true,
   locationName: true,
   locationAddress: true,

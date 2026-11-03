@@ -94,11 +94,11 @@ struct FastPlaybackRulesTests {
 
 @Suite("Vitesse ×2 du lecteur : modèle")
 @MainActor
-struct FastPlaybackModelTests {
+struct PlaybackOptionsModelTests {
     @Test("la vitesse suit l'appui et le verrou, sur les lecteurs partagés")
     func appliesRate() {
         let playback = FakePlayback()
-        let model = FastPlaybackModel(playback: playback, analytics: nil)
+        let model = PlaybackOptionsModel(playback: playback, analytics: nil)
         model.begin(bottomInset: 83)
         #expect(model.isHolding)
         #expect(model.bottomInset == 83)
@@ -114,7 +114,7 @@ struct FastPlaybackModelTests {
     @Test("verrouiller affiche un message un instant et le mesure")
     func noticeAndAnalytics() async throws {
         let service = FakeAnalyticsService()
-        let model = FastPlaybackModel(playback: FakePlayback(), analytics: makeAnalytics(service), noticeDuration: .milliseconds(50))
+        let model = PlaybackOptionsModel(playback: FakePlayback(), analytics: makeAnalytics(service), noticeDuration: .milliseconds(50))
         model.begin(bottomInset: 0)
         model.drag(translation: 60)
         model.end()
@@ -133,7 +133,7 @@ struct FastPlaybackModelTests {
     @Test("déconnexion : retour à la vitesse normale")
     func reset() {
         let playback = FakePlayback()
-        let model = FastPlaybackModel(playback: playback, analytics: nil)
+        let model = PlaybackOptionsModel(playback: playback, analytics: nil)
         model.begin(bottomInset: 0)
         model.drag(translation: 60)
         model.end()

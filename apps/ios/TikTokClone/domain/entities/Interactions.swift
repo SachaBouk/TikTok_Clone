@@ -86,12 +86,18 @@ enum VideoLink {
 }
 
 extension FeedVideo {
-    // Garde l'anneau de l'auteur, la date de visionnage, la visibilité et les commentaires.
-    func with(stats: VideoStats? = nil, viewer: ViewerState?, visibility: VideoVisibility? = nil, commentsEnabled: Bool? = nil) -> FeedVideo {
-        FeedVideo(
-            id: id, description: description, hlsURL: hlsURL, thumbnailURL: thumbnailURL, createdAt: createdAt,
-            stats: stats ?? self.stats, author: author, viewer: viewer, authorStory: authorStory, viewedAt: viewedAt,
-            visibility: visibility ?? self.visibility, commentsEnabled: commentsEnabled ?? self.commentsEnabled)
+    // Garde tout le reste (anneau de l'auteur, date de visionnage, lieu, étiquette IA…).
+    func with(
+        stats: VideoStats? = nil, viewer: ViewerState?, visibility: VideoVisibility? = nil, commentsEnabled: Bool? = nil,
+        downloadsEnabled: Bool? = nil
+    ) -> FeedVideo {
+        var copy = self
+        copy.stats = stats ?? self.stats
+        copy.viewer = viewer
+        copy.visibility = visibility ?? self.visibility
+        copy.commentsEnabled = commentsEnabled ?? self.commentsEnabled
+        copy.downloadsEnabled = downloadsEnabled ?? self.downloadsEnabled
+        return copy
     }
 }
 

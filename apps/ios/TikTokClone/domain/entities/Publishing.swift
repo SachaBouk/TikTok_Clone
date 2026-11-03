@@ -72,6 +72,8 @@ struct VideoLocation: Codable, Hashable, Sendable {
 // (JPEG 9:16, déplacée dans le stockage des envois).
 struct PublicationExtras: Equatable, Sendable {
     var aiGenerated = false
+    // « Autoriser le téléchargement » (ADR-067).
+    var downloadsEnabled = true
     var location: VideoLocation?
     var cover: URL?
 }
@@ -79,6 +81,7 @@ struct PublicationExtras: Equatable, Sendable {
 // Ce que l'API reçoit en plus à la création de l'envoi (ADR-065) : `coverSize` demande une URL pour la couverture.
 struct UploadExtras: Equatable, Sendable {
     var aiGenerated = false
+    var downloadsEnabled = true
     var location: VideoLocation?
     var coverSize: Int?
 }
@@ -134,6 +137,8 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var coverFileName: String?
     var coverSize: Int?
     var coverSent = false
+    // « Autoriser le téléchargement » (ADR-067).
+    var downloadsEnabled = true
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -151,12 +156,13 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
         case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
-        case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent
+        case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent, downloadsEnabled
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
     // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés ; avant l'ADR-064, son
-    // partagé, sans son repris ; avant l'ADR-065, sans étiquette IA, lieu ni couverture.
+    // partagé, sans son repris ; avant l'ADR-065, sans étiquette IA, lieu ni couverture ; avant l'ADR-067, téléchargement
+    // autorisé.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -178,7 +184,8 @@ extension PendingUpload {
             location: try container.decodeIfPresent(VideoLocation.self, forKey: .location),
             coverFileName: try container.decodeIfPresent(String.self, forKey: .coverFileName),
             coverSize: try container.decodeIfPresent(Int.self, forKey: .coverSize),
-            coverSent: try container.decodeIfPresent(Bool.self, forKey: .coverSent) ?? false
+            coverSent: try container.decodeIfPresent(Bool.self, forKey: .coverSent) ?? false,
+            downloadsEnabled: try container.decodeIfPresent(Bool.self, forKey: .downloadsEnabled) ?? true
         )
     }
 }

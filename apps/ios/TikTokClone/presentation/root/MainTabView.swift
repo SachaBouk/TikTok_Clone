@@ -153,7 +153,7 @@ struct MainTabView: View {
         }
         // Vitesse ×2 (`FastPlayback`) : pendant l'appui long sur une vidéo, la barre d'onglets est recouverte de noir avec
         // le bandeau « Glisse en bas… ».
-        .overlay { FastPlaybackBottomBar(model: container.fastPlayback) }
+        .overlay { FastPlaybackBottomBar(model: container.playbackOptions) }
         // Menu ☰ de son profil (ADR-057) : par-dessus la barre d'onglets ; une ligne pousse sa page dans le profil.
         .overlay {
             ProfileMenuOverlay(isOpen: $router.isProfileMenuOpen) { route in profilePath.append(route) }

@@ -167,6 +167,15 @@ final class FeedViewModel {
         }
     }
 
+    // Défilement automatique (ADR-067) : la vidéo `videoID` vient de finir ; renvoie l'entrée suivante à afficher, si la
+    // vidéo finie est bien la vidéo courante, lue (ni en pause, ni masquée, onglet affiché) et qu'il y en a une après.
+    func entryAfterEnd(of videoID: String) -> String? {
+        guard isActive, !isPaused, let current = currentVideo, current.id == videoID, !maskedVideoIDs.contains(videoID),
+            let index = entries.firstIndex(where: { $0.id == currentEntryID }), entries.indices.contains(index + 1)
+        else { return nil }
+        return entries[index + 1].id
+    }
+
     // Toucher la vidéo : pause ou reprise.
     func togglePause() {
         guard let video = currentVideo, !maskedVideoIDs.contains(video.id) else { return }

@@ -16,6 +16,8 @@ import {
   COVER_CONTENT_TYPE,
   coverKeyFor,
   isSupportedVideoType,
+  DOWNLOAD_URL_TTL_SECONDS,
+  downloadFileOf,
   MAX_COVER_SIZE_BYTES,
   MAX_VIDEO_SIZE_BYTES,
   partCount,
@@ -63,11 +65,22 @@ export interface CreateUploadInput {
   commentsEnabled?: boolean;
   // « Autoriser l'utilisation de mon son », autorisé par défaut, et son repris d'une autre vidéo (ADR-064).
   soundShared?: boolean;
+  // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+  downloadsEnabled?: boolean;
   soundId?: string;
   // ADR-065 : couverture à envoyer (JPEG), étiquette « Contenu généré par l'IA », lieu (nom et adresse affichée).
   cover?: { fileSize: number };
   aiGenerated?: boolean;
   location?: { name: string; address?: string | null };
+}
+
+// Téléchargement de la vidéo d'origine (ADR-067) : URL signée de lecture, valable peu de temps.
+export interface VideoDownload {
+  url: string;
+  expiresAt: Date;
+  contentType: string;
+  fileName: string;
+  size: number;
 }
 
 export interface VideoUpload {
@@ -127,6 +140,7 @@ export class VideosService {
         visibility: input.visibility ?? 'public',
         commentsEnabled: input.commentsEnabled ?? true,
         soundShared: input.soundShared ?? true,
+        downloadsEnabled: input.downloadsEnabled ?? true,
         soundId: input.soundId ?? null,
         coverKey,
         aiGenerated: input.aiGenerated ?? false,
@@ -334,6 +348,28 @@ export class VideosService {
     const updated = await this.videos.setSoundShared(videoId, shared);
     if (!updated) throw new VideoNotFoundError(videoId);
     return updated;
+  }
+
+  // « Autoriser le téléchargement » (ADR-067), par l'auteur, quel que soit le statut.
+  async setDownloadsEnabled(userId: string, videoId: string, enabled: boolean): Promise<Video> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
+    if (video.downloadsEnabled === enabled) return video;
+    const updated = await this.videos.setDownloadsEnabled(videoId, enabled);
+    if (!updated) throw new VideoNotFoundError(videoId);
+    return updated;
+  }
+
+  // URL signée du fichier d'origine d'une vidéo publiée (ADR-067). Les droits (visibilité, comptes masqués, réglage
+  // de l'auteur) sont vérifiés par `interactions`, qui l'appelle ; un brut disparu donne 404.
+  async presignDownload(videoId: string): Promise<VideoDownload> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.status !== 'ready') throw new VideoNotFoundError(videoId);
+    const size = await this.storage.getObjectSize(video.rawKey);
+    if (size === null) throw new VideoNotFoundError(videoId);
+    const { contentType, fileName } = downloadFileOf(video.rawKey, videoId);
+    const url = await this.storage.presignGet(video.rawKey, fileName, DOWNLOAD_URL_TTL_SECONDS);
+    return { url, expiresAt: new Date(this.now().getTime() + DOWNLOAD_URL_TTL_SECONDS * 1000), contentType, fileName, size };
   }
 
   // Sons proposés (ADR-064, module feed) : auteurs masqués exclus, page à partir de `offset`.

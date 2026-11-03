@@ -5,6 +5,7 @@ import Foundation
 // - en glissant vers le bas pendant l'appui, puis en relâchant : la vitesse ×2 est verrouillée, pour toutes les vidéos ;
 // - verrouillée, un appui long lit à vitesse normale ; glisser vers le bas puis relâcher la déverrouille.
 // Gardée jusqu'à la relance de l'app (et oubliée à la déconnexion), dans tous les lecteurs vidéo (ni stories ni lives).
+// La vitesse choisie dans le menu de la vidéo (ADR-067) est le même réglage : verrouiller le ×2 revient à choisir 2.0×.
 struct FastPlayback: Equatable, Sendable {
     static let fastRate: Float = 2
     // Distance vers le bas, en points, au-delà de laquelle relâcher verrouille (ou déverrouille).
@@ -24,31 +25,40 @@ struct FastPlayback: Equatable, Sendable {
         let isArmed: Bool
     }
 
-    // Message affiché en haut un instant après un changement de verrouillage.
+    // Message affiché en haut un instant : changement de verrouillage, défilement automatique (ADR-067).
     enum Notice: Equatable, Sendable {
         case locked, unlocked
+        case autoScrollOn, autoScrollOff
 
         var text: String {
             switch self {
             case .locked: "Verrouillée à la vitesse accélérée ×2"
             case .unlocked: "Retour à la vitesse normale"
+            case .autoScrollOn: "La prochaine publication s'affichera automatiquement"
+            case .autoScrollOff: "Fais défiler jusqu'à la publication suivante"
             }
         }
 
-        var systemImage: String {
+        // Nil : texte seul.
+        var systemImage: String? {
             switch self {
             case .locked: "lock.fill"
             case .unlocked: "lock.open"
+            case .autoScrollOn, .autoScrollOff: nil
             }
         }
     }
 
-    private(set) var isLocked = false
+    private(set) var speed: PlaybackSpeed = .normal
     private(set) var hold: Hold?
 
-    // Vitesse de lecture : l'appui inverse l'état verrouillé (×2 sans verrou, vitesse normale avec).
+    // Verrouillée en ×2 (glisser vers le bas pendant l'appui, ou 2.0× choisi dans le menu).
+    var isLocked: Bool { speed == .double }
+
+    // Vitesse de lecture : la vitesse choisie ; pendant l'appui, ×2, ou vitesse normale si le ×2 est verrouillé.
     var rate: Float {
-        (hold != nil) != isLocked ? Self.fastRate : 1
+        guard hold != nil else { return Float(speed.rawValue) }
+        return isLocked ? 1 : Self.fastRate
     }
 
     var hint: Hint? {
@@ -85,12 +95,41 @@ struct FastPlayback: Equatable, Sendable {
         guard let hold else { return nil }
         self.hold = nil
         guard hold.isArmed else { return nil }
-        isLocked.toggle()
+        speed = isLocked ? .normal : .double
         return isLocked ? .locked : .unlocked
+    }
+
+    // Vitesse choisie dans le menu de la vidéo, ou dans l'affichage allégé.
+    mutating func setSpeed(_ speed: PlaybackSpeed) {
+        self.speed = speed
     }
 
     // Appui interrompu (app en arrière-plan, autre geste) : rien ne change.
     mutating func cancel() {
         hold = nil
+    }
+}
+
+// Vitesses du menu d'une vidéo (ADR-067), comme TikTok.
+enum PlaybackSpeed: Double, CaseIterable, Sendable {
+    case half = 0.5
+    case normal = 1
+    case oneAndHalf = 1.5
+    case double = 2
+
+    // « 0.5× » dans le menu, comme TikTok.
+    var label: String {
+        String(format: "%.1f×", rawValue)
+    }
+
+    // Pastille de l'affichage allégé : « 1× », « 1.5× ».
+    var shortLabel: String {
+        rawValue == rawValue.rounded() ? "\(Int(rawValue))×" : "\(rawValue)×"
+    }
+
+    // Toucher la vitesse de l'affichage allégé : la suivante, puis retour à 0.5×.
+    var next: PlaybackSpeed {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
     }
 }

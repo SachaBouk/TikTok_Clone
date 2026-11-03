@@ -1183,6 +1183,66 @@
         ]
       }
     },
+    "/videos/{id}/download-settings": {
+      "patch": {
+        "operationId": "setVideoDownloadSettings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDownloadSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
     "/videos/{id}": {
       "delete": {
         "operationId": "deleteVideo",
@@ -1943,6 +2003,85 @@
           "interactions"
         ],
         "security": []
+      }
+    },
+    "/videos/{id}/download": {
+      "post": {
+        "operationId": "downloadVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Téléchargement refusé par l’auteur de la vidéo (ADR-067).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue, pas encore publiée, privée ou d’un compte masqué.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de téléchargements récents (ADR-067) : réessayer après le délai de l’en-tête Retry-After (secondes).",
+            "headers": {
+              "Retry-After": {
+                "description": "Secondes à attendre avant de réessayer.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
       }
     },
     "/videos/{id}/comments": {
@@ -9444,6 +9583,10 @@
             "type": "boolean",
             "description": "« Autoriser l'utilisation de mon son » (ADR-064), vrai par défaut."
           },
+          "downloadsEnabled": {
+            "type": "boolean",
+            "description": "« Autoriser le téléchargement » (ADR-067), vrai par défaut."
+          },
           "soundId": {
             "type": "string",
             "format": "uuid",
@@ -9518,6 +9661,10 @@
             "type": "boolean",
             "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
           },
+          "downloadsEnabled": {
+            "type": "boolean",
+            "description": "« Autoriser le téléchargement » (ADR-067)."
+          },
           "aiGenerated": {
             "type": "boolean",
             "description": "Étiquette « Contenu généré par l'IA » (ADR-065)."
@@ -9549,6 +9696,7 @@
           "visibility",
           "commentsEnabled",
           "soundShared",
+          "downloadsEnabled",
           "aiGenerated",
           "hlsUrl",
           "thumbnailUrl",
@@ -9676,6 +9824,18 @@
           "soundShared"
         ]
       },
+      "SetDownloadSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "downloadsEnabled": {
+            "type": "boolean",
+            "description": "« Autoriser le téléchargement » (ADR-067)."
+          }
+        },
+        "required": [
+          "downloadsEnabled"
+        ]
+      },
       "PendingVideosResponse": {
         "type": "object",
         "properties": {
@@ -9743,6 +9903,39 @@
         },
         "required": [
           "sharesCount"
+        ]
+      },
+      "VideoDownloadResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL signée du fichier d’origine (GET), servi en pièce jointe."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "contentType": {
+            "type": "string",
+            "example": "video/mp4"
+          },
+          "fileName": {
+            "type": "string",
+            "example": "0190f…c2.mp4"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Taille du fichier, en octets."
+          }
+        },
+        "required": [
+          "url",
+          "expiresAt",
+          "contentType",
+          "fileName",
+          "size"
         ]
       },
       "UserSummaryResponse": {
@@ -11118,6 +11311,10 @@
             "type": "boolean",
             "description": "« Autoriser l'utilisation de mon son » (ADR-064)."
           },
+          "downloadsEnabled": {
+            "type": "boolean",
+            "description": "« Autoriser le téléchargement » (ADR-067)."
+          },
           "aiGenerated": {
             "type": "boolean",
             "description": "Étiquette « Contenu généré par l'IA » (ADR-065)."
@@ -11176,6 +11373,7 @@
           "visibility",
           "commentsEnabled",
           "soundShared",
+          "downloadsEnabled",
           "aiGenerated",
           "createdAt",
           "viewsCount",

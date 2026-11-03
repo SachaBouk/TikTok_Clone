@@ -377,6 +377,32 @@ describe('VideosService', () => {
     });
   });
 
+  describe('téléchargement (ADR-067)', () => {
+    it('autorisé par défaut, choisi à l’envoi, changé par l’auteur seulement', async () => {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      expect((await service.getVideo(video.id, ALICE)).downloadsEnabled).toBe(true);
+      const { video: closed } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, downloadsEnabled: false });
+      expect((await service.getVideo(closed.id, ALICE)).downloadsEnabled).toBe(false);
+      await expect(service.setDownloadsEnabled(BOB, video.id, false)).rejects.toBeInstanceOf(VideoNotFoundError);
+      await expect(service.setDownloadsEnabled(ALICE, video.id, false)).resolves.toMatchObject({ downloadsEnabled: false });
+    });
+
+    it('URL signée du brut d’une vidéo publiée, 15 min, nommée d’après son extension', async () => {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/quicktime', fileSize: 1000 });
+      await expect(service.presignDownload(video.id)).rejects.toBeInstanceOf(VideoNotFoundError);
+      Object.assign(videos.videos.get(video.id)!, { status: 'ready', hlsUrl: 'h', thumbnailUrl: 't' });
+      await expect(service.presignDownload(video.id)).rejects.toBeInstanceOf(VideoNotFoundError);
+      storage.putObject(video.rawKey, 1000);
+      await expect(service.presignDownload(video.id)).resolves.toEqual({
+        url: `memory://${video.rawKey}?download=${video.id}.mov`,
+        expiresAt: new Date('2026-01-01T00:15:00Z'),
+        contentType: 'video/quicktime',
+        fileName: `${video.id}.mov`,
+        size: 1000,
+      });
+    });
+  });
+
   describe('écran de publication (ADR-065)', () => {
     it('couverture : URL signée d’un seul PUT, clé à côté du brut, passée au transcodage puis nettoyée', async () => {
       await expect(

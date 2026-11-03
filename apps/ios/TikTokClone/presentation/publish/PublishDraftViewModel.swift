@@ -61,6 +61,8 @@ final class PublishDraftViewModel {
     var commentsEnabled = true
     // « Autoriser l'utilisation de mon son » (ADR-064).
     var soundShared = true
+    // « Autoriser le téléchargement » (ADR-067).
+    var downloadsEnabled = true
     // Écran de publication (ADR-065) : étiquette « Contenu généré par l'IA », lieu, couverture (et son image dessinée),
     // « Enregistrer sur l'appareil » (retenu sur l'iPhone).
     var aiGenerated = false
@@ -385,7 +387,8 @@ final class PublishDraftViewModel {
         let isVideo = mode == .video
         var extras = PublicationExtras()
         if isVideo {
-            extras = PublicationExtras(aiGenerated: aiGenerated, location: location, cover: cover.isCustom ? coverFile : nil)
+            extras = PublicationExtras(
+                aiGenerated: aiGenerated, downloadsEnabled: downloadsEnabled, location: location, cover: cover.isCustom ? coverFile : nil)
             details.coverChanged = extras.cover != nil
             details.coverTitle = extras.cover != nil && cover.shownTitle != nil
             details.locationAdded = location != nil
@@ -430,6 +433,7 @@ final class PublishDraftViewModel {
         visibility = defaultVisibility
         commentsEnabled = true
         soundShared = true
+        downloadsEnabled = true
         aiGenerated = false
         location = nil
         setCover(CoverChoice(), image: nil)
@@ -470,7 +474,7 @@ final class PublishDraftViewModel {
         let draft = VideoDraft(
             id: UUID().uuidString, userID: userID, savedAt: Date(), plan: plan, source: source, description: description,
             visibility: visibility, commentsEnabled: commentsEnabled, soundShared: soundShared, aiGenerated: aiGenerated,
-            location: location, cover: cover)
+            location: location, cover: cover, downloadsEnabled: downloadsEnabled)
         do {
             try drafts.save(draft, thumbnail: coverImage?.jpegData(compressionQuality: 0.7) ?? thumbnail)
             publishing.track(.draftSaved(fromPost: fromPost))
@@ -489,6 +493,7 @@ final class PublishDraftViewModel {
         visibility = draft.visibility
         commentsEnabled = draft.commentsEnabled
         soundShared = draft.soundShared
+        downloadsEnabled = draft.downloadsEnabled ?? true
         aiGenerated = draft.aiGenerated
         location = draft.location
         cover = draft.cover

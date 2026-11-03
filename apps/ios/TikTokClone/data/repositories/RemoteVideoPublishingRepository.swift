@@ -15,7 +15,7 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
         }
         let body = Components.Schemas.CreateUploadRequest(
             contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility),
-            commentsEnabled: commentsEnabled, soundShared: soundShared, soundId: soundID,
+            commentsEnabled: commentsEnabled, soundShared: soundShared, downloadsEnabled: extras.downloadsEnabled, soundId: soundID,
             cover: extras.coverSize.map { .init(fileSize: $0) }, aiGenerated: extras.aiGenerated,
             location: extras.location.map { .init(name: $0.name, address: $0.address) })
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
@@ -43,6 +43,16 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
     func setVisibility(videoID: String, visibility: VideoVisibility) async throws {
         let body = Components.Schemas.SetVideoVisibilityRequest(visibility: .init(visibility))
         switch try await mappingErrors({ try await client.setVideoVisibility(path: .init(id: videoID), body: .json(body)) }) {
+        case .ok: return
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func setDownloadsEnabled(videoID: String, enabled: Bool) async throws {
+        let body = Components.Schemas.SetDownloadSettingsRequest(downloadsEnabled: enabled)
+        switch try await mappingErrors({ try await client.setVideoDownloadSettings(path: .init(id: videoID), body: .json(body)) }) {
         case .ok: return
         case .unauthorized: throw AppError.sessionExpired
         case .notFound: throw AppError.notFound

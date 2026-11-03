@@ -32,10 +32,10 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     let hlsURL: URL
     let thumbnailURL: URL
     let createdAt: Date
-    let stats: VideoStats
+    var stats: VideoStats
     let author: UserSummary
     // Nil en mode invité.
-    let viewer: ViewerState?
+    var viewer: ViewerState?
     // Anneau autour de l'avatar de l'auteur (ADR-051) : nil s'il n'a pas de story visible.
     var authorStory: StoryRing? = nil
     // Historique de visionnage seulement (ADR-057) : dernière vue de la vidéo.
@@ -47,6 +47,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     // Lieu et étiquette « Contenu généré par l'IA » (ADR-065).
     var location: VideoLocation? = nil
     var aiGenerated = false
+    // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
+    var downloadsEnabled = true
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

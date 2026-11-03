@@ -4,11 +4,12 @@ import { formatRetryDelay } from '../../../rate-limit/rate-limiter';
 export abstract class InteractionError extends Error {}
 
 // Trop d'actions récentes de ce type (ADR-039) : 429 avec Retry-After.
-export type LimitedAction = 'reaction' | 'comment' | 'follow';
+export type LimitedAction = 'reaction' | 'comment' | 'follow' | 'download';
 const LIMITED_ACTIONS: Record<LimitedAction, string> = {
   reaction: 'Trop de réactions',
   comment: 'Trop de commentaires',
   follow: 'Trop d’abonnements',
+  download: 'Trop de téléchargements',
 };
 export class TooManyActionsError extends InteractionError {
   constructor(
@@ -60,6 +61,14 @@ export class BlockedError extends InteractionError {
 }
 
 // L'auteur de la vidéo a coupé les commentaires (ADR-062) : personne ne peut commenter, répondre ni aimer un commentaire.
+// Téléchargement refusé par l'auteur de la vidéo (ADR-067) : 403.
+export class DownloadsDisabledError extends InteractionError {
+  constructor() {
+    super('Le téléchargement de cette vidéo n’est pas autorisé.');
+    this.name = 'DownloadsDisabledError';
+  }
+}
+
 export class CommentsDisabledError extends InteractionError {
   constructor() {
     super('Les commentaires sont désactivés pour cette vidéo.');

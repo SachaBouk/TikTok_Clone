@@ -2,7 +2,9 @@ import type { NotificationsService } from '../../notifications/application/notif
 import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
+import { VideoNotFoundError } from '../../videos/domain/video.errors';
 import type { VideosService } from '../../videos/application/videos.service';
+import type { VideoDownload } from '../../videos/application/videos.service';
 import type { PublishedVideo, Video } from '../../videos/domain/video';
 import { decodeFollowCursor, encodeFollowCursor } from '../domain/follow-cursor';
 import type {
@@ -21,6 +23,7 @@ import {
   BlockedError,
   CommentsDisabledError,
   CannotBlockYourselfError,
+  DownloadsDisabledError,
   CannotFollowYourselfError,
   CommentNotFoundError,
   EmptyCommentError,
@@ -30,7 +33,14 @@ import {
   VideoNotAvailableError,
   type LimitedAction,
 } from '../domain/interaction.errors';
-import { COMMENT_RATE_LIMITS, FOLLOW_RATE_LIMITS, REACTION_RATE_LIMITS, SHARE_DEDUP_SECONDS, VIEW_RATE_LIMITS } from '../domain/interaction';
+import {
+  COMMENT_RATE_LIMITS,
+  DOWNLOAD_RATE_LIMITS,
+  FOLLOW_RATE_LIMITS,
+  REACTION_RATE_LIMITS,
+  SHARE_DEDUP_SECONDS,
+  VIEW_RATE_LIMITS,
+} from '../domain/interaction';
 import { extractMentions, MAX_MENTIONS_NOTIFIED } from '../domain/mentions';
 import type { InteractionRepository } from '../domain/interaction.repository';
 import type { ProfileCountersPublisher } from '../domain/profile-counters-publisher';
@@ -172,6 +182,24 @@ export class InteractionsService {
     const sharesCount = await this.videos.recordShare(videoId);
     if (sharesCount === null) throw new VideoNotAvailableError(videoId);
     return sharesCount;
+  }
+
+  // Téléchargement de la vidéo d'origine (ADR-067), compte connecté : vidéo publiée et visible (privée : son auteur
+  // seulement), auteur ni suspendu ni bloqué dans un sens ou l'autre (404, comme la vidéo seule), téléchargement
+  // autorisé par l'auteur (403 sinon, sauf pour lui-même), puis la limite. Renvoie une URL signée du fichier.
+  async downloadVideo(userId: string, videoId: string): Promise<VideoDownload> {
+    const video = await this.publishedVideo(videoId, userId);
+    if (video.userId !== userId) {
+      if ((await this.hiddenAccounts(userId)).has(video.userId)) throw new VideoNotAvailableError(videoId);
+      if (!video.downloadsEnabled) throw new DownloadsDisabledError();
+    }
+    await this.limit('download', userId, DOWNLOAD_RATE_LIMITS);
+    try {
+      return await this.videos.presignDownload(videoId);
+    } catch (error) {
+      if (error instanceof VideoNotFoundError) throw new VideoNotAvailableError(videoId);
+      throw error;
+    }
   }
 
   // Suivre (`active`) ou ne plus suivre un compte. Idempotent. Renvoie le nombre d'abonnés du compte.

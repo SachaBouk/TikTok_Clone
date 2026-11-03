@@ -200,3 +200,20 @@ extension CommentHistoryEntry {
         )
     }
 }
+
+// Téléchargement de la vidéo d'origine (ADR-067).
+extension RemoteInteractionRepository: VideoDownloadRepository {
+    func downloadLink(videoID: String) async throws -> VideoDownloadLink {
+        switch try await mappingErrors({ try await client.downloadVideo(path: .init(id: videoID)) }) {
+        case .ok(let ok):
+            let dto = try ok.body.json
+            guard let url = URL(string: dto.url) else { throw AppError.unexpected }
+            return VideoDownloadLink(url: url, fileName: dto.fileName, size: dto.size)
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        case .notFound: throw AppError.notFound
+        case .tooManyRequests(let error): throw AppError.tooManyActions(.downloads, retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .unauthorized: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+}

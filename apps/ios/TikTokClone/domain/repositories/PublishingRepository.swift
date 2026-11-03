@@ -24,6 +24,8 @@ protocol VideoPublishingRepository: Sendable {
     func setVisibility(videoID: String, visibility: VideoVisibility) async throws
     // Commentaires autorisés ou coupés (ADR-062), par l'auteur.
     func setCommentsEnabled(videoID: String, enabled: Bool) async throws
+    // « Autoriser le téléchargement » (ADR-067).
+    func setDownloadsEnabled(videoID: String, enabled: Bool) async throws
 }
 
 // Port de l'envoi d'une partie au stockage objet, sur son URL signée (PUT direct, sans passer par l'API).
