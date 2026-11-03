@@ -575,8 +575,16 @@ final class AppContainer {
     }
 
     // `username` nil : son propre profil.
+    // Profil déjà chargé pendant le balayage vers le profil d'un auteur (`authorProfileSwipe`) : repris une fois par la
+    // page poussée, qui s'affiche sans rechargement.
+    var preparedProfile: ProfileViewModel?
+
     func makeProfileViewModel(username: String?) -> ProfileViewModel {
-        ProfileViewModel(
+        if let prepared = preparedProfile, prepared.username == username {
+            preparedProfile = nil
+            return prepared
+        }
+        return ProfileViewModel(
             username: username,
             getMyProfile: GetMyProfileUseCase(profiles: profiles),
             loadProfile: LoadProfileUseCase(profiles: profiles),

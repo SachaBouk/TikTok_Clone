@@ -63,6 +63,8 @@ struct FeedView: View {
         .overlay { VideoDownloadOverlay(model: container.downloads) }
         .background(.black)
         .environment(\.colorScheme, .dark)
+        // Balayage vers la gauche : profil de l'auteur de la vidéo affichée (pas pendant le ×2 ni l'affichage allégé).
+        .authorProfileSwipe(author: swipeAuthor, container: container) { openProfile($0.username) }
         .task { await viewModel.start() }
         .onChange(of: viewModel.currentEntryID) { _, id in
             if scrolledID != id { scrolledID = id }
@@ -196,13 +198,7 @@ struct FeedView: View {
                                     hashtagRoute = HashtagRoute(name: name)
                                 }
                             },
-                            openMention: { username in
-                                if let navigationPath {
-                                    navigationPath.wrappedValue.append(ProfileRoute(username: username))
-                                } else {
-                                    mentionRoute = ProfileRoute(username: username)
-                                }
-                            },
+                            openMention: { openProfile($0) },
                             gift: { openGifts(entry.video) },
                             // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
                             openStories: { container.router.openStories([entry.video.author], source: .feed) },
@@ -239,6 +235,21 @@ struct FeedView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)
+    }
+
+    private var swipeAuthor: UserSummary? {
+        let options = container.playbackOptions
+        guard isTabActive, isOnScreen, !options.isHolding, !options.isClearMode, let video = viewModel.currentVideo else { return nil }
+        return video.author
+    }
+
+    // Profil poussé dans la pile de l'écran (mention touchée, balayage vers la gauche).
+    private func openProfile(_ username: String) {
+        if let navigationPath {
+            navigationPath.wrappedValue.append(ProfileRoute(username: username))
+        } else {
+            mentionRoute = ProfileRoute(username: username)
+        }
     }
 
     private func updateActivity() {
@@ -330,11 +341,13 @@ struct FeedPageView: View {
     @State private var width: CGFloat = 0
     // Taille affichée de la vidéo, lue sur le lecteur (zéro tant qu'elle n'est pas prête).
     @State private var videoSize = CGSize.zero
+    // Doigt posé sur la barre de progression : position visée (fraction de la vidéo) ; nil sinon.
+    @State private var scrubFraction: Double?
 
     private var offersFullScreen: Bool { VideoFraming.offersFullScreen(width: videoSize.width, height: videoSize.height) }
 
     // Pendant l'appui long, et en affichage allégé (ADR-067) : seule la vidéo reste, comme TikTok.
-    private var hidesOverlays: Bool { options?.isHolding == true || options?.isClearMode == true }
+    private var hidesOverlays: Bool { options?.isHolding == true || options?.isClearMode == true || scrubFraction != nil }
 
     private struct HeartBurst: Identifiable, Equatable {
         let id = UUID()
@@ -441,11 +454,32 @@ struct FeedPageView: View {
             }
             .overlay(alignment: .bottom) {
                 if let progress {
-                    // Un peu au-dessus de la barre d'onglets, qui la touchait.
-                    PlaybackProgressBar(progress: progress, isPaused: showsPauseIndicator)
-                        .padding(.bottom, bottomInset + Self.progressBarGap)
-                        .allowsHitTesting(false)
-                        .opacity(hidesOverlays ? 0 : 1)
+                    // Un peu au-dessus de la barre d'onglets, qui la touchait. Le doigt posé dessus avance ou recule dans
+                    // la vidéo (zone de 30 pt autour de la barre) ; le reste disparaît, le temps visé s'affiche en grand.
+                    let scrubbing = scrubFraction != nil
+                    PlaybackProgressBar(progress: progress, isPaused: showsPauseIndicator, scrubFraction: scrubFraction)
+                        .padding(.vertical, Self.scrubTouchMargin)
+                        .contentShape(Rectangle())
+                        .gesture(scrubGesture, isEnabled: seek != nil && revealReported == nil && options?.isHolding != true)
+                        // Barre de 18 pt (place du gros point) : 6 pt plus bas, la ligne reste où elle était.
+                        .padding(.bottom, bottomInset + Self.progressBarGap - Self.scrubTouchMargin - 6)
+                        .opacity(hidesOverlays && !scrubbing ? 0 : 1)
+                        .accessibilityIdentifier("feed.progress")
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if let scrubFraction, let progress {
+                    let labels = PlaybackScrub.labels(fraction: scrubFraction, duration: progress()?.duration)
+                    HStack(spacing: 22) {
+                        Text(labels.position).foregroundStyle(.white)
+                        Text("/").foregroundStyle(.white.opacity(0.6))
+                        Text(labels.duration).foregroundStyle(.white.opacity(0.6))
+                    }
+                    .font(.system(size: 44, weight: .semibold).monospacedDigit())
+                    .shadow(color: .black.opacity(0.35), radius: 4)
+                    .padding(.bottom, bottomInset + 90)
+                    .allowsHitTesting(false)
+                    .accessibilityIdentifier("feed.scrubTime")
                 }
             }
             .overlay(alignment: .bottom) {
@@ -474,6 +508,19 @@ struct FeedPageView: View {
 
     // Espace entre la barre de progression et la barre d'onglets.
     static let progressBarGap: CGFloat = 8
+    // Marge tactile au-dessus et au-dessous de la barre de progression.
+    static let scrubTouchMargin: CGFloat = 12
+
+    private var scrubGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let inset = PlaybackProgressBar.scrubInset
+                let fraction = PlaybackScrub.fraction(x: value.location.x - inset, width: width - 2 * inset)
+                scrubFraction = fraction
+                seek?(fraction)
+            }
+            .onEnded { _ in scrubFraction = nil }
+    }
 
     // Pseudo et description, avec une ombre pour rester lisibles sur une vidéo claire.
     private var authorAndDescription: some View {
@@ -648,21 +695,32 @@ struct RepostPill: View {
 struct PlaybackProgressBar: View {
     let progress: () -> PlaybackProgress?
     let isPaused: Bool
+    // Doigt posé sur la barre : position visée, barre épaisse et gros point, comme TikTok ; nil : lecture.
+    var scrubFraction: Double? = nil
+
+    // Marges de la barre épaisse pendant le glissement.
+    static let scrubInset: CGFloat = 14
 
     var body: some View {
-        TimelineView(.animation(paused: isPaused)) { _ in
-            let fraction = progress()?.fraction ?? 0
+        TimelineView(.animation(paused: isPaused || scrubFraction != nil)) { _ in
+            let fraction = scrubFraction ?? progress()?.fraction ?? 0
+            let scrubbing = scrubFraction != nil
+            let line: CGFloat = scrubbing ? 8 : 2
+            let dot: CGFloat = scrubbing ? 18 : 6
             GeometryReader { geometry in
                 let x = geometry.size.width * fraction
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.25)).frame(height: 2)
-                    Capsule().fill(.white.opacity(0.9)).frame(width: x, height: 2)
-                    Circle().fill(.white).frame(width: 6, height: 6).offset(x: min(max(0, x - 3), geometry.size.width - 6))
+                    Capsule().fill(.white.opacity(0.25)).frame(height: line)
+                    Capsule().fill(.white.opacity(0.9)).frame(width: x, height: line)
+                    Circle().fill(.white).frame(width: dot, height: dot)
+                        .offset(x: min(max(0, x - dot / 2), geometry.size.width - dot))
                 }
                 .frame(maxHeight: .infinity)
             }
-            .frame(height: 6)
+            .frame(height: 18)
+            .padding(.horizontal, scrubbing ? Self.scrubInset : 0)
         }
+        .animation(.easeOut(duration: 0.15), value: scrubFraction == nil)
         .accessibilityHidden(true)
     }
 }

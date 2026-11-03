@@ -22,6 +22,8 @@ final class AppRouter {
 
     // Menu ☰ de son profil (ADR-057), panneau par-dessus les onglets.
     var isProfileMenuOpen = false
+    // Balayage vers le profil d'un auteur en cours (`authorProfileSwipe`) : barres du haut des lecteurs masquées.
+    var isSwipingToProfile = false
     // Toucher l'onglet Accueil alors qu'il est déjà affiché (comme TikTok) : le feed affiché se recharge. Chaque toucher
     // incrémente le compteur ; `isHomeRefreshing` pendant le rechargement (flèche qui tourne dans la barre d'onglets,
     // deux points à la place de la loupe).

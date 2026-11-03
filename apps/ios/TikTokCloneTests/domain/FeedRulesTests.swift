@@ -95,3 +95,42 @@ struct FullScreenRulesTests {
         #expect(!LandscapeRotation.leavesFullScreen(tilt: .landscape))
     }
 }
+
+@Suite("Barre de progression qu'on fait glisser")
+struct PlaybackScrubTests {
+    @Test("position sous le doigt, bornée à la vidéo")
+    func fraction() {
+        #expect(PlaybackScrub.fraction(x: 100, width: 400) == 0.25)
+        #expect(PlaybackScrub.fraction(x: -20, width: 400) == 0)
+        #expect(PlaybackScrub.fraction(x: 500, width: 400) == 1)
+        #expect(PlaybackScrub.fraction(x: 10, width: 0) == 0)
+    }
+
+    @Test("temps visé et durée affichés en grand")
+    func labels() {
+        let labels = PlaybackScrub.labels(fraction: 0.5, duration: .seconds(11))
+        #expect(labels.position == "00:05")
+        #expect(labels.duration == "00:11")
+        #expect(PlaybackScrub.labels(fraction: 1, duration: .seconds(125)) == ("02:05", "02:05"))
+        #expect(PlaybackScrub.labels(fraction: 0.3, duration: nil) == ("00:00", "00:00"))
+    }
+}
+
+@Suite("Balayage vers le profil de l'auteur")
+struct AuthorSwipeTests {
+    @Test("part du profil entrée, d'après le doigt vers la gauche")
+    func progress() {
+        #expect(AuthorSwipe.progress(translation: -100, width: 400) == 0.25)
+        #expect(AuthorSwipe.progress(translation: 50, width: 400) == 0)
+        #expect(AuthorSwipe.progress(translation: -800, width: 400) == 1)
+    }
+
+    @Test("ouvert au-delà d'un tiers ou sur un balayage rapide ; sinon il repart")
+    func completes() {
+        #expect(AuthorSwipe.completes(progress: 0.4, velocity: 0))
+        #expect(!AuthorSwipe.completes(progress: 0.2, velocity: -100))
+        #expect(AuthorSwipe.completes(progress: 0.1, velocity: -900))
+        #expect(!AuthorSwipe.completes(progress: 0.02, velocity: -900))
+        #expect(!AuthorSwipe.completes(progress: 0.2, velocity: 800))
+    }
+}

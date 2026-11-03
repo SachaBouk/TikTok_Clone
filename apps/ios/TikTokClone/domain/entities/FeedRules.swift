@@ -87,3 +87,34 @@ enum LandscapeRotation {
         tilt == .portrait
     }
 }
+
+// Barre de progression du lecteur qu'on fait glisser, comme TikTok : le doigt posé dessus avance ou recule dans la vidéo.
+enum PlaybackScrub {
+    // Position sous le doigt, en fraction de la vidéo (bornée).
+    static func fraction(x: Double, width: Double) -> Double {
+        guard width > 0 else { return 0 }
+        return min(1, max(0, x / width))
+    }
+
+    // Instant visé et durée, affichés en grand pendant le glissement : « 00:05 » / « 00:11 ».
+    static func labels(fraction: Double, duration: Duration?) -> (position: String, duration: String) {
+        let total = duration.map { max(0, $0.components.seconds) } ?? 0
+        let seconds = Int((Double(total) * fraction).rounded(.down))
+        let format = { (value: Int64) in String(format: "%02d:%02d", value / 60, value % 60) }
+        return (format(Int64(seconds)), format(total))
+    }
+}
+
+// Balayage vers la gauche sur une vidéo, comme TikTok : le profil de son auteur arrive de la droite sous le doigt.
+enum AuthorSwipe {
+    // Part du profil déjà entrée, d'après le déplacement du doigt (négatif vers la gauche).
+    static func progress(translation: Double, width: Double) -> Double {
+        guard width > 0 else { return 0 }
+        return min(1, max(0, -translation / width))
+    }
+
+    // Relâché : le profil s'ouvre au-delà d'un tiers, ou sur un balayage rapide vers la gauche ; sinon il repart.
+    static func completes(progress: Double, velocity: Double) -> Bool {
+        progress >= 1.0 / 3 || (velocity < -600 && progress > 0.05)
+    }
+}

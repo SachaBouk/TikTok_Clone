@@ -42,7 +42,7 @@ struct FriendsFeedView: View {
                 .padding(.top, 6)
                 .accessibilityAddTraits(.isHeader)
                 // Masqué pendant l'appui long de la vitesse ×2 et en affichage allégé (ADR-067).
-                .opacity(container.playbackOptions.isHolding || container.playbackOptions.isClearMode ? 0 : 1)
+                .opacity(container.playbackOptions.isHolding || container.playbackOptions.isClearMode || container.router.isSwipingToProfile ? 0 : 1)
                 .animation(.easeInOut(duration: 0.15), value: container.playbackOptions.isHolding)
         }
         .toolbarVisibility(container.playbackOptions.isClearMode ? .hidden : .automatic, for: .tabBar)

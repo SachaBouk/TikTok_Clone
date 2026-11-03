@@ -19,7 +19,9 @@ struct VideoListPlayerView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         // Pendant l'appui long de la vitesse ×2, seule la vidéo reste (bandeau en bas : `MainTabView`).
-        .navigationBarBackButtonHidden(container.playbackOptions.isHolding || container.playbackOptions.isClearMode)
+        .navigationBarBackButtonHidden(
+            container.playbackOptions.isHolding || container.playbackOptions.isClearMode || container.router.isSwipingToProfile
+        )
         // Affichage allégé (ADR-067) : sans barre d'onglets.
         .toolbarVisibility(container.playbackOptions.isClearMode ? .hidden : .automatic, for: .tabBar)
     }

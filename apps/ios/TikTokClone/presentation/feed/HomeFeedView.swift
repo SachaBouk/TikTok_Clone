@@ -100,7 +100,11 @@ struct HomeFeedView: View {
 
     // Pendant l'appui long de la vitesse ×2 et en affichage allégé (ADR-067) : sélecteur, « LIVE » et loupe masqués,
     // seule la vidéo reste.
-    private var barOpacity: Double { container.playbackOptions.isHolding || container.playbackOptions.isClearMode ? 0 : 1 }
+    private var barOpacity: Double {
+        let options = container.playbackOptions
+        // Balayage vers le profil d'un auteur : la barre ne passe pas par-dessus le profil qui arrive.
+        return options.isHolding || options.isClearMode || container.router.isSwipingToProfile ? 0 : 1
+    }
 
     private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false) -> some View {
         FeedView(

@@ -36,6 +36,8 @@ struct VideoDetailView: View {
                     .ignoresSafeArea()
             }
             .background(.black)
+            // Balayage vers la gauche : profil de l'auteur, poussé dans la pile de la vidéo seule.
+            .authorProfileSwipe(author: swipeAuthor, container: container) { path.append(ProfileRoute(username: $0.username)) }
             // Vitesse ×2 : bandeau en bas pendant l'appui, message du verrouillage en haut.
             .overlay { FastPlaybackBottomBar(model: container.playbackOptions) }
             .overlay { VideoDownloadOverlay(model: container.downloads) }
@@ -44,7 +46,7 @@ struct VideoDetailView: View {
             }
             .toolbar {
                 // Masqué pendant l'appui long de la vitesse ×2.
-                if !container.playbackOptions.isHolding && !container.playbackOptions.isClearMode {
+                if !container.playbackOptions.isHolding && !container.playbackOptions.isClearMode && !container.router.isSwipingToProfile {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Fermer", systemImage: "xmark") { dismiss() }
                             .accessibilityIdentifier("video.close")
@@ -103,6 +105,14 @@ struct VideoDetailView: View {
         .onChange(of: container.router.presentedStories == nil) { _, closed in
             if closed { viewModel.resume() } else { viewModel.stop() }
         }
+    }
+
+    private var swipeAuthor: UserSummary? {
+        let options = container.playbackOptions
+        guard path.isEmpty, container.router.presentedStories == nil, !options.isHolding, !options.isClearMode,
+            case .loaded(let video) = viewModel.state
+        else { return nil }
+        return video.author
     }
 
     @ViewBuilder
