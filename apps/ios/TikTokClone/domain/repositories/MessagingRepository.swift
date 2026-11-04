@@ -19,6 +19,8 @@ protocol MessagingRepository: Sendable {
     func replyToStory(conversationID: String, storyID: String, content: String, clientMessageID: String) async throws -> DirectMessage
     // Partage d'un live en cours (ADR-053) ; lève AppError.rejected si le live est terminé.
     func shareLive(conversationID: String, liveID: String) async throws -> DirectMessage
+    // Partage d'un profil (ADR-069), avec un texte facultatif ; lève AppError.rejected si le compte n'est plus visible.
+    func shareProfile(conversationID: String, userID: String, content: String?, clientMessageID: String?) async throws -> DirectMessage
     // Lu jusqu'à `upToID` (tout si nil) ; renvoie les badges.
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges
     func accept(conversationID: String) async throws -> Conversation

@@ -86,6 +86,9 @@ export abstract class InteractionRepository {
   // Parmi `userIds`, ceux qui suivent `userId` et que `userId` suit.
   // Comptes suggérés (ADR-058), déjà classés, sans `excludedIds`.
   abstract findSuggestionCandidates(userId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]>;
+  // Comptes liés au profil `targetId` (ADR-069), proposés à `userId` : ceux que suit ce profil et ceux que suivent ses
+  // abonnés ; ni `userId`, ni le profil, ni un compte déjà suivi par `userId`, ni `excludedIds`. Déjà classés.
+  abstract findProfileSuggestionCandidates(userId: string, targetId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]>;
   abstract findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>>;
 
   abstract findViewerInteractions(userId: string, videoIds: string[], authorIds: string[]): Promise<ViewerInteractions>;

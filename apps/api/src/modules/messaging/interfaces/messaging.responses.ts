@@ -13,6 +13,7 @@ import type {
   MessageSearchResultDto,
   MessageSearchResultListDto,
   MessagePageDto,
+  MessageProfileDto,
   SharedVideoDto,
   UnreadConversationsDto,
 } from '@repo/shared';
@@ -20,7 +21,7 @@ import { MessageLiveResponse, toMessageLiveDto } from '../../live/interfaces/liv
 import { MessageStoryResponse, toMessageStoryDto } from '../../stories/interfaces/stories.responses';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { ConversationWithParticipant, GroupInfo, MessageSearchResult } from '../application/messaging.service';
-import type { MessageItem, MessagingBadges, SharedVideo } from '../domain/messaging';
+import type { MessageItem, MessagingBadges, SharedProfile, SharedVideo } from '../domain/messaging';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 // Objets imbriqués sans description : elle produirait un `allOf`, que le client Swift envelopperait (voir CLAUDE.md).
@@ -60,6 +61,18 @@ export class GroupEventResponse implements GroupEventDto {
   name?: string | null;
 }
 
+// Profil partagé (ADR-069) : `user` absent pour un compte supprimé ou masqué au lecteur.
+export class MessageProfileResponse implements MessageProfileDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  available!: boolean;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  user?: UserSummaryResponse;
+}
+
 export class MessageResponse implements MessageDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -83,6 +96,10 @@ export class MessageResponse implements MessageDto {
   // Live partagé (ADR-053).
   @ApiPropertyOptional({ type: MessageLiveResponse })
   live?: MessageLiveResponse;
+
+  // Profil partagé (ADR-069).
+  @ApiPropertyOptional({ type: MessageProfileResponse })
+  profile?: MessageProfileResponse;
 
   @ApiPropertyOptional({
     format: 'uuid',
@@ -212,7 +229,16 @@ export class UnreadConversationsResponse implements UnreadConversationsDto {
 
 // Mappings explicites : rien n'est exposé par accident (ADR-003). Partagés par le controller et
 // les événements WebSocket (AppMessagingEventPublisher).
-export function toMessageDto({ message, sharedVideo, repliedStory, sharedLive, clientMessageId, sender, eventUser }: MessageItem): MessageDto {
+export function toMessageDto({
+  message,
+  sharedVideo,
+  repliedStory,
+  sharedLive,
+  sharedProfile,
+  clientMessageId,
+  sender,
+  eventUser,
+}: MessageItem): MessageDto {
   const dto: MessageDto = {
     id: message.id,
     conversationId: message.conversationId,
@@ -223,6 +249,7 @@ export function toMessageDto({ message, sharedVideo, repliedStory, sharedLive, c
   if (sharedVideo) dto.sharedVideo = toSharedVideoDto(sharedVideo);
   if (repliedStory) dto.story = toMessageStoryDto(repliedStory.id, repliedStory.story ?? undefined);
   if (sharedLive) dto.live = toMessageLiveDto(sharedLive.id, sharedLive.item);
+  if (sharedProfile) dto.profile = toMessageProfileDto(sharedProfile);
   if (clientMessageId) dto.clientMessageId = clientMessageId;
   if (sender) dto.sender = toUserSummary(sender);
   if (message.event) {
@@ -232,6 +259,10 @@ export function toMessageDto({ message, sharedVideo, repliedStory, sharedLive, c
     dto.event = event;
   }
   return dto;
+}
+
+function toMessageProfileDto({ id, user }: SharedProfile): MessageProfileDto {
+  return user ? { id, available: true, user: toUserSummary(user) } : { id, available: false };
 }
 
 function toSharedVideoDto({ id, video, author }: SharedVideo): SharedVideoDto {

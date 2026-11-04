@@ -40,6 +40,14 @@ export class SharedLiveNotFoundError extends MessagingError {
   }
 }
 
+// Profil partagé inconnu ou masqué à l'expéditeur (blocage, suspension, ADR-069) : 404.
+export class SharedProfileNotFoundError extends MessagingError {
+  constructor(id: string) {
+    super(`Profil introuvable : ${id}`);
+    this.name = 'SharedProfileNotFoundError';
+  }
+}
+
 export class RepliedStoryNotFoundError extends MessagingError {
   constructor(id: string) {
     super(`Story introuvable : ${id}`);

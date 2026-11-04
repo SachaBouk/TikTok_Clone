@@ -33,6 +33,7 @@ import {
   NotGroupAdminError,
   RepliedStoryNotFoundError,
   SharedLiveNotFoundError,
+  SharedProfileNotFoundError,
   MessageNotFoundError,
   NotAPendingRequestError,
   NotMessageSenderError,
@@ -523,6 +524,30 @@ describe('MessagingService', () => {
       await expect(service.sendMessage('alice', id, { liveId: '00000000-0000-7000-8000-000000000999' })).rejects.toBeInstanceOf(
         SharedLiveNotFoundError,
       );
+    });
+  });
+
+  describe('partage d’un profil (ADR-069)', () => {
+    it('partage un profil visible, sans texte ; indisponible une fois masqué au lecteur', async () => {
+      const id = await open('alice', 'bob');
+      const sent = await service.sendMessage('alice', id, { profileId: 'carol' });
+      expect(sent.message).toMatchObject({ content: '', sharedUserId: 'carol' });
+      expect(sent.sharedProfile?.user).toMatchObject({ id: 'carol' });
+      expect(events.pushes.at(-1)).toMatchObject({ recipientId: 'bob' });
+
+      // Bob bloque Carol : le profil partagé devient indisponible pour lui seul.
+      await interactions.setBlock('bob', 'carol', true);
+      const [received] = (await service.listMessages('bob', id, null, 10)).items;
+      expect(received.sharedProfile).toEqual({ id: 'carol', user: null });
+      const [own] = (await service.listMessages('alice', id, null, 10)).items;
+      expect(own.sharedProfile?.user).toMatchObject({ id: 'carol' });
+
+      // Inconnu, ou masqué à l'expéditeur : refusé.
+      await expect(service.sendMessage('alice', id, { profileId: '00000000-0000-7000-8000-000000000999' })).rejects.toBeInstanceOf(
+        SharedProfileNotFoundError,
+      );
+      await suspended.add('carol');
+      await expect(service.sendMessage('alice', id, { profileId: 'carol' })).rejects.toBeInstanceOf(SharedProfileNotFoundError);
     });
   });
 

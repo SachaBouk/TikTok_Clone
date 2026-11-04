@@ -295,6 +295,43 @@ export class InMemoryInteractionRepository extends InteractionRepository {
       .slice(0, limit);
   }
 
+  async findProfileSuggestionCandidates(userId: string, targetId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]> {
+    const following = new Set(await this.listFollowingIds(userId));
+    const theirs = new Set(await this.listFollowingIds(targetId));
+    const fans = await this.listFollowerIds(targetId);
+    const fansCount = new Map<string, number>();
+    for (const fan of fans) for (const id of await this.listFollowingIds(fan)) fansCount.set(id, (fansCount.get(id) ?? 0) + 1);
+    // Ordre d'insertion des follows = ordre du temps : les plus récents en dernier.
+    const via = new Map<string, string[]>();
+    for (const key of this.follows.keys()) {
+      const [followerId, followingId] = key.split(':') as [string, string];
+      if (following.has(followerId)) via.set(followingId, [followerId, ...(via.get(followingId) ?? [])]);
+    }
+    const excluded = new Set([userId, targetId, ...following, ...excludedIds]);
+    return [...new Set([...theirs, ...fansCount.keys()])]
+      .filter((id) => !excluded.has(id))
+      .map((id) => ({
+        candidate: {
+          userId: id,
+          followsMe: this.follows.has(`${id}:${userId}`),
+          followedByIds: (via.get(id) ?? []).slice(0, SUGGESTION_FOLLOWERS_SHOWN),
+          followedByCount: via.get(id)?.length ?? 0,
+        },
+        theirs: theirs.has(id),
+        fans: fansCount.get(id) ?? 0,
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.candidate.followsMe) - Number(a.candidate.followsMe) ||
+          b.candidate.followedByCount - a.candidate.followedByCount ||
+          Number(b.theirs) - Number(a.theirs) ||
+          b.fans - a.fans ||
+          (a.candidate.userId < b.candidate.userId ? -1 : 1),
+      )
+      .slice(0, limit)
+      .map((entry) => entry.candidate);
+  }
+
   async findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>> {
     return new Set(userIds.filter((id) => this.follows.has(`${userId}:${id}`) && this.follows.has(`${id}:${userId}`)));
   }

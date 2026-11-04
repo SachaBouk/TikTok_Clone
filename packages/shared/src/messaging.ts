@@ -17,6 +17,14 @@ export interface SharedVideoDto {
   author?: UserSummaryDto;
 }
 
+// Profil partagé dans un message (ADR-069). `available` faux si le compte a été supprimé ou est masqué au lecteur
+// (blocage, suspension) : `user` est alors absent.
+export interface MessageProfileDto {
+  id: string;
+  available: boolean;
+  user?: UserSummaryDto;
+}
+
 export interface MessageDto {
   id: string;
   conversationId: string;
@@ -29,6 +37,8 @@ export interface MessageDto {
   story?: MessageStoryDto;
   // Live partagé (ADR-053).
   live?: MessageLiveDto;
+  // Profil partagé (ADR-069).
+  profile?: MessageProfileDto;
   // Identifiant d'envoi choisi par l'app (ADR-044) : seulement dans la réponse à l'envoi et l'écho temps réel adressé à
   // l'expéditeur, pour reconnaître la bulle en attente.
   clientMessageId?: string;

@@ -8,6 +8,15 @@ struct LoadSuggestionsUseCase: Sendable {
     }
 }
 
+// Comptes suggérés sous le profil d'un autre (ADR-069).
+struct LoadProfileSuggestionsUseCase: Sendable {
+    let suggestions: any SuggestionRepository
+
+    func callAsFunction(username: String) async throws -> [AccountSuggestion] {
+        try await suggestions.profileSuggestions(username: username)
+    }
+}
+
 struct SearchMessagesUseCase: Sendable {
     let messaging: any MessagingRepository
 

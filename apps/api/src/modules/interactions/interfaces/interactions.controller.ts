@@ -27,7 +27,13 @@ import { ApiTooManyRequests } from '../../../rate-limit/api-too-many-requests.de
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
 import { Public } from '../../auth/interfaces/public.decorator';
 import { toUserSummary } from '../../users/interfaces/user-summary.response';
-import { InteractionsService, type CommentHistoryPage, type CommentWithAuthor, type FollowPage } from '../application/interactions.service';
+import {
+  InteractionsService,
+  type AccountSuggestion,
+  type CommentHistoryPage,
+  type CommentWithAuthor,
+  type FollowPage,
+} from '../application/interactions.service';
 import { InteractionErrorFilter } from './interaction-error.filter';
 import { CommentsQuery, CreateCommentRequest, FollowsQuery, RelationshipsQuery, SuggestionsQuery } from './interactions.requests';
 import {
@@ -318,16 +324,22 @@ export class InteractionsController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Nombre invalide.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   async listSuggestions(@CurrentUser() user: AuthenticatedUser, @Query() query: SuggestionsQuery): Promise<AccountSuggestionListDto> {
-    const suggestions = await this.interactions.listSuggestions(user.userId, query.limit);
-    return {
-      items: suggestions.map((s) => ({
-        user: toUserSummary(s.user),
-        followersCount: s.user.followersCount,
-        followsYou: s.followsMe,
-        followedBy: s.followedBy.map(toUserSummary),
-        followedByCount: s.followedByCount,
-      })),
-    };
+    return toSuggestionList(await this.interactions.listSuggestions(user.userId, query.limit));
+  }
+
+  // Comptes suggérés sous le profil d'un autre (ADR-069) : comptes liés à ce profil (suivis par lui ou par ses abonnés),
+  // complétés par des comptes populaires. Déclarée après `users/me/suggestions` (« me » n'est pas un pseudo).
+  @Get('users/:username/suggestions')
+  @ApiOkResponse({ type: AccountSuggestionListResponse })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Nombre invalide.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Compte inconnu, bloqué dans un sens ou l’autre, ou suspendu.' })
+  async listProfileSuggestions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('username') username: string,
+    @Query() query: SuggestionsQuery,
+  ): Promise<AccountSuggestionListDto> {
+    return toSuggestionList(await this.interactions.listProfileSuggestions(user.userId, username, query.limit));
   }
 
   // Listes publiques (mode invité compris) ; `viewer` n'est renseigné que pour un compte connecté.
@@ -424,5 +436,18 @@ function toCommentHistoryDto(page: CommentHistoryPage): CommentHistoryPageDto {
       video: { id: video.id, thumbnailUrl: video.thumbnailUrl, author: toUserSummary(videoAuthor) },
     })),
     nextCursor: page.nextCursor,
+  };
+}
+
+// Mapping explicite d'une liste de comptes suggérés (ADR-058, ADR-069).
+function toSuggestionList(suggestions: AccountSuggestion[]): AccountSuggestionListDto {
+  return {
+    items: suggestions.map((s) => ({
+      user: toUserSummary(s.user),
+      followersCount: s.user.followersCount,
+      followsYou: s.followsMe,
+      followedBy: s.followedBy.map(toUserSummary),
+      followedByCount: s.followedByCount,
+    })),
   };
 }

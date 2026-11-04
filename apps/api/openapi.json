@@ -2875,6 +2875,77 @@
         ]
       }
     },
+    "/users/{username}/suggestions": {
+      "get": {
+        "operationId": "listProfileSuggestions",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSuggestionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nombre invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte inconnu, bloqué dans un sens ou l’autre, ou suspendu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
     "/users/{username}/followers": {
       "get": {
         "operationId": "listFollowers",
@@ -11752,6 +11823,25 @@
           "available"
         ]
       },
+      "MessageProfileResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSummaryResponse"
+          }
+        },
+        "required": [
+          "id",
+          "available"
+        ]
+      },
       "GroupEventType": {
         "type": "string",
         "enum": [
@@ -11809,6 +11899,9 @@
           },
           "live": {
             "$ref": "#/components/schemas/MessageLiveResponse"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/MessageProfileResponse"
           },
           "clientMessageId": {
             "type": "string",
@@ -12121,6 +12214,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Live en cours partagé (ADR-053) ; `content` facultatif."
+          },
+          "profileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Compte dont le profil est partagé (ADR-069) ; visible de l’expéditeur, sinon 404. `content` facultatif."
           },
           "clientMessageId": {
             "type": "string",

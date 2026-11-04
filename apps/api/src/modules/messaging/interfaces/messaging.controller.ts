@@ -270,6 +270,7 @@ export class MessagingController {
         videoId: body.videoId,
         storyId: body.storyId,
         liveId: body.liveId,
+        profileId: body.profileId,
         clientMessageId: body.clientMessageId,
       }),
     );

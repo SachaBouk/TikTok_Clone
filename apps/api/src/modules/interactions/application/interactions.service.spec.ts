@@ -646,6 +646,21 @@ describe('InteractionsService', () => {
       expect((await suggestions()).map(([username]) => username)).toEqual(['u3']);
     });
 
+    it('comptes suggérés sous un profil (ADR-069) : suivis par lui ou par ses abonnés ; ni moi, ni lui, ni mes abonnements', async () => {
+      const suggestions = async (username: string) =>
+        (await lists.listProfileSuggestions(id(4), username, 20)).map((s) => [s.user.username, s.followedBy.map((u) => u.username)]);
+      // u4 suit u1. Profil de u1 : il suit u3 (que suit aussi u1, abonnement de u4) ; ses abonnés suivent u5.
+      expect(await suggestions('u1')).toEqual([
+        ['u3', ['u1']],
+        ['u5', []],
+      ]);
+      // Profil de u2 : il suit u1 (déjà suivi par u4) et u5.
+      expect(await suggestions('u2')).toEqual([['u5', []]]);
+      await expect(lists.listProfileSuggestions(id(4), 'inconnu', 20)).rejects.toBeInstanceOf(TargetUserNotFoundError);
+      await lists.setBlock(id(4), 'u2', true);
+      await expect(lists.listProfileSuggestions(id(4), 'u2', 20)).rejects.toBeInstanceOf(TargetUserNotFoundError);
+    });
+
     it('liste les abonnés du plus récent au plus ancien, page par page, sans doublon ni oubli', async () => {
       const first = await lists.listFollows('followers', 'u1', undefined, null, 3);
       expect(usernames(first)).toEqual(['u5', 'u4', 'u3']);

@@ -118,9 +118,18 @@ final class FakeSuggestionRepository: SuggestionRepository {
         stored = Mutex(suggestions)
     }
 
+    // Comptes suggérés sous un profil (ADR-069), par pseudo ; pseudos demandés.
+    let byProfile = Mutex<[String: [AccountSuggestion]]>([:])
+    let requestedProfiles = Mutex<[String]>([])
+
     func suggestions() async throws -> [AccountSuggestion] {
         calls.withLock { $0 += 1 }
         return stored.withLock { $0 }
+    }
+
+    func profileSuggestions(username: String) async throws -> [AccountSuggestion] {
+        requestedProfiles.withLock { $0.append(username) }
+        return byProfile.withLock { $0[username] ?? [] }
     }
 }
 

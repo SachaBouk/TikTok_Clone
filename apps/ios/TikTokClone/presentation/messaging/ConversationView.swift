@@ -430,6 +430,9 @@ private struct MessageBubble: View {
             if let live = message.live {
                 SharedLiveCard(live: live, open: openLive)
             }
+            if let profile = message.profile {
+                SharedProfileCard(profile: profile, open: openProfile)
+            }
             if !message.content.isEmpty {
                 TextBubble(text: message.content, isOwn: isOwn)
             }
@@ -560,6 +563,43 @@ private struct SharedLiveCard: View {
             .accessibilityIdentifier("conversation.sharedLive")
         } else {
             Label("Live terminé", systemImage: "dot.radiowaves.left.and.right")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(12)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// Profil partagé (ADR-069) : photo, nom, @pseudo et « Voir le profil » ; compte supprimé ou masqué : « Profil indisponible ».
+private struct SharedProfileCard: View {
+    let profile: SharedProfile
+    let open: (String) -> Void
+
+    var body: some View {
+        if let user = profile.user {
+            Button {
+                open(user.username)
+            } label: {
+                VStack(spacing: 6) {
+                    AvatarView(url: user.avatarURL, name: user.displayName, size: 64)
+                    Text(user.displayName).font(.subheadline.bold()).lineLimit(1)
+                    Text("@\(user.username)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text("Voir le profil")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.top, 4)
+                }
+                .padding(14)
+                .frame(width: 200)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Profil de @\(user.username)")
+            .accessibilityIdentifier("conversation.sharedProfile")
+        } else {
+            Label("Profil indisponible", systemImage: "person.crop.circle.badge.xmark")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(12)

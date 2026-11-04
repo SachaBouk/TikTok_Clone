@@ -327,6 +327,41 @@ export class PrismaInteractionRepository extends InteractionRepository {
     return rows.map((r) => ({ userId: r.user_id, followsMe: r.follows_me, followedByIds: r.via_ids ?? [], followedByCount: r.via_count }));
   }
 
+  // Une requête : ceux que suit le profil (`theirs`), les comptes que suivent ses abonnés (`fans_follow`, avec leur
+  // nombre), puis, comme les suggestions (ADR-058), « te suit » et les comptes suivis qui les suivent.
+  async findProfileSuggestionCandidates(userId: string, targetId: string, excludedIds: string[], limit: number): Promise<SuggestionCandidate[]> {
+    const rows = await this.prisma.$queryRaw<{ user_id: string; follows_me: boolean; via_ids: string[] | null; via_count: number }[]>`
+      WITH mine AS (
+        SELECT following_id FROM follows WHERE follower_id = ${userId}::uuid
+      ), theirs AS (
+        SELECT following_id AS candidate FROM follows WHERE follower_id = ${targetId}::uuid
+      ), fans_follow AS (
+        SELECT f2.following_id AS candidate, count(*)::int AS n
+        FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.follower_id
+        WHERE f1.following_id = ${targetId}::uuid
+        GROUP BY f2.following_id
+      ), candidates AS (
+        SELECT candidate FROM theirs UNION SELECT candidate FROM fans_follow
+      ), via AS (
+        SELECT f.following_id AS candidate, f.follower_id AS via_id, f.created_at
+        FROM follows f JOIN mine m ON f.follower_id = m.following_id
+        WHERE f.following_id IN (SELECT candidate FROM candidates)
+      )
+      SELECT c.candidate::text AS user_id,
+             EXISTS (SELECT 1 FROM follows WHERE follower_id = c.candidate AND following_id = ${userId}::uuid) AS follows_me,
+             (SELECT (array_agg(v.via_id::text ORDER BY v.created_at DESC))[1:${SUGGESTION_FOLLOWERS_SHOWN}] FROM via v WHERE v.candidate = c.candidate) AS via_ids,
+             (SELECT count(*)::int FROM via v WHERE v.candidate = c.candidate) AS via_count,
+             EXISTS (SELECT 1 FROM theirs t WHERE t.candidate = c.candidate) AS followed_by_target,
+             COALESCE((SELECT n FROM fans_follow ff WHERE ff.candidate = c.candidate), 0) AS fans_count
+      FROM candidates c
+      WHERE c.candidate <> ${userId}::uuid AND c.candidate <> ${targetId}::uuid
+        AND c.candidate NOT IN (SELECT following_id FROM mine)
+        AND NOT (c.candidate = ANY(${excludedIds}::uuid[]))
+      ORDER BY follows_me DESC, via_count DESC, followed_by_target DESC, fans_count DESC, c.candidate
+      LIMIT ${limit}`;
+    return rows.map((r) => ({ userId: r.user_id, followsMe: r.follows_me, followedByIds: r.via_ids ?? [], followedByCount: r.via_count }));
+  }
+
   async findMutualFollows(userId: string, userIds: string[]): Promise<Set<string>> {
     const rows = await this.prisma.follow.findMany({
       where: { followerId: userId, followingId: { in: userIds }, following: { following: { some: { followingId: userId } } } },

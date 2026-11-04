@@ -70,7 +70,7 @@ export class AppMessagingEventPublisher extends MessagingEventPublisher {
 function pushText(message: Message): string {
   return message.storyId
     ? `Réponse à ta story : ${message.content}`
-    : message.content || (message.liveId ? 'a partagé un live' : 'a partagé une vidéo');
+    : message.content || (message.liveId ? 'a partagé un live' : message.sharedUserId ? 'a partagé un profil' : 'a partagé une vidéo');
 }
 
 // Mapping explicite des badges (noms identiques, mais rien n'est exposé par accident).

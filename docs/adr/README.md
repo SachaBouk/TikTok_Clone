@@ -70,6 +70,7 @@
 | [ADR-066](ADR-066-lives-facon-tiktok.md) | Lives façon TikTok : icône « LIVE », lives à faire défiler, écran redessiné (complète ADR-053 et ADR-016) | Proposé |
 | [ADR-067](ADR-067-menu-video-telechargement.md) | Menu d'une vidéo : vitesse, défilement automatique, affichage allégé, téléchargement (complète ADR-016, ADR-062 et ADR-035) | Proposé |
 | [ADR-068](ADR-068-suggestions-comptes-populaires.md) | Comptes suggérés complétés par des comptes populaires (complète ADR-058) | Proposé |
+| [ADR-069](ADR-069-profil-facon-tiktok-autres-comptes.md) | Profil d'un autre compte façon TikTok : comptes suggérés liés au profil, profil partagé par message (complète ADR-056, ADR-058 et ADR-018) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

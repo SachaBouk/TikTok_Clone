@@ -69,6 +69,8 @@ final class SendVideoViewModel {
     enum Item: Equatable {
         case video(FeedVideo)
         case live(LiveStream)
+        // Profil d'un compte (ADR-069).
+        case profile(UserSummary)
     }
 
     // Section de la liste complète : « Chats récents », « Amis », puis une par lettre sous « Suivis ».
@@ -109,6 +111,7 @@ final class SendVideoViewModel {
     private let messaging: MessagingModel
     private let share: ShareVideoByMessageUseCase
     private let shareLive: ShareLiveByMessageUseCase?
+    private let shareProfile: ShareProfileByMessageUseCase?
     private let interactions: VideoInteractionsModel
     private let session: SessionStore
 
@@ -131,11 +134,13 @@ final class SendVideoViewModel {
         loadFollows: LoadFollowsUseCase,
         share: ShareVideoByMessageUseCase,
         shareLive: ShareLiveByMessageUseCase?,
+        shareProfile: ShareProfileByMessageUseCase? = nil,
         interactions: VideoInteractionsModel,
         session: SessionStore
     ) {
         self.item = item
         self.shareLive = shareLive
+        self.shareProfile = shareProfile
         self.messaging = messaging
         self.share = share
         self.interactions = interactions
@@ -312,6 +317,12 @@ final class SendVideoViewModel {
         case (.live(let live), .group(let conversationID)):
             guard let shareLive else { throw AppError.unexpected }
             _ = try await shareLive(liveID: live.id, inConversation: conversationID)
+        case (.profile(let profile), .user(let user)):
+            guard let shareProfile else { throw AppError.unexpected }
+            _ = try await shareProfile(userID: profile.id, to: user.username, message: message, clientMessageID: clientMessageID)
+        case (.profile(let profile), .group(let conversationID)):
+            guard let shareProfile else { throw AppError.unexpected }
+            _ = try await shareProfile(userID: profile.id, inConversation: conversationID, message: message, clientMessageID: clientMessageID)
         }
     }
 }

@@ -18,6 +18,13 @@ struct ProfileView: View {
     @State private var editModel: EditProfileViewModel
     @State private var isChoosingPhoto = false
     @State private var editingField: ProfileField?
+    // Profil d'un autre (ADR-069) : rangée des comptes suggérés dépliée, sa liste complète, et feuille de partage (l'action
+    // choisie dedans — signaler, bloquer, écrire, se connecter — s'enchaîne une fois la feuille fermée).
+    @State private var showsSuggestions = false
+    @State private var suggestionsModel: ProfileSuggestionsModel?
+    @State private var isShowingAllSuggestions = false
+    @State private var isSharing = false
+    @State private var shareAction: ProfileShareSheet.Action?
 
     init(viewModel: ProfileViewModel, container: AppContainer) {
         _viewModel = State(initialValue: viewModel)
@@ -29,12 +36,28 @@ struct ProfileView: View {
 
     var body: some View {
         content
-            .navigationTitle(viewModel.profile?.displayName ?? "Profil")
+            .navigationTitle(viewModel.isOwn ? viewModel.profile?.displayName ?? "Profil" : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .task { await viewModel.load() }
             .navigationDestination(item: $openedConversation) { route in
                 ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
+            }
+            .navigationDestination(isPresented: $isShowingAllSuggestions) {
+                if let suggestionsModel { ProfileSuggestionsListView(model: suggestionsModel, container: container) }
+            }
+            .sheet(isPresented: $isSharing, onDismiss: runShareAction) {
+                if let profile = viewModel.profile {
+                    ProfileShareSheet(
+                        profile: UserSummary(
+                            id: profile.id, username: profile.username, displayName: profile.displayName, avatarURL: profile.avatarURL),
+                        isBlocked: viewModel.isBlocked, container: container
+                    ) { shareAction = $0 }
+                    .presentationDetents([.height(430), .large])
+                    .presentationCornerRadius(16)
+                    .presentationBackground(.white)
+                    .environment(\.colorScheme, .light)
+                }
             }
             .navigationDestination(isPresented: $isEditing) {
                 EditProfileView(viewModel: editModel)
@@ -93,6 +116,67 @@ struct ProfileView: View {
             }
     }
 
+    // Profil d'un autre façon TikTok (ADR-069) : en-tête, boutons, comptes suggérés dépliables, bio à gauche.
+    @ViewBuilder
+    private func otherProfileTop(_ profile: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OtherProfileHeader(profile: profile, container: container)
+            if viewModel.isBlocked {
+                Button("Débloquer") { isConfirmingBlock = true }
+                    .buttonStyle(ProfileActionButtonStyle())
+                    .padding(.horizontal, 16)
+            } else if let status = viewModel.followStatus {
+                OtherProfileActions(
+                    status: status, showsSuggestions: showsSuggestions, follow: follow, message: openConversation,
+                    toggleSuggestions: toggleSuggestions)
+            }
+            if showsSuggestions, let suggestionsModel {
+                ProfileSuggestionsRow(
+                    model: suggestionsModel, container: container,
+                    openProfile: { username in navigationPath?.wrappedValue.append(ProfileRoute(username: username)) },
+                    showAll: { isShowingAllSuggestions = true }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if let bio = profile.bio, !bio.isEmpty {
+                Text(bio).font(.subheadline).padding(.horizontal, 16)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 6)
+    }
+
+    // « personne + » : déplie la rangée (compte connecté ; en invité, la connexion).
+    private func toggleSuggestions() {
+        guard container.session.isSignedIn else { return container.session.requestSignIn() }
+        if suggestionsModel == nil, let username = viewModel.profile?.username {
+            suggestionsModel = ProfileSuggestionsModel(username: username, load: container.loadProfileSuggestions(), session: container.session)
+        }
+        withAnimation(.easeInOut(duration: 0.25)) { showsSuggestions.toggle() }
+    }
+
+    private func openConversation() {
+        guard let username = viewModel.profile?.username else { return }
+        if container.session.isSignedIn {
+            openedConversation = ConversationRoute(username: username)
+        } else {
+            container.session.requestSignIn()
+        }
+    }
+
+    // Action choisie dans la feuille de partage, une fois celle-ci fermée (une confirmation ou une feuille présentée
+    // pendant la fermeture serait ignorée).
+    private func runShareAction() {
+        guard let action = shareAction, let profile = viewModel.profile else { return }
+        shareAction = nil
+        switch action {
+        case .report: reportTarget = .account(id: profile.id, username: profile.username)
+        case .block: isConfirmingBlock = true
+        case .message: openConversation()
+        case .signIn: container.session.requestSignIn()
+        }
+    }
+
     private var blockTitle: String {
         guard let username = viewModel.profile?.username else { return "" }
         return viewModel.isBlocked ? "Débloquer @\(username) ?" : "Bloquer @\(username) ?"
@@ -120,9 +204,13 @@ struct ProfileView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     if let profile = viewModel.profile {
-                        ProfileHeader(profile: profile, isOwn: viewModel.isOwn, container: container) { isChoosingPhoto = true }
-                        actionButtons
-                        bio(profile)
+                        if viewModel.isOwn {
+                            ProfileHeader(profile: profile, isOwn: true, container: container) { isChoosingPhoto = true }
+                            actionButtons
+                            bio(profile)
+                        } else {
+                            otherProfileTop(profile)
+                        }
                     }
                     if viewModel.isBlocked {
                         ContentUnavailableView(
@@ -166,8 +254,8 @@ struct ProfileView: View {
         }
     }
 
-    // Comme TikTok : « Modifier le profil », « Partager le profil » et les jetons (ADR-009) sur le sien ;
-    // « Suivre » (rouge) et « Message » sur celui d'un autre.
+    // Son profil, comme TikTok : « Modifier le profil », « Partager le profil » et les jetons (ADR-009). Celui d'un autre a
+    // ses propres boutons (`OtherProfileActions`, ADR-069).
     @ViewBuilder
     private var actionButtons: some View {
         if viewModel.isOwn {
@@ -196,34 +284,6 @@ struct ProfileView: View {
                 .accessibilityIdentifier("profile.wallet")
             }
             .padding(.horizontal, 24)
-        } else if viewModel.isBlocked {
-            Button("Débloquer") { isConfirmingBlock = true }
-                .buttonStyle(ProfileActionButtonStyle())
-                .frame(width: 180)
-        } else if let status = viewModel.followStatus {
-            HStack(spacing: 6) {
-                Button(status.title) { follow() }
-                    .buttonStyle(ProfileActionButtonStyle(isProminent: !status.isFollowing))
-                    .accessibilityIdentifier("profile.follow")
-                messageButton
-            }
-            .padding(.horizontal, 48)
-        }
-    }
-
-    // Écrire à ce compte : sa conversation, ouverte ou créée. En invité : la connexion.
-    @ViewBuilder
-    private var messageButton: some View {
-        if let username = viewModel.profile?.username {
-            Button("Message") {
-                if container.session.isSignedIn {
-                    openedConversation = ConversationRoute(username: username)
-                } else {
-                    container.session.requestSignIn()
-                }
-            }
-            .buttonStyle(ProfileActionButtonStyle())
-            .accessibilityIdentifier("profile.message")
         }
     }
 
@@ -281,21 +341,10 @@ struct ProfileView: View {
             if viewModel.isOwn {
                 Button("Menu", systemImage: "line.3.horizontal") { container.router.isProfileMenuOpen = true }
                     .accessibilityIdentifier("profile.settings")
-            } else if container.session.isSignedIn, viewModel.profile != nil {
-                Menu {
-                    if let profile = viewModel.profile {
-                        Button("Signaler", systemImage: "flag") {
-                            reportTarget = .account(id: profile.id, username: profile.username)
-                        }
-                    }
-                    Button(viewModel.isBlocked ? "Débloquer" : "Bloquer", systemImage: "hand.raised", role: viewModel.isBlocked ? nil : .destructive)
-                    {
-                        isConfirmingBlock = true
-                    }
-                } label: {
-                    Label("Options", systemImage: "ellipsis.circle")
-                }
-                .accessibilityIdentifier("profile.menu")
+            } else if viewModel.profile != nil {
+                // Feuille « Envoyer à » du profil (ADR-069) : amis, liens, Code QR, Signaler, Bloquer, Envoyer message.
+                Button("Partager le profil", systemImage: "arrowshape.turn.up.right") { isSharing = true }
+                    .accessibilityIdentifier("profile.share")
             }
         }
     }
@@ -308,10 +357,6 @@ private struct ProfileHeader: View {
     let isOwn: Bool
     let container: AppContainer
     let changePhoto: () -> Void
-
-    private var summary: UserSummary {
-        UserSummary(id: profile.id, username: profile.username, displayName: profile.displayName, avatarURL: profile.avatarURL)
-    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -335,64 +380,8 @@ private struct ProfileHeader: View {
         .accessibilityIdentifier("profile.header")
     }
 
-    @ViewBuilder
     private var avatar: some View {
-        let ring = container.stories.ring(for: profile.id)
-        // En direct (ADR-053) : la photo ouvre le live, avant les stories.
-        let live = container.lives.live(of: profile.id)
-        Button {
-            if let live {
-                container.router.openLive(live.id, source: .profile)
-            } else if ring != nil {
-                container.router.openStories([summary], source: .profile)
-            } else if isOwn {
-                changePhoto()
-            }
-        } label: {
-            if live != nil {
-                AvatarView(url: profile.avatarURL, name: profile.displayName, size: 104)
-                    .padding(6)
-                    .overlay { Circle().strokeBorder(.red, lineWidth: 4) }
-                    .overlay(alignment: .bottom) { LiveBadge().offset(y: 8) }
-                    .padding(.bottom, 6)
-            } else if isOwn, profile.avatarURL == nil, ring == nil {
-                // Pas encore de photo : rond gris « Ajouter », comme TikTok.
-                Circle()
-                    .fill(Color(.systemGray3))
-                    .frame(width: 104, height: 104)
-                    .overlay {
-                        VStack(spacing: 2) {
-                            Image(systemName: "camera.fill").font(.title2)
-                            Text("Ajouter").font(.footnote.weight(.semibold))
-                        }
-                        .foregroundStyle(.white)
-                    }
-            } else {
-                StoryAvatar(url: profile.avatarURL, name: profile.displayName, size: 104, ring: ring)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(ring == nil && live == nil && !isOwn)
-        .overlay(alignment: .bottomTrailing) {
-            if isOwn, live == nil {
-                Button(action: changePhoto) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Color.brandCyan.mix(with: .blue, by: 0.25), in: Circle())
-                        .overlay { Circle().strokeBorder(Color(.systemBackground), lineWidth: 2) }
-                }
-                .accessibilityLabel("Changer la photo de profil")
-                .accessibilityIdentifier("profile.changePhoto")
-            }
-        }
-        .accessibilityLabel(
-            live != nil ? "@\(profile.username) est en direct" : ring == nil ? "Photo de profil" : "Stories de @\(profile.username)"
-        )
-        .accessibilityIdentifier("profile.avatar")
-        .task(id: profile.id) { await container.stories.loadRing(for: summary) }
-        .task(id: profile.id) { await container.lives.load(for: summary) }
+        ProfileAvatar(profile: profile, isOwn: isOwn, container: container, size: 104, changePhoto: changePhoto)
     }
 
     private func counter(_ value: Int, _ label: String) -> some View {
@@ -452,5 +441,79 @@ struct ProfileActionButtonStyle: ButtonStyle {
             .frame(width: isSquare ? 44 : nil)
             .background(isProminent ? Color.brandPink : Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+// Photo d'un profil (en-tête de TikTok) : entourée de l'anneau des stories (ADR-051 : la toucher les ouvre ; en direct, le
+// live) ; sur la sienne, « + » bleu pour la changer (ADR-056), et rond gris « Ajouter » sans photo.
+struct ProfileAvatar: View {
+    let profile: UserProfile
+    let isOwn: Bool
+    let container: AppContainer
+    let size: CGFloat
+    let changePhoto: () -> Void
+
+    private var summary: UserSummary {
+        UserSummary(id: profile.id, username: profile.username, displayName: profile.displayName, avatarURL: profile.avatarURL)
+    }
+
+    @ViewBuilder
+    var body: some View {
+        let ring = container.stories.ring(for: profile.id)
+        // En direct (ADR-053) : la photo ouvre le live, avant les stories.
+        let live = container.lives.live(of: profile.id)
+        Button {
+            if let live {
+                container.router.openLive(live.id, source: .profile)
+            } else if ring != nil {
+                container.router.openStories([summary], source: .profile)
+            } else if isOwn {
+                changePhoto()
+            }
+        } label: {
+            if live != nil {
+                AvatarView(url: profile.avatarURL, name: profile.displayName, size: size)
+                    .padding(6)
+                    .overlay { Circle().strokeBorder(.red, lineWidth: 4) }
+                    .overlay(alignment: .bottom) { LiveBadge().offset(y: 8) }
+                    .padding(.bottom, 6)
+            } else if isOwn, profile.avatarURL == nil, ring == nil {
+                // Pas encore de photo : rond gris « Ajouter », comme TikTok.
+                Circle()
+                    .fill(Color(.systemGray3))
+                    .frame(width: size, height: size)
+                    .overlay {
+                        VStack(spacing: 2) {
+                            Image(systemName: "camera.fill").font(.title2)
+                            Text("Ajouter").font(.footnote.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                    }
+            } else {
+                StoryAvatar(url: profile.avatarURL, name: profile.displayName, size: size, ring: ring)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(ring == nil && live == nil && !isOwn)
+        .overlay(alignment: .bottomTrailing) {
+            if isOwn, live == nil {
+                Button(action: changePhoto) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.brandCyan.mix(with: .blue, by: 0.25), in: Circle())
+                        .overlay { Circle().strokeBorder(Color(.systemBackground), lineWidth: 2) }
+                }
+                .accessibilityLabel("Changer la photo de profil")
+                .accessibilityIdentifier("profile.changePhoto")
+            }
+        }
+        .accessibilityLabel(
+            live != nil ? "@\(profile.username) est en direct" : ring == nil ? "Photo de profil" : "Stories de @\(profile.username)"
+        )
+        .accessibilityIdentifier("profile.avatar")
+        .task(id: profile.id) { await container.stories.loadRing(for: summary) }
+        .task(id: profile.id) { await container.lives.load(for: summary) }
     }
 }

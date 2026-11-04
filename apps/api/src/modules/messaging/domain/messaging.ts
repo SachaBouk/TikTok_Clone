@@ -22,6 +22,8 @@ export interface Message {
   storyId: string | null;
   // Live partagé (ADR-053).
   liveId: string | null;
+  // Profil partagé (ADR-069).
+  sharedUserId: string | null;
   // Ligne d'événement d'un groupe (ADR-059) : l'expéditeur en est l'auteur ; `content` = nouveau nom d'un renommage.
   event: GroupEvent | null;
   // Membre ajouté ou retiré.
@@ -53,11 +55,19 @@ export interface SharedLive {
   item: LiveItem | null;
 }
 
+// Profil partagé (ADR-069), résolu à la lecture : null si le compte a été supprimé ou s'il est masqué au lecteur
+// (blocage dans un sens ou l'autre, suspension).
+export interface SharedProfile {
+  id: string;
+  user: User | null;
+}
+
 export interface MessageItem {
   message: Message;
   sharedVideo: SharedVideo | null;
   repliedStory: RepliedStory | null;
   sharedLive: SharedLive | null;
+  sharedProfile: SharedProfile | null;
   // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
   // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
   clientMessageId?: string;

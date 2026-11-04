@@ -49,6 +49,14 @@ export class SendMessageRequest {
 
   @ApiPropertyOptional({
     format: 'uuid',
+    description: 'Compte dont le profil est partagé (ADR-069) ; visible de l’expéditeur, sinon 404. `content` facultatif.',
+  })
+  @IsOptional()
+  @IsUUID()
+  profileId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
     description:
       'Identifiant d’envoi choisi par l’app (ADR-044). Le renvoyer pour le même message rend celui déjà créé (même réponse), sans en créer un second ni le compter dans les limites.',
   })

@@ -80,6 +80,25 @@ struct ShareVideoByMessageUseCase: Sendable {
     }
 }
 
+// Partage d'un profil (feuille « Envoyer à » d'un profil, ADR-069) : avec un compte (sa conversation, ouverte au besoin)
+// ou dans un groupe ; texte facultatif dans le même message, identifiant d'envoi gardé d'un essai à l'autre (ADR-044).
+struct ShareProfileByMessageUseCase: Sendable {
+    let messaging: any MessagingRepository
+
+    func callAsFunction(userID: String, to username: String, message: String? = nil, clientMessageID: String? = nil) async throws
+        -> DirectMessage
+    {
+        let conversation = try await messaging.open(username: username)
+        return try await messaging.shareProfile(conversationID: conversation.id, userID: userID, content: message, clientMessageID: clientMessageID)
+    }
+
+    func callAsFunction(userID: String, inConversation conversationID: String, message: String? = nil, clientMessageID: String? = nil)
+        async throws -> DirectMessage
+    {
+        try await messaging.shareProfile(conversationID: conversationID, userID: userID, content: message, clientMessageID: clientMessageID)
+    }
+}
+
 struct MarkConversationReadUseCase: Sendable {
     let messaging: any MessagingRepository
 

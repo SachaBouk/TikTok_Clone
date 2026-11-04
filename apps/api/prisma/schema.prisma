@@ -628,6 +628,8 @@ model Message {
   storyId         String?     @map("story_id") @db.Uuid
   // Live partagé (ADR-053). Sans clé étrangère, comme une vidéo partagée.
   liveId          String?     @map("live_id") @db.Uuid
+  // Profil partagé (ADR-069). Sans clé étrangère : un compte supprimé depuis reste signalé « indisponible ».
+  sharedUserId    String?     @map("shared_user_id") @db.Uuid
   // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
   // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
   clientMessageId String?     @map("client_message_id") @db.Uuid

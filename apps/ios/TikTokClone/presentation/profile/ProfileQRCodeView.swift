@@ -3,12 +3,18 @@ import SwiftUI
 
 // « Ton code QR » (ADR-057), ouvert par le menu ☰ de son profil : le lien de son profil (`tiktokclone://users/<pseudo>`,
 // ADR-056) en code QR, dessiné sur l'iPhone. Scanné par l'appareil photo d'un iPhone qui a l'app, il ouvre le profil.
+// Aussi pour le compte d'un autre (`account`, feuille de partage de son profil, ADR-069).
 struct ProfileQRCodeView: View {
     let session: SessionStore
+    var account: UserSummary? = nil
+
+    private var shown: UserSummary? {
+        account ?? session.profile.map { UserSummary(id: $0.id, username: $0.username, displayName: $0.displayName, avatarURL: $0.avatarURL) }
+    }
 
     var body: some View {
         VStack(spacing: 24) {
-            if let profile = session.profile {
+            if let profile = shown {
                 let link = ProfileLink.url(for: profile.username)
                 VStack(spacing: 16) {
                     AvatarView(url: profile.avatarURL, name: profile.displayName, size: 72)
@@ -22,7 +28,9 @@ struct ProfileQRCodeView: View {
                             .accessibilityLabel("Code QR du profil @\(profile.username)")
                             .accessibilityIdentifier("qrCode.image")
                     }
-                    Text("Scanne ce code pour voir mon profil").font(.subheadline).foregroundStyle(.secondary)
+                    Text(account == nil ? "Scanne ce code pour voir mon profil" : "Scanne ce code pour voir son profil")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(28)
                 .frame(maxWidth: .infinity)
@@ -30,7 +38,9 @@ struct ProfileQRCodeView: View {
                 // Toujours noir sur blanc : un code QR clair sur fond sombre se lit mal.
                 .environment(\.colorScheme, .light)
                 .padding(.horizontal, 24)
-                ShareLink(item: link, message: Text("Mon profil sur TikTok Clone")) {
+                ShareLink(
+                    item: link, message: Text(account == nil ? "Mon profil sur TikTok Clone" : "Le profil de @\(profile.username) sur TikTok Clone")
+                ) {
                     Label("Partager le profil", systemImage: "arrowshape.turn.up.right.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)

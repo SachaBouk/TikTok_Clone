@@ -47,6 +47,7 @@ import {
   RecipientNotFoundError,
   RepliedStoryNotFoundError,
   SharedLiveNotFoundError,
+  SharedProfileNotFoundError,
   RequestLimitReachedError,
   SharedVideoNotFoundError,
 } from '../domain/messaging.errors';
@@ -116,6 +117,8 @@ export interface SendMessageInput {
   storyId?: string;
   // Live en cours partagé (ADR-053).
   liveId?: string;
+  // Profil partagé (ADR-069) : un compte visible de l'expéditeur.
+  profileId?: string;
   // Identifiant d'envoi choisi par l'app (ADR-044) : renvoyer le même rend le message déjà créé.
   clientMessageId?: string;
 }
@@ -234,8 +237,9 @@ export class MessagingService {
     const sharedVideoId = input.videoId ?? null;
     const storyId = input.storyId ?? null;
     const liveId = input.liveId ?? null;
-    // Réponse à une story : texte obligatoire. Sinon : texte, vidéo ou live partagé.
-    if (storyId ? !content : !content && !sharedVideoId && !liveId) throw new EmptyMessageError();
+    const sharedUserId = input.profileId ?? null;
+    // Réponse à une story : texte obligatoire. Sinon : texte, vidéo, live ou profil partagé.
+    if (storyId ? !content : !content && !sharedVideoId && !liveId && !sharedUserId) throw new EmptyMessageError();
 
     const view = await this.conversations.findView(conversationId, userId);
     if (!view) throw new ConversationNotFoundError(conversationId);
@@ -280,6 +284,12 @@ export class MessagingService {
       });
     }
 
+    // Profil partagé : un compte qui existe, visible de l'expéditeur (ni bloqué dans un sens ou l'autre, ni suspendu).
+    if (sharedUserId) {
+      const [profile] = await this.users.getByIds([sharedUserId]);
+      if (!profile || (await this.interactions.getHiddenAccountIds(userId)).has(profile.id)) throw new SharedProfileNotFoundError(sharedUserId);
+    }
+
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
 
@@ -290,6 +300,7 @@ export class MessagingService {
       sharedVideoId,
       storyId,
       liveId,
+      sharedUserId,
       clientMessageId,
       accept,
       openRequest,
@@ -721,23 +732,41 @@ export class MessagingService {
     const storyIds = messages.flatMap((m) => (m.storyId ? [m.storyId] : []));
     const stories = storyIds.length > 0 ? await this.stories.getStoryPreviews(storyIds, viewerId) : new Map<string, ActiveStory>();
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
-    const [published, hidden] = videoIds.length
-      ? await Promise.all([this.videos.getPublishedVideos(videoIds, viewerId), this.interactions.getHiddenAccountIds(viewerId)])
-      : [[], new Set<string>()];
+    const profileIds = messages.flatMap((m) => (m.sharedUserId ? [m.sharedUserId] : []));
+    const [published, hidden] =
+      videoIds.length || profileIds.length
+        ? await Promise.all([
+            videoIds.length ? this.videos.getPublishedVideos(videoIds, viewerId) : Promise.resolve([]),
+            this.interactions.getHiddenAccountIds(viewerId),
+          ])
+        : [[], new Set<string>()];
     const videos = new Map(published.filter((v) => !hidden.has(v.userId)).map((v) => [v.id, v]));
     const people = inGroup ? messages.flatMap((m) => [m.senderId, ...(m.eventUserId ? [m.eventUserId] : [])]) : [];
-    const users = new Map((await this.users.getByIds([...new Set([...[...videos.values()].map((v) => v.userId), ...people])])).map((u) => [u.id, u]));
+    const users = new Map(
+      (await this.users.getByIds([...new Set([...[...videos.values()].map((v) => v.userId), ...people, ...profileIds])])).map((u) => [u.id, u]),
+    );
     return messages.map((message) => {
       const repliedStory = message.storyId ? { id: message.storyId, story: stories.get(message.storyId) ?? null } : null;
       const sharedLive = message.liveId ? { id: message.liveId, item: lives.get(message.liveId) ?? null } : null;
+      // Profil partagé : indisponible pour un compte supprimé ou masqué au lecteur.
+      const sharedProfile = message.sharedUserId
+        ? { id: message.sharedUserId, user: hidden.has(message.sharedUserId) ? null : (users.get(message.sharedUserId) ?? null) }
+        : null;
       const people: Pick<MessageItem, 'sender' | 'eventUser'> = inGroup
         ? { sender: users.get(message.senderId) ?? null, ...(message.eventUserId ? { eventUser: users.get(message.eventUserId) ?? null } : {}) }
         : {};
-      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory, sharedLive, ...people };
+      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory, sharedLive, sharedProfile, ...people };
       const video = videos.get(message.sharedVideoId) ?? null;
       const author = video ? (users.get(video.userId) ?? null) : null;
       // Vidéo supprimée, son auteur, ou compte bloqué : « indisponible ».
-      return { message, sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author }, repliedStory, sharedLive, ...people };
+      return {
+        message,
+        sharedVideo: { id: message.sharedVideoId, video: author ? video : null, author },
+        repliedStory,
+        sharedLive,
+        sharedProfile,
+        ...people,
+      };
     });
   }
 }

@@ -128,6 +128,9 @@ export const SUGGESTION_FOLLOWERS_SHOWN = 3;
 // (au moins une vidéo publiée et publique) : du plus d'abonnés au moins, puis du plus de vidéos, puis l'identifiant.
 // Classés parmi les `POPULAR_SUGGESTION_POOL` comptes qui publient le plus.
 export const POPULAR_SUGGESTION_POOL = 100;
+// Comptes suggérés sous le profil d'un autre (ADR-069) : comptes liés à ce profil (suivis par lui ou par ses abonnés),
+// classés comme les suggestions (« te suit », puis comptes suivis qui le suivent), puis suivis par le profil, puis le
+// nombre de ses abonnés qui les suivent ; complétés par des comptes populaires.
 
 export interface SuggestionCandidate {
   userId: string;

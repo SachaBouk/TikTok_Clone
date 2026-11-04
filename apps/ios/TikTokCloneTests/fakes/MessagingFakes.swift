@@ -148,6 +148,16 @@ final class FakeMessagingRepository: MessagingRepository {
         return message
     }
 
+    // Profils partagés (ADR-069) : identifiant du compte, par conversation.
+    let sharedProfiles = Mutex<[(conversationID: String, userID: String)]>([])
+
+    func shareProfile(conversationID: String, userID: String, content: String?, clientMessageID: String?) async throws -> DirectMessage {
+        var message = try await send(conversationID: conversationID, content: content, videoID: nil, clientMessageID: clientMessageID)
+        sharedProfiles.withLock { $0.append((conversationID, userID)) }
+        message.profile = SharedProfile(id: userID, user: nil)
+        return message
+    }
+
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges {
         try state.withLock { state in
             state.markedUpTo.append(upToID)

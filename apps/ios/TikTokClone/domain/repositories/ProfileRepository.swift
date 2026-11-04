@@ -35,6 +35,8 @@ protocol RelationshipRepository: Sendable {
 // Comptes suggérés (ADR-058) : amis d'amis et abonnés que l'on ne suit pas.
 protocol SuggestionRepository: Sendable {
     func suggestions() async throws -> [AccountSuggestion]
+    // Comptes liés au profil de `username` (ADR-069), complétés par des comptes populaires.
+    func profileSuggestions(username: String) async throws -> [AccountSuggestion]
 }
 
 // Suggestions écartées (×), sur l'appareil seulement (ADR-058).

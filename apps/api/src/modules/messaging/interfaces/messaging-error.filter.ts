@@ -66,6 +66,6 @@ function toHttpException(error: MessagingError): HttpException {
     );
   }
   // ConversationNotFoundError, MessageNotFoundError, RecipientNotFoundError, SharedVideoNotFoundError, RepliedStoryNotFoundError,
-  // SharedLiveNotFoundError, GroupMemberNotFoundError
+  // SharedLiveNotFoundError, SharedProfileNotFoundError, GroupMemberNotFoundError
   return new NotFoundException(error.message);
 }

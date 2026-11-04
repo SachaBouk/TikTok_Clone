@@ -56,6 +56,7 @@ final class AppContainer {
     private let uploads: any UploadStore
     private let activityRepository: any ActivityRepository
     private let messagingRepository: any MessagingRepository
+    private let suggestionRepository: any SuggestionRepository
     private let walletRepository: any WalletRepository
     private let search: any SearchRepository
     private let gifts: any GiftRepository
@@ -99,9 +100,10 @@ final class AppContainer {
             logout: LogoutUseCase(auth: auth)
         )
         expiry.session = session
+        let suggestionRepository = RemoteSuggestionRepository(client: client)
+        self.suggestionRepository = suggestionRepository
         suggestions = SuggestionsModel(
-            load: LoadSuggestionsUseCase(suggestions: RemoteSuggestionRepository(client: client)), store: UserDefaultsPreferencesStore(),
-            session: session)
+            load: LoadSuggestionsUseCase(suggestions: suggestionRepository), store: UserDefaultsPreferencesStore(), session: session)
         drafts = DraftsModel(store: FileDraftStore(), session: session)
         let analyticsService: any AnalyticsService =
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
@@ -270,6 +272,25 @@ final class AppContainer {
             interactions: videoInteractions,
             session: session
         )
+    }
+
+    // « Envoyer à » d'un profil (ADR-069).
+    func makeSendProfileViewModel(profile: UserSummary) -> SendVideoViewModel {
+        SendVideoViewModel(
+            item: .profile(profile),
+            messaging: messaging,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            share: ShareVideoByMessageUseCase(messaging: messagingRepository),
+            shareLive: nil,
+            shareProfile: ShareProfileByMessageUseCase(messaging: messagingRepository),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    // Comptes suggérés sous le profil d'un autre (ADR-069).
+    func loadProfileSuggestions() -> LoadProfileSuggestionsUseCase {
+        LoadProfileSuggestionsUseCase(suggestions: suggestionRepository)
     }
 
     // « Envoyer à » d'un live (ADR-053).

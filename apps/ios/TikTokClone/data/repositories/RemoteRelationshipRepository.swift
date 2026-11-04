@@ -185,14 +185,24 @@ struct RemoteSuggestionRepository: SuggestionRepository {
 
     func suggestions() async throws -> [AccountSuggestion] {
         switch try await mappingErrors({ try await client.listSuggestions(query: .init()) }) {
-        case .ok(let ok):
-            return try ok.body.json.items.map {
-                AccountSuggestion(
-                    user: UserSummary($0.user), followersCount: $0.followersCount, followsYou: $0.followsYou,
-                    followedBy: $0.followedBy.map(UserSummary.init), followedByCount: $0.followedByCount)
-            }
+        case .ok(let ok): return try ok.body.json.items.map(Self.suggestion)
         case .unauthorized: throw AppError.sessionExpired
         case .badRequest, .undocumented: throw AppError.unexpected
         }
+    }
+
+    func profileSuggestions(username: String) async throws -> [AccountSuggestion] {
+        switch try await mappingErrors({ try await client.listProfileSuggestions(path: .init(username: username), query: .init()) }) {
+        case .ok(let ok): return try ok.body.json.items.map(Self.suggestion)
+        case .unauthorized: throw AppError.sessionExpired
+        case .notFound: throw AppError.notFound
+        case .badRequest, .undocumented: throw AppError.unexpected
+        }
+    }
+
+    private static func suggestion(_ dto: Components.Schemas.AccountSuggestionResponse) -> AccountSuggestion {
+        AccountSuggestion(
+            user: UserSummary(dto.user), followersCount: dto.followersCount, followsYou: dto.followsYou,
+            followedBy: dto.followedBy.map(UserSummary.init), followedByCount: dto.followedByCount)
     }
 }

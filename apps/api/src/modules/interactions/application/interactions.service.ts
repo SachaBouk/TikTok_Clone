@@ -15,6 +15,7 @@ import type {
   ReactionPosition,
   Relationship,
   Sharer,
+  SuggestionCandidate,
   VideoReaction,
   ViewerInteractions,
   ViewPosition,
@@ -592,6 +593,30 @@ export class InteractionsService {
   async listSuggestions(userId: string, limit: number): Promise<AccountSuggestion[]> {
     const hidden = await this.hiddenAccounts(userId);
     const candidates = await this.interactions.findSuggestionCandidates(userId, [...hidden], limit);
+    return this.withPopular(userId, candidates, hidden, [], limit);
+  }
+
+  // Comptes suggérés sous le profil de `username` (ADR-069) : comptes liés à ce profil, complétés par des comptes
+  // populaires (jamais le profil lui-même). Profil inconnu ou masqué (bloqué, suspendu) : 404.
+  async listProfileSuggestions(userId: string, username: string, limit: number): Promise<AccountSuggestion[]> {
+    const target = await this.users.getByUsername(username).catch((error: unknown) => {
+      if (error instanceof UserNotFoundError) return null;
+      throw error;
+    });
+    const hidden = await this.hiddenAccounts(userId);
+    if (!target || hidden.has(target.id)) throw new TargetUserNotFoundError(username);
+    const candidates = await this.interactions.findProfileSuggestionCandidates(userId, target.id, [...hidden], limit);
+    return this.withPopular(userId, candidates, hidden, [target.id], limit);
+  }
+
+  // Candidats résolus en comptes, puis complétés par des comptes populaires s'il reste de la place (ADR-068).
+  private async withPopular(
+    userId: string,
+    candidates: SuggestionCandidate[],
+    hidden: Set<string>,
+    alsoExcluded: string[],
+    limit: number,
+  ): Promise<AccountSuggestion[]> {
     const ids = [...new Set(candidates.flatMap((c) => [c.userId, ...c.followedByIds]))];
     const users = new Map((ids.length > 0 ? await this.users.getByIds(ids) : []).map((u) => [u.id, u]));
     const suggestions = candidates.flatMap((c) => {
@@ -601,7 +626,8 @@ export class InteractionsService {
       return [{ user, followsMe: c.followsMe, followedBy, followedByCount: c.followedByCount }];
     });
     if (suggestions.length >= limit) return suggestions;
-    const popular = await this.popularSuggestions(userId, [...hidden, ...candidates.map((c) => c.userId)], limit - suggestions.length);
+    const excluded = [...hidden, ...alsoExcluded, ...candidates.map((c) => c.userId)];
+    const popular = await this.popularSuggestions(userId, excluded, limit - suggestions.length);
     return [...suggestions, ...popular];
   }
 
