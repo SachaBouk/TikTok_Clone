@@ -311,7 +311,8 @@ export class InteractionsController {
     };
   }
 
-  // Comptes suggérés (ADR-058) : amis d'amis et abonnés que l'on ne suit pas, sans comptes bloqués ni suspendus.
+  // Comptes suggérés (ADR-058) : amis d'amis et abonnés que l'on ne suit pas, sans comptes bloqués ni suspendus ;
+  // complétés par des comptes populaires s'il reste de la place (ADR-068).
   @Get('users/me/suggestions')
   @ApiOkResponse({ type: AccountSuggestionListResponse })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Nombre invalide.' })

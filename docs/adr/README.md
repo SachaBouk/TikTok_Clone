@@ -69,6 +69,7 @@
 | [ADR-065](ADR-065-ecran-publication.md) | Écran de publication : couverture, lieu, mentions, étiquette IA, brouillons (complète ADR-062, ADR-060 et ADR-035) | Proposé |
 | [ADR-066](ADR-066-lives-facon-tiktok.md) | Lives façon TikTok : icône « LIVE », lives à faire défiler, écran redessiné (complète ADR-053 et ADR-016) | Proposé |
 | [ADR-067](ADR-067-menu-video-telechargement.md) | Menu d'une vidéo : vitesse, défilement automatique, affichage allégé, téléchargement (complète ADR-016, ADR-062 et ADR-035) | Proposé |
+| [ADR-068](ADR-068-suggestions-comptes-populaires.md) | Comptes suggérés complétés par des comptes populaires (complète ADR-058) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

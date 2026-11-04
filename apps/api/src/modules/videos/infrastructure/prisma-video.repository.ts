@@ -7,6 +7,7 @@ import type {
   SoundQuery,
   NewVideo,
   PublishedVideo,
+  PublishingAuthor,
   TranscodeOutcome,
   Video,
   VideoDetails,
@@ -318,6 +319,18 @@ export class PrismaVideoRepository extends VideoRepository {
     if (userIds.length === 0) return new Map();
     const rows = await this.prisma.video.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _count: { _all: true } });
     return new Map(rows.map((row) => [row.userId, row._count._all]));
+  }
+
+  async findPublishingAuthors(excludedIds: string[], limit: number): Promise<PublishingAuthor[]> {
+    const rows = await this.prisma.video.groupBy({
+      by: ['userId'],
+      where: { status: 'ready', visibility: 'public', userId: { notIn: excludedIds } },
+      _count: { _all: true },
+      _max: { createdAt: true },
+      orderBy: [{ _count: { userId: 'desc' } }, { _max: { createdAt: 'desc' } }, { userId: 'asc' }],
+      take: limit,
+    });
+    return rows.map((row) => ({ userId: row.userId, videosCount: row._count._all }));
   }
 
   async sumLikesByAuthor(userId: string): Promise<number> {

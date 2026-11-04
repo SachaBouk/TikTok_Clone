@@ -619,6 +619,33 @@ describe('InteractionsService', () => {
       expect(await suggestions()).toEqual([]);
     });
 
+    it('comptes suggérés complétés par des comptes populaires (ADR-068) : vidéos publiques, du plus suivi au moins suivi', async () => {
+      const publish = async (userId: string, visibility: 'public' | 'private' = 'public') => {
+        const created = await videoRepository.create({ userId, description: null, rawKey: 'k', uploadId: 'u', rawSize: 1 });
+        Object.assign(videoRepository.videos.get(created.id)!, { status: 'ready', visibility, hlsUrl: 'h', thumbnailUrl: 't' });
+      };
+      // u5 (1 abonné) : 2 vidéos ; u2 (aucun abonné) : 1 vidéo ; u1 est suivi par u4 ; u3 : vidéo privée seulement.
+      await publish(id(5));
+      await publish(id(5));
+      await publish(id(2));
+      await publish(id(1));
+      await publish(id(3), 'private');
+      const suggestions = async (limit = 20) =>
+        (await lists.listSuggestions(id(4), limit)).map((s) => [s.user.username, s.followsMe, s.followedBy.length, s.followedByCount]);
+      // u3 : ami d'ami (u4 suit u1, qui suit u3) ; puis les populaires, sans u1 (suivi) ni u4 (soi).
+      expect(await suggestions()).toEqual([
+        ['u3', false, 1, 1],
+        ['u5', false, 0, 0],
+        ['u2', false, 0, 0],
+      ]);
+      expect((await suggestions(2)).map(([username]) => username)).toEqual(['u3', 'u5']);
+      expect((await suggestions(1)).map(([username]) => username)).toEqual(['u3']);
+      // Masqué (suspendu, bloqué) : jamais proposé.
+      await suspended.add(id(5));
+      await lists.setBlock(id(4), 'u2', true);
+      expect((await suggestions()).map(([username]) => username)).toEqual(['u3']);
+    });
+
     it('liste les abonnés du plus récent au plus ancien, page par page, sans doublon ni oubli', async () => {
       const first = await lists.listFollows('followers', 'u1', undefined, null, 3);
       expect(usernames(first)).toEqual(['u5', 'u4', 'u3']);

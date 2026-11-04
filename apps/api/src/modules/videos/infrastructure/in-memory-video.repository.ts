@@ -3,6 +3,7 @@ import type { Hashtag, HashtagVideoPosition } from '../domain/hashtags';
 import type {
   NewVideo,
   PublishedVideo,
+  PublishingAuthor,
   Sound,
   SoundQuery,
   TranscodeOutcome,
@@ -269,6 +270,19 @@ export class InMemoryVideoRepository extends VideoRepository {
       if (userIds.includes(video.userId)) counts.set(video.userId, (counts.get(video.userId) ?? 0) + 1);
     }
     return counts;
+  }
+
+  async findPublishingAuthors(excludedIds: string[], limit: number): Promise<PublishingAuthor[]> {
+    const authors = new Map<string, { count: number; latest: number }>();
+    for (const video of this.videos.values()) {
+      if (video.status !== 'ready' || video.visibility !== 'public' || excludedIds.includes(video.userId)) continue;
+      const author = authors.get(video.userId) ?? { count: 0, latest: 0 };
+      authors.set(video.userId, { count: author.count + 1, latest: Math.max(author.latest, video.createdAt.getTime()) });
+    }
+    return [...authors]
+      .sort(([idA, a], [idB, b]) => b.count - a.count || b.latest - a.latest || (idA < idB ? -1 : 1))
+      .slice(0, limit)
+      .map(([userId, author]) => ({ userId, videosCount: author.count }));
   }
 
   async sumLikesByAuthor(userId: string): Promise<number> {

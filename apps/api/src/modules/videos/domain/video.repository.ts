@@ -2,6 +2,7 @@ import type { Hashtag, HashtagVideoPosition } from './hashtags';
 import type {
   NewVideo,
   PublishedVideo,
+  PublishingAuthor,
   Sound,
   SoundQuery,
   TranscodeOutcome,
@@ -72,6 +73,9 @@ export abstract class VideoRepository {
   abstract countCreatedSince(since: Date): Promise<number>;
   // Nombre de vidéos (tous statuts) de chaque compte de `userIds` ; un compte sans vidéo est absent.
   abstract countByAuthors(userIds: string[]): Promise<Map<string, number>>;
+  // Comptes qui ont des vidéos publiées et publiques, hors `excludedIds` : du plus grand nombre de vidéos au plus petit,
+  // puis de la publication la plus récente à la plus ancienne (ADR-068).
+  abstract findPublishingAuthors(excludedIds: string[], limit: number): Promise<PublishingAuthor[]>;
   // Likes reçus par un compte : somme des likes de ses vidéos publiées et publiques (ADR-056, ADR-061).
   abstract sumLikesByAuthor(userId: string): Promise<number>;
 

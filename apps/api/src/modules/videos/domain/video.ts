@@ -107,6 +107,12 @@ export interface VideoPosition {
   id: string;
 }
 
+// Compte qui publie (ADR-068) : nombre de vidéos publiées et publiques.
+export interface PublishingAuthor {
+  userId: string;
+  videosCount: number;
+}
+
 // Résultat du transcodage renvoyé par le worker (ADR-008, ADR-012).
 // `sound` : piste son extraite (ADR-064), pour une vidéo qui a du son.
 export type TranscodeOutcome =

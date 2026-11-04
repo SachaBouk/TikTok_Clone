@@ -30,6 +30,7 @@ import {
 import {
   MAX_UNPUBLISHED_VIDEOS,
   type PublishedVideo,
+  type PublishingAuthor,
   type Sound,
   type SoundQuery,
   type TranscodeOutcome,
@@ -423,6 +424,12 @@ export class VideosService {
   // Backoffice : nombre de vidéos (tous statuts) de chaque compte ; un compte sans vidéo est absent.
   countVideosByAuthors(userIds: string[]): Promise<Map<string, number>> {
     return this.videos.countByAuthors([...new Set(userIds)]);
+  }
+
+  // Pour le module interactions (comptes suggérés, ADR-068) : comptes qui publient des vidéos publiques, hors
+  // `excludedIds`, du plus grand nombre de vidéos au plus petit.
+  listPublishingAuthors(excludedIds: string[], limit: number): Promise<PublishingAuthor[]> {
+    return this.videos.findPublishingAuthors([...new Set(excludedIds)], limit);
   }
 
   // Pour le module users : likes reçus par un compte, sur ses vidéos publiées (compteur « J'aime » du profil, ADR-056).

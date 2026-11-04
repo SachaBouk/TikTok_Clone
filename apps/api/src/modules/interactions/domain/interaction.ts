@@ -124,6 +124,10 @@ export const DEFAULT_SUGGESTIONS = 20;
 export const MAX_SUGGESTIONS = 50;
 // Comptes suivis qui suivent la suggestion, affichés (« Suivi(e) par … »).
 export const SUGGESTION_FOLLOWERS_SHOWN = 3;
+// Complément (ADR-068) : sans assez d'amis d'amis ni d'abonnés, la liste est complétée par des comptes populaires
+// (au moins une vidéo publiée et publique) : du plus d'abonnés au moins, puis du plus de vidéos, puis l'identifiant.
+// Classés parmi les `POPULAR_SUGGESTION_POOL` comptes qui publient le plus.
+export const POPULAR_SUGGESTION_POOL = 100;
 
 export interface SuggestionCandidate {
   userId: string;

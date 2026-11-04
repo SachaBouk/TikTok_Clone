@@ -37,6 +37,7 @@ import {
   COMMENT_RATE_LIMITS,
   DOWNLOAD_RATE_LIMITS,
   FOLLOW_RATE_LIMITS,
+  POPULAR_SUGGESTION_POOL,
   REACTION_RATE_LIMITS,
   SHARE_DEDUP_SECONDS,
   VIEW_RATE_LIMITS,
@@ -586,19 +587,40 @@ export class InteractionsService {
   }
 
   // Comptes suggérés (ADR-058) : amis d'amis et abonnés non suivis, sans comptes masqués (bloqués, suspendus). Un
-  // compte disparu entre-temps est sauté ; « suivi par » ne montre que des comptes visibles.
+  // compte disparu entre-temps est sauté ; « suivi par » ne montre que des comptes visibles. Liste complétée par des
+  // comptes populaires s'il reste de la place (ADR-068).
   async listSuggestions(userId: string, limit: number): Promise<AccountSuggestion[]> {
     const hidden = await this.hiddenAccounts(userId);
     const candidates = await this.interactions.findSuggestionCandidates(userId, [...hidden], limit);
-    if (candidates.length === 0) return [];
     const ids = [...new Set(candidates.flatMap((c) => [c.userId, ...c.followedByIds]))];
-    const users = new Map((await this.users.getByIds(ids)).map((u) => [u.id, u]));
-    return candidates.flatMap((c) => {
+    const users = new Map((ids.length > 0 ? await this.users.getByIds(ids) : []).map((u) => [u.id, u]));
+    const suggestions = candidates.flatMap((c) => {
       const user = users.get(c.userId);
       if (!user) return [];
       const followedBy = c.followedByIds.flatMap((id) => (hidden.has(id) ? [] : (users.get(id) ?? [])));
       return [{ user, followsMe: c.followsMe, followedBy, followedByCount: c.followedByCount }];
     });
+    if (suggestions.length >= limit) return suggestions;
+    const popular = await this.popularSuggestions(userId, [...hidden, ...candidates.map((c) => c.userId)], limit - suggestions.length);
+    return [...suggestions, ...popular];
+  }
+
+  // Comptes populaires (ADR-068) : jamais soi-même, un compte suivi, masqué ou déjà suggéré ; sans « suivi par ».
+  private async popularSuggestions(userId: string, excludedIds: string[], count: number): Promise<AccountSuggestion[]> {
+    const following = await this.interactions.listFollowingIds(userId);
+    const authors = await this.videos.listPublishingAuthors([userId, ...following, ...excludedIds], POPULAR_SUGGESTION_POOL);
+    if (authors.length === 0) return [];
+    const videosCount = new Map(authors.map((a) => [a.userId, a.videosCount]));
+    const users = await this.users.getByIds(authors.map((a) => a.userId));
+    return users
+      .sort(
+        (a, b) =>
+          b.followersCount - a.followersCount ||
+          (videosCount.get(b.id) ?? 0) - (videosCount.get(a.id) ?? 0) ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      )
+      .slice(0, count)
+      .map((user) => ({ user, followsMe: false, followedBy: [], followedByCount: 0 }));
   }
 
   // Pour les modules feed et messaging : comptes dont les contenus (vidéos, commentaires, présence dans les listes)
