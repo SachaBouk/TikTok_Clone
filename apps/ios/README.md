@@ -108,6 +108,8 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - Toucher l'onglet Accueil (ou Amis) quand il est déjà affiché recharge le feed, comme TikTok : l'icône de la barre se change en flèche qui tourne, et deux points rose et cyan remplacent la loupe (en haut à droite pour Amis) le temps du rechargement.
 - En simulateur, les vidéos viennent de MinIO en HTTP (`localhost:9000`) : ATS l'autorise par `NSAllowsLocalNetworking`.
 
+- **Icônes de la barre d'onglets** (`TabBarIcon`) : dessinées comme celles de TikTok, contour ou pleines selon l'onglet sélectionné ; « + » de la création en couleurs et sans texte, touche blanche sur une barre sombre, noire sur une barre claire.
+
 ## Recherche et hashtags (ADR-049)
 
 - Loupe en haut à droite du feed : écran de recherche (comptes et hashtags). Avant la saisie : recherches récentes (sur l'appareil seulement, effacées à la connexion et à la déconnexion) et hashtags tendance.

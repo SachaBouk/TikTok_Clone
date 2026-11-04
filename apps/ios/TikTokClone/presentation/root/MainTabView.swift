@@ -52,7 +52,8 @@ struct MainTabView: View {
             let refreshing = tab == .home ? container.router.isHomeRefreshing : container.router.isFriendsRefreshing
             if end == nil, !refreshing, TabRefreshIcon.canEnd(elapsed: elapsed) { end = .now }
             let icon = TabRefreshIcon.at(
-                elapsed: elapsed, endedFor: end.map { Date.now.timeIntervalSince($0) }, symbol: tab == .home ? "house.fill" : "person.2.fill")
+                elapsed: elapsed, endedFor: end.map { Date.now.timeIntervalSince($0) },
+                symbol: tab == .home ? TabBarIcon.home.refreshName : TabBarIcon.friends.refreshName)
             if tab == .home { homeIcon = icon } else { friendsIcon = icon }
             if icon == .standard { return }
             try? await Task.sleep(for: TabRefreshIcon.frameInterval)
@@ -64,11 +65,16 @@ struct MainTabView: View {
         iconTasks[tab] = Task { await animateIcon(of: tab) }
     }
 
+    // Icône d'un onglet façon TikTok (`TabBarIcon`) : pleine une fois l'onglet sélectionné.
+    private func tabImage(_ icon: TabBarIcon, selected: Bool) -> Image {
+        Image(uiImage: icon.image(filled: selected))
+    }
+
     // Icône d'un onglet de feed : la sienne, ou l'étape dessinée du rechargement.
     @ViewBuilder
-    private func tabIcon(_ icon: TabRefreshIcon, systemImage: String) -> some View {
+    private func tabIcon(_ icon: TabRefreshIcon, tab: TabBarIcon, selected: Bool) -> some View {
         switch icon {
-        case .standard: Image(systemName: systemImage)
+        case .standard: tabImage(tab, selected: selected)
         case .frame(let symbol, let angle, let scale): Image(uiImage: TabRefreshIcon.image(symbol: symbol, angle: angle, scale: scale))
         }
     }
@@ -95,7 +101,7 @@ struct MainTabView: View {
                 Label {
                     Text("Accueil")
                 } icon: {
-                    tabIcon(homeIcon, systemImage: "house")
+                    tabIcon(homeIcon, tab: .home, selected: selection == .home)
                 }
             }
             // Feed des amis (ADR-054), entre l'accueil et la publication.
@@ -115,17 +121,21 @@ struct MainTabView: View {
                 Label {
                     Text("Amis")
                 } icon: {
-                    tabIcon(friendsIcon, systemImage: "person.2")
+                    tabIcon(friendsIcon, tab: .friends, selected: selection == .friends)
                 }
             }
             // Jamais affiché : le toucher ouvre la création (`tabSelection`).
-            Tab("Publier", systemImage: "plus.app", value: .publish) {
+            Tab(value: .publish) {
                 Color.clear
+            } label: {
+                // Sans texte sous le « + », comme TikTok ; « Publier » reste pour VoiceOver.
+                Image(uiImage: TabBarIcon.createButton())
+                    .accessibilityLabel("Publier")
             }
             // Publications en cours d'envoi ou de traitement.
             .badge(container.publishing.inProgressCount)
             // Onglet « Messages » (ADR-058, ex-« Boîte de réception ») : activité et conversations.
-            Tab("Messages", systemImage: "message", value: .inbox) {
+            Tab(value: .inbox) {
                 SignedInOnly(title: "Messages", systemImage: "message", reason: "Connecte-toi pour voir tes messages et ton activité.") {
                     NavigationStack(path: $inboxPath) {
                         InboxView(container: container)
@@ -134,10 +144,16 @@ struct MainTabView: View {
                     .providesNavigationPath($inboxPath)
                     .environment(\.isTabActive, selection == .inbox && !router.coversTabs)
                 }
+            } label: {
+                Label {
+                    Text("Messages")
+                } icon: {
+                    tabImage(.inbox, selected: selection == .inbox)
+                }
             }
             // Notifications non lues, conversations non lues et demandes reçues.
             .badge(container.inboxBadgeCount)
-            Tab("Profil", systemImage: "person", value: .profile) {
+            Tab(value: .profile) {
                 SignedInOnly(
                     title: "Profil", systemImage: "person.crop.circle", reason: "Connecte-toi pour créer ton profil et suivre des comptes.",
                     showsPrivacy: true
@@ -148,6 +164,12 @@ struct MainTabView: View {
                     }
                     .providesNavigationPath($profilePath)
                     .environment(\.isTabActive, selection == .profile && !router.coversTabs)
+                }
+            } label: {
+                Label {
+                    Text("Profil")
+                } icon: {
+                    tabImage(.profile, selected: selection == .profile)
                 }
             }
         }

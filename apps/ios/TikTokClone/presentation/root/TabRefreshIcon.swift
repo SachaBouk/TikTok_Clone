@@ -17,7 +17,7 @@ enum TabRefreshIcon: Equatable {
     static let frameInterval: Duration = .milliseconds(33)
 
     // Étape à `elapsed` secondes du début ; `endedFor` : secondes depuis la fin du rechargement (nil s'il dure encore).
-    // `symbol` : l'icône pleine de l'onglet (« house.fill », « person.2.fill »).
+    // `symbol` : l'icône pleine de l'onglet (`TabBarIcon.refreshName`, « tab.home », « tab.friends »).
     static func at(elapsed: TimeInterval, endedFor: TimeInterval?, symbol: String) -> TabRefreshIcon {
         if let ended = endedFor {
             if ended >= 2 * shrink { return .standard }
@@ -43,7 +43,9 @@ enum TabRefreshIcon: Equatable {
     static func image(symbol: String, angle: Double, scale: Double) -> UIImage {
         let canvas = CGSize(width: 30, height: 30)
         let configuration = UIImage.SymbolConfiguration(pointSize: 21, weight: .semibold)
-        guard let symbolImage = UIImage(systemName: symbol, withConfiguration: configuration) else { return UIImage() }
+        // Icône de l'onglet dessinée par l'app (`TabBarIcon`), sinon un symbole (la flèche).
+        guard let symbolImage = TabBarIcon.named(symbol)?.image(filled: true) ?? UIImage(systemName: symbol, withConfiguration: configuration)
+        else { return UIImage() }
         let image = UIGraphicsImageRenderer(size: canvas).image { context in
             let cg = context.cgContext
             cg.translateBy(x: canvas.width / 2, y: canvas.height / 2)

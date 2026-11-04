@@ -46,4 +46,17 @@ struct TabRefreshIconTests {
         #expect(!TabRefreshIcon.canEnd(elapsed: 0.1))
         #expect(TabRefreshIcon.canEnd(elapsed: 0.2))
     }
+
+    @Test("icônes de la barre façon TikTok : retrouvées par leur nom, contour et pleine de la même taille, « + » en couleurs")
+    @MainActor
+    func tabBarIcons() {
+        for icon in [TabBarIcon.home, .friends, .inbox, .profile] {
+            #expect(TabBarIcon.named(icon.refreshName) == icon)
+            #expect(icon.image(filled: false).size == TabBarIcon.canvas)
+            #expect(icon.image(filled: true).size == TabBarIcon.canvas)
+        }
+        #expect(TabBarIcon.named("arrow.clockwise") == nil)
+        #expect(TabBarIcon.createButton().renderingMode == .alwaysOriginal)
+        #expect(TabBarIcon.createButton().size == CGSize(width: 46, height: 30))
+    }
 }
