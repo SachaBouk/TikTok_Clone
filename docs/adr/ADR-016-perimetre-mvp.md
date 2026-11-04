@@ -74,3 +74,4 @@ Fonctionnalités reportées après la première version :
 - Complété par [ADR-060](ADR-060-commentaires-facon-tiktok.md) — Commentaires façon TikTok : réponses, j'aime, mentions
 - Complété par [ADR-061](ADR-061-videos-privees.md) — Vidéos privées
 - Complété par [ADR-062](ADR-062-creation-video-facon-tiktok.md) — Création vidéo façon TikTok : caméra, galerie, éditeur par clips, commentaires désactivables
+- Complété par [ADR-073](ADR-073-abonnement-plus.md) — Abonnement « Plus »

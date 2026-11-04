@@ -43,3 +43,4 @@ La règle existe en deux exemplaires, qui doivent rester identiques : `apps/work
 - ADR-012 — Traitement asynchrone
 - ADR-016 — Périmètre
 - Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app
+- Complété par [ADR-073](ADR-073-abonnement-plus.md) — Abonnement « Plus »

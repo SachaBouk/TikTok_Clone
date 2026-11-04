@@ -119,3 +119,4 @@ Aucun de ces modules ne dépend de `wallet` (seul `admin` le lit) : pas de cycle
 - ADR-039 — Limites de débit
 - ADR-043 — Notifications supprimées en direct
 - ADR-044 — Identifiant d'envoi
+- Complété par [ADR-073](ADR-073-abonnement-plus.md) — Abonnement « Plus »
