@@ -48,6 +48,13 @@ export class UserProfileResponse implements UserProfileDto {
   @ApiPropertyOptional({ type: ProfileNoteResponse })
   note?: ProfileNoteResponse;
 
+  // Qui peut voir ses vidéos aimées et ses favoris (ADR-071).
+  @ApiProperty({ enum: ['public', 'private'], enumName: 'VideoVisibility' })
+  likesVisibility!: 'public' | 'private';
+
+  @ApiProperty({ enum: ['public', 'private'], enumName: 'VideoVisibility' })
+  favoritesVisibility!: 'public' | 'private';
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 }

@@ -32,7 +32,7 @@ export class InMemoryUserRepository extends UserRepository {
 
   async findProfileDetails(id: string): Promise<ProfileDetails | null> {
     if (!this.users.has(id)) return null;
-    return this.details.get(id) ?? { pronouns: null, noteText: null, notePostedAt: null };
+    return this.details.get(id) ?? { pronouns: null, noteText: null, notePostedAt: null, likesVisibility: 'private', favoritesVisibility: 'private' };
   }
 
   async update(id: string, changes: ProfileChanges): Promise<User | null> {
@@ -43,12 +43,14 @@ export class InMemoryUserRepository extends UserRepository {
       if (owner && owner.id !== id) throw new UsernameTakenError(changes.username);
     }
     // Pronoms et note (ADR-070) gardés à part, comme les colonnes que la base ne lit qu'avec le profil.
-    const { pronouns, noteText, notePostedAt, ...userChanges } = changes;
+    const { pronouns, noteText, notePostedAt, likesVisibility, favoritesVisibility, ...userChanges } = changes;
     const details = (await this.findProfileDetails(id))!;
     this.details.set(id, {
       pronouns: pronouns !== undefined ? pronouns : details.pronouns,
       noteText: noteText !== undefined ? noteText : details.noteText,
       notePostedAt: notePostedAt !== undefined ? notePostedAt : details.notePostedAt,
+      likesVisibility: likesVisibility ?? details.likesVisibility,
+      favoritesVisibility: favoritesVisibility ?? details.favoritesVisibility,
     });
     const updated = { ...user, ...userChanges };
     this.users.set(id, updated);

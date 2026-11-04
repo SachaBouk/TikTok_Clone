@@ -35,45 +35,49 @@ enum UserRole {
 }
 
 model User {
-  id               String    @id @default(uuid(7)) @map("user_id") @db.Uuid
+  id                  String          @id @default(uuid(7)) @map("user_id") @db.Uuid
   // Nul pour un compte Apple dont l'email n'a pas été partagé.
-  email            String?   @unique
+  email               String?         @unique
   // Nul pour un compte créé uniquement via Sign in with Apple.
-  passwordHash     String?   @map("password_hash")
+  passwordHash        String?         @map("password_hash")
   // Identifiant stable renvoyé par Sign in with Apple (`sub`).
-  appleSub         String?   @unique @map("apple_sub")
+  appleSub            String?         @unique @map("apple_sub")
   // Pseudo (@handle).
-  username         String    @unique
+  username            String          @unique
   // Nom affiché.
-  displayName      String    @map("display_name")
-  avatarUrl        String?   @map("avatar_url")
-  bio              String?
+  displayName         String          @map("display_name")
+  avatarUrl           String?         @map("avatar_url")
+  bio                 String?
   // Pronoms affichés à côté du pseudo (ADR-070), 20 caractères au plus (CHECK écrit à la main).
-  pronouns         String?
+  pronouns            String?
   // Note de profil (ADR-070) : 1 à 60 caractères, visible 24 h après `note_posted_at` (filtré à la lecture). Les deux
   // colonnes sont remplies ou vides ensemble (CHECK écrit à la main).
-  noteText         String?   @map("note_text")
-  notePostedAt     DateTime? @map("note_posted_at")
-  role             UserRole  @default(user)
+  noteText            String?         @map("note_text")
+  notePostedAt        DateTime?       @map("note_posted_at")
+  // Visibilité de ses vidéos aimées et de ses favoris (ADR-071), privées par défaut.
+  likesVisibility     VideoVisibility @default(private) @map("likes_visibility")
+  favoritesVisibility VideoVisibility @default(private) @map("favorites_visibility")
+  role                UserRole        @default(user)
   // Date de naissance (ADR-055), propriété du module auth, jamais exposée. Nulle pour les comptes créés avant
   // l'ADR-055 et ceux de Sign in with Apple.
-  birthDate        DateTime? @map("birth_date") @db.Date
+  birthDate           DateTime?       @map("birth_date") @db.Date
   // Suspension par un administrateur (ADR-037), propriété du module auth : connexion refusée, contenus masqués.
   // Les trois colonnes sont remplies ou vides ensemble (CHECK écrit à la main), sauf `suspended_by`, mis à nul si
   // l'administrateur supprime son compte.
-  suspendedAt      DateTime? @map("suspended_at")
+  suspendedAt         DateTime?       @map("suspended_at")
   // Motif interne, visible des seuls administrateurs.
-  suspensionReason String?   @map("suspension_reason")
-  suspendedById    String?   @map("suspended_by") @db.Uuid
+  suspensionReason    String?         @map("suspension_reason")
+  suspendedById       String?         @map("suspended_by") @db.Uuid
   // Compteurs dénormalisés, maintenus par les services applicatifs.
-  followersCount   Int       @default(0) @map("followers_count")
-  followingCount   Int       @default(0) @map("following_count")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  followersCount      Int             @default(0) @map("followers_count")
+  followingCount      Int             @default(0) @map("following_count")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
 
   videos                   Video[]
   likes                    Like[]
   favorites                Favorite[]
+  collections              Collection[]
   reposts                  Repost[]
   comments                 Comment[]
   commentLikes             CommentLike[]
@@ -169,45 +173,45 @@ enum VideoStatus {
 }
 
 model Video {
-  id              String          @id @default(uuid(7)) @map("video_id") @db.Uuid
-  userId          String          @map("user_id") @db.Uuid
-  description     String?
+  id               String          @id @default(uuid(7)) @map("video_id") @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  description      String?
   // Clé de l'objet brut dans le bucket des uploads (ADR-007).
-  rawKey          String          @map("raw_key")
+  rawKey           String          @map("raw_key")
   // Identifiant de l'upload multipart en cours ; nul une fois l'upload terminé (ADR-007).
-  uploadId        String?         @map("upload_id")
+  uploadId         String?         @map("upload_id")
   // Taille déclarée du fichier brut, en octets : l'objet assemblé doit la respecter exactement.
-  rawSize         Int             @map("raw_size")
+  rawSize          Int             @map("raw_size")
   // URL du manifeste HLS, renseignée quand le transcodage est terminé (ADR-008).
-  hlsUrl          String?         @map("hls_url")
-  thumbnailUrl    String?         @map("thumbnail_url")
-  status          VideoStatus     @default(uploading)
+  hlsUrl           String?         @map("hls_url")
+  thumbnailUrl     String?         @map("thumbnail_url")
+  status           VideoStatus     @default(uploading)
   // Vidéo privée (ADR-061) : visible de son seul auteur.
-  visibility      VideoVisibility @default(public)
+  visibility       VideoVisibility @default(public)
   // Commentaires autorisés (ADR-062) ; coupés, ils sont gardés mais cachés.
-  commentsEnabled Boolean         @default(true) @map("comments_enabled")
+  commentsEnabled  Boolean         @default(true) @map("comments_enabled")
   // « Autoriser l'utilisation de mon son » (ADR-064) : refusé, son son n'est plus proposé aux autres.
-  soundShared     Boolean         @default(true) @map("sound_shared")
+  soundShared      Boolean         @default(true) @map("sound_shared")
   // « Autoriser le téléchargement » (ADR-067).
-  downloadsEnabled Boolean        @default(true) @map("downloads_enabled")
+  downloadsEnabled Boolean         @default(true) @map("downloads_enabled")
   // Son repris d'une autre vidéo (ADR-064) ; NULL si ce son a disparu (le son reste dans le fichier publié).
-  soundId         String?         @map("sound_id") @db.Uuid
+  soundId          String?         @map("sound_id") @db.Uuid
   // Couverture choisie dans l'app (ADR-065) : JPEG dans le bucket des uploads, devenu la miniature. Jamais exposée.
-  coverKey        String?         @map("cover_key")
+  coverKey         String?         @map("cover_key")
   // Lieu (ADR-065) : nom et adresse affichée, jamais de coordonnées.
-  locationName    String?         @map("location_name")
-  locationAddress String?         @map("location_address")
+  locationName     String?         @map("location_name")
+  locationAddress  String?         @map("location_address")
   // Étiquette « Contenu généré par l'IA » (ADR-065).
-  aiGenerated     Boolean         @default(false) @map("ai_generated")
+  aiGenerated      Boolean         @default(false) @map("ai_generated")
   // Compteurs dénormalisés, maintenus par les services applicatifs.
-  viewsCount      Int             @default(0) @map("views_count")
-  likesCount      Int             @default(0) @map("likes_count")
-  commentsCount   Int             @default(0) @map("comments_count")
-  favoritesCount  Int             @default(0) @map("favorites_count")
-  repostsCount    Int             @default(0) @map("reposts_count")
-  sharesCount     Int             @default(0) @map("shares_count")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  viewsCount       Int             @default(0) @map("views_count")
+  likesCount       Int             @default(0) @map("likes_count")
+  commentsCount    Int             @default(0) @map("comments_count")
+  favoritesCount   Int             @default(0) @map("favorites_count")
+  repostsCount     Int             @default(0) @map("reposts_count")
+  sharesCount      Int             @default(0) @map("shares_count")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes         Like[]
@@ -331,14 +335,52 @@ model Favorite {
   videoId   String   @map("video_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video            Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  // Collections qui contiennent ce favori (ADR-072) : retirer le favori l'en retire.
+  collectionVideos CollectionVideo[]
 
   @@id([userId, videoId])
   @@index([videoId])
   // Grille du profil, de l'action la plus récente à la plus ancienne.
   @@index([userId, createdAt])
   @@map("favorites")
+}
+
+// Collection de favoris (ADR-072) : nom de 1 à 30 caractères (CHECK écrit à la main), privée par défaut.
+model Collection {
+  id         String          @id @default(uuid(7)) @map("collection_id") @db.Uuid
+  userId     String          @map("user_id") @db.Uuid
+  name       String
+  visibility VideoVisibility @default(private)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  // Avancé à chaque ajout de vidéo : ordre « récemment utilisée ».
+  updatedAt  DateTime        @default(now()) @map("updated_at")
+
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos CollectionVideo[]
+
+  // Cible de la clé composite de `collection_videos` : une collection ne contient que les favoris de son titulaire.
+  @@unique([id, userId])
+  @@index([userId, updatedAt])
+  @@map("collections")
+}
+
+// Vidéo d'une collection (ADR-072) : toujours un favori de son titulaire (clé composite vers `favorites`, en cascade).
+model CollectionVideo {
+  collectionId String   @map("collection_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  videoId      String   @map("video_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  collection Collection @relation(fields: [collectionId, userId], references: [id, userId], onDelete: Cascade)
+  favorite   Favorite   @relation(fields: [userId, videoId], references: [userId, videoId], onDelete: Cascade)
+
+  @@id([collectionId, videoId])
+  // Vidéos d'une collection, de la plus récemment ajoutée à la plus ancienne.
+  @@index([collectionId, createdAt])
+  @@index([userId, videoId])
+  @@map("collection_videos")
 }
 
 model Repost {
@@ -623,27 +665,29 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              String      @id @default(uuid(7)) @map("message_id") @db.Uuid
-  conversationId  String      @map("conversation_id") @db.Uuid
-  senderId        String      @map("sender_id") @db.Uuid
+  id                 String      @id @default(uuid(7)) @map("message_id") @db.Uuid
+  conversationId     String      @map("conversation_id") @db.Uuid
+  senderId           String      @map("sender_id") @db.Uuid
   // Vide si le message ne fait que partager une vidéo (contrainte CHECK : texte ou vidéo).
-  content         String
+  content            String
   // Vidéo partagée. Sans clé étrangère : une vidéo supprimée reste signalée « indisponible » dans le message.
-  sharedVideoId   String?     @map("shared_video_id") @db.Uuid
+  sharedVideoId      String?     @map("shared_video_id") @db.Uuid
   // Story à laquelle répond le message (ADR-051). Sans clé étrangère : une story expirée reste signalée « expirée ».
-  storyId         String?     @map("story_id") @db.Uuid
+  storyId            String?     @map("story_id") @db.Uuid
   // Live partagé (ADR-053). Sans clé étrangère, comme une vidéo partagée.
-  liveId          String?     @map("live_id") @db.Uuid
+  liveId             String?     @map("live_id") @db.Uuid
   // Profil partagé (ADR-069). Sans clé étrangère : un compte supprimé depuis reste signalé « indisponible ».
-  sharedUserId    String?     @map("shared_user_id") @db.Uuid
+  sharedUserId       String?     @map("shared_user_id") @db.Uuid
+  // Collection publique partagée (ADR-072). Sans clé étrangère : supprimée depuis, elle reste signalée « indisponible ».
+  sharedCollectionId String?     @map("shared_collection_id") @db.Uuid
   // Identifiant choisi par l'app pour cet envoi (ADR-044) : un renvoi avec le même identifiant rend le message déjà
   // créé au lieu d'en créer un second. Nul pour un envoi sans identifiant.
-  clientMessageId String?     @map("client_message_id") @db.Uuid
+  clientMessageId    String?     @map("client_message_id") @db.Uuid
   // Ligne d'événement d'un groupe (ADR-059) : l'expéditeur en est l'auteur, `content` le nouveau nom d'un renommage.
-  event           GroupEvent?
+  event              GroupEvent?
   // Membre ajouté ou retiré. Sans clé étrangère : un compte supprimé depuis s'affiche « un compte supprimé ».
-  eventUserId     String?     @map("event_user_id") @db.Uuid
-  createdAt       DateTime    @default(now()) @map("created_at")
+  eventUserId        String?     @map("event_user_id") @db.Uuid
+  createdAt          DateTime    @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)

@@ -70,7 +70,7 @@ struct ProfileViewModelTests {
         let viewModel = makeProfile("bob", session: session)
         await viewModel.load()
         #expect(!viewModel.isOwn)
-        #expect(viewModel.availableGrids == [.videos, .reposts])
+        #expect(viewModel.availableGrids == [.videos, .reposts, .favorites, .likes])
         #expect(viewModel.followStatus == .followBack)
 
         #expect(await viewModel.toggleFollow() == nil)

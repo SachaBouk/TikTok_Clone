@@ -77,7 +77,7 @@ struct PrivateVideosTests {
     @Test("onglet « cadenas » : sur son profil seulement, entre « Vidéos » et « Republications »")
     func grids() {
         #expect(ProfileGrid.available(isOwn: true) == [.videos, .privateVideos, .reposts, .favorites, .likes])
-        #expect(ProfileGrid.available(isOwn: false) == [.videos, .reposts])
+        #expect(ProfileGrid.available(isOwn: false) == [.videos, .reposts, .favorites, .likes])
         #expect(ProfileGrid.privateVideos.systemImage == "lock")
         #expect(VideoList(.privateVideos, username: "alice") == .myPrivateVideos)
         #expect(VideoVisibility.onlyMe.label == "Toi uniquement")

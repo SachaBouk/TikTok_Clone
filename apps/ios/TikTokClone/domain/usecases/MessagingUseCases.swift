@@ -207,3 +207,23 @@ struct LoadFriendsUseCase: Sendable {
         return page.results.filter { $0.viewer?.following == true && $0.viewer?.followedBy == true }.map(\.user)
     }
 }
+
+// Partage d'une collection publique (ADR-072) : même principe que le partage d'un profil.
+struct ShareCollectionByMessageUseCase: Sendable {
+    let messaging: any MessagingRepository
+
+    func callAsFunction(collectionID: String, to username: String, message: String? = nil, clientMessageID: String? = nil)
+        async throws -> DirectMessage
+    {
+        let conversation = try await messaging.open(username: username)
+        return try await messaging.shareCollection(
+            conversationID: conversation.id, collectionID: collectionID, content: message, clientMessageID: clientMessageID)
+    }
+
+    func callAsFunction(collectionID: String, inConversation conversationID: String, message: String? = nil, clientMessageID: String? = nil)
+        async throws -> DirectMessage
+    {
+        try await messaging.shareCollection(
+            conversationID: conversationID, collectionID: collectionID, content: message, clientMessageID: clientMessageID)
+    }
+}

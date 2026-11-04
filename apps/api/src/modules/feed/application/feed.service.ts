@@ -1,13 +1,14 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { VideoReaction } from '../../interactions/domain/interaction';
+import type { CollectionsService } from '../../collections/application/collections.service';
 import type { StoriesService } from '../../stories/application/stories.service';
 import type { User } from '../../users/domain/user';
 import type { UsersService } from '../../users/application/users.service';
 import { MAX_SOUND_RESULTS, type PublishedVideo, type Sound } from '../../videos/domain/video';
 import type { VideosService } from '../../videos/application/videos.service';
 import { decodeCursor, encodeCursor, InvalidFeedCursorError, type FeedPosition } from '../domain/feed-cursor';
-import { FeedItemNotFoundError } from '../domain/feed.errors';
+import { FeedItemNotFoundError, ReactionListPrivateError } from '../domain/feed.errors';
 import { decodeListCursor, encodeListCursor } from '../domain/list-cursor';
 import { CATALOG_LIMIT, PAGE_FILL_ROUNDS, SNAPSHOT_REFRESH_SECONDS, SNAPSHOT_TTL_SECONDS } from '../domain/feed-rules';
 import type { FeedSnapshot, FeedSnapshotStore } from '../domain/feed-snapshot.store';
@@ -70,6 +71,7 @@ export class FeedService {
     private readonly users: UsersService,
     private readonly interactions: InteractionsService,
     private readonly stories: StoriesService,
+    private readonly collections: CollectionsService,
   ) {}
 
   // Sons proposés (ADR-064) : comptes masqués exclus (suspendus, blocages dans un sens ou l'autre). Curseur = position
@@ -264,6 +266,49 @@ export class FeedService {
   // Vidéos likées par le compte connecté, du like le plus récent au plus ancien. Privées, comme les favoris.
   listLikes(userId: string, cursor: string | undefined, limit: number): Promise<FeedPage> {
     return this.listReacted('like', userId, cursor, limit, userId);
+  }
+
+  // Vidéos aimées ou favoris de @username (ADR-071), du plus récent au plus ancien. Publiques si le compte l'a choisi ;
+  // sinon seul leur titulaire les voit (ReactionListPrivateError pour les autres). Compte masqué au lecteur : liste
+  // vide, comme ses autres grilles. Une vidéo privée d'un tiers n'apparaît qu'à son auteur (`loadItems`).
+  async listAccountReactions(
+    kind: 'like' | 'favorite',
+    username: string,
+    cursor: string | undefined,
+    limit: number,
+    viewerId: string | null,
+  ): Promise<FeedPage> {
+    const [user, hidden] = await Promise.all([this.users.getByUsername(username), this.hiddenAccounts(viewerId)]);
+    if (user.id !== viewerId) {
+      const lists = await this.users.getReactionListsVisibility(user.id);
+      if ((kind === 'like' ? lists.likes : lists.favorites) === 'private') throw new ReactionListPrivateError(username, kind);
+    }
+    if (hidden.has(user.id)) {
+      if (cursor) decodeListCursor(cursor); // un curseur invalide reste une erreur (400)
+      return { items: [], nextCursor: null };
+    }
+    return this.listReacted(kind, user.id, cursor, limit, viewerId, hidden);
+  }
+
+  // Vidéos d'une collection (ADR-072), de la plus récemment ajoutée à la plus ancienne : son titulaire, ou tout le monde
+  // si elle est publique (CollectionNotFoundError sinon). Vidéos privées d'un tiers et comptes masqués retirés (page plus
+  // courte, curseur inchangé).
+  async listCollectionVideos(id: string, cursor: string | undefined, limit: number, viewerId: string | null): Promise<FeedPage> {
+    const after = cursor ? decodeListCursor(cursor) : null;
+    const [rows, hidden] = await Promise.all([
+      this.collections.listVideoRows(id, viewerId, after && { videoId: after.videoId, addedAt: after.at }, limit + 1),
+      this.hiddenAccounts(viewerId),
+    ]);
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: await this.loadItems(
+        page.map((row) => row.videoId),
+        viewerId,
+        hidden,
+      ),
+      nextCursor: rows.length > limit && last ? encodeListCursor({ at: last.addedAt, videoId: last.videoId }) : null,
+    };
   }
 
   // Historique de visionnage du compte connecté, du plus récent au plus ancien. Privé. Une vidéo revue remonte

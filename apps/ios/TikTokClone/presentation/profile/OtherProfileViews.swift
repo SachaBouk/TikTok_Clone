@@ -520,6 +520,8 @@ struct ProfileShareSheet: View {
     let profile: UserSummary
     let isBlocked: Bool
     let container: AppContainer
+    // Collection publique partagée (ADR-072) à la place du profil : même feuille, sans Code QR ni actions sur le compte.
+    var collection: VideoCollection? = nil
     let action: (Action) -> Void
     @State private var recipients: SendVideoViewModel?
     @State private var isShowingAllRecipients = false
@@ -531,8 +533,11 @@ struct ProfileShareSheet: View {
     @State private var unavailableMessage: String?
     @Environment(\.dismiss) private var dismiss
 
-    private var link: URL { ProfileLink.url(for: profile.username) }
-    private var sharedText: String { "Le profil de @\(profile.username) sur TikTok Clone : \(link.absoluteString)" }
+    private var link: URL { collection.map { CollectionLink.url(for: $0.id) } ?? ProfileLink.url(for: profile.username) }
+    private var sharedText: String {
+        if let collection { return "La collection « \(collection.name) » de @\(profile.username) sur TikTok Clone : \(link.absoluteString)" }
+        return "Le profil de @\(profile.username) sur TikTok Clone : \(link.absoluteString)"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -542,13 +547,15 @@ struct ProfileShareSheet: View {
                 ShareMessageComposer(model: recipients) { dismiss() }
             } else {
                 linksRow
-                actionsRow
+                if collection == nil { actionsRow }
             }
             Spacer(minLength: 0)
         }
         .task {
             guard container.session.isSignedIn else { return }
-            let model = recipients ?? container.makeSendProfileViewModel(profile: profile)
+            let model =
+                recipients ?? collection.map { container.makeSendCollectionViewModel(collection: $0) }
+                ?? container.makeSendProfileViewModel(profile: profile)
             recipients = model
             await model.load()
         }

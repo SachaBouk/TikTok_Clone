@@ -150,6 +150,15 @@ extension AnalyticsEvent {
     }
 
     // Signalement envoyé (ADR-038) : type de cible et motif, jamais la précision saisie.
+    // Collections de favoris (ADR-072) : nombre de vidéos et source de l'enregistrement, jamais le nom.
+    static func collectionCreated(isPublic: Bool, videos: Int) -> AnalyticsEvent {
+        AnalyticsEvent(name: "collection_created", properties: ["public": .bool(isPublic), "videos": .int(videos)])
+    }
+
+    static func savedToCollection(videoID: String, source: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "video_saved_to_collection", properties: ["video_id": .string(videoID), "source": .string(source)])
+    }
+
     static func reportSubmitted(target: ReportTarget, reason: ReportReason) -> AnalyticsEvent {
         AnalyticsEvent(name: "report_submitted", properties: ["target_type": .string(target.analyticsName), "reason": .string(reason.rawValue)])
     }

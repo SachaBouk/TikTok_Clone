@@ -30,6 +30,8 @@ enum AccountRoute: Hashable {
     case qrCode
     // « Trouver des amis » (ADR-070), depuis « personne + » de son profil.
     case findFriends
+    // Qui voit ses vidéos aimées (`.likes`) ou ses favoris (`.favorites`), ADR-071.
+    case listVisibility(ProfileGrid)
     // Publications en cours (ADR-062), depuis les vignettes « Publication… » de son profil.
     case publications
     // Brouillons sur l'iPhone (ADR-065), depuis la case « Brouillons » de son profil.
@@ -86,6 +88,9 @@ extension View {
             .navigationDestination(for: HashtagRoute.self) { route in
                 HashtagView(viewModel: container.makeHashtagViewModel(name: route.name))
             }
+            .navigationDestination(for: CollectionRoute.self) { route in
+                CollectionDetailView(model: container.makeCollectionDetailModel(route), container: container)
+            }
             .navigationDestination(for: VideoPlayerRoute.self) { route in
                 VideoListPlayerView(route: route, container: container)
             }
@@ -97,6 +102,8 @@ extension View {
                 case .searchHistory: SearchHistoryView(history: container.searchHistory)
                 case .qrCode: ProfileQRCodeView(session: container.session)
                 case .findFriends: FindFriendsView(model: container.makeFindFriendsModel(), container: container)
+                case .listVisibility(let grid):
+                    ReactionListVisibilityView(grid: grid, viewModel: container.makeAccountSettingsViewModel())
                 case .viewHistory: ViewHistoryView(viewModel: container.makeViewHistoryViewModel(), container: container)
                 case .commentHistory: CommentHistoryView(viewModel: container.makeCommentHistoryViewModel(), router: container.router)
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())

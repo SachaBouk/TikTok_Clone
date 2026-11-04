@@ -1,5 +1,5 @@
-import { BadRequestException, Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { BadRequestException, Controller, ForbiddenException, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import { ApiBadRequestResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import type { VideoPageDto } from '@repo/shared';
 import { ErrorResponse } from '../../../openapi/error.response';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/interfaces/current-user.decorator';
@@ -7,6 +7,7 @@ import { Public } from '../../auth/interfaces/public.decorator';
 import { UserNotFoundError } from '../../users/domain/user.errors';
 import { FeedService, type FeedPage } from '../application/feed.service';
 import { InvalidFeedCursorError } from '../domain/feed-cursor';
+import { ReactionListPrivateError } from '../domain/feed.errors';
 import { VideoGridQuery } from './feed.requests';
 import { toFeedItemDto, VideoPageResponse } from './feed.responses';
 
@@ -21,7 +22,7 @@ const USER_NOT_FOUND = { type: ErrorResponse, description: 'Pseudo inconnu.' };
 export class ProfileVideosController {
   constructor(private readonly feed: FeedService) {}
 
-  // Privés : seul le titulaire voit ses favoris.
+  // Les siens, quel que soit leur réglage (ADR-071 : publics ou privés pour les autres).
   @Get('me/favorites')
   @ApiOkResponse({ type: VideoPageResponse, description: 'Favoris du compte connecté, du plus récent au plus ancien.' })
   @ApiBadRequestResponse(BAD_REQUEST)
@@ -30,7 +31,7 @@ export class ProfileVideosController {
     return toPageDto(this.feed.listFavorites(user.userId, query.cursor, query.limit));
   }
 
-  // Privées, comme les favoris.
+  // Les siennes, comme les favoris.
   @Get('me/likes')
   @ApiOkResponse({ type: VideoPageResponse, description: 'Vidéos likées par le compte connecté, du like le plus récent au plus ancien.' })
   @ApiBadRequestResponse(BAD_REQUEST)
@@ -82,6 +83,36 @@ export class ProfileVideosController {
   ): Promise<VideoPageDto> {
     return toPageDto(this.feed.listReposts(username, query.cursor, query.limit, user?.userId ?? null));
   }
+
+  // Vidéos aimées d'un compte (ADR-071), si son titulaire les a rendues publiques.
+  @Public()
+  @Get(':username/likes')
+  @ApiOkResponse({ type: VideoPageResponse, description: 'Vidéos aimées par le compte, du like le plus récent au plus ancien.' })
+  @ApiBadRequestResponse(BAD_REQUEST)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Le compte garde ses vidéos aimées privées.' })
+  @ApiNotFoundResponse(USER_NOT_FOUND)
+  listAccountLikes(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('username') username: string,
+    @Query() query: VideoGridQuery,
+  ): Promise<VideoPageDto> {
+    return toPageDto(this.feed.listAccountReactions('like', username, query.cursor, query.limit, user?.userId ?? null));
+  }
+
+  // Favoris d'un compte (ADR-071), si son titulaire les a rendus publics.
+  @Public()
+  @Get(':username/favorites')
+  @ApiOkResponse({ type: VideoPageResponse, description: 'Favoris du compte, du plus récent au plus ancien.' })
+  @ApiBadRequestResponse(BAD_REQUEST)
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Le compte garde ses favoris privés.' })
+  @ApiNotFoundResponse(USER_NOT_FOUND)
+  listAccountFavorites(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('username') username: string,
+    @Query() query: VideoGridQuery,
+  ): Promise<VideoPageDto> {
+    return toPageDto(this.feed.listAccountReactions('favorite', username, query.cursor, query.limit, user?.userId ?? null));
+  }
 }
 
 async function toPageDto(pending: Promise<FeedPage>): Promise<VideoPageDto> {
@@ -91,6 +122,7 @@ async function toPageDto(pending: Promise<FeedPage>): Promise<VideoPageDto> {
   } catch (error) {
     if (error instanceof InvalidFeedCursorError) throw new BadRequestException(error.message);
     if (error instanceof UserNotFoundError) throw new NotFoundException(error.message);
+    if (error instanceof ReactionListPrivateError) throw new ForbiddenException(error.message);
     throw error;
   }
 }

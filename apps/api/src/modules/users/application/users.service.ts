@@ -21,7 +21,7 @@ import {
   isValidAvatarContent,
 } from '../domain/profile-rules';
 import type { ReceivedLikesCounter } from '../domain/received-likes-counter';
-import type { ProfileChanges, ProfileNote, User, UserProfileView } from '../domain/user';
+import type { ProfileChanges, ProfileNote, ReactionListVisibility, ReactionListsVisibility, User, UserProfileView } from '../domain/user';
 import {
   AvatarNotUploadedError,
   InvalidAvatarError,
@@ -41,6 +41,9 @@ export interface ProfileUpdate {
   bio?: string | null;
   // null ou chaîne vide : efface les pronoms (ADR-070).
   pronouns?: string | null;
+  // Visibilité de ses vidéos aimées et de ses favoris (ADR-071).
+  likesVisibility?: ReactionListVisibility;
+  favoritesVisibility?: ReactionListVisibility;
 }
 
 export interface AvatarUpload {
@@ -81,7 +84,20 @@ export class UsersService {
       const expiresAt = new Date(details.notePostedAt.getTime() + NOTE_LIFETIME_MS);
       if (expiresAt > this.now()) note = { text: details.noteText, postedAt: details.notePostedAt, expiresAt };
     }
-    return { user, likesCount, pronouns: details?.pronouns ?? null, note };
+    return {
+      user,
+      likesCount,
+      pronouns: details?.pronouns ?? null,
+      note,
+      lists: { likes: details?.likesVisibility ?? 'private', favorites: details?.favoritesVisibility ?? 'private' },
+    };
+  }
+
+  // Pour le module feed (ADR-071) : qui peut voir ses vidéos aimées et ses favoris. Lève UserNotFoundError.
+  async getReactionListsVisibility(userId: string): Promise<ReactionListsVisibility> {
+    const details = await this.users.findProfileDetails(userId);
+    if (!details) throw new UserNotFoundError(userId);
+    return { likes: details.likesVisibility, favorites: details.favoritesVisibility };
   }
 
   async getById(id: string): Promise<User> {
@@ -188,6 +204,8 @@ export class UsersService {
       }
       changes.pronouns = pronouns;
     }
+    if (update.likesVisibility !== undefined) changes.likesVisibility = update.likesVisibility;
+    if (update.favoritesVisibility !== undefined) changes.favoritesVisibility = update.favoritesVisibility;
 
     if (Object.keys(changes).length === 0) return this.getById(userId);
     const user = await this.users.update(userId, changes);

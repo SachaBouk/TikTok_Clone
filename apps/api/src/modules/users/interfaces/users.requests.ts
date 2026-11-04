@@ -24,6 +24,9 @@ import {
   USERNAME_PATTERN,
 } from '../domain/profile-rules';
 
+// Visibilité des vidéos aimées et des favoris (ADR-071).
+const REACTION_LIST_VISIBILITIES = ['public', 'private'] as const;
+
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
 
 // Seuls les champs présents changent. `username` et `displayName` ne peuvent pas être null ;
@@ -53,6 +56,17 @@ export class UpdateProfileRequest {
   @IsString()
   @MaxLength(MAX_PRONOUNS_LENGTH)
   pronouns?: string | null;
+
+  // Qui peut voir ses vidéos aimées et ses favoris (ADR-071).
+  @ApiPropertyOptional({ enum: REACTION_LIST_VISIBILITIES, enumName: 'VideoVisibility' })
+  @IsOptional()
+  @IsIn(REACTION_LIST_VISIBILITIES)
+  likesVisibility?: 'public' | 'private';
+
+  @ApiPropertyOptional({ enum: REACTION_LIST_VISIBILITIES, enumName: 'VideoVisibility' })
+  @IsOptional()
+  @IsIn(REACTION_LIST_VISIBILITIES)
+  favoritesVisibility?: 'public' | 'private';
 }
 
 // Note de profil (ADR-070) : nettoyée par le service (1 à 60 caractères une fois les espaces réduits).

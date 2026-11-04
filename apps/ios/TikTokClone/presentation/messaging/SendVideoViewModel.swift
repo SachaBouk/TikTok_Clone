@@ -71,6 +71,8 @@ final class SendVideoViewModel {
         case live(LiveStream)
         // Profil d'un compte (ADR-069).
         case profile(UserSummary)
+        // Collection publique (ADR-072).
+        case collection(VideoCollection)
     }
 
     // Section de la liste complète : « Chats récents », « Amis », puis une par lettre sous « Suivis ».
@@ -112,6 +114,7 @@ final class SendVideoViewModel {
     private let share: ShareVideoByMessageUseCase
     private let shareLive: ShareLiveByMessageUseCase?
     private let shareProfile: ShareProfileByMessageUseCase?
+    private let shareCollection: ShareCollectionByMessageUseCase?
     private let interactions: VideoInteractionsModel
     private let session: SessionStore
 
@@ -135,12 +138,14 @@ final class SendVideoViewModel {
         share: ShareVideoByMessageUseCase,
         shareLive: ShareLiveByMessageUseCase?,
         shareProfile: ShareProfileByMessageUseCase? = nil,
+        shareCollection: ShareCollectionByMessageUseCase? = nil,
         interactions: VideoInteractionsModel,
         session: SessionStore
     ) {
         self.item = item
         self.shareLive = shareLive
         self.shareProfile = shareProfile
+        self.shareCollection = shareCollection
         self.messaging = messaging
         self.share = share
         self.interactions = interactions
@@ -323,6 +328,13 @@ final class SendVideoViewModel {
         case (.profile(let profile), .group(let conversationID)):
             guard let shareProfile else { throw AppError.unexpected }
             _ = try await shareProfile(userID: profile.id, inConversation: conversationID, message: message, clientMessageID: clientMessageID)
+        case (.collection(let collection), .user(let user)):
+            guard let shareCollection else { throw AppError.unexpected }
+            _ = try await shareCollection(collectionID: collection.id, to: user.username, message: message, clientMessageID: clientMessageID)
+        case (.collection(let collection), .group(let conversationID)):
+            guard let shareCollection else { throw AppError.unexpected }
+            _ = try await shareCollection(
+                collectionID: collection.id, inConversation: conversationID, message: message, clientMessageID: clientMessageID)
         }
     }
 }

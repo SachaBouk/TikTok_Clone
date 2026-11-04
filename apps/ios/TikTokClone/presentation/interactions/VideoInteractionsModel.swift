@@ -122,6 +122,15 @@ final class VideoInteractionsModel {
         return await apply(kind, active: active, on: video)
     }
 
+    // Vidéo ajoutée à une collection (ADR-072) : l'API l'a mise en favori ; le signet s'allume partout aussitôt.
+    func savedToCollection(_ video: FeedVideo) {
+        let current = display(video)
+        let viewer = current.viewer ?? .empty
+        guard !viewer.isActive(.favorite) else { return }
+        overrides[video.id] = Override(
+            stats: current.stats.with(.favorite, count: current.stats.count(of: .favorite) + 1), viewer: viewer.with(.favorite, active: true))
+    }
+
     // Double toucher : like seulement (ne retire jamais un like), comme TikTok.
     func likeFromDoubleTap(_ video: FeedVideo) async -> String? {
         guard session.isSignedIn else {

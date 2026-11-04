@@ -82,7 +82,13 @@ describe('UsersService', () => {
       () => NOW,
     );
     const view = await withLikes.profileView(await withLikes.getById(alice.id));
-    expect(view).toEqual({ user: expect.objectContaining({ id: alice.id }), likesCount: 12, pronouns: null, note: null });
+    expect(view).toEqual({
+      user: expect.objectContaining({ id: alice.id }),
+      likesCount: 12,
+      pronouns: null,
+      note: null,
+      lists: { likes: 'private', favorites: 'private' },
+    });
     expect((await service.profileView(await service.getById(bob.id))).likesCount).toBe(0);
   });
 

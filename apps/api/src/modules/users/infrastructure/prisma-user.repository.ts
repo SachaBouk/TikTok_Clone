@@ -37,7 +37,10 @@ export class PrismaUserRepository extends UserRepository {
   }
 
   findProfileDetails(id: string): Promise<ProfileDetails | null> {
-    return this.prisma.user.findUnique({ where: { id }, select: { pronouns: true, noteText: true, notePostedAt: true } });
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { pronouns: true, noteText: true, notePostedAt: true, likesVisibility: true, favoritesVisibility: true },
+    });
   }
 
   async update(id: string, changes: ProfileChanges): Promise<User | null> {

@@ -25,6 +25,16 @@ export interface MessageProfileDto {
   user?: UserSummaryDto;
 }
 
+// Collection partagée (ADR-072) : indisponible (et sans détails) une fois supprimée, redevenue privée ou masquée au lecteur.
+export interface MessageCollectionDto {
+  id: string;
+  available: boolean;
+  name?: string;
+  coverUrl?: string | null;
+  videosCount?: number;
+  owner?: UserSummaryDto;
+}
+
 export interface MessageDto {
   id: string;
   conversationId: string;
@@ -39,6 +49,8 @@ export interface MessageDto {
   live?: MessageLiveDto;
   // Profil partagé (ADR-069).
   profile?: MessageProfileDto;
+  // Collection partagée (ADR-072).
+  collection?: MessageCollectionDto;
   // Identifiant d'envoi choisi par l'app (ADR-044) : seulement dans la réponse à l'envoi et l'écho temps réel adressé à
   // l'expéditeur, pour reconnaître la bulle en attente.
   clientMessageId?: string;

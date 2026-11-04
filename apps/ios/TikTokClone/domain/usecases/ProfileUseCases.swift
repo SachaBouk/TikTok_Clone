@@ -63,6 +63,21 @@ struct SetProfileNoteUseCase: Sendable {
     }
 }
 
+// Qui voit ses vidéos aimées ou ses favoris (ADR-071).
+struct SetReactionListVisibilityUseCase: Sendable {
+    let profiles: any ProfileRepository
+
+    func callAsFunction(_ visibility: VideoVisibility, of grid: ProfileGrid) async throws -> UserProfile {
+        var changes = ProfileChanges()
+        switch grid {
+        case .likes: changes.likesVisibility = visibility
+        case .favorites: changes.favoritesVisibility = visibility
+        case .videos, .privateVideos, .reposts: return try await profiles.myProfile()
+        }
+        return try await profiles.updateMyProfile(changes)
+    }
+}
+
 struct RemoveAvatarUseCase: Sendable {
     let profiles: any ProfileRepository
 

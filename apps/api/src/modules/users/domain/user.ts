@@ -18,11 +18,22 @@ export interface ProfileNote {
   expiresAt: Date;
 }
 
-// Champs lus pour le seul profil affiché (ADR-070) : pronoms et note telle qu'elle est stockée (expirée ou non).
+// Visibilité de ses vidéos aimées et de ses favoris (ADR-071) : tout le monde ou soi seulement.
+export type ReactionListVisibility = 'public' | 'private';
+
+export interface ReactionListsVisibility {
+  likes: ReactionListVisibility;
+  favorites: ReactionListVisibility;
+}
+
+// Champs lus pour le seul profil affiché (ADR-070, ADR-071) : pronoms, note telle qu'elle est stockée (expirée ou non),
+// visibilité des listes.
 export interface ProfileDetails {
   pronouns: string | null;
   noteText: string | null;
   notePostedAt: Date | null;
+  likesVisibility: ReactionListVisibility;
+  favoritesVisibility: ReactionListVisibility;
 }
 
 // Profil affiché (`GET /users/me`, `GET /users/:username`…) : le compte, ses likes reçus (ADR-056), ses pronoms et sa
@@ -32,6 +43,7 @@ export interface UserProfileView {
   likesCount: number;
   pronouns: string | null;
   note: ProfileNote | null;
+  lists: ReactionListsVisibility;
 }
 
 // Champs du profil modifiables par le compte ; seuls les champs présents changent.
@@ -44,4 +56,6 @@ export interface ProfileChanges {
   // Ensemble : publiés ou retirés (ADR-070).
   noteText?: string | null;
   notePostedAt?: Date | null;
+  likesVisibility?: ReactionListVisibility;
+  favoritesVisibility?: ReactionListVisibility;
 }

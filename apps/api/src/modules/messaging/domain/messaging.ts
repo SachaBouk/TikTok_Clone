@@ -1,3 +1,4 @@
+import type { CollectionView } from '../../collections/domain/collection';
 import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 import type { User } from '../../users/domain/user';
 import type { LiveItem } from '../../live/application/live.service';
@@ -24,6 +25,8 @@ export interface Message {
   liveId: string | null;
   // Profil partagé (ADR-069).
   sharedUserId: string | null;
+  // Collection publique partagée (ADR-072).
+  sharedCollectionId: string | null;
   // Ligne d'événement d'un groupe (ADR-059) : l'expéditeur en est l'auteur ; `content` = nouveau nom d'un renommage.
   event: GroupEvent | null;
   // Membre ajouté ou retiré.
@@ -62,12 +65,20 @@ export interface SharedProfile {
   user: User | null;
 }
 
+// Collection partagée (ADR-072), résolue à la lecture : null si elle a été supprimée, est redevenue privée ou si son
+// titulaire est masqué au lecteur.
+export interface SharedCollection {
+  id: string;
+  collection: CollectionView | null;
+}
+
 export interface MessageItem {
   message: Message;
   sharedVideo: SharedVideo | null;
   repliedStory: RepliedStory | null;
   sharedLive: SharedLive | null;
   sharedProfile: SharedProfile | null;
+  sharedCollection: SharedCollection | null;
   // Identifiant d'envoi choisi par l'app (ADR-044), rendu à son seul expéditeur dans la réponse à l'envoi et l'écho temps
   // réel : l'app y reconnaît la bulle en attente. Absent ailleurs.
   clientMessageId?: string;

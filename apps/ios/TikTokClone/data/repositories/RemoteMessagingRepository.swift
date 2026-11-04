@@ -122,6 +122,27 @@ struct RemoteMessagingRepository: MessagingRepository {
         }
     }
 
+    func shareCollection(conversationID: String, collectionID: String, content: String?, clientMessageID: String?) async throws
+        -> DirectMessage
+    {
+        let output = try await mappingErrors {
+            try await client.sendMessage(
+                path: .init(id: conversationID),
+                body: .json(.init(content: content, collectionId: collectionID, clientMessageId: clientMessageID)))
+        }
+        switch output {
+        case .created(let created): return DirectMessage(try created.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized: throw AppError.sessionExpired
+        case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+        // Supprimée, redevenue privée ou masquée entre-temps.
+        case .notFound: throw AppError.rejected("Cette collection n’est plus disponible.")
+        case .tooManyRequests(let error): throw AppError.rateLimited(retryAfter: max(1, error.headers.retryAfter ?? 60))
+        case .conflict: throw AppError.unexpected
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func shareProfile(conversationID: String, userID: String, content: String?, clientMessageID: String?) async throws -> DirectMessage {
         let output = try await mappingErrors {
             try await client.sendMessage(
@@ -322,6 +343,7 @@ extension DirectMessage {
             story: dto.story.map(RepliedStory.init),
             live: dto.live.map { SharedLive(id: $0.id, available: $0.available, title: $0.title ?? nil, host: $0.host.map(UserSummary.init)) },
             profile: dto.profile.map { SharedProfile(id: $0.id, user: $0.available ? $0.user.map(UserSummary.init) : nil) },
+            collection: dto.collection.map(SharedCollection.init),
             sender: dto.sender.map(UserSummary.init),
             event: dto.event.map(GroupEvent.init)
         )
@@ -413,5 +435,21 @@ extension ConversationStatus {
 extension MessagingBadges {
     init(_ dto: Components.Schemas.UnreadConversationsResponse) {
         self.init(unreadConversations: dto.unreadCount, pendingRequests: dto.requestCount)
+    }
+}
+
+extension SharedCollection {
+    // Carte d'une collection partagée (ADR-072) : sans détails une fois indisponible.
+    init(_ dto: Components.Schemas.MessageCollectionResponse) {
+        guard dto.available, let name = dto.name, let owner = dto.owner else {
+            self.init(id: dto.id, collection: nil)
+            return
+        }
+        self.init(
+            id: dto.id,
+            collection: VideoCollection(
+                id: dto.id, name: name, visibility: .everyone, videosCount: dto.videosCount ?? 0,
+                coverURL: (dto.coverUrl ?? nil).flatMap(URL.init(string:)), owner: UserSummary(owner), createdAt: .distantPast,
+                updatedAt: .distantPast))
     }
 }

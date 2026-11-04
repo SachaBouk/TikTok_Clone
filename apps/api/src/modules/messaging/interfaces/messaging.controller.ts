@@ -271,6 +271,7 @@ export class MessagingController {
         storyId: body.storyId,
         liveId: body.liveId,
         profileId: body.profileId,
+        collectionId: body.collectionId,
         clientMessageId: body.clientMessageId,
       }),
     );

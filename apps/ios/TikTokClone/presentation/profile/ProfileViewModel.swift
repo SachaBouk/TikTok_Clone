@@ -63,6 +63,11 @@ final class ProfileViewModel {
         ProfileGrid.available(isOwn: isOwn)
     }
 
+    // Vidéos aimées ou favoris d'un autre compte qui les garde privés (ADR-071) : cadenas, rien n'est lu.
+    func isLocked(_ grid: ProfileGrid) -> Bool {
+        !isOwn && profile?.isPrivate(grid) == true
+    }
+
     var isBlocked: Bool {
         relationship?.blockedByMe == true
     }
@@ -78,7 +83,7 @@ final class ProfileViewModel {
         if let list = grids[grid] { return list }
         let list = PagedList<FeedVideo>(session: session) { [weak self] cursor in
             guard let self, let username = self.profile?.username else { return ([], nil) }
-            return try await self.loadVideoPage(VideoList(grid, username: username), cursor: cursor).asPage
+            return try await self.loadVideoPage(VideoList(grid, username: username, isOwn: self.isOwn), cursor: cursor).asPage
         }
         grids[grid] = list
         return list
@@ -86,7 +91,7 @@ final class ProfileViewModel {
 
     // Source du lecteur vertical ouvert depuis une grille.
     func videoList(for grid: ProfileGrid) -> VideoList? {
-        profile.map { VideoList(grid, username: $0.username) }
+        profile.map { VideoList(grid, username: $0.username, isOwn: isOwn) }
     }
 
     func load() async {
@@ -116,13 +121,14 @@ final class ProfileViewModel {
     func refresh() async {
         await load()
         guard !isBlocked else { return }
-        for list in grids.values where list.state != .idle {
+        for (grid, list) in grids where list.state != .idle && !isLocked(grid) {
             await list.loadFirst()
         }
     }
 
     func select(_ grid: ProfileGrid) async {
         selectedGrid = grid
+        guard !isLocked(grid) else { return }
         await self.grid(grid).loadFirstIfNeeded()
     }
 

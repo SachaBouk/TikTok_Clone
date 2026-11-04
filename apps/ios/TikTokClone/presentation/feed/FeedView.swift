@@ -803,6 +803,28 @@ struct FeedActionColumn: View {
     let showsFollowButton: Bool
     let actions: VideoPageActions
     @Environment(StoriesModel.self) private var stories: StoriesModel?
+    // Collections (ADR-072) : bulle de l'appui long sur le signet et feuille « Enregistrer dans la collection ».
+    @Environment(\.appContainer) private var container
+    @State private var showsCollectionsMenu = false
+    @State private var showsSaveSheet = false
+
+    private func openCollectionsMenu() {
+        guard let container else { return }
+        guard container.session.isSignedIn else { return container.session.requestSignIn() }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        showsCollectionsMenu = true
+        Task { await container.collections.loadIfNeeded() }
+    }
+
+    private func save(to collection: VideoCollection) async {
+        guard let container else { return }
+        if let error = await container.collections.save(video, to: collection) {
+            if error != .sessionExpired { container.collections.notice = error.message }
+        } else {
+            container.videoInteractions.savedToCollection(video)
+            container.analytics.track(.savedToCollection(videoID: video.id, source: "quick_menu"))
+        }
+    }
 
     var body: some View {
         let viewer = video.viewer ?? .empty
@@ -845,8 +867,35 @@ struct FeedActionColumn: View {
                 .accessibilityIdentifier("video.comments")
             FeedCounter(
                 systemImage: "bookmark.fill", count: video.stats.favorites, isActive: viewer.favorited, activeColor: .yellow,
-                label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris"
+                label: viewer.favorited ? "Retirer des favoris" : "Ajouter aux favoris",
+                // Appui long (ADR-072) : ses collections récentes, puis « Plus ».
+                longPress: openCollectionsMenu
             ) { actions.toggle(.favorite) }
+            .accessibilityAction(named: "Enregistrer dans une collection") { openCollectionsMenu() }
+            .popover(isPresented: $showsCollectionsMenu, arrowEdge: .trailing) {
+                if let container {
+                    CollectionQuickMenu(collections: container.collections.recent) { collection in
+                        showsCollectionsMenu = false
+                        Task { await save(to: collection) }
+                    } more: {
+                        showsCollectionsMenu = false
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(350))
+                            showsSaveSheet = true
+                        }
+                    }
+                    .presentationCompactAdaptation(.popover)
+                }
+            }
+            .sheet(isPresented: $showsSaveSheet) {
+                if let container {
+                    SaveToCollectionSheet(video: video, container: container)
+                        .presentationDetents([.fraction(0.55), .large])
+                        .presentationCornerRadius(16)
+                        .presentationBackground(.white)
+                        .environment(\.colorScheme, .light)
+                }
+            }
             .accessibilityIdentifier("video.favorite")
             FeedCounter(systemImage: "arrowshape.turn.up.right.fill", count: video.stats.shares, label: "Partager", action: actions.share)
                 .accessibilityIdentifier("video.share")
@@ -958,30 +1007,49 @@ struct FeedCounter: View {
     var isActive = false
     var activeColor: Color = .white
     let label: String
+    // Appui long (signet, ADR-072) : prioritaire sur le toucher, qui n'est alors pas déclenché au relâchement (un
+    // `Button` le déclenchait quand même).
+    var longPress: (() -> Void)? = nil
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 28))
-                    .foregroundStyle(isActive ? activeColor : .white)
-                    .shadow(radius: 4)
-                    .symbolEffect(.bounce, value: isActive)
-                Text(count, format: .number.notation(.compactName))
-                    .font(.caption.bold())
-                    .shadow(color: .black.opacity(0.6), radius: 3)
-                    .contentTransition(.numericText(value: Double(count)))
-            }
-            // Toute la zone du bouton est touchable : sinon un toucher entre l'icône et le compteur
-            // passe à la vidéo dessous (pause).
-            .frame(width: 56)
-            .contentShape(Rectangle())
+        if let longPress {
+            content
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in longPress() }
+                        .exclusively(before: TapGesture().onEnded { action() })
+                )
+                .animation(.snappy, value: count)
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(label)
+                .accessibilityValue(Text(count, format: .number))
+                .accessibilityAction { action() }
+        } else {
+            Button(action: action) { content }
+                .buttonStyle(.plain)
+                .animation(.snappy, value: count)
+                .accessibilityLabel(label)
+                .accessibilityValue(Text(count, format: .number))
         }
-        .buttonStyle(.plain)
-        .animation(.snappy, value: count)
-        .accessibilityLabel(label)
-        .accessibilityValue(Text(count, format: .number))
+    }
+
+    private var content: some View {
+        VStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.system(size: 28))
+                .foregroundStyle(isActive ? activeColor : .white)
+                .shadow(radius: 4)
+                .symbolEffect(.bounce, value: isActive)
+            Text(count, format: .number.notation(.compactName))
+                .font(.caption.bold())
+                .shadow(color: .black.opacity(0.6), radius: 3)
+                .contentTransition(.numericText(value: Double(count)))
+        }
+        // Toute la zone du bouton est touchable : sinon un toucher entre l'icône et le compteur
+        // passe à la vidéo dessous (pause).
+        .frame(width: 56)
+        .contentShape(Rectangle())
     }
 }
 

@@ -17,6 +17,18 @@ struct UserProfile: Equatable, Sendable {
     var pronouns: String? = nil
     // Note encore visible (ADR-070) ; l'API ne la renvoie plus une fois expirée.
     var note: ProfileNote? = nil
+    // Qui peut voir ses vidéos aimées et ses favoris (ADR-071) ; privés par défaut.
+    var likesVisibility: VideoVisibility = .onlyMe
+    var favoritesVisibility: VideoVisibility = .onlyMe
+
+    // Vidéos aimées ou favoris de ce compte cachés aux autres (ADR-071) : onglet avec un cadenas sur son profil.
+    func isPrivate(_ grid: ProfileGrid) -> Bool {
+        switch grid {
+        case .likes: likesVisibility == .onlyMe
+        case .favorites: favoritesVisibility == .onlyMe
+        case .videos, .privateVideos, .reposts: false
+        }
+    }
 }
 
 // Note de profil (ADR-070) : court texte affiché dans une bulle au-dessus de la photo, visible 24 h.

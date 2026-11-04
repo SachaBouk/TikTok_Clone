@@ -225,6 +225,19 @@ struct MainTabView: View {
             }
             .environment(container.stories)
         }
+        // Collection ouverte par un lien d'app (ADR-072), avec sa propre pile.
+        .sheet(item: $router.presentedCollection) { route in
+            NavigationStack {
+                CollectionDetailView(model: container.makeCollectionDetailModel(route), container: container)
+                    .appDestinations(container)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Fermer", systemImage: "xmark") { router.presentedCollection = nil }
+                        }
+                    }
+            }
+            .environment(container.stories)
+        }
         // Visionneuse de stories (ADR-051), sauf quand la vidéo seule est ouverte : elle la présente elle-même.
         .storiesPresenter(container) { container.router.presentedVideo == nil }
         // Live (ADR-053), par-dessus tout.
@@ -243,6 +256,9 @@ struct MainTabView: View {
             selection = .profile
         }
         .environment(container.stories)
+        .environment(\.appContainer, container)
+        // « Enregistré dans … » (collections, ADR-072).
+        .toast(Bindable(container.collections).notice)
         .alert(
             "Session expirée",
             isPresented: Binding(

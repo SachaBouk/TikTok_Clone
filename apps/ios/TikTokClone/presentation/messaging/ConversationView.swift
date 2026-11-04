@@ -16,6 +16,8 @@ struct ConversationView: View {
     // Ouvert par un bouton : un lien de navigation par valeur ne fonctionne pas dans un écran lui-même poussé
     // par `navigationDestination(item:)` (boîte de réception, demandes).
     @State private var openedProfile: ProfileRoute?
+    // Collection partagée (ADR-072), ouverte de la même façon.
+    @State private var openedCollection: CollectionRoute?
     @State private var showsGroupSettings = false
     @FocusState private var isComposing: Bool
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +37,9 @@ struct ConversationView: View {
             .toolbar(.hidden, for: .tabBar)
             .navigationDestination(item: $openedProfile) { route in
                 ProfileView(viewModel: container.makeProfileViewModel(username: route.username), container: container)
+            }
+            .navigationDestination(item: $openedCollection) { route in
+                CollectionDetailView(model: container.makeCollectionDetailModel(route), container: container)
             }
             .navigationDestination(isPresented: $showsGroupSettings) {
                 GroupSettingsView(viewModel: viewModel, container: container)
@@ -173,6 +178,8 @@ struct ConversationView: View {
                                 container.router.openLive(liveID, source: .message)
                             } openProfile: { username in
                                 openedProfile = ProfileRoute(username: username)
+                            } openCollection: { collection in
+                                openedCollection = CollectionRoute(id: collection.id, preview: collection)
                             }
                             .contextMenu {
                                 if !message.content.isEmpty {
@@ -394,6 +401,7 @@ private struct MessageBubble: View {
     let openVideo: (String) -> Void
     let openLive: (String) -> Void
     var openProfile: (String) -> Void = { _ in }
+    var openCollection: (VideoCollection) -> Void = { _ in }
 
     var body: some View {
         if let sender {
@@ -432,6 +440,9 @@ private struct MessageBubble: View {
             }
             if let profile = message.profile {
                 SharedProfileCard(profile: profile, open: openProfile)
+            }
+            if let collection = message.collection {
+                SharedCollectionCard(shared: collection, open: openCollection)
             }
             if !message.content.isEmpty {
                 TextBubble(text: message.content, isOwn: isOwn)
@@ -600,6 +611,42 @@ private struct SharedProfileCard: View {
             .accessibilityIdentifier("conversation.sharedProfile")
         } else {
             Label("Profil indisponible", systemImage: "person.crop.circle.badge.xmark")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(12)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// Collection partagée (ADR-072) : image, nom, « N publications · @pseudo » et « Voir la collection » ; supprimée, redevenue
+// privée ou masquée : « Collection indisponible ».
+private struct SharedCollectionCard: View {
+    let shared: SharedCollection
+    let open: (VideoCollection) -> Void
+
+    var body: some View {
+        if let collection = shared.collection {
+            Button {
+                open(collection)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    CollectionCard(collection: collection)
+                    Text("\(collection.countLabel) · @\(collection.owner.username)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text("Voir la collection")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .padding(10)
+                .frame(width: 200)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collection \(collection.name) de @\(collection.owner.username)")
+            .accessibilityIdentifier("conversation.sharedCollection")
+        } else {
+            Label("Collection indisponible", systemImage: "bookmark.slash")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(12)

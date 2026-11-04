@@ -136,6 +136,36 @@ struct RemoteVideoListRepository: VideoListRepository {
             case .unauthorized: throw AppError.sessionExpired
             case .undocumented: throw AppError.unexpected
             }
+        case .accountLikes(let username):
+            switch try await mappingErrors({
+                try await client.listAccountLikes(path: .init(username: username), query: .init(cursor: cursor, limit: Self.pageSize))
+            }) {
+            case .ok(let ok): dto = try ok.body.json
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            // Rendues privées depuis l'ouverture du profil.
+            case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+            case .notFound: throw AppError.notFound
+            case .undocumented: throw AppError.unexpected
+            }
+        case .collection(let id):
+            switch try await mappingErrors({
+                try await client.listCollectionVideos(path: .init(id: id), query: .init(cursor: cursor, limit: Self.pageSize))
+            }) {
+            case .ok(let ok): dto = try ok.body.json
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            case .notFound: throw AppError.notFound
+            case .undocumented: throw AppError.unexpected
+            }
+        case .accountFavorites(let username):
+            switch try await mappingErrors({
+                try await client.listAccountFavorites(path: .init(username: username), query: .init(cursor: cursor, limit: Self.pageSize))
+            }) {
+            case .ok(let ok): dto = try ok.body.json
+            case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+            case .forbidden(let error): throw AppError.rejected(try error.body.json.text)
+            case .notFound: throw AppError.notFound
+            case .undocumented: throw AppError.unexpected
+            }
         case .myHistory:
             switch try await mappingErrors({ try await client.listMyHistory(query: .init(cursor: cursor, limit: Self.pageSize)) }) {
             case .ok(let ok): dto = try ok.body.json

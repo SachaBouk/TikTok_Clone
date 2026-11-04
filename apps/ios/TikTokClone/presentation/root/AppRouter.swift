@@ -19,6 +19,8 @@ final class AppRouter {
     }
 
     var presentedProfile: ProfileSheetRoute?
+    // Collection ouverte par un lien d'app (tiktokclone://collections/<id>, ADR-072), dans une feuille.
+    var presentedCollection: CollectionRoute?
 
     // Menu ☰ de son profil (ADR-057), panneau par-dessus les onglets.
     var isProfileMenuOpen = false
@@ -128,6 +130,10 @@ final class AppRouter {
         }
         if let username = ProfileLink.username(from: url) {
             presentedProfile = ProfileSheetRoute(username: username)
+            return true
+        }
+        if let collectionID = CollectionLink.id(from: url) {
+            presentedCollection = CollectionRoute(id: collectionID)
             return true
         }
         guard let videoID = VideoLink.videoID(from: url) else { return false }

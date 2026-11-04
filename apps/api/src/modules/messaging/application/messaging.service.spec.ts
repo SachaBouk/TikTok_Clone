@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CollectionsService } from '../../collections/application/collections.service';
+import { InMemoryCollectionRepository } from '../../collections/infrastructure/in-memory-collection.repository';
 import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
@@ -34,6 +36,7 @@ import {
   RepliedStoryNotFoundError,
   SharedLiveNotFoundError,
   SharedProfileNotFoundError,
+  SharedCollectionNotFoundError,
   MessageNotFoundError,
   NotAPendingRequestError,
   NotMessageSenderError,
@@ -77,6 +80,7 @@ describe('MessagingService', () => {
   let events: InMemoryMessagingEventPublisher;
   let interactions: InteractionsService;
   let service: MessagingService;
+  let collections: CollectionsService;
   let stories: ReturnType<typeof inMemoryStories>;
   let lives: ReturnType<typeof inMemoryLive>;
 
@@ -129,6 +133,7 @@ describe('MessagingService', () => {
     events = new InMemoryMessagingEventPublisher();
     stories = inMemoryStories(users, interactions, () => new Date(clock));
     lives = inMemoryLive(users, interactions, notifications, () => new Date(clock));
+    collections = new CollectionsService(new InMemoryCollectionRepository(), interactions, videos, users);
     service = new MessagingService(
       conversations,
       users,
@@ -136,6 +141,7 @@ describe('MessagingService', () => {
       videos,
       stories.service,
       lives.service,
+      collections,
       events,
       new InMemoryRateLimiter(() => clock),
       () => clock,
@@ -548,6 +554,23 @@ describe('MessagingService', () => {
       );
       await suspended.add('carol');
       await expect(service.sendMessage('alice', id, { profileId: 'carol' })).rejects.toBeInstanceOf(SharedProfileNotFoundError);
+    });
+  });
+
+  describe('partage d’une collection (ADR-072)', () => {
+    it('collection publique seulement ; carte indisponible une fois redevenue privée', async () => {
+      const id = await open('alice', 'bob');
+      const { collection } = await collections.create('carol', { name: 'Recettes' });
+      await expect(service.sendMessage('alice', id, { collectionId: collection.id })).rejects.toBeInstanceOf(SharedCollectionNotFoundError);
+      await collections.update('carol', collection.id, { visibility: 'public' });
+      const sent = await service.sendMessage('alice', id, { collectionId: collection.id });
+      expect(sent.message).toMatchObject({ content: '', sharedCollectionId: collection.id });
+      expect(sent.sharedCollection?.collection?.collection.name).toBe('Recettes');
+      expect(events.pushes.at(-1)).toMatchObject({ recipientId: 'bob' });
+
+      await collections.update('carol', collection.id, { visibility: 'private' });
+      const [received] = (await service.listMessages('bob', id, null, 10)).items;
+      expect(received.sharedCollection).toEqual({ id: collection.id, collection: null });
     });
   });
 

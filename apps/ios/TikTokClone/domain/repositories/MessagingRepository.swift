@@ -21,6 +21,9 @@ protocol MessagingRepository: Sendable {
     func shareLive(conversationID: String, liveID: String) async throws -> DirectMessage
     // Partage d'un profil (ADR-069), avec un texte facultatif ; lève AppError.rejected si le compte n'est plus visible.
     func shareProfile(conversationID: String, userID: String, content: String?, clientMessageID: String?) async throws -> DirectMessage
+    // Collection publique partagée (ADR-072).
+    func shareCollection(conversationID: String, collectionID: String, content: String?, clientMessageID: String?) async throws
+        -> DirectMessage
     // Lu jusqu'à `upToID` (tout si nil) ; renvoie les badges.
     func markRead(conversationID: String, upToID: String?) async throws -> MessagingBadges
     func accept(conversationID: String) async throws -> Conversation

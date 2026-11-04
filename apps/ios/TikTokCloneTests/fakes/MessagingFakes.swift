@@ -150,6 +150,16 @@ final class FakeMessagingRepository: MessagingRepository {
 
     // Profils partagés (ADR-069) : identifiant du compte, par conversation.
     let sharedProfiles = Mutex<[(conversationID: String, userID: String)]>([])
+    let sharedCollections = Mutex<[(conversationID: String, collectionID: String)]>([])
+
+    func shareCollection(conversationID: String, collectionID: String, content: String?, clientMessageID: String?) async throws
+        -> DirectMessage
+    {
+        var message = try await send(conversationID: conversationID, content: content, videoID: nil, clientMessageID: clientMessageID)
+        sharedCollections.withLock { $0.append((conversationID, collectionID)) }
+        message.collection = SharedCollection(id: collectionID, collection: nil)
+        return message
+    }
 
     func shareProfile(conversationID: String, userID: String, content: String?, clientMessageID: String?) async throws -> DirectMessage {
         var message = try await send(conversationID: conversationID, content: content, videoID: nil, clientMessageID: clientMessageID)

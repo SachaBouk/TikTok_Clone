@@ -3,6 +3,7 @@
 
 export * from './admin.js';
 export * from './auth.js';
+export * from './collections.js';
 export * from './feed.js';
 export * from './health.js';
 export * from './interactions.js';

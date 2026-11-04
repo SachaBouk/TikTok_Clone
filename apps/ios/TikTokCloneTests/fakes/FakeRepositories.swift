@@ -88,7 +88,8 @@ final class FakeProfileRepository: ProfileRepository {
                 avatarURL: current.avatarURL, bio: changes.bio.map { $0.isEmpty ? nil : $0 } ?? current.bio,
                 followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt,
                 likesCount: current.likesCount, pronouns: changes.pronouns.map { $0.isEmpty ? nil : $0 } ?? current.pronouns,
-                note: current.note
+                note: current.note, likesVisibility: changes.likesVisibility ?? current.likesVisibility,
+                favoritesVisibility: changes.favoritesVisibility ?? current.favoritesVisibility
             )
             result.withLock { $0 = .success(updated) }
             return updated
@@ -126,7 +127,8 @@ final class FakeProfileRepository: ProfileRepository {
         let updated = UserProfile(
             id: current.id, username: current.username, displayName: current.displayName, avatarURL: url, bio: current.bio,
             followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt,
-            likesCount: current.likesCount, pronouns: current.pronouns, note: current.note)
+            likesCount: current.likesCount, pronouns: current.pronouns, note: current.note, likesVisibility: current.likesVisibility,
+            favoritesVisibility: current.favoritesVisibility)
         result.withLock { $0 = .success(updated) }
         return updated
     }

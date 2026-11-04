@@ -48,13 +48,14 @@ enum FollowStatus: Equatable, Sendable {
     var isFollowing: Bool { self == .following || self == .friends }
 }
 
-// Grilles d'un profil. Favoris et likes sont privés : seulement sur son propre profil (choix du développeur).
+// Grilles d'un profil. Favoris et vidéos aimées : sur celui d'un autre aussi, lisibles s'il les a rendus publics, sinon
+// un cadenas (ADR-071).
 enum ProfileGrid: String, CaseIterable, Hashable, Sendable {
     // `privateVideos` : onglet « cadenas » (ADR-061), sur son propre profil.
     case videos, privateVideos, reposts, favorites, likes
 
     static func available(isOwn: Bool) -> [ProfileGrid] {
-        isOwn ? allCases : [.videos, .reposts]
+        isOwn ? allCases : [.videos, .reposts, .favorites, .likes]
     }
 
     var title: String {
@@ -84,19 +85,24 @@ enum VideoList: Hashable, Sendable {
     case reposts(username: String)
     case myFavorites
     case myLikes
+    // Vidéos aimées et favoris d'un autre compte, s'il les a rendus publics (ADR-071).
+    case accountLikes(username: String)
+    case accountFavorites(username: String)
     case myHistory
     // Ses vidéos privées (ADR-061).
     case myPrivateVideos
     // Page d'un hashtag (ADR-049), sans « # ».
     case hashtag(name: String)
+    // Vidéos d'une collection (ADR-072).
+    case collection(id: String)
 
-    init(_ grid: ProfileGrid, username: String) {
+    init(_ grid: ProfileGrid, username: String, isOwn: Bool = true) {
         switch grid {
         case .videos: self = .accountVideos(username: username)
         case .privateVideos: self = .myPrivateVideos
         case .reposts: self = .reposts(username: username)
-        case .favorites: self = .myFavorites
-        case .likes: self = .myLikes
+        case .favorites: self = isOwn ? .myFavorites : .accountFavorites(username: username)
+        case .likes: self = isOwn ? .myLikes : .accountLikes(username: username)
         }
     }
 }
@@ -156,8 +162,13 @@ struct ProfileChanges: Equatable, Sendable {
     var displayName: String?
     var bio: String?
     var pronouns: String?
+    // Visibilité des vidéos aimées et des favoris (ADR-071).
+    var likesVisibility: VideoVisibility?
+    var favoritesVisibility: VideoVisibility?
 
-    var isEmpty: Bool { username == nil && displayName == nil && bio == nil && pronouns == nil }
+    var isEmpty: Bool {
+        username == nil && displayName == nil && bio == nil && pronouns == nil && likesVisibility == nil && favoritesVisibility == nil
+    }
 }
 
 // Photo de profil (choix du développeur : l'app recadre en carré de 512 px ; JPEG ou PNG, 5 Mio au plus).

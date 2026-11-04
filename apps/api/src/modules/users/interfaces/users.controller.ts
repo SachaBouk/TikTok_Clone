@@ -63,6 +63,8 @@ export class UsersController {
           displayName: body.displayName,
           bio: body.bio,
           pronouns: body.pronouns,
+          likesVisibility: body.likesVisibility,
+          favoritesVisibility: body.favoritesVisibility,
         }),
       ),
     );
@@ -168,7 +170,7 @@ export class UsersController {
 }
 
 // Mapping explicite : un champ ajouté au type de domaine n'est pas exposé par l'API sans le vouloir.
-function toProfileDto({ user, likesCount, pronouns, note }: UserProfileView): UserProfileDto {
+function toProfileDto({ user, likesCount, pronouns, note, lists }: UserProfileView): UserProfileDto {
   return {
     id: user.id,
     username: user.username,
@@ -180,6 +182,8 @@ function toProfileDto({ user, likesCount, pronouns, note }: UserProfileView): Us
     likesCount,
     pronouns,
     ...(note && { note: { text: note.text, postedAt: note.postedAt.toISOString(), expiresAt: note.expiresAt.toISOString() } }),
+    likesVisibility: lists.likes,
+    favoritesVisibility: lists.favorites,
     createdAt: user.createdAt.toISOString(),
   };
 }

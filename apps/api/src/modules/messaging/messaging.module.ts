@@ -1,3 +1,5 @@
+import { CollectionsService } from '../collections/application/collections.service';
+import { CollectionsModule } from '../collections/collections.module';
 import { Module } from '@nestjs/common';
 import { InteractionsService } from '../interactions/application/interactions.service';
 import { InteractionsModule } from '../interactions/interactions.module';
@@ -24,7 +26,7 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
 // mutuels et blocages via InteractionsService, vidéos partagées via VideosService ; événements par le module
 // realtime (ADR-011) et notifications push par le module push ; limites d'envoi par le limiteur partagé (src/rate-limit).
 @Module({
-  imports: [UsersModule, InteractionsModule, VideosModule, StoriesModule, LiveModule, RealtimeModule, PushModule],
+  imports: [UsersModule, InteractionsModule, VideosModule, StoriesModule, LiveModule, CollectionsModule, RealtimeModule, PushModule],
   controllers: [MessagingController],
   providers: [
     { provide: ConversationRepository, useClass: PrismaConversationRepository },
@@ -38,9 +40,10 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
         videos: VideosService,
         stories: StoriesService,
         lives: LiveService,
+        collections: CollectionsService,
         events: MessagingEventPublisher,
         rateLimiter: RateLimiter,
-      ) => new MessagingService(conversations, users, interactions, videos, stories, lives, events, rateLimiter),
+      ) => new MessagingService(conversations, users, interactions, videos, stories, lives, collections, events, rateLimiter),
       inject: [
         ConversationRepository,
         UsersService,
@@ -48,6 +51,7 @@ import { MessagingRealtimeHandlers } from './interfaces/messaging-realtime.handl
         VideosService,
         StoriesService,
         LiveService,
+        CollectionsService,
         MessagingEventPublisher,
         RateLimiter,
       ],

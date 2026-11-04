@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CollectionsService } from '../../collections/application/collections.service';
+import { InMemoryCollectionRepository } from '../../collections/infrastructure/in-memory-collection.repository';
 import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { AuthService } from '../../auth/application/auth.service';
@@ -222,6 +224,7 @@ describe('AdminService', () => {
       videos,
       stories.service,
       lives.service,
+      new CollectionsService(new InMemoryCollectionRepository(), interactions, videos, users),
       new InMemoryMessagingEventPublisher(),
       new InMemoryRateLimiter(),
     );

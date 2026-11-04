@@ -27,6 +27,13 @@ struct SharedProfile: Equatable, Sendable {
     let user: UserSummary?
 }
 
+// Collection partagée dans un message (ADR-072) : `collection` nil si elle a été supprimée, est redevenue privée ou si son
+// titulaire est masqué au lecteur.
+struct SharedCollection: Equatable, Sendable {
+    let id: String
+    let collection: VideoCollection?
+}
+
 // Vidéo partagée dans un message ; `available` faux si elle a été supprimée depuis (autres champs nuls).
 struct SharedVideo: Equatable, Sendable {
     let id: String
@@ -53,6 +60,8 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     var live: SharedLive? = nil
     // Profil partagé (ADR-069).
     var profile: SharedProfile? = nil
+    // Collection partagée (ADR-072).
+    var collection: SharedCollection? = nil
     // Dans un groupe (ADR-059) : l'expéditeur (nil si son compte n'existe plus) et la ligne d'événement.
     var sender: UserSummary? = nil
     var event: GroupEvent? = nil
@@ -60,7 +69,10 @@ struct DirectMessage: Identifiable, Equatable, Sendable {
     // Aperçu d'une ligne de la boîte de réception ; dans un groupe, le nom de l'expéditeur (« Inès : salut »).
     func preview(ownID: String?, inGroup: Bool = false) -> String {
         if let event { return event.text(actor: sender, ownID: ownID) }
-        let text = content.isEmpty ? (live != nil ? "Live partagé" : profile != nil ? "Profil partagé" : "Vidéo partagée") : content
+        let text =
+            content.isEmpty
+            ? (live != nil ? "Live partagé" : profile != nil ? "Profil partagé" : collection != nil ? "Collection partagée" : "Vidéo partagée")
+            : content
         if senderID == ownID { return "Toi : \(text)" }
         if inGroup, let sender { return "\(sender.displayName) : \(text)" }
         return text

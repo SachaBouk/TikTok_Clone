@@ -71,6 +71,17 @@ struct ProfileUseCasesTests {
         #expect(!note.isVisible(at: now.addingTimeInterval(60)))
     }
 
+    @Test("vidéos aimées et favoris (ADR-071) : privés par défaut, réglage envoyé seul, cadenas selon le réglage")
+    func reactionListsVisibility() async throws {
+        #expect(alice.isPrivate(.likes) && alice.isPrivate(.favorites) && !alice.isPrivate(.reposts))
+        let profiles = FakeProfileRepository()
+        let set = SetReactionListVisibilityUseCase(profiles: profiles)
+        let updated = try await set(.everyone, of: .likes)
+        #expect(profiles.updates == [ProfileChanges(likesVisibility: .everyone)])
+        #expect(!updated.isPrivate(.likes) && updated.isPrivate(.favorites))
+        #expect(try await set(.everyone, of: .favorites).isPrivate(.favorites) == false)
+    }
+
     @Test("bouton d'abonnement : Suivre, Suivre en retour, Abonné(e), Ami(e)s")
     func followStatus() {
         #expect(FollowStatus(following: false, followedBy: false).title == "Suivre")
@@ -84,8 +95,10 @@ struct ProfileUseCasesTests {
     @Test("grilles : favoris et likes sur son seul profil")
     func grids() {
         #expect(ProfileGrid.available(isOwn: true) == [.videos, .privateVideos, .reposts, .favorites, .likes])
-        #expect(ProfileGrid.available(isOwn: false) == [.videos, .reposts])
+        #expect(ProfileGrid.available(isOwn: false) == [.videos, .reposts, .favorites, .likes])
         #expect(VideoList(.likes, username: "alice") == .myLikes)
+        #expect(VideoList(.likes, username: "bob", isOwn: false) == .accountLikes(username: "bob"))
+        #expect(VideoList(.favorites, username: "bob", isOwn: false) == .accountFavorites(username: "bob"))
         #expect(VideoList(.reposts, username: "bob") == .reposts(username: "bob"))
     }
 

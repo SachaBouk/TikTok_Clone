@@ -72,6 +72,8 @@
 | [ADR-068](ADR-068-suggestions-comptes-populaires.md) | Comptes suggérés complétés par des comptes populaires (complète ADR-058) | Proposé |
 | [ADR-069](ADR-069-profil-facon-tiktok-autres-comptes.md) | Profil d'un autre compte façon TikTok : comptes suggérés liés au profil, profil partagé par message (complète ADR-056, ADR-058 et ADR-018) | Proposé |
 | [ADR-070](ADR-070-son-profil-facon-tiktok-pronoms-notes.md) | Son profil façon TikTok : pronoms, notes de profil, « Trouver des amis » (complète ADR-056, ADR-069 et ADR-016) | Proposé |
+| [ADR-071](ADR-071-visibilite-videos-aimees-favoris.md) | Visibilité des vidéos aimées et des favoris (complète ADR-016, ADR-056 et ADR-069) | Proposé |
+| [ADR-072](ADR-072-collections-de-favoris.md) | Collections de favoris : module `collections`, appui long sur le signet, partage par message (complète ADR-016, ADR-003, ADR-071 et ADR-069) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

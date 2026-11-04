@@ -48,6 +48,14 @@ export class SharedProfileNotFoundError extends MessagingError {
   }
 }
 
+// Collection partagée inconnue, privée ou masquée à l'expéditeur (ADR-072) : 404.
+export class SharedCollectionNotFoundError extends MessagingError {
+  constructor(id: string) {
+    super(`Collection introuvable : ${id}`);
+    this.name = 'SharedCollectionNotFoundError';
+  }
+}
+
 export class RepliedStoryNotFoundError extends MessagingError {
   constructor(id: string) {
     super(`Story introuvable : ${id}`);

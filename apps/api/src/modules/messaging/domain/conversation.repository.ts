@@ -43,6 +43,7 @@ export abstract class ConversationRepository {
     storyId: string | null;
     liveId: string | null;
     sharedUserId: string | null;
+    sharedCollectionId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;

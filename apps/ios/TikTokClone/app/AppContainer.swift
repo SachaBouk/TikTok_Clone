@@ -30,6 +30,8 @@ final class AppContainer {
     let sounds: SoundLibraryModel
     // Comptes suggérés de l'onglet Messages (ADR-058).
     let suggestions: SuggestionsModel
+    // Ses collections de favoris (ADR-072).
+    let collections: CollectionsModel
     // Brouillons de la création, sur l'iPhone (ADR-065).
     let drafts: DraftsModel
     // « Je n'aime pas » sur les commentaires, sur l'appareil (ADR-060).
@@ -53,6 +55,7 @@ final class AppContainer {
     private let relationships: any RelationshipRepository
     private let reports: any ReportRepository
     private let videoLists: any VideoListRepository
+    private let collectionRepository: any CollectionRepository
     private let uploads: any UploadStore
     private let activityRepository: any ActivityRepository
     private let messagingRepository: any MessagingRepository
@@ -105,6 +108,8 @@ final class AppContainer {
         suggestions = SuggestionsModel(
             load: LoadSuggestionsUseCase(suggestions: suggestionRepository), store: UserDefaultsPreferencesStore(), session: session)
         drafts = DraftsModel(store: FileDraftStore(), session: session)
+        collectionRepository = RemoteCollectionRepository(client: client)
+        collections = CollectionsModel(useCase: CollectionsUseCase(collections: collectionRepository), session: session)
         let analyticsService: any AnalyticsService =
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
@@ -212,6 +217,7 @@ final class AppContainer {
                 searchHistory.clear()
                 sounds.reset()
                 suggestions.reset()
+                collections.reset()
                 drafts.reset()
                 commentDislikes.reset()
                 playbackOptions.reset()
@@ -272,6 +278,36 @@ final class AppContainer {
             interactions: videoInteractions,
             session: session
         )
+    }
+
+    // « Envoyer à » d'une collection publique (ADR-072).
+    func makeSendCollectionViewModel(collection: VideoCollection) -> SendVideoViewModel {
+        SendVideoViewModel(
+            item: .collection(collection),
+            messaging: messaging,
+            loadFollows: LoadFollowsUseCase(relationships: relationships),
+            share: ShareVideoByMessageUseCase(messaging: messagingRepository),
+            shareLive: nil,
+            shareCollection: ShareCollectionByMessageUseCase(messaging: messagingRepository),
+            interactions: videoInteractions,
+            session: session
+        )
+    }
+
+    // Page d'une collection (ADR-072) et ses vidéos, au format du feed.
+    func makeCollectionDetailModel(_ route: CollectionRoute) -> CollectionDetailModel {
+        CollectionDetailModel(
+            route: route, useCase: collectionsUseCase,
+            videos: makeVideoPageList(.collection(id: route.id)), session: session)
+    }
+
+    // Collections d'un autre compte (onglet favoris de son profil, ADR-072).
+    var collectionsUseCase: CollectionsUseCase { CollectionsUseCase(collections: collectionRepository) }
+
+    // Une liste de vidéos paginée (favoris à choisir, vidéos d'une collection).
+    func makeVideoPageList(_ list: VideoList) -> PagedList<FeedVideo> {
+        let load = LoadVideoPageUseCase(videos: videoLists)
+        return PagedList(session: session) { cursor in try await load(list, cursor: cursor).asPage }
     }
 
     // « Envoyer à » d'un profil (ADR-069).
@@ -661,6 +697,7 @@ final class AppContainer {
         AccountSettingsViewModel(
             deleteAccount: DeleteAccountUseCase(profiles: profiles, auth: auth),
             discardUploads: DiscardUploadsUseCase(store: uploads),
+            setListVisibility: SetReactionListVisibilityUseCase(profiles: profiles),
             session: session
         )
     }

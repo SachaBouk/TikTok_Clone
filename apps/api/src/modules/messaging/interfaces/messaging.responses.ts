@@ -13,6 +13,7 @@ import type {
   MessageSearchResultDto,
   MessageSearchResultListDto,
   MessagePageDto,
+  MessageCollectionDto,
   MessageProfileDto,
   SharedVideoDto,
   UnreadConversationsDto,
@@ -21,7 +22,7 @@ import { MessageLiveResponse, toMessageLiveDto } from '../../live/interfaces/liv
 import { MessageStoryResponse, toMessageStoryDto } from '../../stories/interfaces/stories.responses';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { ConversationWithParticipant, GroupInfo, MessageSearchResult } from '../application/messaging.service';
-import type { MessageItem, MessagingBadges, SharedProfile, SharedVideo } from '../domain/messaging';
+import type { MessageItem, MessagingBadges, SharedCollection, SharedProfile, SharedVideo } from '../domain/messaging';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 // Objets imbriqués sans description : elle produirait un `allOf`, que le client Swift envelopperait (voir CLAUDE.md).
@@ -73,6 +74,27 @@ export class MessageProfileResponse implements MessageProfileDto {
   user?: UserSummaryResponse;
 }
 
+// Collection partagée (ADR-072).
+export class MessageCollectionResponse implements MessageCollectionDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  available!: boolean;
+
+  @ApiPropertyOptional({ example: 'Recettes' })
+  name?: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uri' })
+  coverUrl?: string | null;
+
+  @ApiPropertyOptional({ type: 'integer', minimum: 0 })
+  videosCount?: number;
+
+  @ApiPropertyOptional({ type: UserSummaryResponse })
+  owner?: UserSummaryResponse;
+}
+
 export class MessageResponse implements MessageDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -100,6 +122,10 @@ export class MessageResponse implements MessageDto {
   // Profil partagé (ADR-069).
   @ApiPropertyOptional({ type: MessageProfileResponse })
   profile?: MessageProfileResponse;
+
+  // Collection partagée (ADR-072).
+  @ApiPropertyOptional({ type: MessageCollectionResponse })
+  collection?: MessageCollectionResponse;
 
   @ApiPropertyOptional({
     format: 'uuid',
@@ -235,6 +261,7 @@ export function toMessageDto({
   repliedStory,
   sharedLive,
   sharedProfile,
+  sharedCollection,
   clientMessageId,
   sender,
   eventUser,
@@ -250,6 +277,7 @@ export function toMessageDto({
   if (repliedStory) dto.story = toMessageStoryDto(repliedStory.id, repliedStory.story ?? undefined);
   if (sharedLive) dto.live = toMessageLiveDto(sharedLive.id, sharedLive.item);
   if (sharedProfile) dto.profile = toMessageProfileDto(sharedProfile);
+  if (sharedCollection) dto.collection = toMessageCollectionDto(sharedCollection);
   if (clientMessageId) dto.clientMessageId = clientMessageId;
   if (sender) dto.sender = toUserSummary(sender);
   if (message.event) {
@@ -263,6 +291,18 @@ export function toMessageDto({
 
 function toMessageProfileDto({ id, user }: SharedProfile): MessageProfileDto {
   return user ? { id, available: true, user: toUserSummary(user) } : { id, available: false };
+}
+
+function toMessageCollectionDto({ id, collection }: SharedCollection): MessageCollectionDto {
+  if (!collection) return { id, available: false };
+  return {
+    id,
+    available: true,
+    name: collection.collection.name,
+    coverUrl: collection.coverUrl,
+    videosCount: collection.collection.videosCount,
+    owner: toUserSummary(collection.owner),
+  };
 }
 
 function toSharedVideoDto({ id, video, author }: SharedVideo): SharedVideoDto {

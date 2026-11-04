@@ -20,6 +20,10 @@ struct ProfileView: View {
     @State private var isChoosingPhoto = false
     @State private var editingField: ProfileField?
     @State private var isEditingNote = false
+    // Onglet favoris (ADR-072) : sous-onglet choisi, collections d'un autre compte (nil tant qu'elles ne sont pas lues).
+    @State private var favoritesSegment: FavoritesSegments.Segment = .publications
+    @State private var profileCollections: [VideoCollection]?
+    @State private var isCreatingCollection = false
     // Profil d'un autre (ADR-069) : rangée des comptes suggérés dépliée, sa liste complète, et feuille de partage (l'action
     // choisie dedans — signaler, bloquer, écrire, se connecter — s'enchaîne une fois la feuille fermée).
     @State private var showsSuggestions = false
@@ -63,6 +67,14 @@ struct ProfileView: View {
             }
             .navigationDestination(isPresented: $isEditing) {
                 EditProfileView(viewModel: editModel)
+            }
+            .task(id: viewModel.selectedGrid == .favorites) {
+                if viewModel.selectedGrid == .favorites { await loadCollections() }
+            }
+            .sheet(isPresented: $isCreatingCollection) {
+                CreateCollectionSheet(container: container) { collection in
+                    navigationPath?.wrappedValue.append(CollectionRoute(id: collection.id, preview: collection))
+                }
             }
             .sheet(isPresented: $isEditingNote) {
                 ProfileNoteEditor(viewModel: editModel)
@@ -299,6 +311,72 @@ struct ProfileView: View {
                     selection: viewModel.selectedGrid
                 ) { grid in Task { await viewModel.select(grid) } }
             }
+            if viewModel.selectedGrid == .favorites {
+                favoritesContent
+            } else if viewModel.isLocked(viewModel.selectedGrid) {
+                lockedGrid(viewModel.selectedGrid)
+            } else {
+                videoGrid
+            }
+        }
+    }
+
+    // Onglet favoris (ADR-072) : « Publications » (la grille, ou le cadenas d'un autre compte qui les garde privés) et
+    // « Collections » (les siennes, ou les collections publiques d'un autre compte, même si ses favoris sont privés).
+    @ViewBuilder
+    private var favoritesContent: some View {
+        FavoritesSegments(selection: $favoritesSegment, collectionsCount: collectionsCount)
+        switch favoritesSegment {
+        case .publications:
+            if viewModel.isLocked(.favorites) { lockedGrid(.favorites) } else { videoGrid }
+        case .collections:
+            CollectionsGrid(
+                collections: viewModel.isOwn ? container.collections.mine : profileCollections ?? [],
+                isOwn: viewModel.isOwn,
+                isLoading: viewModel.isOwn ? container.collections.state == .loading : profileCollections == nil,
+                open: { collection in navigationPath?.wrappedValue.append(CollectionRoute(id: collection.id, preview: collection)) },
+                create: { isCreatingCollection = true }
+            )
+        }
+    }
+
+    private var collectionsCount: Int? {
+        viewModel.isOwn ? (container.collections.state == .loaded ? container.collections.mine.count : nil) : profileCollections?.count
+    }
+
+    // Ses collections (modèle partagé, relu à chaque affichage) ou celles d'un autre compte.
+    private func loadCollections() async {
+        if viewModel.isOwn {
+            await container.collections.reload()
+        } else if let username = viewModel.profile?.username {
+            profileCollections = try? await container.collectionsUseCase.ofProfile(username: username)
+        }
+    }
+
+    // Vidéos aimées ou favoris gardés privés par ce compte (ADR-071), comme TikTok.
+    private func lockedGrid(_ grid: ProfileGrid) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock").font(.system(size: 40, weight: .light)).foregroundStyle(.secondary)
+            Text(grid == .likes ? "Les vidéos aimées de cet utilisateur sont privées" : "Les favoris de cet utilisateur sont privés")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            Text(
+                grid == .likes
+                    ? "Les vidéos aimées par @\(viewModel.profile?.username ?? "") sont masquées."
+                    : "Les vidéos enregistrées par @\(viewModel.profile?.username ?? "") sont masquées."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 56)
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("profile.lockedGrid")
+    }
+
+    private var videoGrid: some View {
+        Group {
             VideoGrid(
                 list: viewModel.grid(viewModel.selectedGrid),
                 pending: viewModel.isOwn && viewModel.selectedGrid == .videos ? pendingPublications : [],

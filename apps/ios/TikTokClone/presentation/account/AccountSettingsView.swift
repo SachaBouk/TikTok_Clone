@@ -8,17 +8,46 @@ final class AccountSettingsViewModel {
     var errorMessage: String?
     private(set) var isDeleting = false
 
+    private(set) var isSavingVisibility = false
+
     private let deleteAccount: DeleteAccountUseCase
     private let discardUploads: DiscardUploadsUseCase
+    private let setListVisibility: SetReactionListVisibilityUseCase?
     private let session: SessionStore
 
-    init(deleteAccount: DeleteAccountUseCase, discardUploads: DiscardUploadsUseCase, session: SessionStore) {
+    init(
+        deleteAccount: DeleteAccountUseCase, discardUploads: DiscardUploadsUseCase,
+        setListVisibility: SetReactionListVisibilityUseCase? = nil, session: SessionStore
+    ) {
         self.deleteAccount = deleteAccount
         self.discardUploads = discardUploads
+        self.setListVisibility = setListVisibility
         self.session = session
     }
 
     var username: String? { session.profile?.username }
+
+    // Qui voit ses vidéos aimées ou ses favoris (ADR-071) ; privés tant que le profil n'est pas chargé.
+    func visibility(of grid: ProfileGrid) -> VideoVisibility {
+        session.profile.map { $0.isPrivate(grid) ? .onlyMe : .everyone } ?? .onlyMe
+    }
+
+    // Enregistré aussitôt ; le profil de la session suit (son profil, ses paramètres).
+    func setVisibility(_ visibility: VideoVisibility, of grid: ProfileGrid) async {
+        guard let setListVisibility, !isSavingVisibility, visibility != self.visibility(of: grid) else { return }
+        isSavingVisibility = true
+        defer { isSavingVisibility = false }
+        do {
+            session.update(try await setListVisibility(visibility, of: grid))
+        } catch {
+            let error = AppError.from(error)
+            if error == .sessionExpired {
+                session.sessionExpired()
+            } else {
+                errorMessage = error.message
+            }
+        }
+    }
 
     func signOut() async {
         await session.signOut()
@@ -88,26 +117,21 @@ struct AccountSettingsView: View {
                     Label("Comptes bloqués", systemImage: "nosign")
                 }
                 .accessibilityIdentifier("settings.blocked")
-                // Toujours privés (ADR-016), sans réglage : affichés pour le dire.
-                LabeledContent {
-                    Text("Toi uniquement")
-                } label: {
-                    Label {
-                        Text("Vidéos aimées")
-                    } icon: {
-                        // Dans un `LabeledContent`, l'icône prendrait la teinte de l'app.
-                        Image(systemName: "heart.fill").foregroundStyle(Color(.systemGray))
+                // Qui voit ses vidéos aimées et ses favoris (ADR-071), chacun sur sa page.
+                ForEach([ProfileGrid.likes, .favorites], id: \.self) { grid in
+                    NavigationLink(value: AccountRoute.listVisibility(grid)) {
+                        LabeledContent {
+                            Text(viewModel.visibility(of: grid).label)
+                        } label: {
+                            Label {
+                                Text(ReactionListVisibilityView.title(grid))
+                            } icon: {
+                                // Dans un `LabeledContent`, l'icône prendrait la teinte de l'app.
+                                Image(systemName: grid == .likes ? "heart.fill" : "bookmark.fill").foregroundStyle(Color(.systemGray))
+                            }
+                        }
                     }
-                }
-                LabeledContent {
-                    Text("Toi uniquement")
-                } label: {
-                    Label {
-                        Text("Favoris")
-                    } icon: {
-                        // Dans un `LabeledContent`, l'icône prendrait la teinte de l'app.
-                        Image(systemName: "bookmark.fill").foregroundStyle(Color(.systemGray))
-                    }
+                    .accessibilityIdentifier("settings.\(grid.rawValue)Visibility")
                 }
             }
             Section {
@@ -210,6 +234,60 @@ struct SettingsLabelStyle: LabelStyle {
                 .frame(width: 26)
             configuration.title
                 .font(.body.weight(.medium))
+        }
+    }
+}
+
+// « Vidéos aimées » ou « Vidéos favorites » (ADR-071) : « Tout le monde » ou « Toi uniquement », enregistré au toucher.
+struct ReactionListVisibilityView: View {
+    let grid: ProfileGrid
+    @State var viewModel: AccountSettingsViewModel
+
+    static func title(_ grid: ProfileGrid) -> String {
+        grid == .likes ? "Vidéos aimées" : "Vidéos favorites"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(VideoVisibility.allCases, id: \.self) { visibility in
+                    Button {
+                        Task { await viewModel.setVisibility(visibility, of: grid) }
+                    } label: {
+                        HStack {
+                            Text(visibility.label).foregroundStyle(.primary)
+                            Spacer()
+                            if viewModel.visibility(of: grid) == visibility {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Color.brandPink)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .disabled(viewModel.isSavingVisibility)
+                    .accessibilityAddTraits(viewModel.visibility(of: grid) == visibility ? .isSelected : [])
+                    .accessibilityIdentifier("listVisibility.\(visibility.rawValue)")
+                }
+            } header: {
+                Text(grid == .likes ? "Qui peut voir les vidéos que tu aimes" : "Qui peut voir tes vidéos favorites")
+            } footer: {
+                Text(
+                    grid == .likes
+                        ? "« Tout le monde » : l'onglet ♡ de ton profil est visible des autres. Les vidéos privées n'y apparaissent jamais."
+                        : "« Tout le monde » : l'onglet des favoris de ton profil est visible des autres. Les vidéos privées n'y apparaissent jamais."
+                )
+            }
+        }
+        // La teinte de l'app colorerait le texte des boutons (piège rencontré).
+        .tint(.primary)
+        .navigationTitle(Self.title(grid))
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            Self.title(grid),
+            isPresented: Binding(get: { viewModel.errorMessage != nil }, set: { if !$0 { viewModel.errorMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "")
         }
     }
 }

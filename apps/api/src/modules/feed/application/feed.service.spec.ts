@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CollectionNotFoundError, InvalidCollectionNameError, TooManyCollectionVideosError } from '../../collections/domain/collection.errors';
+import { CollectionsService } from '../../collections/application/collections.service';
+import { InMemoryCollectionRepository } from '../../collections/infrastructure/in-memory-collection.repository';
 import { inMemoryStories, publishTestStory } from '../../stories/infrastructure/in-memory-stories';
 import { InMemoryProfileCountersPublisher } from '../../interactions/infrastructure/in-memory-profile-counters-publisher';
 import { InteractionsService } from '../../interactions/application/interactions.service';
@@ -21,7 +24,7 @@ import { InvalidHashtagError } from '../../videos/domain/video.errors';
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
 import { encodeCursor, InvalidFeedCursorError } from '../domain/feed-cursor';
-import { FeedItemNotFoundError } from '../domain/feed.errors';
+import { FeedItemNotFoundError, ReactionListPrivateError } from '../domain/feed.errors';
 import { encodeListCursor } from '../domain/list-cursor';
 import { seededShuffle } from '../domain/seeded-shuffle';
 import { InMemoryFeedSnapshotStore } from '../infrastructure/in-memory-feed-snapshot.store';
@@ -55,6 +58,8 @@ describe('FeedService', () => {
   let snapshots: InMemoryFeedSnapshotStore;
   let interactions: InteractionsService;
   let feed: FeedService;
+  let collections: InMemoryCollectionRepository;
+  let collectionsService: CollectionsService;
   let stories: ReturnType<typeof inMemoryStories>;
 
   // Crée une vidéo publiée (`ready`) directement dans le dépôt en mémoire.
@@ -105,8 +110,9 @@ describe('FeedService', () => {
       new InMemoryNotificationPublisher(),
       suspended,
     );
+    const interactionRepository = new InMemoryInteractionRepository(videoRepository, users);
     interactions = new InteractionsService(
-      new InMemoryInteractionRepository(videoRepository, users),
+      interactionRepository,
       videos,
       usersService,
       notifications,
@@ -115,7 +121,16 @@ describe('FeedService', () => {
       new InMemoryProfileCountersPublisher(),
     );
     stories = inMemoryStories(usersService, interactions);
-    feed = new FeedService(snapshots, videos, usersService, interactions, stories.service);
+    collections = new InMemoryCollectionRepository((userId, videoId) => interactionRepository.reactions.favorite.has(`${userId}:${videoId}`));
+    collectionsService = new CollectionsService(collections, interactions, videos, usersService);
+    feed = new FeedService(
+      snapshots,
+      videos,
+      usersService,
+      interactions,
+      stories.service,
+      new CollectionsService(collections, interactions, videos, usersService),
+    );
   });
 
   it('parcourt toutes les vidéos publiées, sans doublon ni oubli, page par page', async () => {
@@ -396,6 +411,113 @@ describe('FeedService', () => {
       expect((await feed.getPage(undefined, 10, 'alice')).items).toEqual([]);
       expect((await feed.listFavorites('bob', undefined, 10)).items).toEqual([]);
       await expect(interactions.setReaction('bob', id, 'like', true)).rejects.toThrow();
+    });
+  });
+
+  describe('vidéos aimées et favoris visibles des autres (ADR-071)', () => {
+    const ids = (page: { items: { video: { id: string } }[] }) => page.items.map((i) => i.video.id);
+
+    it('privés par défaut : seul leur titulaire les voit, les autres et les invités reçoivent ReactionListPrivateError', async () => {
+      const a = await publish('bob');
+      await interactions.setReaction('alice', a, 'like', true);
+      await interactions.setReaction('alice', a, 'favorite', true);
+      expect(ids(await feed.listAccountReactions('like', 'alice', undefined, 10, 'alice'))).toEqual([a]);
+      for (const viewer of ['bob', null]) {
+        await expect(feed.listAccountReactions('like', 'alice', undefined, 10, viewer)).rejects.toBeInstanceOf(ReactionListPrivateError);
+        await expect(feed.listAccountReactions('favorite', 'alice', undefined, 10, viewer)).rejects.toBeInstanceOf(ReactionListPrivateError);
+      }
+      await expect(feed.listAccountReactions('like', 'inconnu', undefined, 10, 'bob')).rejects.toBeInstanceOf(UserNotFoundError);
+    });
+
+    it('publics : visibles de tous, réglage par liste, vidéo privée d’un tiers jamais montrée, compte bloqué : liste vide', async () => {
+      const [a, secret] = [await publish('bob'), await publish('dave')];
+      for (const id of [a, secret]) await interactions.setReaction('alice', id, 'like', true);
+      await interactions.setReaction('alice', a, 'favorite', true);
+      Object.assign(videoRepository.videos.get(secret)!, { visibility: 'private' });
+      await users.update('alice', { likesVisibility: 'public' });
+
+      expect(ids(await feed.listAccountReactions('like', 'alice', undefined, 10, 'bob'))).toEqual([a]);
+      expect(ids(await feed.listAccountReactions('like', 'alice', undefined, 10, null))).toEqual([a]);
+      expect(ids(await feed.listAccountReactions('like', 'alice', undefined, 10, 'dave'))).toEqual([secret, a]);
+      await expect(feed.listAccountReactions('favorite', 'alice', undefined, 10, 'bob')).rejects.toBeInstanceOf(ReactionListPrivateError);
+
+      await interactions.setBlock('bob', 'alice', true);
+      expect(await feed.listAccountReactions('like', 'alice', undefined, 10, 'bob')).toEqual({ items: [], nextCursor: null });
+      await users.update('alice', { likesVisibility: 'private' });
+      await expect(feed.listAccountReactions('like', 'alice', undefined, 10, null)).rejects.toBeInstanceOf(ReactionListPrivateError);
+    });
+  });
+
+  describe('collections (ADR-072)', () => {
+    const ids = (page: { items: { video: { id: string } }[] }) => page.items.map((i) => i.video.id);
+
+    it('création, vidéos mises en favori, ordre récemment utilisée, image, containsVideo', async () => {
+      const [a, b] = [await publish('bob'), await publish('dave')];
+      const recettes = await collectionsService.create('alice', { name: '  Recettes   du  soir ', videoIds: [a] });
+      expect(recettes).toMatchObject({ collection: { name: 'Recettes du soir', visibility: 'private', videosCount: 1 }, coverUrl: 't' });
+      expect((await feed.listFavorites('alice', undefined, 10)).items.map((i) => i.video.id)).toEqual([a]);
+
+      const sport = await collectionsService.create('alice', { name: 'Sport', visibility: 'public' });
+      expect(sport.coverUrl).toBeNull();
+      await collectionsService.addVideos('alice', sport.collection.id, [b, b]);
+      expect((await collectionsService.listMine('alice')).map((v) => v.collection.name)).toEqual(['Sport', 'Recettes du soir']);
+      await collectionsService.addVideos('alice', recettes.collection.id, [b]);
+      const mine = await collectionsService.listMine('alice', b);
+      expect(mine.map((v) => [v.collection.name, v.collection.videosCount, v.containsVideo])).toEqual([
+        ['Recettes du soir', 2, true],
+        ['Sport', 1, true],
+      ]);
+      expect(ids(await feed.listCollectionVideos(recettes.collection.id, undefined, 10, 'alice'))).toEqual([b, a]);
+    });
+
+    it('privée : son seul titulaire ; publique : tout le monde, même avec des favoris privés ; compte bloqué : rien', async () => {
+      const a = await publish('dave');
+      const prive = await collectionsService.create('alice', { name: 'Privée', videoIds: [a] });
+      const publique = await collectionsService.create('alice', { name: 'Publique', visibility: 'public', videoIds: [a] });
+      for (const viewer of ['bob', null]) {
+        await expect(collectionsService.get(prive.collection.id, viewer)).rejects.toBeInstanceOf(CollectionNotFoundError);
+        await expect(feed.listCollectionVideos(prive.collection.id, undefined, 10, viewer)).rejects.toBeInstanceOf(CollectionNotFoundError);
+        expect((await collectionsService.listForProfile('alice', viewer)).map((v) => v.collection.name)).toEqual(['Publique']);
+        expect(ids(await feed.listCollectionVideos(publique.collection.id, undefined, 10, viewer))).toEqual([a]);
+      }
+      expect((await collectionsService.listForProfile('alice', 'alice')).map((v) => v.collection.name)).toEqual(['Publique', 'Privée']);
+      await interactions.setBlock('bob', 'alice', true);
+      expect(await collectionsService.listForProfile('alice', 'bob')).toEqual([]);
+      await expect(collectionsService.get(publique.collection.id, 'bob')).rejects.toBeInstanceOf(CollectionNotFoundError);
+    });
+
+    it('modification, retrait (le favori reste), favori retiré (la collection perd la vidéo), suppression, contrôles', async () => {
+      const [a, b] = [await publish('bob'), await publish('bob')];
+      const { collection } = await collectionsService.create('alice', { name: 'DIY', videoIds: [a, b] });
+      await expect(collectionsService.update('bob', collection.id, { name: 'X' })).rejects.toBeInstanceOf(CollectionNotFoundError);
+      await expect(collectionsService.update('alice', collection.id, { name: '   ' })).rejects.toBeInstanceOf(InvalidCollectionNameError);
+      await expect(collectionsService.create('alice', { name: 'x'.repeat(31) })).rejects.toBeInstanceOf(InvalidCollectionNameError);
+      expect(await collectionsService.update('alice', collection.id, { name: 'Bricolage', visibility: 'public' })).toMatchObject({
+        collection: { name: 'Bricolage', visibility: 'public' },
+      });
+
+      await collectionsService.removeVideos('alice', collection.id, [a]);
+      expect(ids(await feed.listCollectionVideos(collection.id, undefined, 10, 'alice'))).toEqual([b]);
+      expect(ids(await feed.listFavorites('alice', undefined, 10)).sort()).toEqual([a, b].sort());
+
+      await interactions.setReaction('alice', b, 'favorite', false);
+      expect((await collectionsService.get(collection.id, 'alice')).collection.videosCount).toBe(0);
+
+      await expect(collectionsService.addVideos('alice', collection.id, [])).rejects.toBeInstanceOf(TooManyCollectionVideosError);
+      await collectionsService.delete('alice', collection.id);
+      await expect(collectionsService.get(collection.id, 'alice')).rejects.toBeInstanceOf(CollectionNotFoundError);
+      expect(ids(await feed.listFavorites('alice', undefined, 10))).toEqual([a]);
+    });
+
+    it('partage : seule une collection publique et visible ; carte indisponible une fois privée', async () => {
+      const a = await publish('dave');
+      const { collection } = await collectionsService.create('alice', { name: 'Fifa', videoIds: [a] });
+      await expect(collectionsService.assertShareable(collection.id, 'alice')).rejects.toBeInstanceOf(CollectionNotFoundError);
+      await collectionsService.update('alice', collection.id, { visibility: 'public' });
+      await collectionsService.assertShareable(collection.id, 'bob');
+      expect((await collectionsService.getSharedPreviews([collection.id], 'bob')).get(collection.id)?.collection.name).toBe('Fifa');
+      await collectionsService.update('alice', collection.id, { visibility: 'private' });
+      expect((await collectionsService.getSharedPreviews([collection.id], 'bob')).size).toBe(0);
     });
   });
 

@@ -133,6 +133,7 @@ export class InMemoryConversationRepository extends ConversationRepository {
     storyId: string | null;
     liveId: string | null;
     sharedUserId: string | null;
+    sharedCollectionId: string | null;
     clientMessageId: string | null;
     accept: boolean;
     openRequest: boolean;
@@ -147,6 +148,7 @@ export class InMemoryConversationRepository extends ConversationRepository {
       storyId: input.storyId,
       liveId: input.liveId,
       sharedUserId: input.sharedUserId,
+      sharedCollectionId: input.sharedCollectionId,
       event: null,
       eventUserId: null,
       createdAt: new Date(),
@@ -287,6 +289,7 @@ export class InMemoryConversationRepository extends ConversationRepository {
       storyId: null,
       liveId: null,
       sharedUserId: null,
+      sharedCollectionId: null,
       event,
       eventUserId,
       createdAt: new Date(),

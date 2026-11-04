@@ -26,7 +26,9 @@ struct RemoteProfileRepository: ProfileRepository {
 
     func updateMyProfile(_ changes: ProfileChanges) async throws -> UserProfile {
         let body = Components.Schemas.UpdateProfileRequest(
-            username: changes.username, displayName: changes.displayName, bio: changes.bio, pronouns: changes.pronouns)
+            username: changes.username, displayName: changes.displayName, bio: changes.bio, pronouns: changes.pronouns,
+            likesVisibility: changes.likesVisibility.map(Components.Schemas.VideoVisibility.init),
+            favoritesVisibility: changes.favoritesVisibility.map(Components.Schemas.VideoVisibility.init))
         switch try await mappingErrors({ try await client.updateMyProfile(body: .json(body)) }) {
         case .ok(let ok): return UserProfile(try ok.body.json)
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
@@ -118,7 +120,9 @@ extension UserProfile {
             createdAt: dto.createdAt,
             likesCount: dto.likesCount,
             pronouns: dto.pronouns,
-            note: dto.note.map { ProfileNote(text: $0.text, postedAt: $0.postedAt, expiresAt: $0.expiresAt) }
+            note: dto.note.map { ProfileNote(text: $0.text, postedAt: $0.postedAt, expiresAt: $0.expiresAt) },
+            likesVisibility: VideoVisibility(dto.likesVisibility),
+            favoritesVisibility: VideoVisibility(dto.favoritesVisibility)
         )
     }
 }

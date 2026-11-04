@@ -1,3 +1,5 @@
+import type { CollectionsService } from '../../collections/application/collections.service';
+import { CollectionNotFoundError } from '../../collections/domain/collection.errors';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { LiveItem, LiveService } from '../../live/application/live.service';
 import { LiveNotFoundError } from '../../live/domain/live.errors';
@@ -48,6 +50,7 @@ import {
   RepliedStoryNotFoundError,
   SharedLiveNotFoundError,
   SharedProfileNotFoundError,
+  SharedCollectionNotFoundError,
   RequestLimitReachedError,
   SharedVideoNotFoundError,
 } from '../domain/messaging.errors';
@@ -119,6 +122,8 @@ export interface SendMessageInput {
   liveId?: string;
   // Profil partagé (ADR-069) : un compte visible de l'expéditeur.
   profileId?: string;
+  // Collection publique partagée (ADR-072).
+  collectionId?: string;
   // Identifiant d'envoi choisi par l'app (ADR-044) : renvoyer le même rend le message déjà créé.
   clientMessageId?: string;
 }
@@ -144,6 +149,7 @@ export class MessagingService {
     private readonly videos: VideosService,
     private readonly stories: StoriesService,
     private readonly lives: LiveService,
+    private readonly collections: CollectionsService,
     private readonly events: MessagingEventPublisher,
     private readonly rateLimiter: RateLimiter,
     private readonly now: () => number = () => Date.now(),
@@ -238,8 +244,9 @@ export class MessagingService {
     const storyId = input.storyId ?? null;
     const liveId = input.liveId ?? null;
     const sharedUserId = input.profileId ?? null;
-    // Réponse à une story : texte obligatoire. Sinon : texte, vidéo, live ou profil partagé.
-    if (storyId ? !content : !content && !sharedVideoId && !liveId && !sharedUserId) throw new EmptyMessageError();
+    const sharedCollectionId = input.collectionId ?? null;
+    // Réponse à une story : texte obligatoire. Sinon : texte, vidéo, live, profil ou collection partagés.
+    if (storyId ? !content : !content && !sharedVideoId && !liveId && !sharedUserId && !sharedCollectionId) throw new EmptyMessageError();
 
     const view = await this.conversations.findView(conversationId, userId);
     if (!view) throw new ConversationNotFoundError(conversationId);
@@ -290,6 +297,16 @@ export class MessagingService {
       if (!profile || (await this.interactions.getHiddenAccountIds(userId)).has(profile.id)) throw new SharedProfileNotFoundError(sharedUserId);
     }
 
+    // Collection partagée (ADR-072) : publique et visible de l'expéditeur.
+    if (sharedCollectionId) {
+      try {
+        await this.collections.assertShareable(sharedCollectionId, userId);
+      } catch (error) {
+        if (error instanceof CollectionNotFoundError) throw new SharedCollectionNotFoundError(sharedCollectionId);
+        throw error;
+      }
+    }
+
     if (openRequest) await this.limit(`request:${userId}`, REQUEST_RATE_LIMITS);
     await this.limit(`message:${userId}`, MESSAGE_RATE_LIMITS);
 
@@ -301,6 +318,7 @@ export class MessagingService {
       storyId,
       liveId,
       sharedUserId,
+      sharedCollectionId,
       clientMessageId,
       accept,
       openRequest,
@@ -733,6 +751,8 @@ export class MessagingService {
     const stories = storyIds.length > 0 ? await this.stories.getStoryPreviews(storyIds, viewerId) : new Map<string, ActiveStory>();
     const videoIds = [...new Set(messages.flatMap((m) => (m.sharedVideoId ? [m.sharedVideoId] : [])))];
     const profileIds = messages.flatMap((m) => (m.sharedUserId ? [m.sharedUserId] : []));
+    const collectionIds = messages.flatMap((m) => (m.sharedCollectionId ? [m.sharedCollectionId] : []));
+    const collections = await this.collections.getSharedPreviews(collectionIds, viewerId);
     const [published, hidden] =
       videoIds.length || profileIds.length
         ? await Promise.all([
@@ -752,10 +772,14 @@ export class MessagingService {
       const sharedProfile = message.sharedUserId
         ? { id: message.sharedUserId, user: hidden.has(message.sharedUserId) ? null : (users.get(message.sharedUserId) ?? null) }
         : null;
+      // Collection partagée : indisponible une fois supprimée, redevenue privée ou masquée au lecteur.
+      const sharedCollection = message.sharedCollectionId
+        ? { id: message.sharedCollectionId, collection: collections.get(message.sharedCollectionId) ?? null }
+        : null;
       const people: Pick<MessageItem, 'sender' | 'eventUser'> = inGroup
         ? { sender: users.get(message.senderId) ?? null, ...(message.eventUserId ? { eventUser: users.get(message.eventUserId) ?? null } : {}) }
         : {};
-      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory, sharedLive, sharedProfile, ...people };
+      if (!message.sharedVideoId) return { message, sharedVideo: null, repliedStory, sharedLive, sharedProfile, sharedCollection, ...people };
       const video = videos.get(message.sharedVideoId) ?? null;
       const author = video ? (users.get(video.userId) ?? null) : null;
       // Vidéo supprimée, son auteur, ou compte bloqué : « indisponible ».
@@ -765,6 +789,7 @@ export class MessagingService {
         repliedStory,
         sharedLive,
         sharedProfile,
+        sharedCollection,
         ...people,
       };
     });

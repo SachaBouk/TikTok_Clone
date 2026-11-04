@@ -1,3 +1,5 @@
+import type { VideoVisibility } from './videos.js';
+
 // Profil public d'un compte (ADR-016 : nom, pseudo, photo, bio, followers, suivis).
 export interface UserProfileDto {
   id: string;
@@ -13,6 +15,9 @@ export interface UserProfileDto {
   pronouns: string | null;
   // Note de profil visible 24 h (ADR-070) ; absente sans note ou une fois expirée.
   note?: ProfileNoteDto;
+  // Qui peut voir ses vidéos aimées et ses favoris (ADR-071).
+  likesVisibility: VideoVisibility;
+  favoritesVisibility: VideoVisibility;
   createdAt: string;
 }
 
