@@ -13,6 +13,8 @@ struct FeedView: View {
     let emptyState: FeedEmptyState
     // « Pour toi » : indication « Balaie vers le haut » sur la première vidéo, une fois par installation (ADR-055).
     let showsSwipeHint: Bool
+    // « Pour toi » : carrousel de comptes suggérés de temps en temps (`SuggestionCarouselRules`), compte connecté.
+    let showsSuggestionCarousel: Bool
     @State private var scrolledID: String?
     @State private var commentsVideo: FeedVideo?
     @State private var shareVideo: FeedVideo?
@@ -38,7 +40,7 @@ struct FeedView: View {
 
     init(
         viewModel: FeedViewModel, pool: AVPlayerPool, interactions: VideoInteractionsModel, container: AppContainer, isTabActive: Bool,
-        allowsRefresh: Bool = true, emptyState: FeedEmptyState = .feed, showsSwipeHint: Bool = false
+        allowsRefresh: Bool = true, emptyState: FeedEmptyState = .feed, showsSwipeHint: Bool = false, showsSuggestionCarousel: Bool = false
     ) {
         _viewModel = State(initialValue: viewModel)
         self.pool = pool
@@ -48,6 +50,13 @@ struct FeedView: View {
         self.allowsRefresh = allowsRefresh
         self.emptyState = emptyState
         self.showsSwipeHint = showsSwipeHint
+        self.showsSuggestionCarousel = showsSuggestionCarousel
+    }
+
+    // Suggestions à voir : le carrousel a sa place dans les pages.
+    private var hasSuggestions: Bool {
+        showsSuggestionCarousel && session.isSignedIn
+            && !container.suggestions.visible(blocked: interactions.blockedUserIDs).isEmpty
     }
 
     var body: some View {
@@ -66,6 +75,14 @@ struct FeedView: View {
         // Balayage vers la gauche : profil de l'auteur de la vidéo affichée (pas pendant le ×2 ni l'affichage allégé).
         .authorProfileSwipe(author: swipeAuthor, container: container) { openProfile($0.username) }
         .task { await viewModel.start() }
+        // Suggestions chargées une fois par session (aussi après un changement de compte, qui les remet à zéro). Tâche
+        // détachée de la vue : `.task(id:)` sur cet état s'annulait lui-même dès le début du chargement (piège rencontré).
+        .onChange(of: showsSuggestionCarousel && session.isSignedIn && container.suggestions.state == .idle, initial: true) { _, needsLoad in
+            if needsLoad { Task { await container.suggestions.loadIfNeeded() } }
+        }
+        .onChange(of: hasSuggestions, initial: true) { _, shows in
+            viewModel.setShowsSuggestions(shows)
+        }
         .onChange(of: viewModel.currentEntryID) { _, id in
             if scrolledID != id { scrolledID = id }
         }
@@ -176,46 +193,18 @@ struct FeedView: View {
     private func pages(bottomInset: CGFloat, topInset: CGFloat) -> some View {
         ScrollView(.vertical) {
             LazyVStack(spacing: 0) {
-                ForEach(viewModel.entries) { entry in
-                    FeedPageView(
-                        video: interactions.display(entry.video),
-                        player: pool.player(for: entry.video.id),
-                        showsPauseIndicator: entry.id == viewModel.currentEntryID && viewModel.isPaused
-                            && !interactions.reportedVideoIDs.contains(entry.video.id),
-                        bottomInset: bottomInset,
-                        showsFollowButton: !interactions.isOwn(entry.video),
-                        actions: .init(
-                            interactions: interactions,
-                            video: entry.video,
-                            togglePause: { viewModel.togglePause() },
-                            comments: { commentsVideo = interactions.display(entry.video) },
-                            share: { shareVideo = interactions.display(entry.video) },
-                            alert: { alertMessage = $0 },
-                            openHashtag: { name in
-                                if let navigationPath {
-                                    navigationPath.wrappedValue.append(HashtagRoute(name: name))
-                                } else {
-                                    hashtagRoute = HashtagRoute(name: name)
-                                }
-                            },
-                            openMention: { openProfile($0) },
-                            gift: { openGifts(entry.video) },
-                            // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
-                            openStories: { container.router.openStories([entry.video.author], source: .feed) },
-                            openMenu: { menuVideo = interactions.display(entry.video) }
-                        ),
-                        // Barre de progression : la vidéo courante seulement.
-                        progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
-                        revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
-                            ? { interactions.showReported(videoID: entry.video.id) } : nil,
-                        options: container.playbackOptions,
-                        seek: { pool.seek(entry.video.id, to: $0) },
-                        scrubbing: { pool.setScrubbing($0, videoID: entry.video.id) },
-                        openFullScreen: entry.id == viewModel.currentEntryID && isTabActive && isOnScreen
-                            ? { withoutAnimation { fullScreenVideo = entry.video } } : nil
-                    )
-                    .containerRelativeFrame([.horizontal, .vertical])
-                    .id(entry.id)
+                ForEach(viewModel.pages) { page in
+                    switch page {
+                    case .video(let entry):
+                        videoPage(entry, bottomInset: bottomInset)
+                    case .suggestions(let id):
+                        SuggestionCarouselPage(
+                            container: container, isCurrent: id == viewModel.currentEntryID && isTabActive && isOnScreen,
+                            openProfile: { openProfile($0) }
+                        )
+                        .containerRelativeFrame([.horizontal, .vertical])
+                        .id(id)
+                    }
                 }
             }
             .scrollTargetLayout()
@@ -236,6 +225,48 @@ struct FeedView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)
+    }
+
+    private func videoPage(_ entry: FeedViewModel.Entry, bottomInset: CGFloat) -> some View {
+        FeedPageView(
+            video: interactions.display(entry.video),
+            player: pool.player(for: entry.video.id),
+            showsPauseIndicator: entry.id == viewModel.currentEntryID && viewModel.isPaused
+                && !interactions.reportedVideoIDs.contains(entry.video.id),
+            bottomInset: bottomInset,
+            showsFollowButton: !interactions.isOwn(entry.video),
+            actions: .init(
+                interactions: interactions,
+                video: entry.video,
+                togglePause: { viewModel.togglePause() },
+                comments: { commentsVideo = interactions.display(entry.video) },
+                share: { shareVideo = interactions.display(entry.video) },
+                alert: { alertMessage = $0 },
+                openHashtag: { name in
+                    if let navigationPath {
+                        navigationPath.wrappedValue.append(HashtagRoute(name: name))
+                    } else {
+                        hashtagRoute = HashtagRoute(name: name)
+                    }
+                },
+                openMention: { openProfile($0) },
+                gift: { openGifts(entry.video) },
+                // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
+                openStories: { container.router.openStories([entry.video.author], source: .feed) },
+                openMenu: { menuVideo = interactions.display(entry.video) }
+            ),
+            // Barre de progression : la vidéo courante seulement.
+            progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
+            revealReported: interactions.reportedVideoIDs.contains(entry.video.id)
+                ? { interactions.showReported(videoID: entry.video.id) } : nil,
+            options: container.playbackOptions,
+            seek: { pool.seek(entry.video.id, to: $0) },
+            scrubbing: { pool.setScrubbing($0, videoID: entry.video.id) },
+            openFullScreen: entry.id == viewModel.currentEntryID && isTabActive && isOnScreen
+                ? { withoutAnimation { fullScreenVideo = entry.video } } : nil
+        )
+        .containerRelativeFrame([.horizontal, .vertical])
+        .id(entry.id)
     }
 
     private var swipeAuthor: UserSummary? {

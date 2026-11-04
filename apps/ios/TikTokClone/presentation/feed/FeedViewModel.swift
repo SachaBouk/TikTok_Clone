@@ -17,6 +17,19 @@ final class FeedViewModel {
         let video: FeedVideo
     }
 
+    // Une page du lecteur : une vidéo, ou le carrousel de comptes suggérés (feed principal, `SuggestionCarouselRules`).
+    enum Page: Identifiable, Equatable {
+        case video(Entry)
+        case suggestions(id: String)
+
+        var id: String {
+            switch self {
+            case .video(let entry): entry.id
+            case .suggestions(let id): id
+            }
+        }
+    }
+
     enum Mode {
         case endlessFeed
         case followingFeed
@@ -34,7 +47,10 @@ final class FeedViewModel {
 
     private(set) var entries: [Entry] = []
     private(set) var loadState: LoadState = .idle
+    // Page affichée : une vidéo (`Entry.id`) ou le carrousel (`Page.suggestions`).
     private(set) var currentEntryID: String?
+    // Carrousel de comptes suggérés affiché (compte connecté avec des suggestions à voir, feed principal seulement).
+    private(set) var showsSuggestions = false
     private(set) var isPaused = false
     // Incrémenté à chaque rechargement : la vue recrée alors sa ScrollView, qui repart en haut, sur la vidéo
     // courante. Sans cela, elle garderait sa position (2e vidéo) pendant que la 1re est lue.
@@ -53,6 +69,9 @@ final class FeedViewModel {
     private var nextCursor: String?
     private var generation = 0
     private var isLoadingMore = false
+    // Vidéos ajoutées depuis le dernier rechargement, et entrées après lesquelles le carrousel s'insère.
+    private var videoCount = 0
+    private var suggestionAnchors: [String] = []
     // Onglet affiché et app au premier plan.
     private var isActive = true
     // Vidéos masquées par le voile d'un signalement : jamais lues tant qu'il est là.
@@ -100,6 +119,45 @@ final class FeedViewModel {
         entries.first { $0.id == currentEntryID }?.video
     }
 
+    // Pages du lecteur : les vidéos, et le carrousel après ses ancres quand il est affiché.
+    var pages: [Page] {
+        guard showsSuggestions, !suggestionAnchors.isEmpty else { return entries.map { .video($0) } }
+        let anchors = Set(suggestionAnchors)
+        var pages: [Page] = []
+        for entry in entries {
+            pages.append(.video(entry))
+            if anchors.contains(entry.id) { pages.append(.suggestions(id: Self.suggestionsID(after: entry.id))) }
+        }
+        return pages
+    }
+
+    var isShowingSuggestions: Bool { currentEntryID.map { anchorIndex(ofSuggestions: $0) != nil } ?? false }
+
+    private static let suggestionsPrefix = "suggestions-"
+
+    private static func suggestionsID(after entryID: String) -> String { suggestionsPrefix + entryID }
+
+    // Position de la vidéo qui précède le carrousel `id` ; nil si `id` n'est pas un carrousel affiché.
+    private func anchorIndex(ofSuggestions id: String) -> Int? {
+        guard showsSuggestions, id.hasPrefix(Self.suggestionsPrefix) else { return nil }
+        let anchor = String(id.dropFirst(Self.suggestionsPrefix.count))
+        guard suggestionAnchors.contains(anchor) else { return nil }
+        return entries.firstIndex { $0.id == anchor }
+    }
+
+    // Suggestions à voir ou non (chargées, toutes écartées, connexion) : le carrousel apparaît ou disparaît. Affiché
+    // quand il disparaît, la vidéo suivante devient courante.
+    func setShowsSuggestions(_ shows: Bool) {
+        guard shows != showsSuggestions else { return }
+        guard !shows, let currentEntryID, let index = anchorIndex(ofSuggestions: currentEntryID) else {
+            showsSuggestions = shows
+            return
+        }
+        showsSuggestions = false
+        self.currentEntryID = nil
+        show(entries[min(index + 1, entries.count - 1)].id)
+    }
+
     // Premier affichage : charge la première page si ce n'est pas déjà fait.
     func start() async {
         guard entries.isEmpty, loadState != .loading else { return }
@@ -120,6 +178,7 @@ final class FeedViewModel {
 
     func remove(videoIDs: Set<String>) {
         guard entries.contains(where: { videoIDs.contains($0.video.id) }) else { return }
+        moveSuggestionAnchors(removing: videoIDs)
         let currentIndex = entries.firstIndex { $0.id == currentEntryID }
         let wasCurrentRemoved = currentVideo.map { videoIDs.contains($0.id) } ?? false
         entries.removeAll { videoIDs.contains($0.video.id) }
@@ -134,6 +193,23 @@ final class FeedViewModel {
         }
     }
 
+    // Carrousel ancré à une vidéo retirée : il passe à la vidéo d'avant (rien avant : il disparaît).
+    private func moveSuggestionAnchors(removing videoIDs: Set<String>) {
+        let wasShowingSuggestions = isShowingSuggestions
+        var anchors: [String] = []
+        for anchor in suggestionAnchors {
+            guard let index = entries.firstIndex(where: { $0.id == anchor }) else { continue }
+            let kept = entries[...index].last { !videoIDs.contains($0.video.id) }
+            if let kept, !anchors.contains(kept.id) {
+                anchors.append(kept.id)
+                if wasShowingSuggestions, currentEntryID == Self.suggestionsID(after: anchor) {
+                    currentEntryID = Self.suggestionsID(after: kept.id)
+                }
+            }
+        }
+        suggestionAnchors = anchors
+    }
+
     // Nouvelle session (tirer pour actualiser, connexion ou déconnexion : l'état des boutons change).
     func reload() async {
         viewTask?.cancel()
@@ -142,6 +218,8 @@ final class FeedViewModel {
         entries = []
         currentEntryID = nil
         nextCursor = nil
+        videoCount = 0
+        suggestionAnchors = []
         generation += 1
         reloadCount += 1
         viewTracker = ViewTracker()
@@ -150,6 +228,10 @@ final class FeedViewModel {
 
     // La vidéo `entryID` devient la vidéo affichée (défilement).
     func show(_ entryID: String) {
+        if let anchorIndex = anchorIndex(ofSuggestions: entryID) {
+            showSuggestions(entryID, anchorIndex: anchorIndex)
+            return
+        }
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         currentEntryID = entryID
         isPaused = false
@@ -172,13 +254,28 @@ final class FeedViewModel {
         }
     }
 
+    // Carrousel affiché : aucune vidéo ne joue ; la suivante reste préchargée.
+    private func showSuggestions(_ id: String, anchorIndex: Int) {
+        currentEntryID = id
+        isPaused = false
+        viewTask?.cancel()
+        watch.finish(.swipe)
+        if isActive {
+            playback.keepLoaded(PreloadPolicy.window(around: anchorIndex, count: entries.count).map { entries[$0].video })
+            playback.pauseAll()
+        }
+        if PreloadPolicy.shouldLoadMore(currentIndex: anchorIndex, count: entries.count) {
+            Task { await loadMore() }
+        }
+    }
+
     // Défilement automatique (ADR-067) : la vidéo `videoID` vient de finir ; renvoie l'entrée suivante à afficher, si la
     // vidéo finie est bien la vidéo courante, lue (ni en pause, ni masquée, onglet affiché) et qu'il y en a une après.
     func entryAfterEnd(of videoID: String) -> String? {
         guard isActive, !isPaused, let current = currentVideo, current.id == videoID, !maskedVideoIDs.contains(videoID),
-            let index = entries.firstIndex(where: { $0.id == currentEntryID }), entries.indices.contains(index + 1)
+            case let pages = pages, let index = pages.firstIndex(where: { $0.id == currentEntryID }), pages.indices.contains(index + 1)
         else { return nil }
-        return entries[index + 1].id
+        return pages[index + 1].id
     }
 
     // Toucher la vidéo : pause ou reprise.
@@ -268,7 +365,12 @@ final class FeedViewModel {
 
     private func append(_ page: FeedPage) {
         let generation = generation
-        entries += page.videos.map { Entry(id: "\(generation)-\($0.id)", video: $0) }
+        for video in page.videos {
+            let entry = Entry(id: "\(generation)-\(video.id)", video: video)
+            entries.append(entry)
+            videoCount += 1
+            if case .endlessFeed = mode, SuggestionCarouselRules.isSlot(afterVideo: videoCount) { suggestionAnchors.append(entry.id) }
+        }
         nextCursor = page.nextCursor
     }
 

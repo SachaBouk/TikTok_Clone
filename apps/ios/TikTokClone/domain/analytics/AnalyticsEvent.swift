@@ -139,6 +139,16 @@ extension AnalyticsEvent {
         AnalyticsEvent(name: "follow_changed", properties: ["user_id": .string(userID), "active": .bool(active)])
     }
 
+    // Carrousel de comptes suggérés affiché dans le feed (nombre de cartes).
+    static func suggestionCarouselShown(count: Int) -> AnalyticsEvent {
+        AnalyticsEvent(name: "suggestion_carousel_shown", properties: ["count": .int(count)])
+    }
+
+    // Compte suggéré écarté depuis le carrousel du feed (× ou « Pas intéressé(e) »).
+    static func suggestionDismissed(userID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "suggestion_dismissed", properties: ["user_id": .string(userID), "source": .string("feed")])
+    }
+
     // Signalement envoyé (ADR-038) : type de cible et motif, jamais la précision saisie.
     static func reportSubmitted(target: ReportTarget, reason: ReportReason) -> AnalyticsEvent {
         AnalyticsEvent(name: "report_submitted", properties: ["target_type": .string(target.analyticsName), "reason": .string(reason.rawValue)])

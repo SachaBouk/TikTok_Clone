@@ -34,7 +34,7 @@ struct HomeFeedView: View {
 
     var body: some View {
         ZStack {
-            feed(forYou, shown: selection == .forYou, emptyState: .feed, showsSwipeHint: true)
+            feed(forYou, shown: selection == .forYou, emptyState: .feed, showsSwipeHint: true, showsSuggestionCarousel: true)
             if !session.isSignedIn {
                 if selection == .following { guestPrompt }
             } else if let following {
@@ -106,7 +106,9 @@ struct HomeFeedView: View {
         return options.isHolding || options.isClearMode || container.router.isSwipingToProfile ? 0 : 1
     }
 
-    private func feed(_ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false) -> some View {
+    private func feed(
+        _ viewModel: FeedViewModel, shown: Bool, emptyState: FeedEmptyState, showsSwipeHint: Bool = false, showsSuggestionCarousel: Bool = false
+    ) -> some View {
         FeedView(
             viewModel: viewModel,
             pool: container.playerPool,
@@ -114,7 +116,8 @@ struct HomeFeedView: View {
             container: container,
             isTabActive: isTabActive && shown,
             emptyState: emptyState,
-            showsSwipeHint: showsSwipeHint
+            showsSwipeHint: showsSwipeHint,
+            showsSuggestionCarousel: showsSuggestionCarousel
         )
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
