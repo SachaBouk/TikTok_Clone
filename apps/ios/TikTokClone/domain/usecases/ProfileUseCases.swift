@@ -23,8 +23,12 @@ struct UpdateProfileUseCase: Sendable {
     let profiles: any ProfileRepository
 
     // Renvoie le profil inchangé s'il n'y a rien à envoyer.
-    func callAsFunction(_ profile: UserProfile, username: String, displayName: String, bio: String) async throws -> UserProfile {
-        let changes = try ProfileRules.changes(from: profile, username: username, displayName: displayName, bio: bio).get()
+    func callAsFunction(
+        _ profile: UserProfile, username: String, displayName: String, bio: String, pronouns: String? = nil
+    ) async throws -> UserProfile {
+        let changes = try ProfileRules.changes(
+            from: profile, username: username, displayName: displayName, bio: bio, pronouns: pronouns
+        ).get()
         guard !changes.isEmpty else { return profile }
         return try await profiles.updateMyProfile(changes)
     }
@@ -43,6 +47,19 @@ struct ChangeAvatarUseCase: Sendable {
         let upload = try await profiles.createAvatarUpload(type: type, size: data.count)
         try await transport.upload(data, type: type, to: upload.uploadURL)
         return try await profiles.setAvatar(id: upload.id)
+    }
+}
+
+// Note de profil (ADR-070) : texte nettoyé (vide → retirée), puis envoyé.
+struct SetProfileNoteUseCase: Sendable {
+    let profiles: any ProfileRepository
+
+    func callAsFunction(_ text: String) async throws -> UserProfile {
+        guard let note = ProfileRules.cleanedNote(text) else { return try await profiles.removeNote() }
+        guard note.count <= ProfileRules.maxNoteLength else {
+            throw AppError.rejected("Note : \(ProfileRules.maxNoteLength) caractères au plus.")
+        }
+        return try await profiles.setNote(note)
     }
 }
 

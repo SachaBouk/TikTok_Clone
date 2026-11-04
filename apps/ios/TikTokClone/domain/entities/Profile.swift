@@ -150,13 +150,14 @@ struct CommentHistoryPage: Equatable, Sendable {
     let nextCursor: String?
 }
 
-// Modification du profil : seuls les champs renseignés changent. `bio` vide l'efface.
+// Modification du profil : seuls les champs renseignés changent. `bio` ou `pronouns` vide l'efface.
 struct ProfileChanges: Equatable, Sendable {
     var username: String?
     var displayName: String?
     var bio: String?
+    var pronouns: String?
 
-    var isEmpty: Bool { username == nil && displayName == nil && bio == nil }
+    var isEmpty: Bool { username == nil && displayName == nil && bio == nil && pronouns == nil }
 }
 
 // Photo de profil (choix du développeur : l'app recadre en carré de 512 px ; JPEG ou PNG, 5 Mio au plus).
@@ -174,11 +175,17 @@ struct AvatarUpload: Equatable, Sendable {
 // Règles du profil, alignées sur l'API (`users/domain/profile-rules.ts`). L'API reste seule juge (400 / 409).
 enum ProfileRules {
     static let maxBioLength = 80
+    // Pronoms et note de profil (ADR-070).
+    static let maxPronounsLength = 20
+    static let maxNoteLength = 60
     static let maxAvatarSize = 5 * 1024 * 1024
     static let avatarSide = 512
 
-    // Changements à envoyer (champs nettoyés et réellement modifiés), ou un message si l'un est invalide.
-    static func changes(from profile: UserProfile, username: String, displayName: String, bio: String) -> Result<ProfileChanges, AppError> {
+    // Changements à envoyer (champs nettoyés et réellement modifiés), ou un message si l'un est invalide. `pronouns` nil :
+    // inchangés.
+    static func changes(
+        from profile: UserProfile, username: String, displayName: String, bio: String, pronouns: String? = nil
+    ) -> Result<ProfileChanges, AppError> {
         let username = username.trimmingCharacters(in: .whitespaces)
         let displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -195,11 +202,22 @@ enum ProfileRules {
         if bio.count > maxBioLength {
             return .failure(.rejected("Bio : \(maxBioLength) caractères au plus."))
         }
+        let pronouns = pronouns?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let pronouns, pronouns.count > maxPronounsLength {
+            return .failure(.rejected("Pronoms : \(maxPronounsLength) caractères au plus."))
+        }
         return .success(
             ProfileChanges(
                 username: username == profile.username ? nil : username,
                 displayName: displayName == profile.displayName ? nil : displayName,
-                bio: bio == (profile.bio ?? "") ? nil : bio
+                bio: bio == (profile.bio ?? "") ? nil : bio,
+                pronouns: pronouns == nil || pronouns == (profile.pronouns ?? "") ? nil : pronouns
             ))
+    }
+
+    // Note nettoyée comme le fait l'API (espaces et retours à la ligne réduits à un espace), ou nil si elle est vide.
+    static func cleanedNote(_ text: String) -> String? {
+        let cleaned = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return cleaned.isEmpty ? nil : cleaned
     }
 }

@@ -513,6 +513,11 @@ final class AppContainer {
     }
 
     // Recherche de comptes et hashtags (ADR-049).
+    func makeFindFriendsModel() -> FindFriendsModel {
+        FindFriendsModel(
+            searchAccounts: SearchAccountsUseCase(search: search), loadVideos: LoadVideoPageUseCase(videos: videoLists), session: session)
+    }
+
     func makeSearchViewModel() -> SearchViewModel {
         SearchViewModel(
             searchAccounts: SearchAccountsUseCase(search: search),
@@ -623,6 +628,7 @@ final class AppContainer {
             updateProfile: UpdateProfileUseCase(profiles: profiles),
             changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: URLSessionAvatarUploader()),
             removeAvatar: RemoveAvatarUseCase(profiles: profiles),
+            setNote: SetProfileNoteUseCase(profiles: profiles),
             session: session,
             // Story « nouvelle photo de profil » (ADR-056) : dessinée, préparée comme une story photo, puis mise en file.
             publishStory: { [session, publishing] avatar in

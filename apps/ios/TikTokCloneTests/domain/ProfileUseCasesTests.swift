@@ -32,6 +32,45 @@ struct ProfileUseCasesTests {
         }
     }
 
+    @Test("pronoms (ADR-070) : nil = inchangés, nettoyés, vides = effacés, 20 caractères au plus")
+    func pronouns() throws {
+        #expect(try ProfileRules.changes(from: alice, username: "alice", displayName: "Alice", bio: "Bonjour").get().isEmpty)
+        #expect(
+            try ProfileRules.changes(from: alice, username: "alice", displayName: "Alice", bio: "Bonjour", pronouns: " elle ").get()
+                == ProfileChanges(pronouns: "elle"))
+        var withPronouns = alice
+        withPronouns.pronouns = "elle"
+        #expect(
+            try ProfileRules.changes(from: withPronouns, username: "alice", displayName: "Alice", bio: "Bonjour", pronouns: "elle").get()
+                .isEmpty)
+        #expect(
+            try ProfileRules.changes(from: withPronouns, username: "alice", displayName: "Alice", bio: "Bonjour", pronouns: "  ").get()
+                == ProfileChanges(pronouns: ""))
+        #expect(throws: AppError.rejected("Pronoms : 20 caractères au plus.")) {
+            try ProfileRules.changes(
+                from: alice, username: "alice", displayName: "Alice", bio: "Bonjour", pronouns: String(repeating: "x", count: 21)
+            ).get()
+        }
+    }
+
+    @Test("note (ADR-070) : espaces réduits comme l'API ; vide = retirée ; 60 caractères au plus ; visible jusqu'à son expiration")
+    func note() async throws {
+        #expect(ProfileRules.cleanedNote("  En   vacances\n au soleil ") == "En vacances au soleil")
+        #expect(ProfileRules.cleanedNote(" \n ") == nil)
+        let profiles = FakeProfileRepository()
+        let setNote = SetProfileNoteUseCase(profiles: profiles)
+        #expect(try await setNote("  Salut  tout le monde ").note?.text == "Salut tout le monde")
+        #expect(try await setNote("   ").note == nil)
+        #expect(profiles.calls == ["setNote-Salut tout le monde", "removeNote"])
+        await #expect(throws: AppError.rejected("Note : 60 caractères au plus.")) {
+            try await setNote(String(repeating: "a", count: 61))
+        }
+        let now = Date()
+        let note = ProfileNote(text: "Salut", postedAt: now, expiresAt: now.addingTimeInterval(60))
+        #expect(note.isVisible(at: now))
+        #expect(!note.isVisible(at: now.addingTimeInterval(60)))
+    }
+
     @Test("bouton d'abonnement : Suivre, Suivre en retour, Abonné(e), Ami(e)s")
     func followStatus() {
         #expect(FollowStatus(following: false, followedBy: false).title == "Suivre")

@@ -28,6 +28,8 @@ enum AccountRoute: Hashable {
     case wallet(PaywallSource)
     // Code QR de son profil (ADR-057).
     case qrCode
+    // « Trouver des amis » (ADR-070), depuis « personne + » de son profil.
+    case findFriends
     // Publications en cours (ADR-062), depuis les vignettes « Publication… » de son profil.
     case publications
     // Brouillons sur l'iPhone (ADR-065), depuis la case « Brouillons » de son profil.
@@ -94,6 +96,7 @@ extension View {
                 case .activityCenter: ActivityCenterView()
                 case .searchHistory: SearchHistoryView(history: container.searchHistory)
                 case .qrCode: ProfileQRCodeView(session: container.session)
+                case .findFriends: FindFriendsView(model: container.makeFindFriendsModel(), container: container)
                 case .viewHistory: ViewHistoryView(viewModel: container.makeViewHistoryViewModel(), container: container)
                 case .commentHistory: CommentHistoryView(viewModel: container.makeCommentHistoryViewModel(), router: container.router)
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())

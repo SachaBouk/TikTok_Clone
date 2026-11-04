@@ -20,7 +20,14 @@ import { AvatarUploadResponse } from './avatar-upload.response';
 import { UserInterestsResponse, UsernameAvailabilityResponse } from './interests.responses';
 import { UserErrorFilter } from './user-error.filter';
 import { UserProfileResponse } from './user-profile.response';
-import { CreateAvatarUploadRequest, SetAvatarRequest, SetInterestsRequest, UpdateProfileRequest, UsernameAvailabilityQuery } from './users.requests';
+import {
+  CreateAvatarUploadRequest,
+  SetAvatarRequest,
+  SetInterestsRequest,
+  SetProfileNoteRequest,
+  UpdateProfileRequest,
+  UsernameAvailabilityQuery,
+} from './users.requests';
 
 const UNAUTHORIZED = { type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' };
 const ACCOUNT_NOT_FOUND = { type: ErrorResponse, description: 'Compte supprimé.' };
@@ -51,7 +58,12 @@ export class UsersController {
   async updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateProfileRequest): Promise<UserProfileDto> {
     return toProfileDto(
       await this.usersService.profileView(
-        await this.usersService.updateProfile(user.userId, { username: body.username, displayName: body.displayName, bio: body.bio }),
+        await this.usersService.updateProfile(user.userId, {
+          username: body.username,
+          displayName: body.displayName,
+          bio: body.bio,
+          pronouns: body.pronouns,
+        }),
       ),
     );
   }
@@ -98,6 +110,25 @@ export class UsersController {
     return toProfileDto(await this.usersService.profileView(await this.usersService.removeAvatar(user.userId)));
   }
 
+  // Note de profil (ADR-070) : publiée ou remplacée, visible de tous pendant 24 h.
+  @Put('me/note')
+  @ApiOkResponse({ type: UserProfileResponse, description: 'Profil à jour, avec la note.' })
+  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Note vide ou de plus de 60 caractères.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
+  async setMyNote(@CurrentUser() user: AuthenticatedUser, @Body() body: SetProfileNoteRequest): Promise<UserProfileDto> {
+    return toProfileDto(await this.usersService.profileView(await this.usersService.setNote(user.userId, body.text)));
+  }
+
+  // Retire la note (idempotent).
+  @Delete('me/note')
+  @ApiOkResponse({ type: UserProfileResponse, description: 'Profil à jour, sans note.' })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse(ACCOUNT_NOT_FOUND)
+  async removeMyNote(@CurrentUser() user: AuthenticatedUser): Promise<UserProfileDto> {
+    return toProfileDto(await this.usersService.profileView(await this.usersService.removeNote(user.userId)));
+  }
+
   // Centres d'intérêt du compte (ADR-055), privés.
   @Get('me/interests')
   @ApiOkResponse({ type: UserInterestsResponse })
@@ -137,7 +168,7 @@ export class UsersController {
 }
 
 // Mapping explicite : un champ ajouté au type de domaine n'est pas exposé par l'API sans le vouloir.
-function toProfileDto({ user, likesCount }: UserProfileView): UserProfileDto {
+function toProfileDto({ user, likesCount, pronouns, note }: UserProfileView): UserProfileDto {
   return {
     id: user.id,
     username: user.username,
@@ -147,6 +178,8 @@ function toProfileDto({ user, likesCount }: UserProfileView): UserProfileDto {
     followersCount: user.followersCount,
     followingCount: user.followingCount,
     likesCount,
+    pronouns,
+    ...(note && { note: { text: note.text, postedAt: note.postedAt.toISOString(), expiresAt: note.expiresAt.toISOString() } }),
     createdAt: user.createdAt.toISOString(),
   };
 }

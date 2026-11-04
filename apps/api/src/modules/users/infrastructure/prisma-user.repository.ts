@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { violatedUniqueConstraint } from '../../../database/prisma-errors';
 import { PrismaService } from '../../../database/prisma.service';
-import type { ProfileChanges, User } from '../domain/user';
+import type { ProfileChanges, ProfileDetails, User } from '../domain/user';
 import { UsernameTakenError } from '../domain/user.errors';
 import { UserRepository } from '../domain/user.repository';
 
@@ -34,6 +34,10 @@ export class PrismaUserRepository extends UserRepository {
   findByIds(ids: string[]): Promise<User[]> {
     if (ids.length === 0) return Promise.resolve([]);
     return this.prisma.user.findMany({ where: { id: { in: ids } }, select: userSelect });
+  }
+
+  findProfileDetails(id: string): Promise<ProfileDetails | null> {
+    return this.prisma.user.findUnique({ where: { id }, select: { pronouns: true, noteText: true, notePostedAt: true } });
   }
 
   async update(id: string, changes: ProfileChanges): Promise<User | null> {

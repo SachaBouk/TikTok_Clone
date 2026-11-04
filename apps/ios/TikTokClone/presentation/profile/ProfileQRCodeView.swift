@@ -7,6 +7,9 @@ import SwiftUI
 struct ProfileQRCodeView: View {
     let session: SessionStore
     var account: UserSummary? = nil
+    // Son code (ADR-070, « Utiliser un code QR ») : « Scanner » ouvre le scanner, qui pousse le profil scanné.
+    @Environment(\.navigationPath) private var navigationPath
+    @State private var isScanning = false
 
     private var shown: UserSummary? {
         account ?? session.profile.map { UserSummary(id: $0.id, username: $0.username, displayName: $0.displayName, avatarURL: $0.avatarURL) }
@@ -56,6 +59,20 @@ struct ProfileQRCodeView: View {
         .background(LinearGradient(colors: [.cyan.opacity(0.35), .pink.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
         .navigationTitle("Code QR")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if account == nil, navigationPath != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Scanner", systemImage: "qrcode.viewfinder") { isScanning = true }
+                        .accessibilityIdentifier("qrCode.scan")
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $isScanning) {
+            QRCodeScannerView { username in
+                isScanning = false
+                navigationPath?.wrappedValue.append(ProfileRoute(username: username))
+            }
+        }
     }
 }
 

@@ -231,7 +231,7 @@ struct MainTabView: View {
         .livePresenter(container)
         // Création (ADR-062), par-dessus les onglets ; une vidéo publiée ouvre le profil (publication en cours).
         .fullScreenCover(item: $router.presentedCreation) { route in
-            CreationScreen(container: container, mode: route.mode, restoring: route.draft) { story in
+            CreationScreen(container: container, mode: route.mode, restoring: route.draft, opensGallery: route.opensGallery) { story in
                 router.presentedCreation = nil
                 if !story { router.publishedFromCreation += 1 }
             } onClose: {

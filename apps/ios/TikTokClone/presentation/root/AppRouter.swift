@@ -48,15 +48,17 @@ final class AppRouter {
         let mode: PublishDraftViewModel.Mode
         // Brouillon rouvert (ADR-065) : l'éditeur s'ouvre sur son montage.
         var draft: VideoDraft?
+        // « Importer » de son profil vide (ADR-070) : la galerie s'ouvre aussitôt par-dessus la caméra.
+        var opensGallery = false
     }
 
     var presentedCreation: CreationRoute?
     // Incrémenté à chaque vidéo publiée depuis la création : l'onglet Profil s'ouvre (publication en cours).
     var publishedFromCreation = 0
 
-    func openCreation(mode: PublishDraftViewModel.Mode = .video, draft: VideoDraft? = nil) {
+    func openCreation(mode: PublishDraftViewModel.Mode = .video, draft: VideoDraft? = nil, opensGallery: Bool = false) {
         guard presentedCreation == nil else { return }
-        presentedCreation = CreationRoute(mode: mode, draft: draft)
+        presentedCreation = CreationRoute(mode: mode, draft: draft, opensGallery: opensGallery)
     }
 
     func openStories(_ authors: [UserSummary], startAuthor: Int = 0, source: StorySource) {

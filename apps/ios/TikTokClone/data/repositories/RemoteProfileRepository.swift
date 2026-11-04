@@ -25,7 +25,8 @@ struct RemoteProfileRepository: ProfileRepository {
     }
 
     func updateMyProfile(_ changes: ProfileChanges) async throws -> UserProfile {
-        let body = Components.Schemas.UpdateProfileRequest(username: changes.username, displayName: changes.displayName, bio: changes.bio)
+        let body = Components.Schemas.UpdateProfileRequest(
+            username: changes.username, displayName: changes.displayName, bio: changes.bio, pronouns: changes.pronouns)
         switch try await mappingErrors({ try await client.updateMyProfile(body: .json(body)) }) {
         case .ok(let ok): return UserProfile(try ok.body.json)
         case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
@@ -66,6 +67,23 @@ struct RemoteProfileRepository: ProfileRepository {
         }
     }
 
+    func setNote(_ text: String) async throws -> UserProfile {
+        switch try await mappingErrors({ try await client.setMyNote(body: .json(.init(text: text))) }) {
+        case .ok(let ok): return UserProfile(try ok.body.json)
+        case .badRequest(let error): throw AppError.rejected(try error.body.json.text)
+        case .unauthorized, .notFound: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
+    func removeNote() async throws -> UserProfile {
+        switch try await mappingErrors({ try await client.removeMyNote() }) {
+        case .ok(let ok): return UserProfile(try ok.body.json)
+        case .unauthorized, .notFound: throw AppError.sessionExpired
+        case .undocumented: throw AppError.unexpected
+        }
+    }
+
     func deleteAccount() async throws {
         switch try await mappingErrors({ try await client.deleteMyAccount() }) {
         case .noContent: return
@@ -98,7 +116,9 @@ extension UserProfile {
             followersCount: dto.followersCount,
             followingCount: dto.followingCount,
             createdAt: dto.createdAt,
-            likesCount: dto.likesCount
+            likesCount: dto.likesCount,
+            pronouns: dto.pronouns,
+            note: dto.note.map { ProfileNote(text: $0.text, postedAt: $0.postedAt, expiresAt: $0.expiresAt) }
         )
     }
 }

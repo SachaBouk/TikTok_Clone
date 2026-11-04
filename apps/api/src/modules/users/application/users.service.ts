@@ -10,6 +10,9 @@ import {
   MAX_AVATAR_SIZE_BYTES,
   MAX_BIO_LENGTH,
   MAX_DISPLAY_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_PRONOUNS_LENGTH,
+  NOTE_LIFETIME_MS,
   RESERVED_USERNAMES,
   USERNAME_PATTERN,
   avatarKey,
@@ -18,7 +21,7 @@ import {
   isValidAvatarContent,
 } from '../domain/profile-rules';
 import type { ReceivedLikesCounter } from '../domain/received-likes-counter';
-import type { ProfileChanges, User, UserProfileView } from '../domain/user';
+import type { ProfileChanges, ProfileNote, User, UserProfileView } from '../domain/user';
 import {
   AvatarNotUploadedError,
   InvalidAvatarError,
@@ -36,6 +39,8 @@ export interface ProfileUpdate {
   displayName?: string;
   // null ou chaîne vide : efface la bio.
   bio?: string | null;
+  // null ou chaîne vide : efface les pronoms (ADR-070).
+  pronouns?: string | null;
 }
 
 export interface AvatarUpload {
@@ -67,9 +72,16 @@ export class UsersService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  // Profil affiché : le compte et ses likes reçus (compteur « J'aime », ADR-056).
+  // Profil affiché : le compte, ses likes reçus (compteur « J'aime », ADR-056), ses pronoms et sa note tant qu'elle
+  // n'a pas expiré (ADR-070 : expiration filtrée ici, rien n'est programmé).
   async profileView(user: User): Promise<UserProfileView> {
-    return { user, likesCount: await this.receivedLikes.countFor(user.id) };
+    const [likesCount, details] = await Promise.all([this.receivedLikes.countFor(user.id), this.users.findProfileDetails(user.id)]);
+    let note: ProfileNote | null = null;
+    if (details?.noteText && details.notePostedAt) {
+      const expiresAt = new Date(details.notePostedAt.getTime() + NOTE_LIFETIME_MS);
+      if (expiresAt > this.now()) note = { text: details.noteText, postedAt: details.notePostedAt, expiresAt };
+    }
+    return { user, likesCount, pronouns: details?.pronouns ?? null, note };
   }
 
   async getById(id: string): Promise<User> {
@@ -169,9 +181,33 @@ export class UsersService {
       if (bio && bio.length > MAX_BIO_LENGTH) throw new InvalidProfileError(`Bio : ${MAX_BIO_LENGTH} caractères au plus`);
       changes.bio = bio;
     }
+    if (update.pronouns !== undefined) {
+      const pronouns = update.pronouns?.trim() || null;
+      if (pronouns && pronouns.length > MAX_PRONOUNS_LENGTH) {
+        throw new InvalidProfileError(`Pronoms : ${MAX_PRONOUNS_LENGTH} caractères au plus`);
+      }
+      changes.pronouns = pronouns;
+    }
 
     if (Object.keys(changes).length === 0) return this.getById(userId);
     const user = await this.users.update(userId, changes);
+    if (!user) throw new UserNotFoundError(userId);
+    return user;
+  }
+
+  // Note de profil (ADR-070) : publiée (ou remplacée) maintenant, visible 24 h. Retours à la ligne et espaces répétés
+  // réduits à un espace.
+  async setNote(userId: string, text: string): Promise<User> {
+    const note = text.replace(/\s+/g, ' ').trim();
+    if (!note || note.length > MAX_NOTE_LENGTH) throw new InvalidProfileError(`Note : 1 à ${MAX_NOTE_LENGTH} caractères`);
+    const user = await this.users.update(userId, { noteText: note, notePostedAt: this.now() });
+    if (!user) throw new UserNotFoundError(userId);
+    return user;
+  }
+
+  // Retire la note (idempotent).
+  async removeNote(userId: string): Promise<User> {
+    const user = await this.users.update(userId, { noteText: null, notePostedAt: null });
     if (!user) throw new UserNotFoundError(userId);
     return user;
   }

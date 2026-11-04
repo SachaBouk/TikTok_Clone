@@ -14,7 +14,15 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { AVATAR_CONTENT_TYPES, MAX_AVATAR_SIZE_BYTES, MAX_BIO_LENGTH, MAX_DISPLAY_NAME_LENGTH, USERNAME_PATTERN } from '../domain/profile-rules';
+import {
+  AVATAR_CONTENT_TYPES,
+  MAX_AVATAR_SIZE_BYTES,
+  MAX_BIO_LENGTH,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_PRONOUNS_LENGTH,
+  USERNAME_PATTERN,
+} from '../domain/profile-rules';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
 
@@ -38,6 +46,22 @@ export class UpdateProfileRequest {
   @IsString()
   @MaxLength(MAX_BIO_LENGTH)
   bio?: string | null;
+
+  // Null ou vide : efface les pronoms (ADR-070).
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: MAX_PRONOUNS_LENGTH, example: 'elle' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_PRONOUNS_LENGTH)
+  pronouns?: string | null;
+}
+
+// Note de profil (ADR-070) : nettoyée par le service (1 à 60 caractères une fois les espaces réduits).
+export class SetProfileNoteRequest {
+  @ApiProperty({ minLength: 1, maxLength: MAX_NOTE_LENGTH, example: 'En vacances 🌴' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(MAX_NOTE_LENGTH)
+  text!: string;
 }
 
 export class CreateAvatarUploadRequest {

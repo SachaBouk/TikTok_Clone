@@ -7,10 +7,15 @@ import SwiftUI
 // message (avion en papier) et « personne + », qui déplie les comptes suggérés liés à ce profil ; la flèche de partage
 // (barre du haut) ouvre la feuille « Envoyer à » du profil.
 
-// En-tête : nom, @pseudo et compteurs à gauche, photo à droite.
-struct OtherProfileHeader: View {
+// En-tête, le sien comme celui d'un autre (ADR-069, ADR-070) : nom, @pseudo (et pronoms) et compteurs à gauche, photo à
+// droite, surmontée de la bulle de la note (ADR-070 : sur son profil, « À quoi penses-tu ? » sans note ; la toucher
+// l'écrit). Sur le sien, le « + » de la photo la change.
+struct ProfileTitleHeader: View {
     let profile: UserProfile
     let container: AppContainer
+    var isOwn = false
+    var changePhoto: () -> Void = {}
+    var editNote: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -19,10 +24,15 @@ struct OtherProfileHeader: View {
                     .font(.system(size: 28, weight: .bold))
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
-                Text("@\(profile.username)")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text("@\(profile.username)").lineLimit(1)
+                    if let pronouns = profile.pronouns, !pronouns.isEmpty {
+                        Text("·")
+                        Text(pronouns).lineLimit(1).accessibilityIdentifier("profile.pronouns")
+                    }
+                }
+                .font(.body)
+                .foregroundStyle(.secondary)
                 HStack(spacing: 26) {
                     NavigationLink(value: FollowListRoute(kind: .following, username: profile.username)) {
                         counter(profile.followingCount, "Suivis")
@@ -37,11 +47,25 @@ struct OtherProfileHeader: View {
                 .padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            ProfileAvatar(profile: profile, isOwn: false, container: container, size: 100) {}
+            .padding(.top, hasBubble ? 26 : 0)
+            VStack(spacing: -14) {
+                if hasBubble {
+                    ProfileNoteBubble(text: visibleNote?.text, isOwn: isOwn, action: editNote)
+                        .zIndex(1)
+                }
+                ProfileAvatar(profile: profile, isOwn: isOwn, container: container, size: 100, changePhoto: changePhoto)
+            }
         }
         .padding(.horizontal, 16)
         .accessibilityIdentifier("profile.header")
     }
+
+    private var visibleNote: ProfileNote? {
+        profile.note.flatMap { $0.isVisible(at: .now) ? $0 : nil }
+    }
+
+    // Bulle sur sa photo (pour écrire une note), ou sur celle d'un autre qui en a une.
+    private var hasBubble: Bool { isOwn || visibleNote != nil }
 
     private func counter(_ value: Int, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -49,6 +73,119 @@ struct OtherProfileHeader: View {
             Text(label).font(.subheadline).foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+// Bulle de la note (ADR-070), comme TikTok : blanche, ombrée, avec deux petits ronds de « pensée » vers la photo. Sans
+// note (son profil), « À quoi penses-tu ? » en gris.
+struct ProfileNoteBubble: View {
+    let text: String?
+    let isOwn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(text ?? "À quoi penses-tu ?")
+                .font(.footnote)
+                .foregroundStyle(text == nil ? Color.secondary : Color.primary)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 128)
+                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(Color(.systemBackground))
+                        .frame(width: 9, height: 9)
+                        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+                        .offset(x: -26, y: 8)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isOwn)
+        .accessibilityLabel(text.map { "Note : \($0)" } ?? "Écrire une note")
+        .accessibilityIdentifier("profile.note")
+    }
+}
+
+// Écrire sa note (ADR-070), dans une feuille : la bulle au-dessus de sa photo se remplit pendant la saisie, 60
+// caractères, « Partager » ; « Supprimer la note » si elle existe. Visible de tous pendant 24 h.
+struct ProfileNoteEditor: View {
+    @Bindable var viewModel: EditProfileViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isFocused: Bool
+
+    private var cleaned: String? { ProfileRules.cleanedNote(viewModel.noteText) }
+    private var isTooLong: Bool { (cleaned?.count ?? 0) > ProfileRules.maxNoteLength }
+    private var hasNote: Bool { viewModel.profile?.note?.isVisible(at: .now) == true }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                VStack(spacing: -14) {
+                    ProfileNoteBubble(text: cleaned, isOwn: false) {}
+                        .zIndex(1)
+                    AvatarView(url: viewModel.profile?.avatarURL, name: viewModel.profile?.displayName ?? "", size: 96)
+                }
+                .padding(.top, 8)
+                TextField("À quoi penses-tu ?", text: $viewModel.noteText, axis: .vertical)
+                    .lineLimit(1...3)
+                    .focused($isFocused)
+                    .padding(12)
+                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("noteEditor.field")
+                HStack {
+                    Text("Visible par tout le monde pendant 24 h")
+                    Spacer()
+                    Text("\(cleaned?.count ?? 0)/\(ProfileRules.maxNoteLength)")
+                        .foregroundStyle(isTooLong ? Color.red : Color.secondary)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                if hasNote {
+                    Button("Supprimer la note", role: .destructive) {
+                        Task { if await viewModel.deleteNote() { dismiss() } }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityIdentifier("noteEditor.delete")
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .navigationTitle("Note")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") {
+                        viewModel.reset()
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if viewModel.isSaving {
+                        ProgressView()
+                    } else {
+                        Button("Partager") {
+                            Task { if await viewModel.saveNote() { dismiss() } }
+                        }
+                        .tint(Color.brandPink)
+                        .disabled(cleaned == nil || isTooLong || cleaned == viewModel.profile?.note?.text)
+                        .accessibilityIdentifier("noteEditor.share")
+                    }
+                }
+            }
+            .alert(
+                "Note",
+                isPresented: Binding(get: { viewModel.errorMessage != nil }, set: { if !$0 { viewModel.errorMessage = nil } })
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+        }
+        .onAppear { isFocused = true }
     }
 }
 

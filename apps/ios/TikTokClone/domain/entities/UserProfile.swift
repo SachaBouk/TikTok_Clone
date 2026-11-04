@@ -13,6 +13,19 @@ struct UserProfile: Equatable, Sendable {
     let createdAt: Date
     // Likes reçus sur ses vidéos publiées (compteur « J'aime », ADR-056).
     var likesCount = 0
+    // Pronoms affichés à côté du pseudo (ADR-070).
+    var pronouns: String? = nil
+    // Note encore visible (ADR-070) ; l'API ne la renvoie plus une fois expirée.
+    var note: ProfileNote? = nil
+}
+
+// Note de profil (ADR-070) : court texte affiché dans une bulle au-dessus de la photo, visible 24 h.
+struct ProfileNote: Equatable, Sendable {
+    let text: String
+    let postedAt: Date
+    let expiresAt: Date
+
+    func isVisible(at date: Date) -> Bool { date < expiresAt }
 }
 
 // Lien d'app vers un profil (« Partager le profil », ADR-056) : tiktokclone://users/<pseudo>.

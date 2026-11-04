@@ -637,6 +637,106 @@
         ]
       }
     },
+    "/users/me/note": {
+      "put": {
+        "operationId": "setMyNote",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProfileNoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profil à jour, avec la note.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Note vide ou de plus de 60 caractères.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      },
+      "delete": {
+        "operationId": "removeMyNote",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Profil à jour, sans note.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte supprimé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/users/me/interests": {
       "get": {
         "operationId": "getMyInterests",
@@ -9361,6 +9461,29 @@
           "refreshToken"
         ]
       },
+      "ProfileNoteResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 60,
+            "example": "En vacances 🌴"
+          },
+          "postedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "text",
+          "postedAt",
+          "expiresAt"
+        ]
+      },
       "UserProfileResponse": {
         "type": "object",
         "properties": {
@@ -9397,6 +9520,15 @@
             "type": "integer",
             "minimum": 0
           },
+          "pronouns": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20,
+            "example": "elle"
+          },
+          "note": {
+            "$ref": "#/components/schemas/ProfileNoteResponse"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -9411,6 +9543,7 @@
           "followersCount",
           "followingCount",
           "likesCount",
+          "pronouns",
           "createdAt"
         ]
       },
@@ -9433,6 +9566,12 @@
             "nullable": true,
             "maxLength": 80,
             "example": "Danse et cuisine 🍜"
+          },
+          "pronouns": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20,
+            "example": "elle"
           }
         }
       },
@@ -9494,6 +9633,20 @@
         },
         "required": [
           "avatarId"
+        ]
+      },
+      "SetProfileNoteRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "example": "En vacances 🌴"
+          }
+        },
+        "required": [
+          "text"
         ]
       },
       "UserInterestsResponse": {

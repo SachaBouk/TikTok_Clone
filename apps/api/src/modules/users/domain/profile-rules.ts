@@ -9,6 +9,10 @@ export const RESERVED_USERNAMES: ReadonlySet<string> = new Set(['me']);
 export const MAX_DISPLAY_NAME_LENGTH = 50;
 // Comme sur TikTok.
 export const MAX_BIO_LENGTH = 80;
+// Pronoms et note de profil (ADR-070).
+export const MAX_PRONOUNS_LENGTH = 20;
+export const MAX_NOTE_LENGTH = 60;
+export const NOTE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 import { type ImageDimensions, readJpegDimensions, readPngDimensions } from './image-dimensions';
 

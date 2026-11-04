@@ -82,7 +82,7 @@ describe('UsersService', () => {
       () => NOW,
     );
     const view = await withLikes.profileView(await withLikes.getById(alice.id));
-    expect(view).toEqual({ user: expect.objectContaining({ id: alice.id }), likesCount: 12 });
+    expect(view).toEqual({ user: expect.objectContaining({ id: alice.id }), likesCount: 12, pronouns: null, note: null });
     expect((await service.profileView(await service.getById(bob.id))).likesCount).toBe(0);
   });
 
@@ -162,6 +162,55 @@ describe('UsersService', () => {
 
     it('lève UserNotFoundError pour un compte supprimé', async () => {
       await expect(service.updateProfile('inconnu', { displayName: 'X' })).rejects.toBeInstanceOf(UserNotFoundError);
+    });
+  });
+
+  describe('pronoms et note (ADR-070)', () => {
+    const view = async (id: string, at: Date = NOW) => {
+      const reader = new UsersService(repository, avatars, contentCleanup, interests, suspended, new InMemoryReceivedLikesCounter(), () => at);
+      return reader.profileView(await reader.getById(id));
+    };
+    let repository: InMemoryUserRepository;
+
+    beforeEach(() => {
+      repository = new InMemoryUserRepository([{ ...alice }, { ...bob }]);
+      service = new UsersService(repository, avatars, contentCleanup, interests, suspended, new InMemoryReceivedLikesCounter(), () => NOW);
+    });
+
+    it('pronoms nettoyés, effacés par null ou une chaîne vide, 20 caractères au plus', async () => {
+      await service.updateProfile(alice.id, { pronouns: '  elle  ' });
+      expect((await view(alice.id)).pronouns).toBe('elle');
+      await service.updateProfile(alice.id, { pronouns: '   ' });
+      expect((await view(alice.id)).pronouns).toBeNull();
+      await service.updateProfile(alice.id, { pronouns: 'il' });
+      await service.updateProfile(alice.id, { pronouns: null });
+      expect((await view(alice.id)).pronouns).toBeNull();
+      await expect(service.updateProfile(alice.id, { pronouns: 'x'.repeat(21) })).rejects.toBeInstanceOf(InvalidProfileError);
+    });
+
+    it('note publiée, espaces réduits, visible 24 h puis absente', async () => {
+      await service.setNote(alice.id, '  En   vacances\n🌴 ');
+      const expiresAt = new Date(NOW.getTime() + 24 * 3600 * 1000);
+      expect((await view(alice.id)).note).toEqual({ text: 'En vacances 🌴', postedAt: NOW, expiresAt });
+      expect((await view(alice.id, new Date(expiresAt.getTime() - 1))).note).not.toBeNull();
+      expect((await view(alice.id, expiresAt)).note).toBeNull();
+      expect((await view(bob.id)).note).toBeNull();
+    });
+
+    it('note remplacée puis retirée (idempotent)', async () => {
+      await service.setNote(alice.id, 'Première');
+      await service.setNote(alice.id, 'Seconde');
+      expect((await view(alice.id)).note?.text).toBe('Seconde');
+      await service.removeNote(alice.id);
+      await service.removeNote(alice.id);
+      expect((await view(alice.id)).note).toBeNull();
+    });
+
+    it('note vide ou trop longue refusée, compte supprimé introuvable', async () => {
+      await expect(service.setNote(alice.id, '  \n ')).rejects.toBeInstanceOf(InvalidProfileError);
+      await expect(service.setNote(alice.id, 'x'.repeat(61))).rejects.toBeInstanceOf(InvalidProfileError);
+      await expect(service.setNote('inconnu', 'Salut')).rejects.toBeInstanceOf(UserNotFoundError);
+      await expect(service.removeNote('inconnu')).rejects.toBeInstanceOf(UserNotFoundError);
     });
   });
 

@@ -12,6 +12,9 @@ protocol ProfileRepository: Sendable {
     // Installe la photo envoyée ; `.rejected` si le fichier est absent ou n'est pas une vraie image.
     func setAvatar(id: String) async throws -> UserProfile
     func removeAvatar() async throws -> UserProfile
+    // Note de profil (ADR-070) : publiée ou remplacée (`.rejected` si vide ou trop longue), ou retirée.
+    func setNote(_ text: String) async throws -> UserProfile
+    func removeNote() async throws -> UserProfile
     // Définitif : vidéos, messages, abonnés… disparaissent.
     func deleteAccount() async throws
 }

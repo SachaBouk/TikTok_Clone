@@ -48,6 +48,12 @@ model User {
   displayName      String    @map("display_name")
   avatarUrl        String?   @map("avatar_url")
   bio              String?
+  // Pronoms affichés à côté du pseudo (ADR-070), 20 caractères au plus (CHECK écrit à la main).
+  pronouns         String?
+  // Note de profil (ADR-070) : 1 à 60 caractères, visible 24 h après `note_posted_at` (filtré à la lecture). Les deux
+  // colonnes sont remplies ou vides ensemble (CHECK écrit à la main).
+  noteText         String?   @map("note_text")
+  notePostedAt     DateTime? @map("note_posted_at")
   role             UserRole  @default(user)
   // Date de naissance (ADR-055), propriété du module auth, jamais exposée. Nulle pour les comptes créés avant
   // l'ADR-055 et ceux de Sign in with Apple.

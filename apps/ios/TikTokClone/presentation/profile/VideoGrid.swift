@@ -15,6 +15,8 @@ struct VideoGrid: View {
     // Action du menu contextuel d'une vidéo (historique : « Retirer de l'historique »).
     var removeTitle: String?
     var onRemove: (FeedVideo) -> Void = { _ in }
+    // Grille vide de ses vidéos (ADR-070) : bouton « Importer » sous le titre, comme TikTok.
+    var onImport: (() -> Void)? = nil
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
@@ -73,8 +75,28 @@ struct VideoGrid: View {
             .padding(.vertical, 32)
         case .loaded:
             if list.items.isEmpty && pending.isEmpty && (drafts?.count ?? 0) == 0 {
-                ContentUnavailableView(emptyTitle, systemImage: "video")
-                    .padding(.vertical, 24)
+                if let onImport {
+                    VStack(spacing: 18) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 52, weight: .light))
+                            .foregroundStyle(.secondary)
+                        Text(emptyTitle).font(.title3.weight(.semibold))
+                        Button(action: onImport) {
+                            Text("Importer")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 48)
+                                .padding(.vertical, 12)
+                                .background(Color.brandPink, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("profile.import")
+                    }
+                    .padding(.vertical, 48)
+                } else {
+                    ContentUnavailableView(emptyTitle, systemImage: "video")
+                        .padding(.vertical, 24)
+                }
             }
         }
     }

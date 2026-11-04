@@ -2,8 +2,9 @@ import Foundation
 import Observation
 import UIKit
 
-// Modification de son profil : nom, pseudo, bio (chacun sur sa page, seuls les champs changés sont envoyés), et photo
-// (recadrée en rond puis appliquée tout de suite ; story « nouvelle photo de profil » si elle est cochée, ADR-056).
+// Modification de son profil : nom, pseudo, bio, pronoms (chacun sur sa page, seuls les champs changés sont envoyés),
+// photo (recadrée en rond puis appliquée tout de suite ; story « nouvelle photo de profil » si elle est cochée, ADR-056)
+// et note de profil (ADR-070).
 // `notice` : message bref affiché après un enregistrement (« Enregistré »).
 @MainActor
 @Observable
@@ -11,6 +12,9 @@ final class EditProfileViewModel {
     var displayName: String
     var username: String
     var bio: String
+    var pronouns: String
+    // Note en cours d'écriture (bulle « À quoi penses-tu ? », ADR-070).
+    var noteText: String
     var errorMessage: String?
     var notice: String?
     private(set) var isSaving = false
@@ -19,6 +23,7 @@ final class EditProfileViewModel {
     private let updateProfile: UpdateProfileUseCase
     private let changeAvatar: ChangeAvatarUseCase
     private let removeAvatar: RemoveAvatarUseCase
+    private let setNote: SetProfileNoteUseCase?
     private let session: SessionStore
     private let prepareImage: @Sendable (Data) -> Data?
     // Publie la story « nouvelle photo de profil » à partir de la photo recadrée ; renvoie un message d'erreur.
@@ -28,6 +33,7 @@ final class EditProfileViewModel {
         updateProfile: UpdateProfileUseCase,
         changeAvatar: ChangeAvatarUseCase,
         removeAvatar: RemoveAvatarUseCase,
+        setNote: SetProfileNoteUseCase? = nil,
         session: SessionStore,
         prepareImage: @escaping @Sendable (Data) -> Data? = { AvatarImage.jpeg(from: $0) },
         publishStory: (@MainActor (Data) async -> String?)? = nil
@@ -35,12 +41,15 @@ final class EditProfileViewModel {
         self.updateProfile = updateProfile
         self.changeAvatar = changeAvatar
         self.removeAvatar = removeAvatar
+        self.setNote = setNote
         self.session = session
         self.prepareImage = prepareImage
         self.publishStory = publishStory
         displayName = session.profile?.displayName ?? ""
         username = session.profile?.username ?? ""
         bio = session.profile?.bio ?? ""
+        pronouns = session.profile?.pronouns ?? ""
+        noteText = session.profile?.note?.text ?? ""
     }
 
     var profile: UserProfile? { session.profile }
@@ -52,7 +61,7 @@ final class EditProfileViewModel {
     // Quelque chose à enregistrer (les champs invalides le sont aussi : le message s'affiche à l'envoi).
     var hasChanges: Bool {
         guard let profile else { return false }
-        switch ProfileRules.changes(from: profile, username: username, displayName: displayName, bio: bio) {
+        switch ProfileRules.changes(from: profile, username: username, displayName: displayName, bio: bio, pronouns: pronouns) {
         case .success(let changes): return !changes.isEmpty
         case .failure: return true
         }
@@ -63,6 +72,8 @@ final class EditProfileViewModel {
         displayName = session.profile?.displayName ?? ""
         username = session.profile?.username ?? ""
         bio = session.profile?.bio ?? ""
+        pronouns = session.profile?.pronouns ?? ""
+        noteText = session.profile?.note?.text ?? ""
     }
 
     // Vrai si le profil est enregistré (la page peut se fermer).
@@ -71,8 +82,32 @@ final class EditProfileViewModel {
         isSaving = true
         defer { isSaving = false }
         do {
-            session.update(try await updateProfile(profile, username: username, displayName: displayName, bio: bio))
+            session.update(try await updateProfile(profile, username: username, displayName: displayName, bio: bio, pronouns: pronouns))
             notice = "Enregistré"
+            return true
+        } catch {
+            errorMessage = handle(error)
+            return false
+        }
+    }
+
+    // Note de profil (ADR-070) : publiée (ou remplacée), ou retirée si le texte est vide. Vrai si c'est enregistré.
+    func saveNote() async -> Bool {
+        await sendNote(noteText, notice: ProfileRules.cleanedNote(noteText) == nil ? "Note supprimée" : "Note partagée")
+    }
+
+    func deleteNote() async -> Bool {
+        await sendNote("", notice: "Note supprimée")
+    }
+
+    private func sendNote(_ text: String, notice: String) async -> Bool {
+        guard let setNote, !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            session.update(try await setNote(text))
+            noteText = session.profile?.note?.text ?? ""
+            self.notice = notice
             return true
         } catch {
             errorMessage = handle(error)

@@ -181,6 +181,31 @@ struct ProfileViewModelTests {
         #expect(session.profile?.avatarURL == nil)
     }
 
+    @Test("note et pronoms (ADR-070) : enregistrés dans la session, message, note retirée")
+    func noteAndPronouns() async {
+        let session = await makeSession()
+        let viewModel = EditProfileViewModel(
+            updateProfile: UpdateProfileUseCase(profiles: profiles),
+            changeAvatar: ChangeAvatarUseCase(profiles: profiles, transport: FakeAvatarTransport()),
+            removeAvatar: RemoveAvatarUseCase(profiles: profiles),
+            setNote: SetProfileNoteUseCase(profiles: profiles),
+            session: session
+        )
+        viewModel.pronouns = "elle"
+        #expect(await viewModel.save())
+        #expect(profiles.updates == [ProfileChanges(pronouns: "elle")])
+        #expect(session.profile?.pronouns == "elle")
+
+        viewModel.noteText = "En vacances 🌴"
+        #expect(await viewModel.saveNote())
+        #expect(session.profile?.note?.text == "En vacances 🌴")
+        #expect(viewModel.notice == "Note partagée")
+        #expect(await viewModel.deleteNote())
+        #expect(session.profile?.note == nil)
+        #expect(viewModel.noteText.isEmpty)
+        #expect(viewModel.notice == "Note supprimée")
+    }
+
     @Test("photo recadrée (ADR-056) : enregistrée, puis la story « nouvelle photo de profil » seulement si elle est cochée")
     func photoStory() async {
         let session = await makeSession()

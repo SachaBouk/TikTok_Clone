@@ -12,13 +12,16 @@ struct CreationView: View {
     let onClose: () -> Void
     @State private var gallery: GalleryViewModel?
     @State private var importThumbnail: CGImage?
+    // Galerie ouverte d'emblée (« Importer » de son profil vide, ADR-070), une seule fois.
+    @State private var opensGallery: Bool
 
     init(
-        draft: PublishDraftViewModel, camera: CameraSetup, container: AppContainer, onPublished: @escaping (Bool) -> Void,
-        onClose: @escaping () -> Void
+        draft: PublishDraftViewModel, camera: CameraSetup, container: AppContainer, opensGallery: Bool = false,
+        onPublished: @escaping (Bool) -> Void, onClose: @escaping () -> Void
     ) {
         _draft = State(initialValue: draft)
         _camera = State(initialValue: camera)
+        _opensGallery = State(initialValue: opensGallery)
         self.container = container
         self.onPublished = onPublished
         self.onClose = onClose
@@ -64,6 +67,11 @@ struct CreationView: View {
                     onClose()
                 }
                 .task { await loadImportThumbnail() }
+                .onAppear {
+                    guard opensGallery else { return }
+                    opensGallery = false
+                    gallery = container.makeGallery(kind: draft.kind)
+                }
             }
             if draft.state == .loading {
                 VStack(spacing: 12) {
@@ -133,6 +141,7 @@ struct CreationScreen: View {
     let mode: PublishDraftViewModel.Mode
     // Brouillon rouvert (ADR-065).
     var restoring: VideoDraft?
+    var opensGallery = false
     let onPublished: (Bool) -> Void
     let onClose: () -> Void
     @State private var setup: (draft: PublishDraftViewModel, camera: CameraSetup)?
@@ -141,7 +150,9 @@ struct CreationScreen: View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let setup {
-                CreationView(draft: setup.draft, camera: setup.camera, container: container, onPublished: onPublished, onClose: onClose)
+                CreationView(
+                    draft: setup.draft, camera: setup.camera, container: container, opensGallery: opensGallery, onPublished: onPublished,
+                    onClose: onClose)
             }
         }
         .onAppear {

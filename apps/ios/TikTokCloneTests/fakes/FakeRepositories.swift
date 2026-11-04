@@ -87,7 +87,8 @@ final class FakeProfileRepository: ProfileRepository {
                 id: current.id, username: changes.username ?? current.username, displayName: changes.displayName ?? current.displayName,
                 avatarURL: current.avatarURL, bio: changes.bio.map { $0.isEmpty ? nil : $0 } ?? current.bio,
                 followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt,
-                likesCount: current.likesCount
+                likesCount: current.likesCount, pronouns: changes.pronouns.map { $0.isEmpty ? nil : $0 } ?? current.pronouns,
+                note: current.note
             )
             result.withLock { $0 = .success(updated) }
             return updated
@@ -125,7 +126,27 @@ final class FakeProfileRepository: ProfileRepository {
         let updated = UserProfile(
             id: current.id, username: current.username, displayName: current.displayName, avatarURL: url, bio: current.bio,
             followersCount: current.followersCount, followingCount: current.followingCount, createdAt: current.createdAt,
-            likesCount: current.likesCount)
+            likesCount: current.likesCount, pronouns: current.pronouns, note: current.note)
+        result.withLock { $0 = .success(updated) }
+        return updated
+    }
+
+    func setNote(_ text: String) async throws -> UserProfile {
+        try state.withLock {
+            $0.calls.append("setNote-\(text)")
+            if let error = $0.error { throw error }
+        }
+        return try withNote(ProfileNote(text: text, postedAt: .now, expiresAt: .now.addingTimeInterval(24 * 3600)))
+    }
+
+    func removeNote() async throws -> UserProfile {
+        state.withLock { $0.calls.append("removeNote") }
+        return try withNote(nil)
+    }
+
+    private func withNote(_ note: ProfileNote?) throws -> UserProfile {
+        var updated = try result.withLock { $0 }.get()
+        updated.note = note
         result.withLock { $0 = .success(updated) }
         return updated
     }

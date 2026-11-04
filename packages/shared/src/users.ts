@@ -9,7 +9,18 @@ export interface UserProfileDto {
   followingCount: number;
   // Likes reçus sur ses vidéos publiées (compteur « J'aime » du profil, ADR-056).
   likesCount: number;
+  // Pronoms affichés à côté du pseudo (ADR-070).
+  pronouns: string | null;
+  // Note de profil visible 24 h (ADR-070) ; absente sans note ou une fois expirée.
+  note?: ProfileNoteDto;
   createdAt: string;
+}
+
+// Note de profil (ADR-070) : court texte (60 caractères au plus) affiché au-dessus de la photo.
+export interface ProfileNoteDto {
+  text: string;
+  postedAt: string;
+  expiresAt: string;
 }
 
 // Résumé d'un compte, affiché à côté d'un contenu (auteur d'une vidéo, d'un commentaire).

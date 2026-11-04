@@ -1,7 +1,8 @@
 import SwiftUI
 
-// Profil d'un compte, comme TikTok (ADR-056) : le sien (onglet Profil) ou celui d'un autre (poussé depuis une vidéo ou
-// une liste). En-tête (photo, @pseudo, abonnements, abonnés, likes reçus), boutons, bio, puis onglets des grilles.
+// Profil d'un compte, comme TikTok (ADR-056, ADR-069, ADR-070) : le sien (onglet Profil) ou celui d'un autre (poussé
+// depuis une vidéo ou une liste). En-tête (nom, @pseudo, compteurs, photo et note), boutons (celui d'un autre), bio, puis
+// onglets des grilles. Le sien : crayon (« Modifier le profil »), « personne + » (« Trouver des amis ») et ☰ en haut.
 struct ProfileView: View {
     @State private var viewModel: ProfileViewModel
     let container: AppContainer
@@ -18,6 +19,7 @@ struct ProfileView: View {
     @State private var editModel: EditProfileViewModel
     @State private var isChoosingPhoto = false
     @State private var editingField: ProfileField?
+    @State private var isEditingNote = false
     // Profil d'un autre (ADR-069) : rangée des comptes suggérés dépliée, sa liste complète, et feuille de partage (l'action
     // choisie dedans — signaler, bloquer, écrire, se connecter — s'enchaîne une fois la feuille fermée).
     @State private var showsSuggestions = false
@@ -36,7 +38,7 @@ struct ProfileView: View {
 
     var body: some View {
         content
-            .navigationTitle(viewModel.isOwn ? viewModel.profile?.displayName ?? "Profil" : "")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .task { await viewModel.load() }
@@ -62,6 +64,11 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $isEditing) {
                 EditProfileView(viewModel: editModel)
             }
+            .sheet(isPresented: $isEditingNote) {
+                ProfileNoteEditor(viewModel: editModel)
+                    .presentationDetents([.medium])
+                    .presentationBackground(Color(.systemBackground))
+            }
             .navigationDestination(item: $editingField) { field in
                 ProfileFieldEditor(field: field, viewModel: editModel)
             }
@@ -70,7 +77,7 @@ struct ProfileView: View {
             .alert(
                 "Profil",
                 isPresented: Binding(
-                    get: { editModel.errorMessage != nil && !isEditing && editingField == nil },
+                    get: { editModel.errorMessage != nil && !isEditing && editingField == nil && !isEditingNote },
                     set: { if !$0 { editModel.errorMessage = nil } }
                 )
             ) {
@@ -120,7 +127,7 @@ struct ProfileView: View {
     @ViewBuilder
     private func otherProfileTop(_ profile: UserProfile) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            OtherProfileHeader(profile: profile, container: container)
+            ProfileTitleHeader(profile: profile, container: container)
             if viewModel.isBlocked {
                 Button("Débloquer") { isConfirmingBlock = true }
                     .buttonStyle(ProfileActionButtonStyle())
@@ -205,9 +212,7 @@ struct ProfileView: View {
                 VStack(spacing: 14) {
                     if let profile = viewModel.profile {
                         if viewModel.isOwn {
-                            ProfileHeader(profile: profile, isOwn: true, container: container) { isChoosingPhoto = true }
-                            actionButtons
-                            bio(profile)
+                            ownProfileTop(profile)
                         } else {
                             otherProfileTop(profile)
                         }
@@ -229,62 +234,56 @@ struct ProfileView: View {
         }
     }
 
-    // Bio sous les boutons ; son propre profil sans bio : « + Ajouter une bio », qui ouvre sa page.
-    @ViewBuilder
-    private func bio(_ profile: UserProfile) -> some View {
-        if let bio = profile.bio, !bio.isEmpty {
-            Text(bio)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        } else if viewModel.isOwn {
-            Button {
-                editModel.reset()
-                editingField = .bio
-            } label: {
-                Text("+ Ajouter une bio")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 4))
+    // Son profil (ADR-070) : en-tête avec la note, puis la bio et la pastille « + Ajouter une bio · ♡ Je m'intéresse à… ».
+    private func ownProfileTop(_ profile: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ProfileTitleHeader(
+                profile: profile, container: container, isOwn: true, changePhoto: { isChoosingPhoto = true },
+                editNote: {
+                    editModel.reset()
+                    isEditingNote = true
+                })
+            if let bio = profile.bio, !bio.isEmpty {
+                Text(bio).font(.subheadline).padding(.horizontal, 16)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profile.addBio")
+            bioPill(hasBio: profile.bio?.isEmpty == false)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 6)
     }
 
-    // Son profil, comme TikTok : « Modifier le profil », « Partager le profil » et les jetons (ADR-009). Celui d'un autre a
-    // ses propres boutons (`OtherProfileActions`, ADR-069).
-    @ViewBuilder
-    private var actionButtons: some View {
-        if viewModel.isOwn {
-            HStack(spacing: 6) {
-                Button("Modifier le profil") {
+    // Pastille grise : « + Ajouter une bio » (sans bio) et « ♡ Je m'intéresse à… » (centres d'intérêt, ADR-055).
+    private func bioPill(hasBio: Bool) -> some View {
+        HStack(spacing: 8) {
+            if !hasBio {
+                Button {
                     editModel.reset()
-                    isEditing = true
-                }
-                .buttonStyle(ProfileActionButtonStyle())
-                .accessibilityIdentifier("profile.edit")
-                if let username = viewModel.profile?.username {
-                    ShareLink(item: ProfileLink.url(for: username), message: Text("Mon profil sur TikTok Clone")) {
-                        Text("Partager le profil")
-                    }
-                    .buttonStyle(ProfileActionButtonStyle())
-                    .accessibilityIdentifier("profile.share")
-                }
-                // Paywall (ADR-009) : solde et achat de jetons.
-                NavigationLink(value: AccountRoute.wallet(.profile)) {
-                    Image(systemName: "bitcoinsign.circle")
-                        .font(.title3)
+                    editingField = .bio
+                } label: {
+                    Label("Ajouter une bio", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                 }
-                .buttonStyle(ProfileActionButtonStyle(isSquare: true))
-                .accessibilityLabel("Jetons")
-                .accessibilityIdentifier("profile.wallet")
+                .accessibilityIdentifier("profile.addBio")
+                Text("·").foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 24)
+            Button {
+                navigationPath?.wrappedValue.append(AccountRoute.interests)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "heart").foregroundStyle(Color.brandPink)
+                    Text("Je m'intéresse à…").foregroundStyle(.secondary).lineLimit(1)
+                }
+                .font(.subheadline)
+            }
+            .accessibilityIdentifier("profile.interests")
         }
+        .labelStyle(.titleAndIcon)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemFill), in: Capsule())
+        .padding(.horizontal, 16)
     }
 
     private func follow() {
@@ -314,7 +313,8 @@ struct ProfileView: View {
                 },
                 drafts: viewModel.isOwn && viewModel.selectedGrid == .videos
                     ? (container.drafts.count, container.drafts.drafts.first.flatMap(container.drafts.thumbnailURL(of:))) : nil,
-                onDraftsTap: { navigationPath?.wrappedValue.append(AccountRoute.drafts) }
+                onDraftsTap: { navigationPath?.wrappedValue.append(AccountRoute.drafts) },
+                onImport: viewModel.isOwn && viewModel.selectedGrid == .videos ? { container.router.openCreation(opensGallery: true) } : nil
             )
             .onAppear { if viewModel.isOwn { container.drafts.reload() } }
         }
@@ -327,7 +327,7 @@ struct ProfileView: View {
 
     private var emptyTitle: String {
         switch viewModel.selectedGrid {
-        case .videos: viewModel.isOwn ? "Publie ta première vidéo" : "Aucune vidéo"
+        case .videos: viewModel.isOwn ? "Partage une vidéo souvenir" : "Aucune vidéo"
         case .privateVideos: "Tes vidéos privées apparaîtront ici"
         case .reposts: "Aucune republication"
         case .favorites: "Aucun favori"
@@ -337,6 +337,22 @@ struct ProfileView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        if viewModel.isOwn {
+            // Son profil (ADR-070) : crayon à gauche, « Trouver des amis » et ☰ à droite.
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Modifier le profil", systemImage: "pencil") {
+                    editModel.reset()
+                    isEditing = true
+                }
+                .accessibilityIdentifier("profile.edit")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Trouver des amis", systemImage: "person.badge.plus") {
+                    navigationPath?.wrappedValue.append(AccountRoute.findFriends)
+                }
+                .accessibilityIdentifier("profile.findFriends")
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             if viewModel.isOwn {
                 Button("Menu", systemImage: "line.3.horizontal") { container.router.isProfileMenuOpen = true }
@@ -347,50 +363,6 @@ struct ProfileView: View {
                     .accessibilityIdentifier("profile.share")
             }
         }
-    }
-}
-
-// En-tête, comme TikTok : grande photo (entourée de l'anneau des stories, ADR-051 : la toucher les ouvre ; en direct,
-// le live), « + » bleu sur la sienne pour la changer (ADR-056), @pseudo, puis abonnements, abonnés et likes reçus.
-private struct ProfileHeader: View {
-    let profile: UserProfile
-    let isOwn: Bool
-    let container: AppContainer
-    let changePhoto: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            avatar
-            Text("@\(profile.username)").font(.title3.bold())
-            HStack(spacing: 0) {
-                NavigationLink(value: FollowListRoute(kind: .following, username: profile.username)) {
-                    counter(profile.followingCount, "Abonnements")
-                }
-                Divider().frame(height: 16)
-                NavigationLink(value: FollowListRoute(kind: .followers, username: profile.username)) {
-                    counter(profile.followersCount, "Abonnés")
-                }
-                Divider().frame(height: 16)
-                counter(profile.likesCount, "J’aime")
-                    .accessibilityIdentifier("profile.likes")
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 24)
-        }
-        .accessibilityIdentifier("profile.header")
-    }
-
-    private var avatar: some View {
-        ProfileAvatar(profile: profile, isOwn: isOwn, container: container, size: 104, changePhoto: changePhoto)
-    }
-
-    private func counter(_ value: Int, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value, format: .number.notation(.compactName)).font(.headline)
-            Text(label).font(.subheadline).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
     }
 }
 
@@ -427,18 +399,16 @@ private struct ProfileGridTabs: View {
     }
 }
 
-// Boutons gris du profil (« Modifier le profil », « Partager le profil », « Message ») ; rouge pour « Suivre ».
+// Bouton gris du profil (« Débloquer ») ; rouge si `isProminent`.
 struct ProfileActionButtonStyle: ButtonStyle {
     var isProminent = false
-    var isSquare = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(isProminent ? Color.white : Color.primary)
             .lineLimit(1)
-            .frame(maxWidth: isSquare ? 44 : .infinity, minHeight: 44)
-            .frame(width: isSquare ? 44 : nil)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(isProminent ? Color.brandPink : Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }

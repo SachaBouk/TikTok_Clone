@@ -1,10 +1,11 @@
-import type { ProfileChanges, User } from '../domain/user';
+import type { ProfileChanges, ProfileDetails, User } from '../domain/user';
 import { UsernameTakenError } from '../domain/user.errors';
 import { UserRepository } from '../domain/user.repository';
 
 // Adaptateur en mémoire du port, pour tester le service sans base de données (ADR-003).
 export class InMemoryUserRepository extends UserRepository {
   private readonly users = new Map<string, User>();
+  private readonly details = new Map<string, ProfileDetails>();
 
   constructor(users: User[] = []) {
     super();
@@ -29,6 +30,11 @@ export class InMemoryUserRepository extends UserRepository {
     });
   }
 
+  async findProfileDetails(id: string): Promise<ProfileDetails | null> {
+    if (!this.users.has(id)) return null;
+    return this.details.get(id) ?? { pronouns: null, noteText: null, notePostedAt: null };
+  }
+
   async update(id: string, changes: ProfileChanges): Promise<User | null> {
     const user = this.users.get(id);
     if (!user) return null;
@@ -36,7 +42,15 @@ export class InMemoryUserRepository extends UserRepository {
       const owner = await this.findByUsername(changes.username);
       if (owner && owner.id !== id) throw new UsernameTakenError(changes.username);
     }
-    const updated = { ...user, ...changes };
+    // Pronoms et note (ADR-070) gardés à part, comme les colonnes que la base ne lit qu'avec le profil.
+    const { pronouns, noteText, notePostedAt, ...userChanges } = changes;
+    const details = (await this.findProfileDetails(id))!;
+    this.details.set(id, {
+      pronouns: pronouns !== undefined ? pronouns : details.pronouns,
+      noteText: noteText !== undefined ? noteText : details.noteText,
+      notePostedAt: notePostedAt !== undefined ? notePostedAt : details.notePostedAt,
+    });
+    const updated = { ...user, ...userChanges };
     this.users.set(id, updated);
     return updated;
   }
