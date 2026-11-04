@@ -68,6 +68,12 @@ final class ProfileViewModel {
         !isOwn && profile?.isPrivate(grid) == true
     }
 
+    // Sur son propre profil, ses vidéos aimées ou ses favoris en « Toi uniquement » (ADR-071) : œil barré sur l'onglet,
+    // comme TikTok. Les autres comptes ne le voient jamais (ils ont le cadenas).
+    func isHiddenFromOthers(_ grid: ProfileGrid) -> Bool {
+        isOwn && profile?.isPrivate(grid) == true
+    }
+
     var isBlocked: Bool {
         relationship?.blockedByMe == true
     }

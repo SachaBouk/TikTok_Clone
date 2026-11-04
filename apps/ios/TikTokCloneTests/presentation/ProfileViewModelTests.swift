@@ -79,6 +79,24 @@ struct ProfileViewModelTests {
         #expect(interactionRepository.calls == ["follow-bob-true"])
     }
 
+    @Test("œil barré (ADR-071) : sur son profil seulement, pour les listes en « Toi uniquement »")
+    func hiddenFromOthersMark() async throws {
+        let session = await makeSession()
+        let own = makeProfile(nil, session: session)
+        await own.load()
+        #expect(own.isHiddenFromOthers(.likes) && own.isHiddenFromOthers(.favorites))
+        #expect(!own.isHiddenFromOthers(.videos) && !own.isHiddenFromOthers(.reposts))
+
+        session.update(try await SetReactionListVisibilityUseCase(profiles: profiles)(.everyone, of: .likes))
+        #expect(!own.isHiddenFromOthers(.likes) && own.isHiddenFromOthers(.favorites))
+
+        profiles.state.withLock { $0.others["bob"] = .bob }
+        let other = makeProfile("bob", session: session)
+        await other.load()
+        #expect(!other.isHiddenFromOthers(.likes) && !other.isHiddenFromOthers(.favorites))
+        #expect(other.isLocked(.likes))
+    }
+
     @Test("invité : pas de relation ; « Suivre » ouvre la connexion")
     func guest() async {
         let session = await makeSession(signedIn: false)

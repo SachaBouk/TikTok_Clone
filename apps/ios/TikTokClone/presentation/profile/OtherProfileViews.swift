@@ -258,6 +258,15 @@ final class ProfileSuggestionsModel {
         all.filter { !dismissed.contains($0.id) && !blocked.contains($0.id) }
     }
 
+    // Lecture lancée, attendue au plus `limit` (la rangée s'ouvre alors à sa hauteur finale) ; elle continue au-delà.
+    func prepare(waitingAtMost limit: Duration) async {
+        Task { await loadIfNeeded() }
+        let deadline = ContinuousClock.now + limit
+        while state == .idle || state == .loading, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     func loadIfNeeded() async {
         guard state == .idle || state == .failed else { return }
         state = .loading

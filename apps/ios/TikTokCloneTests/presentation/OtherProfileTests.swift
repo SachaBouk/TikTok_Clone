@@ -27,6 +27,18 @@ struct OtherProfileTests {
         #expect(model.visible(dismissed: DismissedSuggestions(), blocked: [UserSummary.bob.id]).map(\.id) == [UserSummary.alice.id])
     }
 
+    @Test("dépliage : les comptes sont attendus avant d'ouvrir la rangée (à sa hauteur finale), une seule lecture")
+    func prepareBeforeOpening() async {
+        let session = await makeSession()
+        let repository = FakeSuggestionRepository()
+        repository.byProfile.withLock { $0["carol"] = [suggestion(.alice)] }
+        let model = ProfileSuggestionsModel(username: "carol", load: LoadProfileSuggestionsUseCase(suggestions: repository), session: session)
+        await model.prepare(waitingAtMost: .seconds(2))
+        #expect(model.state == .loaded)
+        await model.prepare(waitingAtMost: .seconds(2))
+        #expect(repository.requestedProfiles.withLock { $0 } == ["carol"])
+    }
+
     @Test("feuille « Envoyer à » d'un profil : la carte du profil part avec le message, à chaque destinataire")
     func shareProfile() async {
         let session = await makeSession()

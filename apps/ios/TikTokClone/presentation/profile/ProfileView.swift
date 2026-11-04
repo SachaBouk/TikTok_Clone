@@ -26,6 +26,8 @@ struct ProfileView: View {
     @State private var isCreatingCollection = false
     // Profil d'un autre (ADR-069) : rangée des comptes suggérés dépliée, sa liste complète, et feuille de partage (l'action
     // choisie dedans — signaler, bloquer, écrire, se connecter — s'enchaîne une fois la feuille fermée).
+    // Comptes suggérés (ADR-069) : demandés (▲ du bouton, aussitôt) puis affichés (rangée, une fois lus).
+    @State private var suggestionsRequested = false
     @State private var showsSuggestions = false
     @State private var suggestionsModel: ProfileSuggestionsModel?
     @State private var isShowingAllSuggestions = false
@@ -146,7 +148,7 @@ struct ProfileView: View {
                     .padding(.horizontal, 16)
             } else if let status = viewModel.followStatus {
                 OtherProfileActions(
-                    status: status, showsSuggestions: showsSuggestions, follow: follow, message: openConversation,
+                    status: status, showsSuggestions: suggestionsRequested, follow: follow, message: openConversation,
                     toggleSuggestions: toggleSuggestions)
             }
             if showsSuggestions, let suggestionsModel {
@@ -155,7 +157,8 @@ struct ProfileView: View {
                     openProfile: { username in navigationPath?.wrappedValue.append(ProfileRoute(username: username)) },
                     showAll: { isShowingAllSuggestions = true }
                 )
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                // Comme TikTok : la rangée apparaît sur place, en fondu, pendant que la suite descend.
+                .transition(.opacity)
             }
             if let bio = profile.bio, !bio.isEmpty {
                 Text(bio).font(.subheadline).padding(.horizontal, 16)
@@ -171,8 +174,23 @@ struct ProfileView: View {
         if suggestionsModel == nil, let username = viewModel.profile?.username {
             suggestionsModel = ProfileSuggestionsModel(username: username, load: container.loadProfileSuggestions(), session: container.session)
         }
-        withAnimation(.easeInOut(duration: 0.25)) { showsSuggestions.toggle() }
+        // L'icône change aussitôt, sans animation, comme TikTok.
+        suggestionsRequested.toggle()
+        guard suggestionsRequested else {
+            withAnimation(Self.suggestionsAnimation) { showsSuggestions = false }
+            return
+        }
+        Task {
+            // Ouverte une fois les comptes lus (0,8 s d'attente au plus) : directement à sa hauteur finale, sans
+            // passer par le chargeur, dont la hauteur faisait sauter la page.
+            await suggestionsModel?.prepare(waitingAtMost: .milliseconds(800))
+            guard suggestionsRequested else { return }
+            withAnimation(Self.suggestionsAnimation) { showsSuggestions = true }
+        }
     }
+
+    // Court et sans rebond, relevé sur un enregistrement de TikTok (ouverture et fermeture en ~70 ms).
+    private static let suggestionsAnimation = Animation.easeOut(duration: 0.12)
 
     private func openConversation() {
         guard let username = viewModel.profile?.username else { return }
@@ -308,7 +326,8 @@ struct ProfileView: View {
             if viewModel.availableGrids.count > 1 {
                 ProfileGridTabs(
                     grids: viewModel.availableGrids,
-                    selection: viewModel.selectedGrid
+                    selection: viewModel.selectedGrid,
+                    hiddenGrids: Set(viewModel.availableGrids.filter(viewModel.isHiddenFromOthers))
                 ) { grid in Task { await viewModel.select(grid) } }
             }
             if viewModel.selectedGrid == .favorites {
@@ -444,10 +463,12 @@ struct ProfileView: View {
     }
 }
 
-// Onglets des grilles, comme TikTok : une icône par grille, soulignée quand elle est choisie.
+// Onglets des grilles, comme TikTok : une icône par grille, soulignée quand elle est choisie ; œil barré sur celles que
+// les autres ne voient pas (`hiddenGrids`, ADR-071).
 private struct ProfileGridTabs: View {
     let grids: [ProfileGrid]
     let selection: ProfileGrid
+    let hiddenGrids: Set<ProfileGrid>
     let select: (ProfileGrid) -> Void
 
     var body: some View {
@@ -456,7 +477,7 @@ private struct ProfileGridTabs: View {
                 Button {
                     select(grid)
                 } label: {
-                    Image(systemName: grid.systemImage)
+                    GridTabIcon(systemImage: grid.systemImage, isHidden: hiddenGrids.contains(grid))
                         .font(.title3)
                         .foregroundStyle(grid == selection ? Color.primary : Color.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -468,12 +489,40 @@ private struct ProfileGridTabs: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(grid.title)
+                .accessibilityLabel(hiddenGrids.contains(grid) ? "\(grid.title), visibles par toi uniquement" : grid.title)
                 .accessibilityAddTraits(grid == selection ? .isSelected : [])
             }
         }
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityIdentifier("profile.grids")
+    }
+}
+
+// Icône d'un onglet ; masqué aux autres : petit œil barré en bas à droite, détouré dans l'icône (comme TikTok).
+private struct GridTabIcon: View {
+    let systemImage: String
+    let isHidden: Bool
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .overlay(alignment: .bottomTrailing) {
+                if isHidden {
+                    ZStack {
+                        // Détourage : efface l'icône sous l'œil, quel que soit le fond ; opaque, sinon une icône grise
+                        // (translucide) n'est effacée qu'à moitié.
+                        Image(systemName: "eye.slash.fill")
+                            .font(.system(size: 11, weight: .black))
+                            .padding(2)
+                            .background(Circle())
+                            .foregroundStyle(.black)
+                            .blendMode(.destinationOut)
+                        Image(systemName: "eye.slash")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .offset(x: 6, y: 3)
+                }
+            }
+            .compositingGroup()
     }
 }
 
