@@ -182,3 +182,4 @@ Les vidéos du feed vivent dans la table `videos`, lue par le feed, les grilles,
 - ADR-039 — Limites de débit
 - ADR-040 — Durée maximale d'une vidéo
 - ADR-046 — Dimensions de la photo de profil
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison

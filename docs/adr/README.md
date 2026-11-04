@@ -75,6 +75,7 @@
 | [ADR-071](ADR-071-visibilite-videos-aimees-favoris.md) | Visibilité des vidéos aimées et des favoris (complète ADR-016, ADR-056 et ADR-069) | Proposé |
 | [ADR-072](ADR-072-collections-de-favoris.md) | Collections de favoris : module `collections`, appui long sur le signet, partage par message (complète ADR-016, ADR-003, ADR-071 et ADR-069) | Proposé |
 | [ADR-073](ADR-073-abonnement-plus.md) | Abonnement « Plus » : mensuel ou annuel, badge, jetons offerts, cadeaux exclusifs, vidéos de 10 min et lives de 4 h, icônes de l'app (complète ADR-009, ADR-016, ADR-050, ADR-040, ADR-053 et ADR-003) | Accepté |
+| [ADR-074](ADR-074-mux-video-data.md) | Mux Video et Mux Data, au choix à côté du pipeline maison (complète ADR-007, ADR-008, ADR-012, ADR-013, ADR-015, ADR-040, ADR-051 et ADR-061) | Accepté |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

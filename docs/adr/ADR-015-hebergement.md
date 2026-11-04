@@ -36,3 +36,4 @@ Critères pour le choix final :
 - ADR-012 — Traitement asynchrone
 - Complété par [ADR-027](ADR-027-images-docker.md) — Images Docker des applications
 - Complété par [ADR-053](ADR-053-live-comparaison-diffusion.md) — Live (serveur LiveKit)
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison

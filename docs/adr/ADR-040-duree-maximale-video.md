@@ -44,3 +44,4 @@ La règle existe en deux exemplaires, qui doivent rester identiques : `apps/work
 - ADR-016 — Périmètre
 - Complété par [ADR-052](ADR-052-enregistrement-edition-video.md) — Enregistrement et édition vidéo dans l'app
 - Complété par [ADR-073](ADR-073-abonnement-plus.md) — Abonnement « Plus »
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison

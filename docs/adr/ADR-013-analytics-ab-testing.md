@@ -27,3 +27,4 @@ Hébergement cloud (EU) ou auto-hébergé, selon l'hébergement retenu (ADR-015)
 - ADR-004 — Architecture backoffice (dashboard)
 - ADR-015 — Hébergement
 - Complété par [ADR-024](ADR-024-mesure-audience-consentement.md) — Mesure d'audience : consentement, identification et première expérience
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison

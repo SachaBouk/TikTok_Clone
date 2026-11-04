@@ -51,3 +51,4 @@ App iOS : onglet « cadenas » entre « Vidéos » et « Republications » sur s
 - ADR-016 — Périmètre du MVP
 - ADR-049 — Recherche et hashtags
 - ADR-056 — Profil façon TikTok
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison

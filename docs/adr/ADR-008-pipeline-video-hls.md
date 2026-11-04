@@ -40,3 +40,4 @@ L'API ne doit pas servir les octets vidéo.
 - Complété par [ADR-040](ADR-040-duree-maximale-video.md) — Durée maximale d'une vidéo : 3 minutes
 - Complété par [ADR-047](ADR-047-tone-mapping-hdr.md) — Tone mapping des vidéos HDR
 - Complété par [ADR-051](ADR-051-stories.md) — Stories
+- Complété par [ADR-074](ADR-074-mux-video-data.md) — Mux Video et Mux Data, au choix à côté du pipeline maison
