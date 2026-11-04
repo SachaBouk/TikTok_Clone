@@ -196,6 +196,14 @@ describe('WalletService', () => {
     await expect(service.getBalance(ALICE)).resolves.toBe(100);
   });
 
+  it('traite les achats du Test Store comme des achats de test, même annoncés en production', async () => {
+    await expect(service.recordCurrencyEvent(event({ store: 'TEST_STORE', environment: 'PRODUCTION' }))).resolves.toBe('applied');
+    expect(wallets.entries.at(-1)).toMatchObject({ store: 'TEST_STORE', environment: 'SANDBOX' });
+    build(true);
+    await expect(service.recordCurrencyEvent(event({ store: 'TEST_STORE', environment: 'PRODUCTION' }))).resolves.toBe('ignored');
+    await expect(service.recordCurrencyEvent(event({ store: 'APP_STORE', environment: 'PRODUCTION' }))).resolves.toBe('applied');
+  });
+
   it("pagine l'historique du plus récent au plus ancien", async () => {
     for (let i = 1; i <= 3; i++) await service.recordCurrencyEvent(event({ amount: i }));
     const first = await service.listTransactions(ALICE, null, 2);

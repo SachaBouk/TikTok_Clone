@@ -250,7 +250,10 @@ Création façon TikTok (ADR-062) : le bouton « + » de la barre d'onglets ouvr
   Dans le tableau de bord RevenueCat : une monnaie virtuelle (code `TKN`, comme `REVENUECAT_CURRENCY_CODE` de l'API), des produits
   consommables qui en accordent (ex. `tokens_100` → 100), une offre courante qui les contient, et le webhook
   `https://<api>/webhooks/revenuecat` avec l'en-tête `Authorization` de `REVENUECAT_WEBHOOK_AUTHORIZATION`. En local, l'API doit être
-  joignable depuis internet (tunnel) pour recevoir le webhook.
+  joignable depuis internet (tunnel) pour recevoir le webhook : `cloudflared tunnel --no-autoupdate --url http://localhost:3000`
+  (`brew install cloudflared`, sans compte ; l'adresse change à chaque lancement, à reporter dans le webhook). Achat simulé : la
+  fenêtre du Test Store propose réussite, échec ou annulation ; l'API range ces achats en sandbox (annoncés `PRODUCTION`, boutique
+  `TEST_STORE`). Une clé `test_…` fait planter une build Release ou TestFlight (voulu par RevenueCat).
 - Sans clé : solde et historique lisibles, achats indiqués comme indisponibles.
 - Le crédit arrive par le webhook, pas par l'app : après l'achat, l'écran attend le solde à jour (événement temps réel `walletUpdated`,
   ou relecture du solde pendant 30 s).

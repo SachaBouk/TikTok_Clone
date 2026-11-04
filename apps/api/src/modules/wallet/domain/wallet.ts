@@ -123,6 +123,16 @@ export interface GiftTotals {
 }
 
 export const PRODUCTION_ENVIRONMENT = 'PRODUCTION';
+export const SANDBOX_ENVIRONMENT = 'SANDBOX';
+// Boutique simulée de RevenueCat (clé `test_…`) : jamais payée.
+export const TEST_STORE = 'TEST_STORE';
+
+// Environnement retenu pour un événement. RevenueCat annonce PRODUCTION pour les achats du Test Store (relevé sur un
+// vrai webhook) : ils sont traités comme des achats de test, sinon `rejectSandbox` les laisserait passer (la clé
+// `test_…` est publique) et le backoffice les compterait comme des ventes.
+export function effectiveEnvironment(store: string | null, environment: string): string {
+  return store === TEST_STORE ? SANDBOX_ENVIRONMENT : environment;
+}
 
 export const DEFAULT_TRANSACTIONS_PAGE_SIZE = 20;
 export const MAX_TRANSACTIONS_PAGE_SIZE = 50;

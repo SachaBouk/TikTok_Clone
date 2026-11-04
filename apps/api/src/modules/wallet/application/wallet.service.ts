@@ -17,14 +17,23 @@ import {
   TooManyGiftsError,
   UnknownGiftError,
 } from '../domain/wallet.errors';
-import type { CurrencyEvent, LedgerFilter, WalletLedgerEntry, WalletStats, WalletTransaction, WalletTransactionKind } from '../domain/wallet';
+import {
+  effectiveEnvironment,
+  PRODUCTION_ENVIRONMENT,
+  type CurrencyEvent,
+  type LedgerFilter,
+  type WalletLedgerEntry,
+  type WalletStats,
+  type WalletTransaction,
+  type WalletTransactionKind,
+} from '../domain/wallet';
 import type { WalletEventPublisher } from '../domain/wallet-events';
 import type { WalletRepository } from '../domain/wallet.repository';
 import type { LiveService } from '../../live/application/live.service';
 import { LiveError, OwnLiveError } from '../../live/domain/live.errors';
 
 export interface WalletSettings {
-  // Refuser les achats de test (SANDBOX) : à activer en production si TestFlight ne doit rien créditer.
+  // Refuser les achats de test (SANDBOX, et Test Store) : à activer en production si TestFlight ne doit rien créditer.
   rejectSandbox: boolean;
 }
 
@@ -251,7 +260,8 @@ export class WalletService {
   // Le solde à jour est poussé aux appareils du compte.
   async recordCurrencyEvent(event: CurrencyEvent): Promise<WebhookOutcome> {
     if (event.amount === 0) return 'ignored';
-    if (this.settings.rejectSandbox && event.environment !== 'PRODUCTION') return 'ignored';
+    const environment = effectiveEnvironment(event.store, event.environment);
+    if (this.settings.rejectSandbox && environment !== PRODUCTION_ENVIRONMENT) return 'ignored';
 
     const userId = await this.resolveCustomer(event.appUserIds);
     const result = await this.wallets.apply({
@@ -263,7 +273,7 @@ export class WalletService {
       productId: event.productId,
       storeTransactionId: event.storeTransactionId,
       store: event.store,
-      environment: event.environment,
+      environment,
       occurredAt: event.occurredAt,
     });
     if (result.status === 'duplicate') return 'duplicate';
