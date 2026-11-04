@@ -86,6 +86,7 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 - `TokenRefresher` (actor) : **un seul rafraîchissement à la fois**, les requêtes simultanées attendent le même résultat (rejouer un refresh token déjà utilisé révoquerait toute la session). Refresh refusé : session effacée, l'app repasse en invité avec l'alerte « Session expirée ». API injoignable : la session est gardée.
 - Lancement : écran noir avec le logo et le nom, animé, au moins 2 s ; pendant ce temps, la session enregistrée est reprise (`RestoreSessionUseCase`) ; API injoignable : écran « Serveur injoignable » (réessayer, ou continuer sans compte).
 - Déconnexion : session oubliée localement, puis révoquée côté serveur au mieux (`POST /auth/logout`).
+- **Changement de session** : à la connexion comme à la déconnexion, retour à l'onglet Accueil sur « Pour toi », piles de navigation des onglets vidées (`MainTabView`, `HomeFeedView`).
 
 ## Feed et lecteur
 

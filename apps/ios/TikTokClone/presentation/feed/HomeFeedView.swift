@@ -94,6 +94,8 @@ struct HomeFeedView: View {
         .onChange(of: session.isSignedIn) { _, isSignedIn in
             // Un autre compte se connectera peut-être : son feed des abonnements repartira de zéro.
             if !isSignedIn { following = nil }
+            // Changement de session : toujours sur « Pour toi », comme à l'ouverture.
+            selection = .forYou
             showFollowingIfSelected()
         }
     }

@@ -165,7 +165,16 @@ struct MainTabView: View {
         .onChange(of: router.isFriendsRefreshing) { _, refreshing in
             if refreshing { startIconAnimation(.friends) }
         }
-        .onChange(of: session.isSignedIn) { router.isProfileMenuOpen = false }
+        // Connexion ou déconnexion (même compte ou un autre) : retour au feed « Pour toi », piles vidées. Sinon l'onglet et
+        // les pages ouverts avant restaient (bug rencontré : déconnecté depuis les paramètres, on s'y retrouvait reconnecté).
+        .onChange(of: session.isSignedIn) {
+            router.isProfileMenuOpen = false
+            selection = .home
+            feedPath = NavigationPath()
+            friendsPath = NavigationPath()
+            inboxPath = NavigationPath()
+            profilePath = NavigationPath()
+        }
         .sheet(isPresented: $session.isPresentingSignIn) {
             AuthFlowView(container: container)
         }
