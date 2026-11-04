@@ -94,7 +94,9 @@ function startConsumer(
       const started = Date.now();
       let output;
       try {
-        output = await transcode(job.data, config, storage, { toneMapping, maxDurationSeconds, extractSound });
+        // Durée permise par l'API pour cette vidéo (abonné « Plus », ADR-073), sinon celle de la file.
+        const maxDuration = queue === TRANSCODE_QUEUE ? (job.data.maxDurationSeconds ?? maxDurationSeconds) : maxDurationSeconds;
+        output = await transcode(job.data, config, storage, { toneMapping, maxDurationSeconds: maxDuration, extractSound });
       } catch (error) {
         // Fichier illisible, trop long ou disparu : les nouvelles tentatives échoueraient de la même façon.
         if (error instanceof InvalidMediaError || error instanceof RawVideoNotFoundError) {

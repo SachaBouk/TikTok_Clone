@@ -14,7 +14,7 @@ struct GiftDataTests {
                 transport: MockTransport { request, operation in
                     log.record(request, operation)
                     if operation == "getGiftCatalog" {
-                        return json(.ok, #"{"items":[{"code":"rose","name":"Rose","emoji":"🌹","price":1}]}"#)
+                        return json(.ok, #"{"items":[{"code":"rose","name":"Rose","emoji":"🌹","price":1,"plusOnly":false}]}"#)
                     }
                     return json(
                         .created,
@@ -55,7 +55,7 @@ struct GiftDataTests {
     func walletMapping() async throws {
         let history = """
             {"items":[{"id":"t1","kind":"giftSent","amount":-50,"balanceAfter":50,"productId":null,\
-            "gift":{"code":"crown","name":"Couronne","emoji":"👑","recipient":{"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null}},\
+            "gift":{"code":"crown","name":"Couronne","emoji":"👑","recipient":{"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false}},\
             "createdAt":"2026-10-07T10:00:00.000Z"}],"nextCursor":null}
             """
         let received = """

@@ -98,6 +98,11 @@ struct AccountSettingsView: View {
                     Label("Centres d’intérêt", systemImage: "heart.text.square.fill")
                 }
                 .accessibilityIdentifier("settings.interests")
+                // Icônes au choix des abonnés « Plus » (ADR-073).
+                NavigationLink(value: AccountRoute.appIcon) {
+                    Label("Icône de l’app", systemImage: "app.badge.fill")
+                }
+                .accessibilityIdentifier("settings.appIcon")
             }
             Section("Compte") {
                 NavigationLink(value: AccountRoute.account) {

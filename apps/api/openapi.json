@@ -8270,7 +8270,7 @@
             }
           },
           "403": {
-            "description": "Blocage avec l’auteur, dans un sens ou dans l’autre.",
+            "description": "Blocage avec l’auteur, dans un sens ou dans l’autre, ou cadeau réservé aux abonnés « Plus ».",
             "content": {
               "application/json": {
                 "schema": {
@@ -8389,7 +8389,7 @@
             }
           },
           "403": {
-            "description": "Blocage avec l’auteur du live, dans un sens ou dans l’autre.",
+            "description": "Blocage avec l’auteur du live, dans un sens ou dans l’autre, ou cadeau réservé aux abonnés « Plus ».",
             "content": {
               "application/json": {
                 "schema": {
@@ -8440,6 +8440,37 @@
         },
         "tags": [
           "gifts"
+        ]
+      }
+    },
+    "/users/me/plus": {
+      "get": {
+        "operationId": "getMyPlusStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlusStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "subscriptions"
         ]
       }
     },
@@ -10288,6 +10319,10 @@
           "favoritesVisibility": {
             "$ref": "#/components/schemas/VideoVisibility"
           },
+          "plus": {
+            "type": "boolean",
+            "description": "Abonné « Plus » (ADR-073) : badge « + »."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -10305,6 +10340,7 @@
           "pronouns",
           "likesVisibility",
           "favoritesVisibility",
+          "plus",
           "createdAt"
         ]
       },
@@ -10549,8 +10585,8 @@
           "fileSize": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 1073741824,
-            "description": "Taille du fichier en octets."
+            "maximum": 2147483648,
+            "description": "Taille du fichier en octets : 1 Gio au plus, 2 Gio pour un abonné « Plus » (ADR-073)."
           },
           "description": {
             "type": "string",
@@ -10941,13 +10977,18 @@
             "type": "string",
             "nullable": true,
             "format": "uri"
+          },
+          "plus": {
+            "type": "boolean",
+            "description": "Abonné « Plus » (ADR-073) : badge « + » à côté du pseudo."
           }
         },
         "required": [
           "id",
           "username",
           "displayName",
-          "avatarUrl"
+          "avatarUrl",
+          "plus"
         ]
       },
       "CommentViewerStateResponse": {
@@ -13335,6 +13376,7 @@
           "purchase",
           "refund",
           "adjustment",
+          "subscriptionGrant",
           "giftSent"
         ]
       },
@@ -13533,13 +13575,18 @@
             "type": "integer",
             "minimum": 1,
             "description": "Prix en jetons."
+          },
+          "plusOnly": {
+            "type": "boolean",
+            "description": "Réservé aux abonnés « Plus » (ADR-073)."
           }
         },
         "required": [
           "code",
           "name",
           "emoji",
-          "price"
+          "price",
+          "plusOnly"
         ]
       },
       "GiftCatalogResponse": {
@@ -13607,6 +13654,37 @@
           "amount",
           "balance",
           "createdAt"
+        ]
+      },
+      "PlusPeriod": {
+        "type": "string",
+        "enum": [
+          "monthly",
+          "annual"
+        ]
+      },
+      "PlusStatusResponse": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Abonné : échéance dans le futur."
+          },
+          "period": {
+            "$ref": "#/components/schemas/PlusPeriod"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Échéance, période de grâce comprise."
+          },
+          "willRenew": {
+            "type": "boolean",
+            "description": "Faux : renouvellement annulé, actif jusqu’à l’échéance."
+          }
+        },
+        "required": [
+          "active"
         ]
       },
       "CreateReportRequest": {
@@ -13707,6 +13785,10 @@
             "minimum": 0,
             "description": "Jetons reçus en cadeaux (ADR-050), non dépensables."
           },
+          "plus": {
+            "type": "boolean",
+            "description": "Abonné « Plus » (ADR-073)."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -13727,6 +13809,7 @@
           "videosCount",
           "tokenBalance",
           "tokenEarned",
+          "plus",
           "createdAt"
         ]
       },
@@ -15021,6 +15104,24 @@
           "data"
         ]
       },
+      "PlusChangedEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "plusChanged"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/PlusStatusResponse"
+          }
+        },
+        "required": [
+          "event",
+          "data"
+        ]
+      },
       "TypingClientData": {
         "type": "object",
         "properties": {
@@ -15322,6 +15423,9 @@
           },
           {
             "$ref": "#/components/schemas/WalletUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PlusChangedEvent"
           }
         ],
         "discriminator": {
@@ -15339,7 +15443,8 @@
             "conversationDeleted": "#/components/schemas/ConversationDeletedEvent",
             "typing": "#/components/schemas/TypingEvent",
             "profileCountersChanged": "#/components/schemas/ProfileCountersChangedEvent",
-            "walletUpdated": "#/components/schemas/WalletUpdatedEvent"
+            "walletUpdated": "#/components/schemas/WalletUpdatedEvent",
+            "plusChanged": "#/components/schemas/PlusChangedEvent"
           }
         }
       },

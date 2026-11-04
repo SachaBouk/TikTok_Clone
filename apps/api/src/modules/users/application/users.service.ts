@@ -33,6 +33,8 @@ import {
 } from '../domain/user.errors';
 import type { UserRepository } from '../domain/user.repository';
 import type { SuspendedAccounts } from '../../../suspension/suspended-accounts';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
+import type { PlusMembers } from '../../../plus/plus-members';
 
 export interface ProfileUpdate {
   username?: string;
@@ -73,6 +75,8 @@ export class UsersService {
     private readonly suspended: SuspendedAccounts,
     private readonly receivedLikes: ReceivedLikesCounter,
     private readonly now: () => Date = () => new Date(),
+    // Abonnés « Plus » (ADR-073) : badge des comptes renvoyés. Sans registre, personne n'est abonné.
+    private readonly plus: PlusMembers = new InMemoryPlusMembers(),
   ) {}
 
   // Profil affiché : le compte, ses likes reçus (compteur « J'aime », ADR-056), ses pronoms et sa note tant qu'elle
@@ -103,7 +107,7 @@ export class UsersService {
   async getById(id: string): Promise<User> {
     const user = await this.users.findById(id);
     if (!user) throw new UserNotFoundError(id);
-    return user;
+    return this.withPlus(user);
   }
 
   // Profil public (`GET /users/:username`) : celui d'un compte suspendu n'est plus lisible (ADR-037). Les autres
@@ -117,25 +121,25 @@ export class UsersService {
   async getByUsername(username: string): Promise<User> {
     const user = await this.users.findByUsername(username);
     if (!user) throw new UserNotFoundError(`@${username}`);
-    return user;
+    return this.withPlus(user);
   }
 
   // Comptes existants parmi `ids` (ex. auteurs des vidéos du feed), dans un ordre quelconque.
-  getByIds(ids: string[]): Promise<User[]> {
-    return this.users.findByIds([...new Set(ids)]);
+  async getByIds(ids: string[]): Promise<User[]> {
+    return this.withPlusAll(await this.users.findByIds([...new Set(ids)]));
   }
 
   // Backoffice (ADR-004) : recherche par pseudo (avec ou sans « @ »), nom ou identifiant ; sans recherche,
   // tous les comptes. Du plus récent au plus ancien, strictement avant `beforeId` s'il est donné.
-  searchAccounts(query: string | null, beforeId: string | null, limit: number): Promise<User[]> {
+  async searchAccounts(query: string | null, beforeId: string | null, limit: number): Promise<User[]> {
     const needle = query?.trim().replace(/^@/, '') || null;
-    return this.users.search(needle, beforeId, limit);
+    return this.withPlusAll(await this.users.search(needle, beforeId, limit));
   }
 
   // Pour le module search (ADR-049) : recherche publique dans le pseudo et le nom, classée (voir le dépôt), hors
   // `excludedIds` (comptes masqués, décidés par l'appelant : `users` ne connaît pas les blocages).
-  searchProfiles(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]> {
-    return this.users.searchPublic(query, [...new Set(excludedIds)], offset, limit);
+  async searchProfiles(query: string, excludedIds: string[], offset: number, limit: number): Promise<User[]> {
+    return this.withPlusAll(await this.users.searchPublic(query, [...new Set(excludedIds)], offset, limit));
   }
 
   // Backoffice : nombre de comptes, créés depuis `createdSince` s'il est donné.
@@ -210,7 +214,7 @@ export class UsersService {
     if (Object.keys(changes).length === 0) return this.getById(userId);
     const user = await this.users.update(userId, changes);
     if (!user) throw new UserNotFoundError(userId);
-    return user;
+    return this.withPlus(user);
   }
 
   // Note de profil (ADR-070) : publiée (ou remplacée) maintenant, visible 24 h. Retours à la ligne et espaces répétés
@@ -220,14 +224,14 @@ export class UsersService {
     if (!note || note.length > MAX_NOTE_LENGTH) throw new InvalidProfileError(`Note : 1 à ${MAX_NOTE_LENGTH} caractères`);
     const user = await this.users.update(userId, { noteText: note, notePostedAt: this.now() });
     if (!user) throw new UserNotFoundError(userId);
-    return user;
+    return this.withPlus(user);
   }
 
   // Retire la note (idempotent).
   async removeNote(userId: string): Promise<User> {
     const user = await this.users.update(userId, { noteText: null, notePostedAt: null });
     if (!user) throw new UserNotFoundError(userId);
-    return user;
+    return this.withPlus(user);
   }
 
   // Photo de profil, étape 1 : URL signée pour envoyer l'image directement au stockage (un seul PUT,
@@ -259,7 +263,7 @@ export class UsersService {
       throw new UserNotFoundError(userId);
     }
     await this.deleteAvatarFiles(userId, key);
-    return user;
+    return this.withPlus(user);
   }
 
   // Retire la photo de profil (l'app affiche alors un avatar par défaut) et supprime ses fichiers.
@@ -267,7 +271,20 @@ export class UsersService {
     const user = await this.users.update(userId, { avatarUrl: null });
     if (!user) throw new UserNotFoundError(userId);
     await this.deleteAvatarFiles(userId);
-    return user;
+    return this.withPlus(user);
+  }
+
+  // Badge « Plus » (ADR-073) : lu dans le registre partagé, une lecture par lot.
+  private async withPlus(user: User): Promise<User> {
+    return { ...user, plus: await this.plus.isActive(user.id, this.now()) };
+  }
+
+  private async withPlusAll(users: User[]): Promise<User[]> {
+    const active = await this.plus.activeAmong(
+      users.map((user) => user.id),
+      this.now(),
+    );
+    return users.map((user) => ({ ...user, plus: active.has(user.id) }));
   }
 
   // Suppression du compte depuis l'app (ADR-010, exigence Apple). La base supprime en cascade

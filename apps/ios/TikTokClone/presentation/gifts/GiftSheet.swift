@@ -8,6 +8,8 @@ struct GiftSheet: View {
     let container: AppContainer
     let onSent: (GiftBurst) -> Void
     @State private var isShowingWallet = false
+    // Cadeau exclusif choisi sans abonnement : paywall « Plus » (ADR-073).
+    @State private var isPresentingPlus = false
     @Environment(\.dismiss) private var dismiss
 
     init(viewModel: GiftSheetViewModel, container: AppContainer, onSent: @escaping (GiftBurst) -> Void) {
@@ -40,6 +42,7 @@ struct GiftSheet: View {
         .environment(\.colorScheme, .dark)
         .presentationBackground(Self.background)
         .task { await viewModel.load() }
+        .sheet(isPresented: $isPresentingPlus) { PlusSheet(source: .gift, container: container) }
         // Retour du paywall : le solde a peut-être changé.
         .onChange(of: viewModel.balance) {
             if let selected = viewModel.selected { viewModel.select(selected) }
@@ -116,6 +119,10 @@ struct GiftSheet: View {
             } label: {
                 VStack(spacing: 4) {
                     Text(item.info.emoji).font(.system(size: 50)).frame(height: 62)
+                        .overlay(alignment: .topTrailing) {
+                            // Cadeau exclusif des abonnés « Plus » (ADR-073).
+                            if item.plusOnly { PlusBadge(size: 16).offset(x: 6, y: -2) }
+                        }
                     if !isSelected {
                         Text(item.info.name).font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                     }
@@ -130,7 +137,9 @@ struct GiftSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(item.info.name), \(item.priceLabel)")
+            .accessibilityLabel(
+                item.plusOnly ? "\(item.info.name), \(item.priceLabel), réservé aux abonnés Plus" : "\(item.info.name), \(item.priceLabel)"
+            )
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityIdentifier("gift.item.\(item.info.code)")
             if isSelected { sendButton }
@@ -141,7 +150,20 @@ struct GiftSheet: View {
     // « Envoyer » dans la case choisie ; « Recharger » si le solde ne suffit pas.
     @ViewBuilder
     private var sendButton: some View {
-        if viewModel.needsTopUp {
+        if viewModel.selected?.plusOnly == true, !container.plus.isActive {
+            Button {
+                isPresentingPlus = true
+            } label: {
+                Text("Plus").font(.subheadline.bold()).frame(maxWidth: .infinity).frame(height: 34)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(
+                LinearGradient(colors: [.brandCyan, .brandPink], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 8)
+            )
+            .accessibilityLabel("Réservé aux abonnés Plus")
+            .accessibilityIdentifier("gift.plusOnly")
+        } else if viewModel.needsTopUp {
             Button {
                 isShowingWallet = true
             } label: {

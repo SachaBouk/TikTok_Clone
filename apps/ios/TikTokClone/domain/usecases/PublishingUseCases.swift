@@ -39,7 +39,11 @@ struct CreatePublicationUseCase: Sendable {
         }
         let fileSize = try store.size(ofFileAt: file)
         guard fileSize > 0 else { throw AppError.rejected(contentType.isVideo ? "Cette vidéo est vide." : "Cette photo est vide.") }
-        guard fileSize <= UploadRules.maxFileSize else { throw AppError.rejected("La vidéo dépasse 1 Go.") }
+        if kind == .video && extras.isPlus {
+            guard fileSize <= PlusRules.maxFileSize else { throw AppError.rejected("La vidéo dépasse 2 Go.") }
+        } else {
+            guard fileSize <= UploadRules.maxFileSize else { throw AppError.rejected("La vidéo dépasse 1 Go.") }
+        }
         if !contentType.isVideo && fileSize > StoryRules.maxPhotoFileSize { throw AppError.rejected("La photo dépasse 5 Mo.") }
 
         // Couverture (ADR-065) : vidéo seulement ; trop lourde ou illisible, elle est laissée de côté (miniature du worker).

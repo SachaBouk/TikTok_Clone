@@ -7,6 +7,8 @@ import { LiveModule } from '../live/live.module';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { PlusMembers } from '../../plus/plus-members';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { UsersService } from '../users/application/users.service';
 import { UsersModule } from '../users/users.module';
 import { VideosService } from '../videos/application/videos.service';
@@ -25,7 +27,7 @@ import { RevenueCatConfig } from './wallet.config';
 // Cadeaux (ADR-050) : débités ici, vidéo et auteur lus via VideosService, masquage et blocages via InteractionsService,
 // notification via NotificationsService (ADR-003) ; cadeaux pendant un live via LiveService (ADR-053) ; solde poussé aux appareils par le module realtime (ADR-011).
 @Module({
-  imports: [UsersModule, RealtimeModule, VideosModule, InteractionsModule, NotificationsModule, LiveModule],
+  imports: [UsersModule, RealtimeModule, VideosModule, InteractionsModule, NotificationsModule, LiveModule, SubscriptionsModule],
   controllers: [WalletController, GiftsController, RevenueCatWebhookController],
   providers: [
     { provide: RevenueCatConfig, useFactory: () => RevenueCatConfig.fromEnv() },
@@ -43,13 +45,14 @@ import { RevenueCatConfig } from './wallet.config';
         notifications: NotificationsService,
         rateLimiter: RateLimiter,
         lives: LiveService,
+        plus: PlusMembers,
       ) =>
         new WalletService(
           wallets,
           users,
           events,
           { rejectSandbox: config.rejectSandbox },
-          { videos, lives, interactions, notifications, rateLimiter },
+          { videos, lives, interactions, notifications, rateLimiter, plus },
         ),
       inject: [
         WalletRepository,
@@ -61,6 +64,7 @@ import { RevenueCatConfig } from './wallet.config';
         NotificationsService,
         RateLimiter,
         LiveService,
+        PlusMembers,
       ],
     },
   ],

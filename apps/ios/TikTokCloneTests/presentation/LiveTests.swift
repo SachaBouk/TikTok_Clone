@@ -360,7 +360,7 @@ struct LiveDataTests {
     static let live = """
         {"id":"0192f3a0-0000-7000-8000-000000000042","userId":"0192f3a0-0000-7000-8000-000000000002",\
         "title":"Mon live","status":"live","startedAt":"2026-10-09T10:00:00.000Z","endedAt":null,"heartsCount":12,\
-        "host":{"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null}}
+        "host":{"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false}}
         """
 
     @Test("rejoindre : mapping de la connexion ; 404, 409 terminé")
@@ -399,7 +399,7 @@ struct LiveDataTests {
     @Test("événements de la salle décodés avec le contrat ; inconnu ou illisible ignoré")
     func roomEvents() {
         let gift = """
-            {"event":"gift","data":{"sender":{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null},\
+            {"event":"gift","data":{"sender":{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null,"plus":false},\
             "gift":{"code":"rose","name":"Rose","emoji":"🌹"},"amount":1,"giftsCount":2,"giftsAmount":6}}
             """
         #expect(
@@ -411,7 +411,7 @@ struct LiveDataTests {
         #expect(LiveRoomEvent(data: Data(#"{"event":"liveEnded","data":{"reason":"timeLimit"}}"#.utf8)) == .ended(.timeLimit))
         #expect(LiveRoomEvent(data: Data(#"{"event":"chatMessageDeleted","data":{"messageId":"m1"}}"#.utf8)) == .chatMessageDeleted(id: "m1"))
         let message = """
-            {"event":"chatMessage","data":{"id":"m1","liveId":"l1","user":{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null},\
+            {"event":"chatMessage","data":{"id":"m1","liveId":"l1","user":{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null,"plus":false},\
             "content":"Salut","createdAt":"2026-10-09T10:00:00.000Z"}}
             """
         guard case .chatMessage(let chat) = LiveRoomEvent(data: Data(message.utf8)) else {
@@ -587,7 +587,7 @@ struct LiveTikTokTests {
 
     @Test("lignes d'événement décodées depuis la salle")
     func decoding() {
-        let user = #"{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null}"#
+        let user = #"{"id":"u1","username":"alice","displayName":"Alice","avatarUrl":null,"plus":false}"#
         let alice = UserSummary(id: "u1", username: "alice", displayName: "Alice", avatarURL: nil)
         #expect(LiveRoomEvent(data: Data(#"{"event":"viewerJoined","data":{"user":\#(user)}}"#.utf8)) == .viewer(.joined, alice))
         #expect(LiveRoomEvent(data: Data(#"{"event":"viewerLiked","data":{"user":\#(user)}}"#.utf8)) == .viewer(.liked, alice))

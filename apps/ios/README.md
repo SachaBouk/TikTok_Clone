@@ -257,6 +257,11 @@ Création façon TikTok (ADR-062) : le bouton « + » de la barre d'onglets ouvr
 - Sans clé : solde et historique lisibles, achats indiqués comme indisponibles.
 - Le crédit arrive par le webhook, pas par l'app : après l'achat, l'écran attend le solde à jour (événement temps réel `walletUpdated`,
   ou relecture du solde pendant 30 s).
+- **Abonnement « Plus »** (ADR-073) : même clé RevenueCat. Dans le tableau de bord : produits d'abonnement `plus_monthly` et
+  `plus_annual` (Test Store), entitlement `plus` attachée aux deux, offre `plus` (packages Monthly et Annual, **pas** l'offre
+  courante), jetons offerts dans la monnaie `TKN` (150 et 1 800, à l'achat et au renouvellement), et la clé secrète V1 de
+  l'API (`sk_…`) dans le `.env` racine : `REVENUECAT_SECRET_API_KEY` (l'API relit l'état du client à chaque webhook).
+  Paywall : menu ☰ › « Plus ». Icônes au choix : Paramètres › « Icône de l'app » (régénérées par `scripts/make-icon.swift`).
 - **Développement sans RevenueCat** (Debug) : argument de lancement `-fakePurchases` (packs fictifs, achat accepté sans paiement), puis
   simuler le webhook, API lancée avec `REVENUECAT_WEBHOOK_AUTHORIZATION` :
   ```bash

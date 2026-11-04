@@ -1,3 +1,5 @@
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
+import type { PlusMembers } from '../../../plus/plus-members';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { NotificationsService } from '../../notifications/application/notifications.service';
@@ -225,6 +227,7 @@ export function inMemoryLive(
   interactions: InteractionsService,
   notifications: NotificationsService,
   now: () => Date = () => new Date(),
+  plus: PlusMembers = new InMemoryPlusMembers(),
 ) {
   const repository = new InMemoryLiveRepository();
   const media = new InMemoryLiveMedia();
@@ -245,6 +248,7 @@ export function inMemoryLive(
     now,
     () => `00000000-0000-7000-a000-${String(++sequence).padStart(12, '0')}`,
     () => `invite-${++guests}`,
+    plus,
   );
   return { service, repository, media, room, lifecycle, rateLimiter };
 }

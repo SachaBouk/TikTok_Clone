@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CLEANUP_DELAY_MS } from '../domain/cleanup-queue';
 import { TranscodingQueue, type TranscodingJob } from '../domain/transcoding-queue';
-import { MAX_COVER_SIZE_BYTES, MAX_VIDEO_SIZE_BYTES, UPLOAD_PART_SIZE_BYTES } from '../domain/upload-rules';
+import {
+  MAX_COVER_SIZE_BYTES,
+  MAX_VIDEO_SIZE_BYTES,
+  PLUS_MAX_VIDEO_DURATION_SECONDS,
+  PLUS_MAX_VIDEO_SIZE_BYTES,
+  UPLOAD_PART_SIZE_BYTES,
+} from '../domain/upload-rules';
 import {
   CoverTooLargeError,
   InvalidHashtagError,
@@ -109,6 +116,37 @@ describe('VideosService', () => {
       const daily = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 }).catch((e: unknown) => e);
       expect((daily as TooManyUploadsError).retryAfterSeconds).toBe(21 * 3600);
       expect((daily as TooManyUploadsError).message).toBe('Trop de vidéos envoyées récemment : réessayez dans 21 h');
+    });
+  });
+
+  describe('abonnés « Plus » (ADR-073)', () => {
+    const NOW = new Date('2026-01-01T00:00:00Z');
+    function withPlus(expiresAt: Date) {
+      const plus = new InMemoryPlusMembers([{ userId: ALICE, expiresAt }]);
+      return new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(), () => NOW, plus);
+    }
+
+    it('envois jusqu’à 2 Gio et vidéos de 10 min, durée gardée et portée par le job (relance comprise)', async () => {
+      const plusService = withPlus(new Date(NOW.getTime() + 86_400_000));
+      const { video, parts } = await plusService.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MAX_VIDEO_SIZE_BYTES + 1 });
+      await expect(plusService.createUpload(ALICE, { contentType: 'video/mp4', fileSize: PLUS_MAX_VIDEO_SIZE_BYTES + 1 })).rejects.toBeInstanceOf(
+        VideoTooLargeError,
+      );
+      const uploaded = await plusService.completeUpload(ALICE, video.id, uploadAllParts(video.uploadId!, MAX_VIDEO_SIZE_BYTES + 1, parts.length));
+      expect(uploaded.maxDurationSeconds).toBe(PLUS_MAX_VIDEO_DURATION_SECONDS);
+      expect(queue.jobs).toEqual([{ videoId: video.id, rawKey: video.rawKey, maxDurationSeconds: 600 }]);
+      expect((await videos.findById(video.id))?.maxDurationSeconds).toBe(600);
+    });
+
+    it('abonnement échu : limites ordinaires, job sans durée', async () => {
+      const expired = withPlus(new Date(NOW.getTime() - 1));
+      await expect(expired.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MAX_VIDEO_SIZE_BYTES + 1 })).rejects.toBeInstanceOf(
+        VideoTooLargeError,
+      );
+      const { video, parts } = await expired.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      const uploaded = await expired.completeUpload(ALICE, video.id, uploadAllParts(video.uploadId!, 1000, parts.length));
+      expect(uploaded.maxDurationSeconds).toBeNull();
+      expect(queue.jobs).toEqual([{ videoId: video.id, rawKey: video.rawKey }]);
     });
   });
 

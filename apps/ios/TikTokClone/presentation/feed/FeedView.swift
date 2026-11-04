@@ -588,7 +588,7 @@ struct FeedPageView: View {
                     .accessibilityIdentifier("video.location")
             }
             NavigationLink(value: ProfileRoute(username: video.author.username)) {
-                Text("@\(video.author.username)").font(.headline)
+                Text("@\(video.author.username)").font(.headline).plusBadge(video.author.isPlus, size: 15)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("video.author")

@@ -77,7 +77,7 @@ private struct SuggestedAccountRow: View {
                 HStack(spacing: 12) {
                     AvatarView(url: suggestion.user.avatarURL, name: suggestion.user.displayName, size: 56)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(suggestion.user.displayName).font(.body.weight(.semibold)).lineLimit(1)
+                        Text(suggestion.user.displayName).font(.body.weight(.semibold)).lineLimit(1).plusBadge(suggestion.user.isPlus)
                         if showsUsername {
                             Text("@\(suggestion.user.username)").font(.subheadline).lineLimit(1)
                         }

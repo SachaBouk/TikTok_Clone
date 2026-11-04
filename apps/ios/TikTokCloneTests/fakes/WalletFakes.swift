@@ -87,6 +87,46 @@ final class FakePurchaseService: PurchaseService {
         duringPurchase?()
         return try outcome.get()
     }
+
+    static let plusOffers = [
+        PlusOffer(id: "monthly", productID: "plus_monthly", period: .monthly, price: "4,99 €", priceValue: 4.99, pricePerMonth: nil),
+        PlusOffer(id: "annual", productID: "plus_annual", period: .annual, price: "39,99 €", priceValue: 39.99, pricePerMonth: "3,33 €"),
+    ]
+    private(set) var restored = 0
+    private(set) var managed = 0
+
+    func plusOffers() async throws -> [PlusOffer] {
+        guard isAvailable else { throw PurchaseError.unavailable }
+        return Self.plusOffers
+    }
+
+    func subscribe(_ offer: PlusOffer) async throws -> PurchaseOutcome {
+        purchased.append(offer.productID)
+        duringPurchase?()
+        return try outcome.get()
+    }
+
+    func restorePurchases() async throws { restored += 1 }
+
+    func manageSubscription() async throws { managed += 1 }
+}
+
+// Abonnement « Plus » par l'API (ADR-073).
+final class FakePlusRepository: PlusRepository {
+    private let state = Mutex(PlusStatus.none)
+    private let requests = Mutex(0)
+
+    var current: PlusStatus {
+        get { state.withLock { $0 } }
+        set { state.withLock { $0 = newValue } }
+    }
+
+    var requestCount: Int { requests.withLock { $0 } }
+
+    func status() async throws -> PlusStatus {
+        requests.withLock { $0 += 1 }
+        return current
+    }
 }
 
 // Attentes simulées (relectures du solde après un achat) : enregistrées, sans délai, avec une action éventuelle.

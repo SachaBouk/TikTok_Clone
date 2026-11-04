@@ -33,6 +33,9 @@ export interface Video {
   aiGenerated: boolean;
   locationName: string | null;
   locationAddress: string | null;
+  // Durée maximale permise (ADR-073) : fixée à la confirmation de l'envoi, 600 s pour un abonné « Plus » ; nulle sinon
+  // (durée par défaut du worker, ADR-040).
+  maxDurationSeconds: number | null;
   createdAt: Date;
 }
 

@@ -334,7 +334,7 @@ private struct ConversationHeader: View {
         Button(action: openProfile) {
             VStack(spacing: 6) {
                 AvatarView(url: user.avatarURL, name: user.displayName, size: 72)
-                Text(user.displayName).font(.headline)
+                Text(user.displayName).font(.headline).plusBadge(user.isPlus, size: 14)
                 Text("@\(user.username)").font(.subheadline).foregroundStyle(.secondary)
             }
             .padding(.vertical, 16)

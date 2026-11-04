@@ -37,6 +37,28 @@ export function parseRevenueCatEvent(body: unknown, currencyCode: string): Curre
   };
 }
 
+// Événement d'abonnement (ADR-073) : seuls le type et les identifiants du client servent, l'état est relu chez
+// RevenueCat. null pour un autre type.
+export interface SubscriptionWebhookEvent {
+  eventId: string;
+  type: string;
+  appUserIds: string[];
+}
+
+export function parseSubscriptionEvent(body: unknown, types: readonly string[]): SubscriptionWebhookEvent | null {
+  const event = record(record(body)?.event);
+  if (!event) throw new MalformedWebhookError('Champ `event` absent');
+  const type = text(event.type);
+  if (!type || !types.includes(type)) return null;
+  const eventId = text(event.id);
+  const ids = (key: string) => (Array.isArray(event[key]) ? (event[key] as unknown[]).map(text).filter((id): id is string => id !== null) : []);
+  const appUserIds = [text(event.app_user_id), text(event.original_app_user_id), ...ids('aliases'), ...ids('transferred_to')].filter(
+    (id): id is string => id !== null,
+  );
+  if (!eventId || appUserIds.length === 0) throw new MalformedWebhookError(`Événement ${type} incomplet`);
+  return { eventId, type, appUserIds: [...new Set(appUserIds)] };
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MalformedWebhookError, parseRevenueCatEvent } from './revenuecat-event';
+import { SUBSCRIPTION_EVENT_TYPES } from '../../subscriptions/domain/plus-subscription';
+import { MalformedWebhookError, parseRevenueCatEvent, parseSubscriptionEvent } from './revenuecat-event';
 
 // Exemple de la documentation RevenueCat (webhooks, VIRTUAL_CURRENCY_TRANSACTION), avec deux monnaies.
 const body = {
@@ -49,5 +50,16 @@ describe('parseRevenueCatEvent', () => {
     expect(() => parseRevenueCatEvent({}, 'TKN')).toThrow(MalformedWebhookError);
     expect(() => parseRevenueCatEvent({ event: { ...body.event, id: undefined } }, 'TKN')).toThrow(MalformedWebhookError);
     expect(() => parseRevenueCatEvent({ event: { ...body.event, adjustments: [{ amount: 1.5 }] } }, 'TKN')).toThrow(MalformedWebhookError);
+  });
+});
+
+describe('parseSubscriptionEvent (ADR-073)', () => {
+  it('garde le type et les identifiants du client ; ignore les autres types', () => {
+    const renewal = {
+      event: { id: 'evt-1', type: 'RENEWAL', app_user_id: 'u1', original_app_user_id: 'u0', aliases: ['u1', 'u2'], product_id: 'plus_monthly' },
+    };
+    expect(parseSubscriptionEvent(renewal, SUBSCRIPTION_EVENT_TYPES)).toEqual({ eventId: 'evt-1', type: 'RENEWAL', appUserIds: ['u1', 'u0', 'u2'] });
+    expect(parseSubscriptionEvent({ event: { ...body.event } }, SUBSCRIPTION_EVENT_TYPES)).toBeNull();
+    expect(() => parseSubscriptionEvent({ event: { type: 'EXPIRATION', id: 'evt-2' } }, SUBSCRIPTION_EVENT_TYPES)).toThrow(MalformedWebhookError);
   });
 });

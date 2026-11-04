@@ -24,6 +24,8 @@ final class AppContainer {
     let analytics: AnalyticsModel
     // Portefeuille de jetons et achats (ADR-009).
     let wallet: WalletModel
+    // Abonnement « Plus » (ADR-073).
+    let plus: PlusModel
     // Historique des recherches (ADR-049), sur l'appareil.
     let searchHistory: SearchHistoryModel
     // Sons repris des vidéos, pour l'éditeur (ADR-064) ; « Récents » sur l'appareil.
@@ -182,15 +184,21 @@ final class AppContainer {
         )
         let walletRepository = RemoteWalletRepository(client: client)
         self.walletRepository = walletRepository
+        // Un seul service d'achats (RevenueCat configuré une fois) pour les jetons et l'abonnement « Plus » (ADR-073).
+        let purchases = Self.makePurchaseService(configuration)
         wallet = WalletModel(
             loadBalance: LoadWalletBalanceUseCase(wallet: walletRepository),
-            purchases: Self.makePurchaseService(configuration),
+            purchases: purchases,
             session: session,
             analytics: analytics
         )
+        plus = PlusModel(
+            loadStatus: LoadPlusStatusUseCase(plus: RemotePlusRepository(client: client)), purchases: purchases, session: session,
+            analytics: analytics)
+        plus.onStatusApplied = { isPlus in AppIconReset.applyIfNeeded(isPlus: isPlus) }
         realtime = RealtimeCoordinator(
             channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet, stories: stories,
-            ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)))
+            ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)), plus: plus)
     }
 
     // RevenueCat avec une clé (Config/Local.xcconfig) ; sinon achats indisponibles. En Debug, `-fakePurchases`
@@ -230,6 +238,7 @@ final class AppContainer {
             activity.reset()
             messaging.reset()
             wallet.reset()
+            plus.reset()
             stories.reset()
             lives.reset()
             videoInteractions.forgetReportedVideos()
@@ -451,7 +460,7 @@ final class AppContainer {
             searchHashtags: SearchHashtagsUseCase(search: search), preferences: UserDefaultsPreferencesStore(),
             mentionSuggestions: MentionSuggestionsUseCase(relationships: relationships, search: search),
             currentUsername: { session.profile?.username }, drafts: drafts, photoSaver: PhotoKitLibrarySaver(),
-            renderCover: { await CoverRenderer.image(video: $0, choice: $1) })
+            renderCover: { await CoverRenderer.image(video: $0, choice: $1) }, isPlus: { [plus] in plus.isActive })
     }
 
     // Lieux d'une publication (ADR-065) : une recherche Apple Plans par écran de publication.
@@ -462,7 +471,7 @@ final class AppContainer {
     // Caméra (ADR-052) : son modèle et la session de capture pour l'aperçu. Une caméra par ouverture de la création.
     func makeCamera(kind: PublicationKind) -> CameraSetup {
         let camera = AVFoundationVideoCamera()
-        return CameraSetup(model: CameraViewModel(kind: kind, camera: camera), session: camera.session)
+        return CameraSetup(model: CameraViewModel(kind: kind, camera: camera, isPlus: plus.isActive), session: camera.session)
     }
 
     // Galerie maison de la création (ADR-062).

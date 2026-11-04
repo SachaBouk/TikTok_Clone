@@ -569,6 +569,7 @@ private struct LiveChatRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(message.user.displayName).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                        .plusBadge(message.user.isPlus, size: 13)
                     if isHost {
                         Text("Créateur")
                             .font(.caption2.bold())

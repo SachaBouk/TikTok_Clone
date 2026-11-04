@@ -55,6 +55,9 @@ export class UserProfileResponse implements UserProfileDto {
   @ApiProperty({ enum: ['public', 'private'], enumName: 'VideoVisibility' })
   favoritesVisibility!: 'public' | 'private';
 
+  @ApiProperty({ description: 'Abonné « Plus » (ADR-073) : badge « + ».' })
+  plus!: boolean;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 }

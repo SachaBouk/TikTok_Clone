@@ -182,7 +182,7 @@ struct AccountSearchRow: View {
         HStack(spacing: 12) {
             AvatarView(url: result.user.avatarURL, name: result.user.displayName, size: 44)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.user.displayName).font(.body.weight(.semibold)).lineLimit(1)
+                Text(result.user.displayName).font(.body.weight(.semibold)).lineLimit(1).plusBadge(result.user.isPlus)
                 Text("@\(result.user.username) · \(followersLabel)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             }
         }

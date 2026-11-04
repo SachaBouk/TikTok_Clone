@@ -9,9 +9,9 @@ struct SearchDataTests {
     @Test("comptes : résumé, abonnés, relation présente ou absente, curseur")
     func accounts() async throws {
         let body = #"""
-            {"items":[{"user":{"id":"u1","username":"lea","displayName":"Léa","avatarUrl":null},"followersCount":12,
+            {"items":[{"user":{"id":"u1","username":"lea","displayName":"Léa","avatarUrl":null,"plus":false},"followersCount":12,
             "viewer":{"following":true,"followedBy":false}},
-            {"user":{"id":"u2","username":"galea","displayName":"Gaëlle","avatarUrl":null},"followersCount":3}],"nextCursor":"c2"}
+            {"user":{"id":"u2","username":"galea","displayName":"Gaëlle","avatarUrl":null,"plus":false},"followersCount":3}],"nextCursor":"c2"}
             """#
         let log = RequestLog()
         let client = makeClient(

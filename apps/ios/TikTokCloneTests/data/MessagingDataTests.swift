@@ -4,7 +4,7 @@ import TikTokAPI
 
 @testable import TikTokClone
 
-private let bobJSON = #"{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null}"#
+private let bobJSON = #"{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false}"#
 
 private let messageJSON = """
     {"id":"m1","conversationId":"c1","senderId":"bob-id","content":"",\
@@ -41,7 +41,7 @@ struct MessagingDataTests {
 
     @Test("groupe (ADR-059) : sans participant, nom, administrateur, membres, sourdine ; ligne d'événement avec son auteur")
     func groupMapping() async throws {
-        let inesJSON = #"{"id":"ines-id","username":"ines","displayName":"Inès","avatarUrl":null}"#
+        let inesJSON = #"{"id":"ines-id","username":"ines","displayName":"Inès","avatarUrl":null,"plus":false}"#
         let body = """
             {"id":"g1","kind":"group","group":{"name":null,"adminId":"bob-id","muted":true,"members":[\
             {"user":\(bobJSON),"joinedAt":"2026-09-26T07:00:00.000Z","lastReadMessageId":"m2"},\

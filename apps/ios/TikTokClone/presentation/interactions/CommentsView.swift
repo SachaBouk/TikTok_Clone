@@ -416,6 +416,7 @@ struct CommentRow: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            if comment.author.isPlus { PlusBadge(size: 13) }
             if isCreator {
                 Text("·").font(.subheadline).foregroundStyle(.secondary)
                 Text("Créateur").font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.13, green: 0.6, blue: 0.75))

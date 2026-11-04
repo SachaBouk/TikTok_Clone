@@ -40,7 +40,7 @@ struct EditingRulesTests {
     func recordingLimit() {
         #expect(RecordingSession(kind: .video, limit: RecordingLimit.fifteenSeconds.duration).maxDuration == .seconds(15))
         #expect(RecordingSession(kind: .story, limit: RecordingLimit.threeMinutes.duration).maxDuration == .seconds(60))
-        #expect(RecordingLimit.allCases.map(\.title) == ["3 min", "60 s", "15 s"])
+        #expect(RecordingLimit.available(isPlus: false).map(\.title) == ["3 min", "60 s", "15 s"])
     }
 
     @Test("plan : vidéo trop longue raccourcie à la durée maximale, durée finale avec la vitesse de chaque clip")

@@ -11,6 +11,14 @@ export class UnknownGiftError extends WalletError {
   }
 }
 
+// Cadeau exclusif (ADR-073) envoyé sans abonnement « Plus » : 403.
+export class GiftRequiresPlusError extends WalletError {
+  constructor() {
+    super('Ce cadeau est réservé aux abonnés Plus.');
+    this.name = 'GiftRequiresPlusError';
+  }
+}
+
 // Vidéo non publiée, supprimée, ou d'un compte suspendu : 404.
 // Live inconnu, masqué ou terminé (ADR-053) : 404 ; sur son propre live, voir CannotGiftYourselfError.
 export class GiftLiveUnavailableError extends WalletError {

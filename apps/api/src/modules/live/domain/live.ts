@@ -21,6 +21,8 @@ export interface Live {
   heartsCount: number;
   giftsCount: number;
   giftsAmount: number;
+  // Durée maximale (ADR-073), fixée au lancement : 4 h pour un abonné « Plus », 2 h sinon.
+  maxDurationSeconds: number;
 }
 
 export interface LiveMessage {
@@ -43,6 +45,8 @@ export interface LiveStats {
 
 // Règles (ADR-053, choix du développeur).
 export const LIVE_MAX_DURATION_MS = 2 * 3600 * 1000;
+// Abonnés « Plus » (ADR-073).
+export const PLUS_LIVE_MAX_DURATION_MS = 4 * 3600 * 1000;
 // Auteur déconnecté du serveur vidéo : le live s'arrête s'il n'est pas revenu dans ce délai.
 export const HOST_RECONNECT_GRACE_MS = 60_000;
 // Au lancement : délai laissé à l'app pour se connecter à la salle.
@@ -56,10 +60,11 @@ export const MAX_HEARTS_PER_BATCH = 30;
 export const MAX_FOLLOWING_LIVES = 100;
 // Lives à faire défiler (icône « LIVE », ADR-066) : au plus.
 export const MAX_DISCOVER_LIVES = 50;
-// Lignes « a rejoint », « a aimé », « a partagé » (ADR-066) : une fois par compte et par live, pendant la durée d'un live.
-export const LIVE_ANNOUNCE_SECONDS = LIVE_MAX_DURATION_MS / 1000;
-// Jetons d'accès à la salle : valables le temps d'un live, plus une marge.
-export const LIVE_TOKEN_TTL_SECONDS = 3 * 3600;
+// Lignes « a rejoint », « a aimé », « a partagé » (ADR-066) : une fois par compte et par live, pendant la durée d'un live
+// (le plus long : celui d'un abonné, ADR-073).
+export const LIVE_ANNOUNCE_SECONDS = PLUS_LIVE_MAX_DURATION_MS / 1000;
+// Jetons d'accès à la salle : valables le temps du plus long live, plus une marge.
+export const LIVE_TOKEN_TTL_SECONDS = PLUS_LIVE_MAX_DURATION_MS / 1000 + 3600;
 // Maintenance : lives en cours relus par passe.
 export const LIVE_MAINTENANCE_BATCH_SIZE = 200;
 
@@ -101,5 +106,5 @@ export function durationSeconds(live: Live, now: Date): number {
 }
 
 export function timeLimitOf(live: Live): Date {
-  return new Date(live.startedAt.getTime() + LIVE_MAX_DURATION_MS);
+  return new Date(live.startedAt.getTime() + live.maxDurationSeconds * 1000);
 }

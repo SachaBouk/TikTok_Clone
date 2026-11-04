@@ -51,6 +51,15 @@ enum PaywallSource: String, Hashable, Sendable {
     case gift
 }
 
+// D'où le paywall « Plus » est ouvert (ADR-073) : menu ☰, ou un avantage verrouillé.
+enum PlusPaywallSource: String, Hashable, Sendable {
+    case menu
+    case gift
+    case longVideo = "long_video"
+    case appIcon = "app_icon"
+    case profile
+}
+
 // Comment la vidéo a cessé d'être regardée.
 enum WatchExit: String, Sendable {
     // Passage à une autre vidéo (moment du swipe).
@@ -227,6 +236,27 @@ extension AnalyticsEvent {
 
     static func tokenPurchaseCancelled(productID: String) -> AnalyticsEvent {
         AnalyticsEvent(name: "token_purchase_cancelled", properties: ["product_id": .string(productID)])
+    }
+
+    // Abonnement « Plus » (ADR-073).
+    static func plusPaywallViewed(source: PlusPaywallSource) -> AnalyticsEvent {
+        AnalyticsEvent(name: "plus_paywall_viewed", properties: ["source": .string(source.rawValue)])
+    }
+
+    static func plusPurchaseStarted(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "plus_purchase_started", properties: ["product_id": .string(productID)])
+    }
+
+    static func plusPurchaseCompleted(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "plus_purchase_completed", properties: ["product_id": .string(productID)])
+    }
+
+    static func plusPurchaseCancelled(productID: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "plus_purchase_cancelled", properties: ["product_id": .string(productID)])
+    }
+
+    static func appIconChanged(_ icon: AppIcon?) -> AnalyticsEvent {
+        AnalyticsEvent(name: "app_icon_changed", properties: ["icon": .string(icon?.rawValue ?? "default")])
     }
 
     // Publication : envoi commencé (source et modifications, ADR-052), vidéo publiée ou en échec.

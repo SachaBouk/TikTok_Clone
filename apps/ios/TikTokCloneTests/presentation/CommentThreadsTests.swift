@@ -234,7 +234,7 @@ struct CommentThreadsTests {
         let log = RequestLog()
         let comment =
             #"{"id":"c1","videoId":"v1","parentId":"c0","content":"Oui","createdAt":"2026-10-16T10:00:00.000Z","#
-            + #""author":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null},"#
+            + #""author":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"#
             + #""repliesCount":0,"likesCount":3,"likedByAuthor":true,"viewer":{"liked":true}}"#
         let repo = RemoteInteractionRepository(
             client: makeClient(

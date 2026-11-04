@@ -18,6 +18,8 @@ export interface UserProfileDto {
   // Qui peut voir ses vidéos aimées et ses favoris (ADR-071).
   likesVisibility: VideoVisibility;
   favoritesVisibility: VideoVisibility;
+  // Abonné « Plus » (ADR-073) : badge « + ».
+  plus: boolean;
   createdAt: string;
 }
 
@@ -34,6 +36,8 @@ export interface UserSummaryDto {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  // Abonné « Plus » (ADR-073) : badge « + » à côté du pseudo.
+  plus: boolean;
 }
 
 // Photo de profil, étape 1 (`POST /users/me/avatar/upload-url`) : l'app envoie l'image en un seul PUT

@@ -5,6 +5,7 @@ export interface NewLive {
   userId: string;
   title: string | null;
   startedAt: Date;
+  maxDurationSeconds: number;
 }
 
 export interface NewLiveMessage {

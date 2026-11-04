@@ -21,6 +21,9 @@ export interface TranscodeJobData {
   // Couverture choisie dans l'app (ADR-065), JPEG dans le bucket des uploads : elle devient la miniature. Absente ou
   // illisible, la miniature est prise dans la vidéo.
   coverKey?: string;
+  // Durée maximale permise par l'API pour cette vidéo (abonné « Plus », ADR-073 : 600 s). Absente : celle de la file
+  // (ADR-040). Ignorée dans la file des stories.
+  maxDurationSeconds?: number;
 }
 
 export type TranscodeResult =

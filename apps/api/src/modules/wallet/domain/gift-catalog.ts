@@ -9,15 +9,20 @@ export interface GiftCatalogItem {
   emoji: string;
   // Prix en jetons.
   price: number;
+  // Réservé aux abonnés « Plus » (ADR-073).
+  plusOnly: boolean;
 }
 
 export const GIFT_CATALOG: readonly GiftCatalogItem[] = [
-  { code: 'rose', name: 'Rose', emoji: '🌹', price: 1 },
-  { code: 'heart', name: 'Cœur', emoji: '❤️', price: 5 },
-  { code: 'star', name: 'Étoile', emoji: '⭐', price: 10 },
-  { code: 'crown', name: 'Couronne', emoji: '👑', price: 50 },
-  { code: 'rocket', name: 'Fusée', emoji: '🚀', price: 100 },
-  { code: 'diamond', name: 'Diamant', emoji: '💎', price: 500 },
+  { code: 'rose', name: 'Rose', emoji: '🌹', price: 1, plusOnly: false },
+  { code: 'heart', name: 'Cœur', emoji: '❤️', price: 5, plusOnly: false },
+  { code: 'star', name: 'Étoile', emoji: '⭐', price: 10, plusOnly: false },
+  // Cadeaux exclusifs des abonnés « Plus » (ADR-073).
+  { code: 'unicorn', name: 'Licorne', emoji: '🦄', price: 20, plusOnly: true },
+  { code: 'crown', name: 'Couronne', emoji: '👑', price: 50, plusOnly: false },
+  { code: 'rocket', name: 'Fusée', emoji: '🚀', price: 100, plusOnly: false },
+  { code: 'planet', name: 'Planète', emoji: '🪐', price: 200, plusOnly: true },
+  { code: 'diamond', name: 'Diamant', emoji: '💎', price: 500, plusOnly: false },
 ];
 
 // Cadeau inconnu du catalogue actuel (retiré depuis) : affichage générique.

@@ -29,6 +29,8 @@ enum RealtimeUpdate: Equatable, Sendable {
     // Compteurs de son propre profil (ADR-045) : abonnement ou désabonnement, le sien ou celui d'un autre envers lui.
     case profileCountersChanged(followers: Int, following: Int)
     case walletUpdated(balance: Int, earned: Int)
+    // Abonnement « Plus » changé (ADR-073) : souscription, renouvellement, annulation, échéance.
+    case plusChanged(PlusStatus)
 }
 
 // Port de la connexion temps réel. L'implémentation gère l'authentification, la détection des connexions

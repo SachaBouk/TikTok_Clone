@@ -28,8 +28,8 @@ export class UnsupportedVideoTypeError extends VideoError {
 }
 
 export class VideoTooLargeError extends VideoError {
-  constructor() {
-    super(`Vidéo trop volumineuse (maximum ${MAX_VIDEO_SIZE_BYTES / 1024 ** 2} Mio)`);
+  constructor(maxBytes: number = MAX_VIDEO_SIZE_BYTES) {
+    super(`Vidéo trop volumineuse (maximum ${maxBytes / 1024 ** 2} Mio)`);
     this.name = 'VideoTooLargeError';
   }
 }

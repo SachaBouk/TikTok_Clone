@@ -19,7 +19,14 @@ import { InMemoryVideoCleanupQueue } from '../../videos/infrastructure/in-memory
 import { InMemoryVideoEventPublisher } from '../../videos/infrastructure/in-memory-video-event-publisher';
 import { InMemoryVideoRepository } from '../../videos/infrastructure/in-memory-video.repository';
 import { InMemoryVideoStorage } from '../../videos/infrastructure/in-memory-video-storage';
-import { HOST_FIRST_CONNECT_GRACE_MS, HOST_RECONNECT_GRACE_MS, LIVE_MAX_DURATION_MS, MAX_LIVE_MESSAGE_LENGTH } from '../domain/live';
+import {
+  HOST_FIRST_CONNECT_GRACE_MS,
+  HOST_RECONNECT_GRACE_MS,
+  LIVE_MAX_DURATION_MS,
+  MAX_LIVE_MESSAGE_LENGTH,
+  PLUS_LIVE_MAX_DURATION_MS,
+} from '../domain/live';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
 import {
   InvalidHeartsCountError,
   InvalidLiveMessageError,
@@ -58,6 +65,7 @@ describe('LiveService (ADR-053)', () => {
   let notificationRepository: InMemoryNotificationRepository;
   let live: ReturnType<typeof inMemoryLive>;
 
+  let notifications: NotificationsService;
   const advance = (ms: number) => (clock = new Date(clock.getTime() + ms));
   const roomEvents = (type: string) => live.room.events.filter((event) => event.type === type);
 
@@ -83,7 +91,7 @@ describe('LiveService (ADR-053)', () => {
       new InMemoryRateLimiter(),
     );
     notificationRepository = new InMemoryNotificationRepository();
-    const notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
+    notifications = new NotificationsService(notificationRepository, users, videos, new InMemoryNotificationPublisher(), suspended);
     interactions = new InteractionsService(
       new InMemoryInteractionRepository(videoRepository, userRepository),
       videos,
@@ -97,6 +105,18 @@ describe('LiveService (ADR-053)', () => {
   });
 
   describe('lancement et fin', () => {
+    it('abonné « Plus » (ADR-073) : live de 4 h, fin programmée et maintenance à cette durée', async () => {
+      const plus = new InMemoryPlusMembers([{ userId: 'alice', expiresAt: new Date(clock.getTime() + 86_400_000) }]);
+      live = inMemoryLive(users, interactions, notifications, () => clock, plus);
+      const connection = await live.service.start('alice', {});
+      expect(live.lifecycle.timeLimits.get(connection.item.live.id)).toEqual(new Date(clock.getTime() + PLUS_LIVE_MAX_DURATION_MS));
+      live.media.connected.add(`${connection.item.live.id}|user:alice`);
+      advance(LIVE_MAX_DURATION_MS);
+      await expect(live.service.runMaintenance()).resolves.toMatchObject({ ended: 0 });
+      advance(PLUS_LIVE_MAX_DURATION_MS - LIVE_MAX_DURATION_MS);
+      await expect(live.service.runMaintenance()).resolves.toMatchObject({ ended: 1 });
+    });
+
     it('ouvre la salle, donne un jeton pour publier, programme la fin et la vérification, prévient les abonnés', async () => {
       await interactions.setFollow('bob', 'alice', true);
       await interactions.setFollow('carol', 'alice', true);

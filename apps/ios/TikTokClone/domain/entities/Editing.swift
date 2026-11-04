@@ -18,29 +18,39 @@ struct SourceClip: Equatable, Sendable {
     let duration: Duration
 }
 
-// Durée maximale d'une publication : vidéo (ADR-040) ou story (ADR-051).
+// Durée maximale d'une publication : vidéo (ADR-040 ; 10 minutes pour un abonné « Plus », ADR-073) ou story (ADR-051).
 extension PublicationKind {
-    var maxDuration: Duration {
-        self == .story ? StoryRules.maxVideoDuration : UploadRules.maxDuration
+    var maxDuration: Duration { maxDuration(isPlus: false) }
+
+    func maxDuration(isPlus: Bool) -> Duration {
+        switch self {
+        case .story: StoryRules.maxVideoDuration
+        case .video: isPlus ? PlusRules.maxVideoDuration : UploadRules.maxDuration
+        }
     }
 
     // Comme le worker : à une seconde près (arrondis du conteneur).
-    func isTooLong(_ duration: Duration) -> Bool {
-        duration > maxDuration + UploadRules.durationTolerance
+    func isTooLong(_ duration: Duration, isPlus: Bool = false) -> Bool {
+        duration > maxDuration(isPlus: isPlus) + UploadRules.durationTolerance
     }
 
     // Vidéo de la galerie trop longue : l'éditeur s'ouvre sur ce message.
-    var tooLongSourceMessage: String {
-        self == .story
-            ? "Une story dure 60 secondes au plus : choisis le passage à garder."
-            : "Cette vidéo dure plus de 3 minutes : choisis le passage à garder."
+    func tooLongSourceMessage(isPlus: Bool = false) -> String {
+        switch self {
+        case .story: "Une story dure 60 secondes au plus : choisis le passage à garder."
+        case .video:
+            isPlus
+                ? "Cette vidéo dure plus de 10 minutes : choisis le passage à garder."
+                : "Cette vidéo dure plus de 3 minutes : choisis le passage à garder. Avec Plus, jusqu’à 10 minutes."
+        }
     }
 
     // Message de l'éditeur quand la vidéo finale dépasse la limite.
-    var tooLongEditMessage: String {
-        self == .story
-            ? "Une story dure 60 secondes au plus. Raccourcis la vidéo."
-            : "Une vidéo dure 3 minutes au plus. Raccourcis-la."
+    func tooLongEditMessage(isPlus: Bool = false) -> String {
+        switch self {
+        case .story: "Une story dure 60 secondes au plus. Raccourcis la vidéo."
+        case .video: isPlus ? "Une vidéo dure 10 minutes au plus. Raccourcis-la." : "Une vidéo dure 3 minutes au plus. Raccourcis-la."
+        }
     }
 }
 
@@ -53,9 +63,11 @@ struct RecordingSession: Equatable, Sendable {
     let maxDuration: Duration
     private(set) var segments: [SourceClip] = []
 
-    // `limit` : durée choisie sur la caméra (« 60 s », « 15 s », ADR-062), jamais au-delà de celle de la publication.
-    init(kind: PublicationKind, limit: Duration? = nil) {
-        maxDuration = min(limit ?? kind.maxDuration, kind.maxDuration)
+    // `limit` : durée choisie sur la caméra (« 60 s », « 15 s », ADR-062), jamais au-delà de celle de la publication
+    // (10 minutes pour un abonné « Plus », ADR-073).
+    init(kind: PublicationKind, limit: Duration? = nil, isPlus: Bool = false) {
+        let publicationMax = kind.maxDuration(isPlus: isPlus)
+        maxDuration = min(limit ?? publicationMax, publicationMax)
     }
 
     var recordedDuration: Duration {
@@ -329,6 +341,8 @@ enum TextDragRules {
 
 // Durées proposées au-dessus du déclencheur de la caméra (ADR-062) : la vidéo filmée s'arrête seule à la limite.
 enum RecordingLimit: CaseIterable, Identifiable, Equatable, Sendable {
+    // Abonnés « Plus » seulement (ADR-073).
+    case tenMinutes
     case threeMinutes
     case sixtySeconds
     case fifteenSeconds
@@ -337,6 +351,7 @@ enum RecordingLimit: CaseIterable, Identifiable, Equatable, Sendable {
 
     var duration: Duration {
         switch self {
+        case .tenMinutes: .seconds(600)
         case .threeMinutes: .seconds(180)
         case .sixtySeconds: .seconds(60)
         case .fifteenSeconds: .seconds(15)
@@ -345,10 +360,16 @@ enum RecordingLimit: CaseIterable, Identifiable, Equatable, Sendable {
 
     var title: String {
         switch self {
+        case .tenMinutes: "10 min"
         case .threeMinutes: "3 min"
         case .sixtySeconds: "60 s"
         case .fifteenSeconds: "15 s"
         }
+    }
+
+    // Durées proposées sur la caméra : « 10 min » pour un abonné « Plus » seulement.
+    static func available(isPlus: Bool) -> [RecordingLimit] {
+        isPlus ? allCases : allCases.filter { $0 != .tenMinutes }
     }
 }
 
@@ -553,10 +574,10 @@ struct EditPlan: Equatable, Sendable {
 
     // Une vidéo trop longue est raccourcie à la durée maximale (la fin est retirée) : le passage à garder se choisit
     // ensuite dans la frise. À une seconde près (ADR-040), elle est gardée entière.
-    init(clips sources: [SourceClip], kind: PublicationKind) {
+    init(clips sources: [SourceClip], kind: PublicationKind, isPlus: Bool = false) {
         self.kind = kind
         let total = sources.reduce(Duration.zero) { $0 + $1.duration }
-        var remaining = kind.isTooLong(total) ? kind.maxDuration : total
+        var remaining = kind.isTooLong(total, isPlus: isPlus) ? kind.maxDuration(isPlus: isPlus) : total
         var clips: [EditClip] = []
         for source in sources {
             var clip = EditClip(source: source)
@@ -587,9 +608,12 @@ struct EditPlan: Equatable, Sendable {
     }
 
     // Raison pour laquelle la vidéo ne peut pas être exportée ; nil si elle peut l'être.
-    var problem: String? {
+    var problem: String? { problem(isPlus: false) }
+
+    // Abonné « Plus » (ADR-073) : vidéos de 10 minutes.
+    func problem(isPlus: Bool) -> String? {
         if clips.isEmpty { return "Aucune vidéo." }
-        if kind.isTooLong(outputDuration) { return kind.tooLongEditMessage }
+        if kind.isTooLong(outputDuration, isPlus: isPlus) { return kind.tooLongEditMessage(isPlus: isPlus) }
         if outputDuration < Self.minDuration { return "La vidéo doit durer au moins 1 seconde." }
         return nil
     }

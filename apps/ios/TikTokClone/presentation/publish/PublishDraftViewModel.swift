@@ -116,6 +116,8 @@ final class PublishDraftViewModel {
     private let photoSaver: (any PhotoLibrarySaver)?
     // Image de la couverture (ADR-065) : image de la vidéo exportée à l'instant choisi, titre dessiné par-dessus.
     private let renderCover: (@MainActor (URL, CoverChoice) async -> UIImage?)?
+    // Abonné « Plus » (ADR-073) : vidéos de 10 minutes et de 2 Go.
+    private let isPlus: @MainActor () -> Bool
 
     init(
         publishing: PublishingModel,
@@ -130,7 +132,8 @@ final class PublishDraftViewModel {
         currentUsername: @escaping @MainActor () -> String? = { nil },
         drafts: DraftsModel? = nil,
         photoSaver: (any PhotoLibrarySaver)? = nil,
-        renderCover: (@MainActor (URL, CoverChoice) async -> UIImage?)? = nil
+        renderCover: (@MainActor (URL, CoverChoice) async -> UIImage?)? = nil,
+        isPlus: @escaping @MainActor () -> Bool = { false }
     ) {
         self.publishing = publishing
         self.prepareVideo = prepareVideo
@@ -145,9 +148,17 @@ final class PublishDraftViewModel {
         self.drafts = drafts
         self.photoSaver = photoSaver
         self.renderCover = renderCover
+        self.isPlus = isPlus
         defaultVisibility = preferences?.defaultVisibility ?? .everyone
         visibility = defaultVisibility
         saveToDevice = preferences?.saveToDevice ?? false
+    }
+
+    // Demande d'édition, avec la durée permise par l'abonnement (ADR-073).
+    private func makeEditorRequest(plan: EditPlan, source: MediaSource, notice: String? = nil, isNew: Bool = true) -> EditorRequest {
+        var request = EditorRequest(plan: plan, source: source, notice: notice, isNew: isNew)
+        request.isPlus = isPlus()
+        return request
     }
 
     // « @ Mention » : un « @ » à la fin de la description, et les suggestions (ses abonnements).
@@ -299,9 +310,9 @@ final class PublishDraftViewModel {
             // limite. Une durée illisible (aucun clip) : la vidéo est publiée telle quelle, le worker la vérifiera.
             if !sources.isEmpty {
                 state = .empty
-                editorRequest = EditorRequest(
-                    plan: EditPlan(clips: sources, kind: kind), source: source,
-                    notice: duration.map { kind.isTooLong($0) } == true ? kind.tooLongSourceMessage : nil)
+                editorRequest = makeEditorRequest(
+                    plan: EditPlan(clips: sources, kind: kind, isPlus: isPlus()), source: source,
+                    notice: duration.map { kind.isTooLong($0, isPlus: isPlus()) } == true ? kind.tooLongSourceMessage(isPlus: isPlus()) : nil)
                 return
             }
             state = .ready(Draft(file: file, preview: await makePreview(file), duration: duration, source: source, sources: sources))
@@ -325,9 +336,11 @@ final class PublishDraftViewModel {
         do {
             let clips = try await prepareClips(loaders)
             state = .empty
-            let plan = EditPlan(clips: clips, kind: kind)
-            editorRequest = EditorRequest(
-                plan: plan, source: .gallery, notice: kind.isTooLong(clips.reduce(.zero) { $0 + $1.duration }) ? kind.tooLongSourceMessage : nil)
+            let plan = EditPlan(clips: clips, kind: kind, isPlus: isPlus())
+            editorRequest = makeEditorRequest(
+                plan: plan, source: .gallery,
+                notice: kind.isTooLong(clips.reduce(.zero) { $0 + $1.duration }, isPlus: isPlus()) ? kind.tooLongSourceMessage(isPlus: isPlus()) : nil
+            )
         } catch let error as AppError {
             state = .failed(error.message)
         } catch {
@@ -388,7 +401,8 @@ final class PublishDraftViewModel {
         var extras = PublicationExtras()
         if isVideo {
             extras = PublicationExtras(
-                aiGenerated: aiGenerated, downloadsEnabled: downloadsEnabled, location: location, cover: cover.isCustom ? coverFile : nil)
+                aiGenerated: aiGenerated, downloadsEnabled: downloadsEnabled, location: location, cover: cover.isCustom ? coverFile : nil,
+                isPlus: isPlus())
             details.coverChanged = extras.cover != nil
             details.coverTitle = extras.cover != nil && cover.shownTitle != nil
             details.locationAdded = location != nil
@@ -450,7 +464,7 @@ final class PublishDraftViewModel {
     @discardableResult
     func saveCurrentDraft() async -> Bool {
         guard case .ready(let draft) = state, !draft.isPhoto,
-            let plan = draft.plan ?? (draft.sources.isEmpty ? nil : EditPlan(clips: draft.sources, kind: kind))
+            let plan = draft.plan ?? (draft.sources.isEmpty ? nil : EditPlan(clips: draft.sources, kind: kind, isPlus: isPlus()))
         else {
             errorMessage = "Cette vidéo ne peut pas être enregistrée en brouillon."
             return false
@@ -497,7 +511,7 @@ final class PublishDraftViewModel {
         aiGenerated = draft.aiGenerated
         location = draft.location
         cover = draft.cover
-        editorRequest = EditorRequest(plan: draft.plan, source: draft.source)
+        editorRequest = makeEditorRequest(plan: draft.plan, source: draft.source)
         publishing.track(.draftOpened)
     }
 
@@ -505,13 +519,14 @@ final class PublishDraftViewModel {
     func recorded(_ segments: [SourceClip]) {
         guard !segments.isEmpty else { return }
         discard()
-        editorRequest = EditorRequest(plan: EditPlan(clips: segments, kind: kind), source: .camera)
+        editorRequest = makeEditorRequest(plan: EditPlan(clips: segments, kind: kind, isPlus: isPlus()), source: .camera)
     }
 
     // « Modifier la vidéo » : l'éditeur repart des fichiers d'origine et du plan précédent (pas de double réencodage).
     func editCurrent() {
         guard canEdit, case .ready(let draft) = state else { return }
-        editorRequest = EditorRequest(plan: draft.plan ?? EditPlan(clips: draft.sources, kind: kind), source: draft.source, isNew: false)
+        editorRequest = makeEditorRequest(
+            plan: draft.plan ?? EditPlan(clips: draft.sources, kind: kind, isPlus: isPlus()), source: draft.source, isNew: false)
     }
 
     // Vidéo exportée par l'éditeur : elle devient le brouillon (la précédente exportée est supprimée, pas ses sources).

@@ -11,6 +11,10 @@ export type SupportedVideoType = keyof typeof SUPPORTED_VIDEO_TYPES;
 
 export const MAX_VIDEO_SIZE_BYTES = 1024 ** 3; // 1 Gio
 
+// Abonnés « Plus » (ADR-073) : vidéos de 10 minutes, donc envois jusqu'à 2 Gio. Les stories gardent leurs limites.
+export const PLUS_MAX_VIDEO_SIZE_BYTES = 2 * 1024 ** 3; // 2 Gio
+export const PLUS_MAX_VIDEO_DURATION_SECONDS = 600;
+
 // Tout upload passe en multipart, même petit : un seul chemin côté app, et toute coupure est reprenable.
 // S3 impose 5 Mio minimum par partie (sauf la dernière) et 10 000 parties maximum.
 export const UPLOAD_PART_SIZE_BYTES = 10 * 1024 ** 2; // 10 Mio → 103 parties au maximum

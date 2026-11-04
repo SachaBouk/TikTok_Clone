@@ -69,7 +69,9 @@ struct RemoteViewHistoryRepository: ViewHistoryRepository {
 
 extension UserSummary {
     init(_ dto: Components.Schemas.UserSummaryResponse) {
-        self.init(id: dto.id, username: dto.username, displayName: dto.displayName, avatarURL: dto.avatarUrl.flatMap(URL.init(string:)))
+        self.init(
+            id: dto.id, username: dto.username, displayName: dto.displayName, avatarURL: dto.avatarUrl.flatMap(URL.init(string:)),
+            isPlus: dto.plus)
     }
 }
 

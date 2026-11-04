@@ -16,6 +16,7 @@ import { InMemoryUserRepository } from '../infrastructure/in-memory-user.reposit
 import { UsersService } from './users.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 import { InMemoryReceivedLikesCounter } from '../infrastructure/in-memory-received-likes-counter';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
 
 // Registre des comptes suspendus (ADR-037), partagé par les services d'un même test.
 let suspended = new InMemorySuspendedAccounts();
@@ -92,6 +93,28 @@ describe('UsersService', () => {
     expect((await service.profileView(await service.getById(bob.id))).likesCount).toBe(0);
   });
 
+  it('badge « Plus » (ADR-073) : sur les comptes renvoyés, tant que l’échéance est dans le futur', async () => {
+    const plus = new InMemoryPlusMembers([
+      { userId: alice.id, expiresAt: new Date(NOW.getTime() + 3600_000) },
+      { userId: bob.id, expiresAt: new Date(NOW.getTime() - 1) },
+    ]);
+    const withPlus = new UsersService(
+      new InMemoryUserRepository([{ ...alice }, { ...bob }]),
+      avatars,
+      contentCleanup,
+      interests,
+      suspended,
+      new InMemoryReceivedLikesCounter(),
+      () => NOW,
+      plus,
+    );
+    expect((await withPlus.getById(alice.id)).plus).toBe(true);
+    expect((await withPlus.getByUsername('bob')).plus).toBe(false);
+    const byIds = await withPlus.getByIds([alice.id, bob.id]);
+    expect(Object.fromEntries(byIds.map((user) => [user.username, user.plus]))).toEqual({ alice: true, bob: false });
+    expect((await withPlus.updateProfile(alice.id, { bio: 'Plus' })).plus).toBe(true);
+  });
+
   // Ce que fait l'app : demande l'URL signée, envoie le fichier, renvoie l'identifiant.
   async function uploadAvatar(userId: string, contentType: string, bytes: Uint8Array): Promise<string> {
     const upload = await service.createAvatarUpload(userId, contentType, bytes.length);
@@ -101,11 +124,11 @@ describe('UsersService', () => {
 
   describe('lecture', () => {
     it('retrouve un compte par son pseudo', async () => {
-      await expect(service.getByUsername('alice')).resolves.toEqual(alice);
+      await expect(service.getByUsername('alice')).resolves.toEqual({ ...alice, plus: false });
     });
 
     it('retrouve un compte par son identifiant', async () => {
-      await expect(service.getById(alice.id)).resolves.toEqual(alice);
+      await expect(service.getById(alice.id)).resolves.toEqual({ ...alice, plus: false });
     });
 
     it('lève UserNotFoundError pour un pseudo inconnu', async () => {
@@ -117,10 +140,10 @@ describe('UsersService', () => {
     });
 
     it('profil public : illisible pour un compte suspendu (ADR-037), qui reste trouvable par les autres modules', async () => {
-      await expect(service.getPublicProfile('alice')).resolves.toEqual(alice);
+      await expect(service.getPublicProfile('alice')).resolves.toEqual({ ...alice, plus: false });
       await suspended.add(alice.id);
       await expect(service.getPublicProfile('alice')).rejects.toBeInstanceOf(ProfileSuspendedError);
-      await expect(service.getByUsername('alice')).resolves.toEqual(alice);
+      await expect(service.getByUsername('alice')).resolves.toEqual({ ...alice, plus: false });
       await expect(service.getPublicProfile('carol')).rejects.toBeInstanceOf(UserNotFoundError);
     });
   });
@@ -128,14 +151,14 @@ describe('UsersService', () => {
   describe('modification du profil', () => {
     it('modifie le nom, la bio et le pseudo (textes nettoyés), sans toucher au reste', async () => {
       const updated = await service.updateProfile(alice.id, { username: 'alice.m', displayName: '  Alice M.  ', bio: '  Danse 🍜 ' });
-      expect(updated).toEqual({ ...alice, username: 'alice.m', displayName: 'Alice M.', bio: 'Danse 🍜' });
+      expect(updated).toEqual({ ...alice, plus: false, username: 'alice.m', displayName: 'Alice M.', bio: 'Danse 🍜' });
       await expect(service.getByUsername('alice.m')).resolves.toMatchObject({ id: alice.id });
       // L'ancien pseudo est libéré aussitôt.
       await expect(service.getByUsername('alice')).rejects.toBeInstanceOf(UserNotFoundError);
     });
 
     it('ne change que les champs présents', async () => {
-      await expect(service.updateProfile(alice.id, { displayName: 'Alice M.' })).resolves.toEqual({ ...alice, displayName: 'Alice M.' });
+      await expect(service.updateProfile(alice.id, { displayName: 'Alice M.' })).resolves.toEqual({ ...alice, plus: false, displayName: 'Alice M.' });
     });
 
     it('efface la bio avec null ou une chaîne vide', async () => {
@@ -145,11 +168,11 @@ describe('UsersService', () => {
     });
 
     it('renvoie le profil inchangé sans aucun champ', async () => {
-      await expect(service.updateProfile(alice.id, {})).resolves.toEqual(alice);
+      await expect(service.updateProfile(alice.id, {})).resolves.toEqual({ ...alice, plus: false });
     });
 
     it('accepte de garder son propre pseudo', async () => {
-      await expect(service.updateProfile(alice.id, { username: 'alice' })).resolves.toEqual(alice);
+      await expect(service.updateProfile(alice.id, { username: 'alice' })).resolves.toEqual({ ...alice, plus: false });
     });
 
     it('refuse un pseudo déjà pris ou réservé', async () => {
@@ -163,7 +186,7 @@ describe('UsersService', () => {
       await expect(service.updateProfile(alice.id, { displayName: '   ' })).rejects.toBeInstanceOf(InvalidProfileError);
       await expect(service.updateProfile(alice.id, { displayName: 'a'.repeat(51) })).rejects.toBeInstanceOf(InvalidProfileError);
       await expect(service.updateProfile(alice.id, { bio: 'b'.repeat(81) })).rejects.toBeInstanceOf(InvalidProfileError);
-      await expect(service.getById(alice.id)).resolves.toEqual(alice);
+      await expect(service.getById(alice.id)).resolves.toEqual({ ...alice, plus: false });
     });
 
     it('lève UserNotFoundError pour un compte supprimé', async () => {

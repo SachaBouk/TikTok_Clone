@@ -203,7 +203,7 @@ struct CameraView<Preview: View>: View {
                     optionButton(option.title, selected: model.captureMode == option) { model.captureMode = option }
                 }
             } else {
-                ForEach(RecordingLimit.allCases) { limit in
+                ForEach(model.limits) { limit in
                     optionButton(limit.title, selected: model.limit == limit) { model.setLimit(limit) }
                 }
             }

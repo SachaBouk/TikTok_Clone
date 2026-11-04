@@ -12,6 +12,8 @@ final class RevenueCatPurchaseService: PurchaseService {
     private var userID: String?
     // Packages de la dernière offre chargée, pour l'achat.
     private var packages: [String: Package] = [:]
+    // Packages de l'offre « plus » (ADR-073).
+    private var plusPackages: [String: Package] = [:]
 
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -20,6 +22,7 @@ final class RevenueCatPurchaseService: PurchaseService {
     func setUser(_ userID: String?) async {
         self.userID = userID
         packages = [:]
+        plusPackages = [:]
         guard Purchases.isConfigured else { return }
         if let userID {
             _ = try? await Purchases.shared.logIn(userID)
@@ -55,6 +58,49 @@ final class RevenueCatPurchaseService: PurchaseService {
         }
     }
 
+    func plusOffers() async throws -> [PlusOffer] {
+        let purchases = try configured()
+        let available = try await wrapping { try await purchases.offerings() }.offering(identifier: Self.plusOffering)?.availablePackages ?? []
+        let subscriptions = available.filter { $0.packageType == .monthly || $0.packageType == .annual }
+        plusPackages = Dictionary(subscriptions.map { ($0.identifier, $0) }, uniquingKeysWith: { first, _ in first })
+        return subscriptions.map { package in
+            PlusOffer(
+                id: package.identifier,
+                productID: package.storeProduct.productIdentifier,
+                period: package.packageType == .annual ? .annual : .monthly,
+                price: package.localizedPriceString,
+                priceValue: package.storeProduct.price,
+                pricePerMonth: package.packageType == .annual ? package.storeProduct.localizedPricePerMonth : nil
+            )
+        }
+    }
+
+    func subscribe(_ offer: PlusOffer) async throws -> PurchaseOutcome {
+        let purchases = try configured()
+        guard let package = plusPackages[offer.id] else { throw PurchaseError.failed("offre introuvable, recharge la page.") }
+        do {
+            let result = try await purchases.purchase(package: package)
+            return result.userCancelled ? .cancelled : .purchased
+        } catch let error as ErrorCode where error == .purchaseCancelledError {
+            return .cancelled
+        } catch {
+            throw PurchaseError.failed(error.localizedDescription)
+        }
+    }
+
+    func restorePurchases() async throws {
+        let purchases = try configured()
+        _ = try await wrapping { try await purchases.restorePurchases() }
+    }
+
+    func manageSubscription() async throws {
+        let purchases = try configured()
+        try await wrapping { try await purchases.showManageSubscriptions() }
+    }
+
+    // Offre de l'abonnement dans le tableau de bord RevenueCat (l'offre courante reste celle des jetons).
+    private static let plusOffering = "plus"
+
     private func configured() throws -> Purchases {
         guard let userID else { throw PurchaseError.unavailable }
         if !Purchases.isConfigured {
@@ -87,6 +133,22 @@ final class UnavailablePurchaseService: PurchaseService {
     func purchase(_ pack: TokenPack) async throws -> PurchaseOutcome {
         throw PurchaseError.unavailable
     }
+
+    func plusOffers() async throws -> [PlusOffer] {
+        throw PurchaseError.unavailable
+    }
+
+    func subscribe(_ offer: PlusOffer) async throws -> PurchaseOutcome {
+        throw PurchaseError.unavailable
+    }
+
+    func restorePurchases() async throws {
+        throw PurchaseError.unavailable
+    }
+
+    func manageSubscription() async throws {
+        throw PurchaseError.unavailable
+    }
 }
 
 #if DEBUG
@@ -110,5 +172,21 @@ final class UnavailablePurchaseService: PurchaseService {
             try? await Task.sleep(for: .seconds(1))
             return .purchased
         }
+
+        func plusOffers() async throws -> [PlusOffer] {
+            [
+                PlusOffer(id: "dev_monthly", productID: "plus_monthly", period: .monthly, price: "4,99 €", priceValue: 4.99, pricePerMonth: nil),
+                PlusOffer(id: "dev_annual", productID: "plus_annual", period: .annual, price: "39,99 €", priceValue: 39.99, pricePerMonth: "3,33 €"),
+            ]
+        }
+
+        func subscribe(_ offer: PlusOffer) async throws -> PurchaseOutcome {
+            try? await Task.sleep(for: .seconds(1))
+            return .purchased
+        }
+
+        func restorePurchases() async throws {}
+
+        func manageSubscription() async throws {}
     }
 #endif

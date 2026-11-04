@@ -44,6 +44,9 @@ export class GiftResponse implements GiftDto {
 export class GiftCatalogItemResponse extends GiftResponse implements GiftCatalogItemDto {
   @ApiProperty({ type: 'integer', minimum: 1, description: 'Prix en jetons.' })
   price!: number;
+
+  @ApiProperty({ description: 'Réservé aux abonnés « Plus » (ADR-073).' })
+  plusOnly!: boolean;
 }
 
 export class GiftCatalogResponse implements GiftCatalogDto {
@@ -180,7 +183,7 @@ export function toGiftDto(code: string): GiftDto {
 }
 
 export function toGiftCatalogItemDto(item: GiftCatalogItem): GiftCatalogItemDto {
-  return { code: item.code, name: item.name, emoji: item.emoji, price: item.price };
+  return { code: item.code, name: item.name, emoji: item.emoji, price: item.price, plusOnly: item.plusOnly };
 }
 
 export function toSentGiftDto({ gift, balance }: SentGift): SentGiftDto {

@@ -16,7 +16,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MAX_COVER_SIZE_BYTES, MAX_DESCRIPTION_LENGTH, MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
+import { MAX_COVER_SIZE_BYTES, MAX_DESCRIPTION_LENGTH, PLUS_MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
 import { MAX_LOCATION_ADDRESS_LENGTH, MAX_LOCATION_NAME_LENGTH, VIDEO_VISIBILITIES, type VideoVisibility } from '../domain/video';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
@@ -54,10 +54,15 @@ export class CreateUploadRequest {
   @IsIn(VIDEO_TYPES)
   contentType!: string;
 
-  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_VIDEO_SIZE_BYTES, description: 'Taille du fichier en octets.' })
+  @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    maximum: PLUS_MAX_VIDEO_SIZE_BYTES,
+    description: 'Taille du fichier en octets : 1 Gio au plus, 2 Gio pour un abonné « Plus » (ADR-073).',
+  })
   @IsInt()
   @Min(1)
-  @Max(MAX_VIDEO_SIZE_BYTES)
+  @Max(PLUS_MAX_VIDEO_SIZE_BYTES)
   fileSize!: number;
 
   @ApiPropertyOptional({ maxLength: MAX_DESCRIPTION_LENGTH })

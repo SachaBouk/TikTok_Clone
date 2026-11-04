@@ -54,6 +54,8 @@ struct RealtimeEventDecoder: Sendable {
             return .profileCountersChanged(followers: event.data.followersCount, following: event.data.followingCount)
         case .walletUpdated(let event):
             return .walletUpdated(balance: event.data.balance, earned: event.data.earned)
+        case .plusChanged(let event):
+            return .plusChanged(PlusStatus(event.data))
         }
     }
 

@@ -13,11 +13,13 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SearchModule } from './modules/search/search.module';
 import { LiveModule } from './modules/live/live.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { StoriesModule } from './modules/stories/stories.module';
 import { UsersModule } from './modules/users/users.module';
 import { VideosModule } from './modules/videos/videos.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { PlusModule } from './plus/plus.module';
 import { SuspensionModule } from './suspension/suspension.module';
 import { RedisModule } from './redis/redis.module';
 
@@ -27,6 +29,7 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     RateLimitModule,
     SuspensionModule,
+    PlusModule,
     AuthModule,
     UsersModule,
     VideosModule,
@@ -41,6 +44,7 @@ import { RedisModule } from './redis/redis.module';
     PushModule,
     RealtimeModule,
     WalletModule,
+    SubscriptionsModule,
     ReportsModule,
     AdminModule,
   ],

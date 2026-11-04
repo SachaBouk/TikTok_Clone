@@ -9,6 +9,8 @@ export interface User {
   followersCount: number;
   followingCount: number;
   createdAt: Date;
+  // Abonné « Plus » (ADR-073), d'après le registre partagé : posé par UsersService, absent des dépôts (faux).
+  plus?: boolean;
 }
 
 // Note de profil (ADR-070) : court texte visible 24 h après sa publication.

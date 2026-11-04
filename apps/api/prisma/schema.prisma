@@ -78,6 +78,7 @@ model User {
   likes                    Like[]
   favorites                Favorite[]
   collections              Collection[]
+  plusSubscription         PlusSubscription?
   reposts                  Repost[]
   comments                 Comment[]
   commentLikes             CommentLike[]
@@ -173,45 +174,48 @@ enum VideoStatus {
 }
 
 model Video {
-  id               String          @id @default(uuid(7)) @map("video_id") @db.Uuid
-  userId           String          @map("user_id") @db.Uuid
-  description      String?
+  id                 String          @id @default(uuid(7)) @map("video_id") @db.Uuid
+  userId             String          @map("user_id") @db.Uuid
+  description        String?
   // Clé de l'objet brut dans le bucket des uploads (ADR-007).
-  rawKey           String          @map("raw_key")
+  rawKey             String          @map("raw_key")
   // Identifiant de l'upload multipart en cours ; nul une fois l'upload terminé (ADR-007).
-  uploadId         String?         @map("upload_id")
+  uploadId           String?         @map("upload_id")
   // Taille déclarée du fichier brut, en octets : l'objet assemblé doit la respecter exactement.
-  rawSize          Int             @map("raw_size")
+  rawSize            Int             @map("raw_size")
   // URL du manifeste HLS, renseignée quand le transcodage est terminé (ADR-008).
-  hlsUrl           String?         @map("hls_url")
-  thumbnailUrl     String?         @map("thumbnail_url")
-  status           VideoStatus     @default(uploading)
+  hlsUrl             String?         @map("hls_url")
+  thumbnailUrl       String?         @map("thumbnail_url")
+  status             VideoStatus     @default(uploading)
   // Vidéo privée (ADR-061) : visible de son seul auteur.
-  visibility       VideoVisibility @default(public)
+  visibility         VideoVisibility @default(public)
   // Commentaires autorisés (ADR-062) ; coupés, ils sont gardés mais cachés.
-  commentsEnabled  Boolean         @default(true) @map("comments_enabled")
+  commentsEnabled    Boolean         @default(true) @map("comments_enabled")
   // « Autoriser l'utilisation de mon son » (ADR-064) : refusé, son son n'est plus proposé aux autres.
-  soundShared      Boolean         @default(true) @map("sound_shared")
+  soundShared        Boolean         @default(true) @map("sound_shared")
   // « Autoriser le téléchargement » (ADR-067).
-  downloadsEnabled Boolean         @default(true) @map("downloads_enabled")
+  downloadsEnabled   Boolean         @default(true) @map("downloads_enabled")
   // Son repris d'une autre vidéo (ADR-064) ; NULL si ce son a disparu (le son reste dans le fichier publié).
-  soundId          String?         @map("sound_id") @db.Uuid
+  soundId            String?         @map("sound_id") @db.Uuid
   // Couverture choisie dans l'app (ADR-065) : JPEG dans le bucket des uploads, devenu la miniature. Jamais exposée.
-  coverKey         String?         @map("cover_key")
+  coverKey           String?         @map("cover_key")
   // Lieu (ADR-065) : nom et adresse affichée, jamais de coordonnées.
-  locationName     String?         @map("location_name")
-  locationAddress  String?         @map("location_address")
+  locationName       String?         @map("location_name")
+  locationAddress    String?         @map("location_address")
   // Étiquette « Contenu généré par l'IA » (ADR-065).
-  aiGenerated      Boolean         @default(false) @map("ai_generated")
+  aiGenerated        Boolean         @default(false) @map("ai_generated")
+  // Durée maximale permise (ADR-073), fixée à la confirmation de l'envoi : 600 s pour un abonné « Plus », NULL sinon
+  // (durée par défaut du worker, ADR-040). Reprise par le job de transcodage, et à sa relance.
+  maxDurationSeconds Int?            @map("max_duration_seconds")
   // Compteurs dénormalisés, maintenus par les services applicatifs.
-  viewsCount       Int             @default(0) @map("views_count")
-  likesCount       Int             @default(0) @map("likes_count")
-  commentsCount    Int             @default(0) @map("comments_count")
-  favoritesCount   Int             @default(0) @map("favorites_count")
-  repostsCount     Int             @default(0) @map("reposts_count")
-  sharesCount      Int             @default(0) @map("shares_count")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
+  viewsCount         Int             @default(0) @map("views_count")
+  likesCount         Int             @default(0) @map("likes_count")
+  commentsCount      Int             @default(0) @map("comments_count")
+  favoritesCount     Int             @default(0) @map("favorites_count")
+  repostsCount       Int             @default(0) @map("reposts_count")
+  sharesCount        Int             @default(0) @map("shares_count")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes         Like[]
@@ -345,6 +349,34 @@ model Favorite {
   // Grille du profil, de l'action la plus récente à la plus ancienne.
   @@index([userId, createdAt])
   @@map("favorites")
+}
+
+// Abonnement « Plus » (ADR-073), dernier état connu, relu chez RevenueCat à chaque webhook d'abonnement. Abonné tant
+// que `expires_at` est dans le futur (période de grâce comprise) ; la ligne reste après l'échéance.
+model PlusSubscription {
+  userId      String     @id @map("user_id") @db.Uuid
+  productId   String     @map("product_id")
+  period      PlusPeriod
+  expiresAt   DateTime   @map("expires_at")
+  // Faux : renouvellement annulé (actif jusqu'à l'échéance).
+  willRenew   Boolean    @map("will_renew")
+  store       String?
+  // SANDBOX (Test Store compris) ou PRODUCTION.
+  environment String
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Reconstruction du registre au démarrage : abonnements en cours.
+  @@index([expiresAt])
+  @@map("plus_subscriptions")
+}
+
+enum PlusPeriod {
+  monthly
+  annual
+
+  @@map("plus_period")
 }
 
 // Collection de favoris (ADR-072) : nom de 1 à 30 caractères (CHECK écrit à la main), privée par défaut.
@@ -544,18 +576,20 @@ enum LiveEndReason {
 // Live : la vidéo passe par le serveur LiveKit (salle = identifiant du live), jamais par l'API. Gardé à sa fin pour ses
 // chiffres (pas de replay) ; son chat est supprimé.
 model Live {
-  id          String         @id @default(uuid(7)) @map("live_id") @db.Uuid
-  userId      String         @map("user_id") @db.Uuid
-  title       String?
-  status      LiveStatus     @default(live)
-  startedAt   DateTime       @default(now()) @map("started_at")
-  endedAt     DateTime?      @map("ended_at")
-  endReason   LiveEndReason? @map("end_reason")
+  id                 String         @id @default(uuid(7)) @map("live_id") @db.Uuid
+  userId             String         @map("user_id") @db.Uuid
+  title              String?
+  status             LiveStatus     @default(live)
+  startedAt          DateTime       @default(now()) @map("started_at")
+  endedAt            DateTime?      @map("ended_at")
+  endReason          LiveEndReason? @map("end_reason")
   // Plus grand nombre de spectateurs connectés en même temps (webhook du serveur vidéo).
-  peakViewers Int            @default(0) @map("peak_viewers")
-  heartsCount Int            @default(0) @map("hearts_count")
-  giftsCount  Int            @default(0) @map("gifts_count")
-  giftsAmount Int            @default(0) @map("gifts_amount")
+  peakViewers        Int            @default(0) @map("peak_viewers")
+  heartsCount        Int            @default(0) @map("hearts_count")
+  giftsCount         Int            @default(0) @map("gifts_count")
+  giftsAmount        Int            @default(0) @map("gifts_amount")
+  // Durée maximale (ADR-073), fixée au lancement : 4 h pour un abonné « Plus », 2 h sinon (ADR-053).
+  maxDurationSeconds Int            @default(7200) @map("max_duration_seconds")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   viewers       LiveViewer[]
@@ -803,6 +837,8 @@ enum WalletTransactionKind {
   purchase
   refund
   adjustment
+  // Jetons offerts par l'abonnement « Plus » (ADR-073), accordés par RevenueCat : jamais comptés comme vendus.
+  subscriptionGrant @map("subscription_grant")
 
   @@map("wallet_transaction_kind")
 }

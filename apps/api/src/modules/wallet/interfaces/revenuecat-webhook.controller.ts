@@ -15,9 +15,12 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Public } from '../../auth/interfaces/public.decorator';
+import { SubscriptionsService } from '../../subscriptions/application/subscriptions.service';
+import { SUBSCRIPTION_EVENT_TYPES } from '../../subscriptions/domain/plus-subscription';
+import { SubscriptionsNotConfiguredError } from '../../subscriptions/domain/subscription.errors';
 import { WalletService } from '../application/wallet.service';
 import { RevenueCatConfig } from '../wallet.config';
-import { MalformedWebhookError, parseRevenueCatEvent } from './revenuecat-event';
+import { MalformedWebhookError, parseRevenueCatEvent, parseSubscriptionEvent } from './revenuecat-event';
 import { checkRevenueCatSignature } from './revenuecat-signature';
 
 // Webhook RevenueCat (ADR-009) : appel de serveur à serveur, hors de la spec OpenAPI (aucun client à générer).
@@ -34,6 +37,7 @@ export class RevenueCatWebhookController {
 
   constructor(
     private readonly walletService: WalletService,
+    private readonly subscriptions: SubscriptionsService,
     private readonly config: RevenueCatConfig,
   ) {}
 
@@ -53,6 +57,26 @@ export class RevenueCatWebhookController {
       if (check !== 'valid') {
         this.logger.warn(`Webhook RevenueCat refusé : signature ${check}`);
         throw new UnauthorizedException();
+      }
+    }
+
+    // Abonnement « Plus » (ADR-073) : l'état est relu chez RevenueCat. Les jetons offerts arrivent à part, par un
+    // événement VIRTUAL_CURRENCY_TRANSACTION.
+    let subscriptionEvent;
+    try {
+      subscriptionEvent = parseSubscriptionEvent(body, SUBSCRIPTION_EVENT_TYPES);
+    } catch (error) {
+      if (error instanceof MalformedWebhookError) throw new BadRequestException(error.message);
+      throw error;
+    }
+    if (subscriptionEvent) {
+      try {
+        const outcome = await this.subscriptions.refresh(subscriptionEvent.appUserIds);
+        this.logger.log(`Événement RevenueCat ${subscriptionEvent.eventId} (${subscriptionEvent.type}) : abonnement ${outcome}`);
+        return { status: outcome };
+      } catch (error) {
+        if (error instanceof SubscriptionsNotConfiguredError) throw new ServiceUnavailableException(error.message);
+        throw error;
       }
     }
 

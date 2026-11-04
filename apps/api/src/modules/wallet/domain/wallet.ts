@@ -2,11 +2,13 @@
 // virtuelle ; l'API reste la source de vérité du solde : elle applique chaque mouvement annoncé par webhook,
 // une seule fois, dans son journal (`wallet_transactions`).
 
-export type WalletTransactionKind = 'purchase' | 'refund' | 'adjustment';
+// `subscriptionGrant` : jetons offerts par l'abonnement « Plus » (ADR-073), accordés par RevenueCat à la souscription et
+// à chaque renouvellement ; jamais comptés comme vendus.
+export type WalletTransactionKind = 'purchase' | 'refund' | 'adjustment' | 'subscriptionGrant';
 
 // Sortes de l'historique d'un compte, pour la spec (enum nommé partagé par l'app et le backoffice) : celles du journal
 // RevenueCat, et les cadeaux envoyés (ADR-050).
-export const WALLET_HISTORY_KINDS = ['purchase', 'refund', 'adjustment', 'giftSent'] as const;
+export const WALLET_HISTORY_KINDS = ['purchase', 'refund', 'adjustment', 'subscriptionGrant', 'giftSent'] as const;
 
 // Un mouvement du journal, tel qu'il a été appliqué au solde du compte.
 export interface WalletTransaction {
@@ -123,6 +125,8 @@ export interface GiftTotals {
 }
 
 export const PRODUCTION_ENVIRONMENT = 'PRODUCTION';
+// Produits de l'abonnement « Plus » (ADR-073) : `plus_monthly`, `plus_annual`.
+export const PLUS_PRODUCT_PREFIX = 'plus_';
 export const SANDBOX_ENVIRONMENT = 'SANDBOX';
 // Boutique simulée de RevenueCat (clé `test_…`) : jamais payée.
 export const TEST_STORE = 'TEST_STORE';

@@ -184,6 +184,7 @@ function toProfileDto({ user, likesCount, pronouns, note, lists }: UserProfileVi
     ...(note && { note: { text: note.text, postedAt: note.postedAt.toISOString(), expiresAt: note.expiresAt.toISOString() } }),
     likesVisibility: lists.likes,
     favoritesVisibility: lists.favorites,
+    plus: user.plus === true,
     createdAt: user.createdAt.toISOString(),
   };
 }

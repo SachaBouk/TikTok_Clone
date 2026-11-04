@@ -7,8 +7,9 @@ import Foundation
 struct ExportEditedVideoUseCase: Sendable {
     let editor: any VideoEditor
 
-    func callAsFunction(_ plan: EditPlan) async throws -> URL {
-        if let problem = plan.problem { throw AppError.rejected(problem) }
+    // `isPlus` : abonné « Plus » (ADR-073), vidéos de 10 minutes.
+    func callAsFunction(_ plan: EditPlan, isPlus: Bool = false) async throws -> URL {
+        if let problem = plan.problem(isPlus: isPlus) { throw AppError.rejected(problem) }
         do {
             return try await editor.export(plan)
         } catch is CancellationError {

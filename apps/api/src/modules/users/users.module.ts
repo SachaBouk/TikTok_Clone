@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StorageConfig } from '../../storage/storage.config';
+import { PlusMembers } from '../../plus/plus-members';
 import { SuspendedAccounts } from '../../suspension/suspended-accounts';
 import { VideosModule } from '../videos/videos.module';
 import { UsersService } from './application/users.service';
@@ -38,8 +39,9 @@ import { UsersController } from './interfaces/users.controller';
         interests: InterestRepository,
         suspended: SuspendedAccounts,
         receivedLikes: ReceivedLikesCounter,
-      ) => new UsersService(users, avatars, contentCleanup, interests, suspended, receivedLikes),
-      inject: [UserRepository, AvatarStorage, AccountContentCleanup, InterestRepository, SuspendedAccounts, ReceivedLikesCounter],
+        plus: PlusMembers,
+      ) => new UsersService(users, avatars, contentCleanup, interests, suspended, receivedLikes, () => new Date(), plus),
+      inject: [UserRepository, AvatarStorage, AccountContentCleanup, InterestRepository, SuspendedAccounts, ReceivedLikesCounter, PlusMembers],
     },
   ],
   exports: [UsersService],

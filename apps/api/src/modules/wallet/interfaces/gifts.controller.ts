@@ -44,7 +44,10 @@ export class GiftsController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Cadeau inconnu, sa propre vidéo, ou corps invalide.' })
   @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
   @ApiResponse({ status: 402, type: ErrorResponse, description: 'Solde insuffisant.' })
-  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Blocage avec l’auteur, dans un sens ou dans l’autre.' })
+  @ApiForbiddenResponse({
+    type: ErrorResponse,
+    description: 'Blocage avec l’auteur, dans un sens ou dans l’autre, ou cadeau réservé aux abonnés « Plus ».',
+  })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo non publiée, supprimée, ou d’un compte suspendu.' })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre vidéo.' })
   @ApiTooManyRequests('Trop de cadeaux envoyés')
@@ -66,7 +69,10 @@ export class GiftsController {
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Cadeau inconnu, son propre live, ou corps invalide.' })
   @ApiUnauthorizedResponse({ type: ErrorResponse, description: 'Access token absent, invalide ou expiré.' })
   @ApiResponse({ status: 402, type: ErrorResponse, description: 'Solde insuffisant.' })
-  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Blocage avec l’auteur du live, dans un sens ou dans l’autre.' })
+  @ApiForbiddenResponse({
+    type: ErrorResponse,
+    description: 'Blocage avec l’auteur du live, dans un sens ou dans l’autre, ou cadeau réservé aux abonnés « Plus ».',
+  })
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Live inconnu, terminé, ou d’un compte suspendu.' })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Identifiant d’envoi déjà utilisé pour un autre cadeau ou une autre cible.' })
   @ApiTooManyRequests('Trop de cadeaux envoyés')

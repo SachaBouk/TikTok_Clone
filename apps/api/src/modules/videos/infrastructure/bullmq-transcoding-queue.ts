@@ -15,7 +15,12 @@ export class BullmqTranscodingQueue extends TranscodingQueue implements OnModule
     this.queue ??= new Queue<TranscodeJobData>(TRANSCODE_QUEUE, { connection: queueConnection() });
     await this.queue.add(
       'transcode',
-      { videoId: job.videoId, rawKey: job.rawKey, ...(job.coverKey ? { coverKey: job.coverKey } : {}) },
+      {
+        videoId: job.videoId,
+        rawKey: job.rawKey,
+        ...(job.coverKey ? { coverKey: job.coverKey } : {}),
+        ...(job.maxDurationSeconds ? { maxDurationSeconds: job.maxDurationSeconds } : {}),
+      },
       {
         // Un job par vidéo : une nouvelle publication pour une vidéo déjà dans la file est ignorée.
         jobId: job.videoId,

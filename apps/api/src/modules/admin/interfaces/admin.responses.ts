@@ -105,6 +105,9 @@ export class AdminUserResponse implements AdminUserDto {
   @ApiProperty({ type: 'integer', minimum: 0, description: 'Jetons reçus en cadeaux (ADR-050), non dépensables.' })
   tokenEarned!: number;
 
+  @ApiProperty({ description: 'Abonné « Plus » (ADR-073).' })
+  plus!: boolean;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -410,6 +413,7 @@ export function toAdminUserDto({ user, isAdmin, videosCount, tokenBalance, token
     videosCount,
     tokenBalance,
     tokenEarned,
+    plus: user.plus === true,
     createdAt: user.createdAt.toISOString(),
     ...(suspension
       ? {

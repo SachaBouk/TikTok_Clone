@@ -16,9 +16,12 @@ export class UserSummaryResponse implements UserSummaryDto {
 
   @ApiProperty({ type: String, nullable: true, format: 'uri' })
   avatarUrl!: string | null;
+
+  @ApiProperty({ description: 'Abonné « Plus » (ADR-073) : badge « + » à côté du pseudo.' })
+  plus!: boolean;
 }
 
 // Mapping explicite, partagé par les modules qui affichent un auteur.
 export function toUserSummary(user: User): UserSummaryDto {
-  return { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl };
+  return { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, plus: user.plus === true };
 }

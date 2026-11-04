@@ -35,6 +35,7 @@ const videoSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  maxDurationSeconds: true,
   hlsUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -55,10 +56,10 @@ export class PrismaVideoRepository extends VideoRepository {
   }
 
   // `status: 'uploading'` dans le WHERE rend la transition atomique : une seule confirmation l'emporte.
-  async markUploaded(id: string): Promise<Video | null> {
+  async markUploaded(id: string, maxDurationSeconds: number | null): Promise<Video | null> {
     const [video] = await this.prisma.video.updateManyAndReturn({
       where: { id, status: 'uploading' },
-      data: { status: 'processing', uploadId: null },
+      data: { status: 'processing', uploadId: null, maxDurationSeconds },
       select: videoSelect,
     });
     return video ?? null;

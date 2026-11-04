@@ -462,7 +462,7 @@ struct EditingTests {
         #expect(draft.state == .empty)
         let request = try #require(draft.editorRequest)
         #expect(request.source == .gallery && request.isNew)
-        #expect(request.notice == "Cette vidéo dure plus de 3 minutes : choisis le passage à garder.")
+        #expect(request.notice == "Cette vidéo dure plus de 3 minutes : choisis le passage à garder. Avec Plus, jusqu’à 10 minutes.")
         #expect(request.plan.clips[0].end == .seconds(180))
         #expect(request.plan.problem == nil)
 

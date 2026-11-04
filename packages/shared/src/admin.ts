@@ -23,6 +23,8 @@ export interface AdminUserDto {
   tokenBalance: number;
   // Jetons reçus en cadeaux (ADR-050), non dépensables.
   tokenEarned: number;
+  // Abonné « Plus » (ADR-073).
+  plus: boolean;
   createdAt: string;
   // Suspension en cours (ADR-037) ; absente si le compte n'est pas suspendu.
   suspension?: AdminSuspensionDto;

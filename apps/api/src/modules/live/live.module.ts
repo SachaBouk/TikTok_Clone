@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PlusMembers } from '../../plus/plus-members';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { InteractionsService } from '../interactions/application/interactions.service';
 import { InteractionsModule } from '../interactions/interactions.module';
@@ -42,8 +43,22 @@ import { LiveKitWebhookController } from './interfaces/livekit-webhook.controlle
         interactions: InteractionsService,
         notifications: NotificationsService,
         rateLimiter: RateLimiter,
+        plus: PlusMembers,
       ) => {
-        const service = new LiveService(lives, media, room, lifecycle, users, interactions, notifications, rateLimiter);
+        const service = new LiveService(
+          lives,
+          media,
+          room,
+          lifecycle,
+          users,
+          interactions,
+          notifications,
+          rateLimiter,
+          undefined,
+          undefined,
+          undefined,
+          plus,
+        );
         users.onAccountDeleting((userId) => service.closeRoomsOf(userId));
         return service;
       },
@@ -56,6 +71,7 @@ import { LiveKitWebhookController } from './interfaces/livekit-webhook.controlle
         InteractionsService,
         NotificationsService,
         RateLimiter,
+        PlusMembers,
       ],
     },
     LiveLifecycleConsumer,

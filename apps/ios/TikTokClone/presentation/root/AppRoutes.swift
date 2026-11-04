@@ -36,6 +36,9 @@ enum AccountRoute: Hashable {
     case publications
     // Brouillons sur l'iPhone (ADR-065), depuis la case « Brouillons » de son profil.
     case drafts
+    // Abonnement « Plus » (ADR-073) et icônes de l'app au choix.
+    case plus(PlusPaywallSource)
+    case appIcon
 }
 
 // Recherche (ADR-049), ouverte par la loupe du feed ; avec une recherche de l'historique, relancée (ADR-057).
@@ -111,6 +114,8 @@ extension View {
                 case .wallet(let source): WalletView(source: source, container: container)
                 case .publications: PublicationsView(publishing: container.publishing, router: container.router)
                 case .drafts: DraftsView(drafts: container.drafts, router: container.router)
+                case .plus(let source): PlusView(source: source, container: container)
+                case .appIcon: AppIconSettingsView(container: container)
                 }
             }
     }

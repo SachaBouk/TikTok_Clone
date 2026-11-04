@@ -11,6 +11,8 @@ struct EditorRequest: Identifiable {
     let source: MediaSource
     var notice: String?
     var isNew = true
+    // Abonné « Plus » (ADR-073) : vidéos de 10 minutes.
+    var isPlus = false
 }
 
 // Vidéo exportée par l'éditeur, avec le plan qui l'a produite (pour le rouvrir sans double réencodage).
@@ -75,7 +77,7 @@ final class VideoEditorViewModel {
         self.makeFrame = makeFrame
     }
 
-    var problem: String? { plan.problem }
+    var problem: String? { plan.problem(isPlus: request.isPlus) }
     var canFinish: Bool { problem == nil && !isExporting }
     var canAddText: Bool { plan.texts.count < EditPlan.maxTexts }
     var canUndo: Bool { history.canUndo }
@@ -356,7 +358,7 @@ final class VideoEditorViewModel {
         isExporting = true
         defer { isExporting = false }
         do {
-            let result = EditResult(file: try await exportVideo(plan), plan: plan)
+            let result = EditResult(file: try await exportVideo(plan, isPlus: request.isPlus), plan: plan)
             let kept = Set(plan.sources.map(\.file))
             for file in Set(request.plan.sources.map(\.file)).union(appendedFiles).subtracting(kept) {
                 try? FileManager.default.removeItem(at: file)

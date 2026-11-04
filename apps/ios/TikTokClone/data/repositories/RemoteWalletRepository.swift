@@ -49,7 +49,9 @@ struct RemoteGiftRepository: GiftRepository {
     func catalog() async throws -> [GiftCatalogItem] {
         switch try await mappingErrors({ try await client.getGiftCatalog() }) {
         case .ok(let ok):
-            return try ok.body.json.items.map { GiftCatalogItem(info: GiftInfo(code: $0.code, name: $0.name, emoji: $0.emoji), price: $0.price) }
+            return try ok.body.json.items.map {
+                GiftCatalogItem(info: GiftInfo(code: $0.code, name: $0.name, emoji: $0.emoji), price: $0.price, plusOnly: $0.plusOnly)
+            }
         case .undocumented: throw AppError.unexpected
         }
     }
@@ -116,6 +118,7 @@ extension WalletTransaction {
             case .purchase: .purchase
             case .refund: .refund
             case .adjustment: .adjustment
+            case .subscriptionGrant: .subscriptionGrant
             case .giftSent: .giftSent
             }
         self.init(

@@ -20,6 +20,8 @@ struct UserProfile: Equatable, Sendable {
     // Qui peut voir ses vidéos aimées et ses favoris (ADR-071) ; privés par défaut.
     var likesVisibility: VideoVisibility = .onlyMe
     var favoritesVisibility: VideoVisibility = .onlyMe
+    // Abonné « Plus » (ADR-073) : badge « + ».
+    var isPlus = false
 
     // Vidéos aimées ou favoris de ce compte cachés aux autres (ADR-071) : onglet avec un cadenas sur son profil.
     func isPrivate(_ grid: ProfileGrid) -> Bool {

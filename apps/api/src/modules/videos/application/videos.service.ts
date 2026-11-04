@@ -20,6 +20,8 @@ import {
   downloadFileOf,
   MAX_COVER_SIZE_BYTES,
   MAX_VIDEO_SIZE_BYTES,
+  PLUS_MAX_VIDEO_DURATION_SECONDS,
+  PLUS_MAX_VIDEO_SIZE_BYTES,
   partCount,
   SUPPORTED_VIDEO_TYPES,
   UPLOAD_PART_SIZE_BYTES,
@@ -54,6 +56,8 @@ import {
 } from '../domain/video.errors';
 import type { VideoRepository } from '../domain/video.repository';
 import type { PresignedPart, UploadedPart, VideoStorage } from '../domain/video-storage';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
+import type { PlusMembers } from '../../../plus/plus-members';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 
 export interface CreateUploadInput {
@@ -109,12 +113,16 @@ export class VideosService {
     private readonly cleanup: VideoCleanupQueue,
     private readonly rateLimiter: RateLimiter,
     private readonly now: () => Date = () => new Date(),
+    // Abonnés « Plus » (ADR-073) : envois plus lourds et vidéos plus longues. Sans registre, personne n'est abonné.
+    private readonly plus: PlusMembers = new InMemoryPlusMembers(),
   ) {}
 
   // Démarre un upload : crée la vidéo en `uploading` et renvoie une URL signée par partie.
   async createUpload(userId: string, input: CreateUploadInput): Promise<VideoUpload> {
     if (!isSupportedVideoType(input.contentType)) throw new UnsupportedVideoTypeError(input.contentType);
-    if (input.fileSize > MAX_VIDEO_SIZE_BYTES) throw new VideoTooLargeError();
+    if (input.fileSize > MAX_VIDEO_SIZE_BYTES) {
+      if (input.fileSize > PLUS_MAX_VIDEO_SIZE_BYTES || !(await this.plus.isActive(userId, this.now()))) throw new VideoTooLargeError();
+    }
     if (input.cover && input.cover.fileSize > MAX_COVER_SIZE_BYTES) throw new CoverTooLargeError();
     // Son repris (ADR-064) : il doit être proposé (vidéo d'origine publique, publiée, qui le permet).
     if (input.soundId && (await this.videos.findSounds({ kind: 'ids', ids: [input.soundId] }, [], 0, 1)).length === 0) {
@@ -195,7 +203,9 @@ export class VideosService {
       throw new UploadIncompleteError(`${size} octets reçus, ${video.rawSize} déclarés`);
     }
 
-    const uploaded = await this.videos.markUploaded(video.id);
+    // Durée permise lue à la confirmation (ADR-073) et gardée : la relance du transcodage reprend la même.
+    const maxDurationSeconds = (await this.plus.isActive(userId, this.now())) ? PLUS_MAX_VIDEO_DURATION_SECONDS : null;
+    const uploaded = await this.videos.markUploaded(video.id, maxDurationSeconds);
     if (!uploaded) throw new VideoNotAwaitingUploadError(videoId);
 
     // Si la publication échoue (Redis indisponible), la vidéo reste en `processing` :
@@ -501,7 +511,12 @@ function filesOf(video: Video): VideoFilesCleanup {
   return { videoId: video.id, rawKey: video.rawKey, uploadId: video.uploadId, ...(video.coverKey ? { coverKey: video.coverKey } : {}) };
 }
 
-// Job de transcodage : la couverture choisie (ADR-065) devient la miniature.
+// Job de transcodage : la couverture choisie (ADR-065) devient la miniature ; durée permise d'un abonné (ADR-073).
 function transcodingJob(video: Video): TranscodingJob {
-  return { videoId: video.id, rawKey: video.rawKey, ...(video.coverKey ? { coverKey: video.coverKey } : {}) };
+  return {
+    videoId: video.id,
+    rawKey: video.rawKey,
+    ...(video.coverKey ? { coverKey: video.coverKey } : {}),
+    ...(video.maxDurationSeconds ? { maxDurationSeconds: video.maxDurationSeconds } : {}),
+  };
 }

@@ -93,8 +93,8 @@ struct InboxTests {
     @Test("suggestions par l'API : compte, « te suit », suivi par, nombre")
     func remoteSuggestions() async throws {
         let body = """
-            {"items":[{"user":{"id":"u2","username":"lea","displayName":"Léa","avatarUrl":null},"followersCount":12,\
-            "followsYou":false,"followedBy":[{"id":"u3","username":"tom","displayName":"Tom","avatarUrl":null}],"followedByCount":4}]}
+            {"items":[{"user":{"id":"u2","username":"lea","displayName":"Léa","avatarUrl":null,"plus":false},"followersCount":12,\
+            "followsYou":false,"followedBy":[{"id":"u3","username":"tom","displayName":"Tom","avatarUrl":null,"plus":false}],"followedByCount":4}]}
             """
         let client = makeClient(
             transport: MockTransport { _, operation in
@@ -114,8 +114,8 @@ struct InboxTests {
         let path = Mutex<String?>(nil)
         let body = """
             {"items":[{"conversationId":"c1","messageId":"m1","content":"On va au cinéma ?","createdAt":"2026-10-15T10:00:00.000Z",\
-            "participant":{"id":"u2","username":"lea","displayName":"Léa","avatarUrl":null},\
-            "sender":{"id":"me","username":"moi","displayName":"Moi","avatarUrl":null}}]}
+            "participant":{"id":"u2","username":"lea","displayName":"Léa","avatarUrl":null,"plus":false},\
+            "sender":{"id":"me","username":"moi","displayName":"Moi","avatarUrl":null,"plus":false}}]}
             """
         let client = makeClient(
             transport: MockTransport { request, _ in

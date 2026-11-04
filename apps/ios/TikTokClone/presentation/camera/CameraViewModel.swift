@@ -50,14 +50,20 @@ final class CameraViewModel {
     init(
         kind: PublicationKind, camera: any VideoCamera,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        isPlus: Bool = false
     ) {
         self.kind = kind
         self.camera = camera
         self.sleep = sleep
         self.now = now
-        recording = RecordingSession(kind: kind)
+        self.isPlus = isPlus
+        recording = RecordingSession(kind: kind, isPlus: isPlus)
     }
+
+    // Abonné « Plus » (ADR-073) : « 10 min » proposé, vidéos de 10 minutes.
+    let isPlus: Bool
+    var limits: [RecordingLimit] { RecordingLimit.available(isPlus: isPlus) }
 
     // Photo : stories seulement (ADR-051).
     var captureModes: [CaptureMode] { kind == .story ? CaptureMode.allCases : [.video] }
@@ -77,13 +83,13 @@ final class CameraViewModel {
         guard canChangeSettings, kind != self.kind else { return }
         self.kind = kind
         if kind == .video { captureMode = .video }
-        recording = RecordingSession(kind: kind, limit: kind == .video ? limit.duration : nil)
+        recording = RecordingSession(kind: kind, limit: kind == .video ? limit.duration : nil, isPlus: isPlus)
     }
 
     func setLimit(_ limit: RecordingLimit) {
         guard canChangeSettings, kind == .video else { return }
         self.limit = limit
-        recording = RecordingSession(kind: kind, limit: limit.duration)
+        recording = RecordingSession(kind: kind, limit: limit.duration, isPlus: isPlus)
     }
 
     func start() async {

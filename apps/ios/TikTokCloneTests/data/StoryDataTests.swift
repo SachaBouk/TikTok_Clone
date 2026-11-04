@@ -15,7 +15,7 @@ struct StoryDataTests {
     @Test("stories d'un compte : auteur, média, état du lecteur, chiffres de l'auteur ; story incomplète sautée")
     func userStories() async throws {
         let body =
-            #"{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null},"items":["#
+            #"{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"items":["#
             + Self.story + #","viewer":{"viewed":true,"liked":false}},"#
             + Self.story.replacingOccurrences(of: "\"s1\"", with: "\"s2\"") + #","stats":{"viewersCount":4,"likesCount":2}},"#
             + #"{"id":"s3","userId":"bob-id","mediaType":"video","status":"processing","mediaUrl":null,"thumbnailUrl":null,"#
@@ -43,12 +43,12 @@ struct StoryDataTests {
                 case "getStoryTray":
                     json(
                         .ok,
-                        #"{"items":[{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null},"storiesCount":2,"#
+                        #"{"items":[{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"storiesCount":2,"#
                             + #""latestAt":"2026-10-08T10:00:00.000Z","hasUnseen":true}]}"#)
                 default:
                     json(
                         .ok,
-                        #"{"items":[{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null},"#
+                        #"{"items":[{"user":{"id":"bob-id","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"#
                             + #""viewedAt":"2026-10-08T10:00:00.000Z","liked":true}],"nextCursor":"c2","viewersCount":5,"likesCount":1}"#)
                 }
             })

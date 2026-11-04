@@ -6,6 +6,8 @@ struct UserSummary: Equatable, Hashable, Sendable {
     let username: String
     let displayName: String
     let avatarURL: URL?
+    // Abonné « Plus » (ADR-073) : badge « + » à côté du nom.
+    var isPlus = false
 }
 
 struct VideoStats: Equatable, Sendable {

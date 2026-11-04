@@ -10,6 +10,8 @@ enum WalletTransactionKind: Equatable, Sendable {
     case refund
     // Ajustement manuel (tableau de bord RevenueCat).
     case adjustment
+    // Jetons offerts par l'abonnement « Plus » (ADR-073), à la souscription et à chaque renouvellement.
+    case subscriptionGrant
     // Cadeau envoyé (ADR-050).
     case giftSent
 
@@ -18,6 +20,7 @@ enum WalletTransactionKind: Equatable, Sendable {
         case .purchase: "Achat de jetons"
         case .refund: "Remboursement"
         case .adjustment: "Ajustement"
+        case .subscriptionGrant: "Jetons offerts par Plus"
         case .giftSent: "Cadeau envoyé"
         }
     }

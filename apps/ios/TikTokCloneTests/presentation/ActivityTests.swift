@@ -5,7 +5,7 @@ import TikTokAPI
 @testable import TikTokClone
 
 private func actorJSON(_ name: String) -> String {
-    #"{"id":"\#(name)","username":"\#(name)","displayName":"\#(name.capitalized)","avatarUrl":null}"#
+    #"{"id":"\#(name)","username":"\#(name)","displayName":"\#(name.capitalized)","avatarUrl":null,"plus":false}"#
 }
 
 @Suite("Centre d'activité : API et temps réel")
@@ -126,7 +126,7 @@ struct ActivityDataTests {
         let decoder = RealtimeEventDecoder()
         let created = """
             {"event":"notificationCreated","data":{"notification":{"id":"n9","kind":"like","actor":\
-            {"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null},"video":{"id":"v1","thumbnailUrl":"http://cdn.test/t.jpg"},\
+            {"id":"u2","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"video":{"id":"v1","thumbnailUrl":"http://cdn.test/t.jpg"},\
             "read":false,"createdAt":"2026-09-26T08:00:00.123Z"},"unreadCount":4}}
             """
         guard case .notificationCreated(let notification, let count)? = decoder.decode(created) else {
@@ -332,7 +332,7 @@ struct ActivityModelTests {
     func removedDecoding() throws {
         let json = """
             {"event":"notificationsRemoved","data":{"removed":[{"id":"n1","key":"like:v1"},{"id":"n9","key":"moderation:n9"}],\
-            "groups":[{"key":"like:v1","kind":"like","actors":[{"id":"u3","username":"carol","displayName":"Carol","avatarUrl":null}],"count":1,\
+            "groups":[{"key":"like:v1","kind":"like","actors":[{"id":"u3","username":"carol","displayName":"Carol","avatarUrl":null,"plus":false}],"count":1,\
             "video":{"id":"v1","thumbnailUrl":"http://cdn.test/v1/thumbnail.jpg"},"read":true,"latestId":"n0","createdAt":"2026-10-03T10:00:00.000Z"}],"unreadCount":3}}
             """
         guard case .notificationsRemoved(let removed, let groups, let unreadCount) = RealtimeEventDecoder().decode(json) else {

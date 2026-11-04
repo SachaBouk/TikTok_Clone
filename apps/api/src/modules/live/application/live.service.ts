@@ -4,6 +4,8 @@ import type { NotificationsService } from '../../notifications/application/notif
 import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
+import type { PlusMembers } from '../../../plus/plus-members';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 // UUID v7 (ordonné dans le temps, comme ceux de Prisma) : l'identifiant du live sert aussi de nom de salle.
 import { newStoryId as newUuidV7 } from '../../stories/domain/story-id';
@@ -20,6 +22,7 @@ import {
   LIVE_HEARTS_RATE_LIMITS,
   LIVE_MAINTENANCE_BATCH_SIZE,
   LIVE_MAX_DURATION_MS,
+  PLUS_LIVE_MAX_DURATION_MS,
   LIVE_MESSAGE_RATE_LIMITS,
   LIVE_START_RATE_LIMITS,
   LIVE_TOKEN_TTL_SECONDS,
@@ -103,6 +106,8 @@ export class LiveService {
     private readonly now: () => Date = () => new Date(),
     private readonly makeLiveId: () => string = () => newUuidV7(),
     private readonly makeGuestId: () => string = () => randomUUID(),
+    // Abonnés « Plus » (ADR-073) : lives de 4 h. Sans registre, personne n'est abonné.
+    private readonly plus: PlusMembers = new InMemoryPlusMembers(),
   ) {}
 
   // ─── Auteur ────────────────────────────────────────────────────────────────
@@ -119,7 +124,9 @@ export class LiveService {
     const retryAfter = await this.rateLimiter.consume(`live-start:${userId}`, LIVE_START_RATE_LIMITS);
     if (retryAfter !== null) throw new TooManyLiveActionsError(retryAfter, 'starts');
 
-    const live = await this.lives.create({ id: this.makeLiveId(), userId, title, startedAt: this.now() });
+    // Durée fixée au lancement (ADR-073) : 4 h pour un abonné « Plus ».
+    const maxDurationMs = (await this.plus.isActive(userId, this.now())) ? PLUS_LIVE_MAX_DURATION_MS : LIVE_MAX_DURATION_MS;
+    const live = await this.lives.create({ id: this.makeLiveId(), userId, title, startedAt: this.now(), maxDurationSeconds: maxDurationMs / 1000 });
     // Lancement simultané : l'autre requête a créé le live, on le reprend.
     if (!live) return this.start(userId, input);
     try {
@@ -361,7 +368,7 @@ export class LiveService {
     let hostChecks = 0;
     for (const live of lives) {
       const age = now.getTime() - live.startedAt.getTime();
-      if (age >= LIVE_MAX_DURATION_MS) {
+      if (now >= timeLimitOf(live)) {
         if (await this.endLive(live, 'timeLimit')) ended++;
       } else if (age < HOST_FIRST_CONNECT_GRACE_MS) {
         continue;

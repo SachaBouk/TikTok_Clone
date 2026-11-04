@@ -9,6 +9,8 @@ const KIND_LABELS: Record<WalletTransactionKind, string> = {
   purchase: 'Achat',
   refund: 'Remboursement',
   adjustment: 'Ajustement',
+  // Jetons offerts par l'abonnement « Plus » (ADR-073).
+  subscriptionGrant: 'Abonnement Plus',
   // Jamais dans le journal RevenueCat : les cadeaux ont leur propre journal (page « Cadeaux », ADR-050).
   giftSent: 'Cadeau envoyé',
 };

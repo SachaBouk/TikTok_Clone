@@ -17,6 +17,8 @@ struct GiftCatalogItem: Identifiable, Equatable, Sendable {
     let info: GiftInfo
     // Prix en jetons.
     let price: Int
+    // Réservé aux abonnés « Plus » (ADR-073).
+    var plusOnly = false
 
     var priceLabel: String { price == 1 ? "1 jeton" : "\(price) jetons" }
 }

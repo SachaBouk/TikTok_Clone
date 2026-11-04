@@ -3,6 +3,8 @@ export interface TranscodingJob {
   rawKey: string;
   // Couverture choisie dans l'app (ADR-065) : elle devient la miniature.
   coverKey?: string;
+  // Durée maximale permise (ADR-073, abonné « Plus ») ; absente : celle du worker (ADR-040).
+  maxDurationSeconds?: number;
 }
 
 // File de transcodage (ADR-012 : BullMQ, queue `video-transcode`), consommée par apps/worker (ADR-008).

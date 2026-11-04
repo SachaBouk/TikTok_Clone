@@ -10,8 +10,8 @@ export interface WalletDto {
 }
 
 // Nature d'un mouvement du solde : achat d'un pack, remboursement par le store, ajustement manuel (tableau
-// de bord RevenueCat), cadeau envoyé (ADR-050).
-export type WalletTransactionKind = 'purchase' | 'refund' | 'adjustment' | 'giftSent';
+// de bord RevenueCat), jetons offerts par l'abonnement « Plus » (ADR-073), cadeau envoyé (ADR-050).
+export type WalletTransactionKind = 'purchase' | 'refund' | 'adjustment' | 'subscriptionGrant' | 'giftSent';
 
 // Cadeau du catalogue (ADR-050) : code, nom et emoji (« 🎁 Cadeau » pour un code retiré depuis).
 export interface GiftDto {
@@ -23,6 +23,8 @@ export interface GiftDto {
 export interface GiftCatalogItemDto extends GiftDto {
   // Prix en jetons.
   price: number;
+  // Réservé aux abonnés « Plus » (ADR-073).
+  plusOnly: boolean;
 }
 
 export interface GiftCatalogDto {

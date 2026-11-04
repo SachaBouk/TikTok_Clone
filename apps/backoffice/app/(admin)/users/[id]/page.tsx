@@ -50,6 +50,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             {user.displayName}
             {user.role === 'admin' && <Badge variant="secondary">Admin</Badge>}
+            {user.plus && <Badge>Plus</Badge>}
             {user.suspension && <Badge variant="destructive">Suspendu</Badge>}
           </h1>
           <p className="text-muted-foreground">@{user.username}</p>

@@ -15,6 +15,9 @@ struct ProfileTitleHeader: View {
     let container: AppContainer
     var isOwn = false
     var changePhoto: () -> Void = {}
+
+    // Badge « + » (ADR-073) : sur son profil, l'état de l'abonnement l'emporte (souscription faite à l'instant).
+    private var isPlus: Bool { isOwn && container.plus.isActive }
     var editNote: () -> Void = {}
 
     var body: some View {
@@ -24,6 +27,7 @@ struct ProfileTitleHeader: View {
                     .font(.system(size: 28, weight: .bold))
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
+                    .plusBadge(profile.isPlus || isPlus, size: 22)
                 HStack(spacing: 4) {
                     Text("@\(profile.username)").lineLimit(1)
                     if let pronouns = profile.pronouns, !pronouns.isEmpty {
@@ -406,7 +410,7 @@ private struct ProfileSuggestionCard: View {
             Button(action: open) {
                 VStack(spacing: 8) {
                     AvatarView(url: suggestion.user.avatarURL, name: suggestion.user.displayName, size: 92)
-                    Text(suggestion.user.displayName).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(suggestion.user.displayName).font(.body.weight(.semibold)).lineLimit(1).plusBadge(suggestion.user.isPlus)
                     SuggestionReasonLine(suggestion: suggestion)
                 }
                 .contentShape(Rectangle())

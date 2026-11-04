@@ -15,6 +15,7 @@ final class RealtimeCoordinator {
     private let stories: StoriesModel
     private let ownProfile: OwnProfileSync
     private let lives: LiveModel?
+    private let plus: PlusModel?
     private var wantsConnection = false
     // Connexions et déconnexions appliquées dans l'ordre.
     private var lastOperation: Task<Void, Never>?
@@ -22,7 +23,7 @@ final class RealtimeCoordinator {
 
     init(
         channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel,
-        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil
+        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil, plus: PlusModel? = nil
     ) {
         self.channel = channel
         self.publishing = publishing
@@ -32,6 +33,7 @@ final class RealtimeCoordinator {
         self.stories = stories
         self.ownProfile = ownProfile
         self.lives = lives
+        self.plus = plus
     }
 
     func update(signedIn: Bool, active: Bool) {
@@ -67,6 +69,7 @@ final class RealtimeCoordinator {
             Task { await ownProfile.refresh() }
             Task { await stories.refresh() }
             Task { await lives?.refresh() }
+            Task { await plus?.refresh() }
         case .videoProcessed(let video):
             publishing.videoProcessed(video)
         case .storyProcessed(let story):
@@ -84,6 +87,10 @@ final class RealtimeCoordinator {
             ownProfile.countersChanged(followers: followers, following: following)
         case .walletUpdated(let balance, let earned):
             wallet.balanceChanged(balance, earned: earned)
+        case .plusChanged(let status):
+            plus?.statusChanged(status)
+            // Le badge du profil de la session suit (ADR-073).
+            Task { await ownProfile.refresh() }
         }
     }
 }

@@ -1,3 +1,4 @@
+import type { PlusMembers } from '../../../plus/plus-members';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { NotificationsService } from '../../notifications/application/notifications.service';
@@ -12,6 +13,7 @@ import {
   GiftBlockedError,
   GiftIdConflictError,
   GiftLiveUnavailableError,
+  GiftRequiresPlusError,
   GiftVideoUnavailableError,
   InsufficientBalanceError,
   TooManyGiftsError,
@@ -19,6 +21,7 @@ import {
 } from '../domain/wallet.errors';
 import {
   effectiveEnvironment,
+  PLUS_PRODUCT_PREFIX,
   PRODUCTION_ENVIRONMENT,
   type CurrencyEvent,
   type LedgerFilter,
@@ -76,6 +79,8 @@ export interface GiftDependencies {
   interactions: InteractionsService;
   notifications: NotificationsService;
   rateLimiter: RateLimiter;
+  // Abonnés « Plus » (ADR-073) : cadeaux exclusifs. Absent : personne n'est abonné.
+  plus?: PlusMembers;
 }
 
 export interface WalletLedgerPage {
@@ -134,10 +139,9 @@ export class WalletService {
   // Cadeau sur une vidéo publiée (ADR-050). Idempotent par identifiant d'envoi : un renvoi rend le cadeau déjà créé,
   // sans nouveau débit (même identifiant pour une autre vidéo ou un autre cadeau : GiftIdConflictError).
   // Lève UnknownGiftError, GiftVideoUnavailableError (non publiée, supprimée, auteur suspendu), CannotGiftYourselfError,
-  // GiftBlockedError, TooManyGiftsError, InsufficientBalanceError.
+  // GiftRequiresPlusError (cadeau exclusif, ADR-073), GiftBlockedError, TooManyGiftsError, InsufficientBalanceError.
   async sendGift(senderId: string, videoId: string, giftCode: string, clientGiftId: string): Promise<SentGift> {
-    const catalogItem = findGift(giftCode);
-    if (!catalogItem) throw new UnknownGiftError(giftCode);
+    const catalogItem = await this.giftFor(senderId, giftCode);
     const [video] = await this.gifts.videos.getPublishedVideos([videoId], senderId);
     if (!video) throw new GiftVideoUnavailableError(videoId);
     const authorId = video.userId;
@@ -165,8 +169,7 @@ export class WalletService {
   // Cadeau pendant un live (ADR-053) : même dépense, vers l'auteur du live. Annoncé dans la salle (animation chez tous) ;
   // pas de notification d'activité, l'auteur le voit en direct.
   async sendLiveGift(senderId: string, liveId: string, giftCode: string, clientGiftId: string): Promise<SentGift> {
-    const catalogItem = findGift(giftCode);
-    if (!catalogItem) throw new UnknownGiftError(giftCode);
+    const catalogItem = await this.giftFor(senderId, giftCode);
     let hostId: string;
     try {
       hostId = (await this.gifts.lives.getGiftableLive(senderId, liveId)).hostId;
@@ -184,6 +187,14 @@ export class WalletService {
       }
     }
     return sent.result;
+  }
+
+  // Cadeau du catalogue ; exclusif (ADR-073) : l'expéditeur doit être abonné « Plus ».
+  private async giftFor(senderId: string, giftCode: string): Promise<GiftCatalogItem> {
+    const catalogItem = findGift(giftCode);
+    if (!catalogItem) throw new UnknownGiftError(giftCode);
+    if (catalogItem.plusOnly && !(await this.gifts.plus?.isActive(senderId))) throw new GiftRequiresPlusError();
+    return catalogItem;
   }
 
   // Dépense commune (ADR-050) : blocages, renvoi, limite, débit atomique, soldes poussés aux deux comptes. `fresh` :
@@ -332,5 +343,7 @@ export class WalletService {
 
 function kindOf(event: CurrencyEvent): WalletTransactionKind {
   if (event.source === 'admin_api') return 'adjustment';
-  return event.amount > 0 ? 'purchase' : 'refund';
+  if (event.amount < 0) return 'refund';
+  // Jetons offerts par l'abonnement (ADR-073) : accordés par RevenueCat avec le produit de l'abonnement.
+  return event.productId?.startsWith(PLUS_PRODUCT_PREFIX) ? 'subscriptionGrant' : 'purchase';
 }

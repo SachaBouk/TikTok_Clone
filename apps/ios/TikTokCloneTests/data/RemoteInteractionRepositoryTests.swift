@@ -66,7 +66,7 @@ struct RemoteInteractionRepositoryTests {
     @Test("commentaires : mapping de la page ; suppression déjà faite (404) acceptée")
     func comments() async throws {
         let body =
-            #"{"items":[{"id":"c1","videoId":"v1","content":"Top","createdAt":"2026-09-25T10:00:00.000Z","author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null},"repliesCount":2,"likesCount":1,"likedByAuthor":false}],"nextCursor":"c1"}"#
+            #"{"items":[{"id":"c1","videoId":"v1","content":"Top","createdAt":"2026-09-25T10:00:00.000Z","author":{"id":"u1","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false},"repliesCount":2,"likesCount":1,"likedByAuthor":false}],"nextCursor":"c1"}"#
         let page = try await repository { _ in json(.ok, body) }.comments(videoID: "v1", cursor: nil)
         #expect(page.comments.map(\.content) == ["Top"])
         #expect(page.comments[0].author.username == "bob")

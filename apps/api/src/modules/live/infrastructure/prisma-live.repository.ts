@@ -16,6 +16,7 @@ const liveSelect = {
   heartsCount: true,
   giftsCount: true,
   giftsAmount: true,
+  maxDurationSeconds: true,
 } as const;
 
 const messageSelect = { id: true, liveId: true, userId: true, content: true, createdAt: true } as const;
@@ -30,7 +31,7 @@ export class PrismaLiveRepository extends LiveRepository {
   async create(live: NewLive): Promise<Live | null> {
     try {
       return await this.prisma.live.create({
-        data: { id: live.id, userId: live.userId, title: live.title, startedAt: live.startedAt },
+        data: { id: live.id, userId: live.userId, title: live.title, startedAt: live.startedAt, maxDurationSeconds: live.maxDurationSeconds },
         select: liveSelect,
       });
     } catch (error) {

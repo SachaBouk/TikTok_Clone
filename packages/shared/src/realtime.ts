@@ -1,6 +1,7 @@
 import type { MessageDto } from './messaging.js';
 import type { NotificationDto, NotificationGroupDto } from './notifications.js';
 import type { StoryDto } from './stories.js';
+import type { PlusStatusDto } from './subscriptions.js';
 import type { VideoDto } from './videos.js';
 import type { WalletDto } from './wallet.js';
 
@@ -104,6 +105,12 @@ export interface WalletUpdatedEventDto {
   data: WalletDto;
 }
 
+// Abonnement « Plus » changé (souscription, renouvellement, annulation, échéance), à tous les appareils du compte (ADR-073).
+export interface PlusChangedEventDto {
+  event: 'plusChanged';
+  data: PlusStatusDto;
+}
+
 export type RealtimeEventDto =
   | VideoProcessedEventDto
   | StoryProcessedEventDto
@@ -117,7 +124,8 @@ export type RealtimeEventDto =
   | ConversationDeletedEventDto
   | TypingEventDto
   | ProfileCountersChangedEventDto
-  | WalletUpdatedEventDto;
+  | WalletUpdatedEventDto
+  | PlusChangedEventDto;
 
 // Messages de l'app vers le serveur, sur le même WebSocket. Les autres sont ignorés.
 // `typing` : à envoyer toutes les ~3 s pendant la saisie dans une conversation.

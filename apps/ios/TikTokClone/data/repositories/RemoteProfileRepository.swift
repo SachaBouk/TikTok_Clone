@@ -122,7 +122,8 @@ extension UserProfile {
             pronouns: dto.pronouns,
             note: dto.note.map { ProfileNote(text: $0.text, postedAt: $0.postedAt, expiresAt: $0.expiresAt) },
             likesVisibility: VideoVisibility(dto.likesVisibility),
-            favoritesVisibility: VideoVisibility(dto.favoritesVisibility)
+            favoritesVisibility: VideoVisibility(dto.favoritesVisibility),
+            isPlus: dto.plus
         )
     }
 }

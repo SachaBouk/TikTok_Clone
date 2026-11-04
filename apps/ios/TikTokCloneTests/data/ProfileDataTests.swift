@@ -6,11 +6,11 @@ import TikTokAPI
 @testable import TikTokClone
 
 private let bobJSON = """
-    {"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null,"bio":null,\
+    {"id":"0192f3a0-0000-7000-8000-000000000002","username":"bob","displayName":"Bob","avatarUrl":null,"plus":false,"bio":null,\
     "followersCount":10,"followingCount":2,"likesCount":25,"likesVisibility":"public","favoritesVisibility":"private","createdAt":"2026-01-01T12:00:00.123Z"}
     """
 
-private let userSummaryJSON = #"{"id":"u2","username":"bob","displayName":"Bob","avatarUrl":"http://cdn.test/bob.jpg"}"#
+private let userSummaryJSON = #"{"id":"u2","username":"bob","displayName":"Bob","avatarUrl":"http://cdn.test/bob.jpg","plus":false}"#
 
 private func client(_ respond: @escaping @Sendable (String) -> (HTTPResponse, HTTPBody?), log: RequestLog = RequestLog()) -> Client {
     makeClient(

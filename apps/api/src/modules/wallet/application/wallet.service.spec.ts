@@ -17,6 +17,7 @@ import {
   GiftBlockedError,
   GiftIdConflictError,
   GiftLiveUnavailableError,
+  GiftRequiresPlusError,
   GiftVideoUnavailableError,
   InsufficientBalanceError,
   TooManyGiftsError,
@@ -33,6 +34,7 @@ import { InMemoryWalletEventPublisher } from '../infrastructure/in-memory-wallet
 import { InMemoryWalletRepository } from '../infrastructure/in-memory-wallet.repository';
 import { WalletService, type WalletHistoryItem } from './wallet.service';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
+import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
 import { inMemoryLive } from '../../live/infrastructure/in-memory-live';
 import { InMemoryReceivedLikesCounter } from '../../users/infrastructure/in-memory-received-likes-counter';
 
@@ -86,6 +88,7 @@ describe('WalletService', () => {
   let suspended: InMemorySuspendedAccounts;
   let rateLimiter: InMemoryRateLimiter;
   let lives: ReturnType<typeof inMemoryLive>;
+  let plus: InMemoryPlusMembers;
 
   function build(rejectSandbox = false) {
     wallets = new InMemoryWalletRepository();
@@ -122,13 +125,14 @@ describe('WalletService', () => {
       new InMemoryProfileCountersPublisher(),
     );
     rateLimiter = new InMemoryRateLimiter();
-    lives = inMemoryLive(users, interactions, notifications);
+    plus = new InMemoryPlusMembers();
+    lives = inMemoryLive(users, interactions, notifications, undefined, plus);
     service = new WalletService(
       wallets,
       users,
       events,
       { rejectSandbox },
-      { videos, lives: lives.service, interactions, notifications, rateLimiter },
+      { videos, lives: lives.service, interactions, notifications, rateLimiter, plus },
     );
   }
 
@@ -204,6 +208,14 @@ describe('WalletService', () => {
     await expect(service.recordCurrencyEvent(event({ store: 'APP_STORE', environment: 'PRODUCTION' }))).resolves.toBe('applied');
   });
 
+  it('jetons offerts par l’abonnement (ADR-073) : sorte à part, jamais comptés comme vendus', async () => {
+    await expect(service.recordCurrencyEvent(event({ amount: 150, productId: 'plus_monthly' }))).resolves.toBe('applied');
+    await expect(service.recordCurrencyEvent(event({ amount: 100, productId: 'tokens_100' }))).resolves.toBe('applied');
+    expect(wallets.entries.map((entry) => entry.kind)).toEqual(['subscriptionGrant', 'purchase']);
+    await expect(service.getBalance(ALICE)).resolves.toBe(250);
+    expect((await service.getStats(new Date(0))).sandbox.purchased).toBe(100);
+  });
+
   it("pagine l'historique du plus récent au plus ancien", async () => {
     for (let i = 1; i <= 3; i++) await service.recordCurrencyEvent(event({ amount: i }));
     const first = await service.listTransactions(ALICE, null, 2);
@@ -217,6 +229,22 @@ describe('WalletService', () => {
     beforeEach(async () => {
       await service.recordCurrencyEvent(event({ amount: 100 }));
       events.published.length = 0;
+    });
+
+    it('cadeaux exclusifs (ADR-073) : réservés aux abonnés « Plus », sur une vidéo comme dans un live', async () => {
+      const video = await publish(BOB);
+      await expect(service.sendGift(ALICE, video, 'unicorn', clientId())).rejects.toBeInstanceOf(GiftRequiresPlusError);
+      await expect(service.getBalance(ALICE)).resolves.toBe(100);
+      await plus.set(ALICE, new Date(Date.now() + 3600_000));
+      await expect(service.sendGift(ALICE, video, 'unicorn', clientId())).resolves.toMatchObject({ gift: { giftCode: 'unicorn', amount: 20 } });
+      await plus.set(ALICE, new Date(Date.now() - 1));
+      await expect(service.sendGift(ALICE, video, 'planet', clientId())).rejects.toBeInstanceOf(GiftRequiresPlusError);
+      expect(
+        service
+          .giftCatalog()
+          .filter((gift) => gift.plusOnly)
+          .map((gift) => gift.code),
+      ).toEqual(['unicorn', 'planet']);
     });
 
     it('débite l’expéditeur, crédite les gains du créateur, notifie et pousse les deux portefeuilles', async () => {
@@ -363,7 +391,7 @@ describe('WalletService', () => {
     it('catalogue du moins cher au plus cher', () => {
       const prices = service.giftCatalog().map((gift) => gift.price);
       expect(prices).toEqual([...prices].sort((a, b) => a - b));
-      expect(service.giftCatalog()[0]).toEqual({ code: 'rose', name: 'Rose', emoji: '🌹', price: 1 });
+      expect(service.giftCatalog()[0]).toEqual({ code: 'rose', name: 'Rose', emoji: '🌹', price: 1, plusOnly: false });
     });
   });
 

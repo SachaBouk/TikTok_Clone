@@ -11,4 +11,11 @@ protocol PurchaseService: AnyObject {
     func packs() async throws -> [TokenPack]
     // Feuille de paiement du store ; `cancelled` si l'utilisateur la ferme.
     func purchase(_ pack: TokenPack) async throws -> PurchaseOutcome
+    // Abonnement « Plus » (ADR-073) : offres de l'offre `plus` (mensuelle, annuelle).
+    func plusOffers() async throws -> [PlusOffer]
+    func subscribe(_ offer: PlusOffer) async throws -> PurchaseOutcome
+    // « Restaurer les achats » (exigé par Apple pour un abonnement) : l'API reçoit l'état par webhook.
+    func restorePurchases() async throws
+    // « Gérer l'abonnement » : la page de l'App Store.
+    func manageSubscription() async throws
 }

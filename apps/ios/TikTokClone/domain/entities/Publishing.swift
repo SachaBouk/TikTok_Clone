@@ -76,6 +76,8 @@ struct PublicationExtras: Equatable, Sendable {
     var downloadsEnabled = true
     var location: VideoLocation?
     var cover: URL?
+    // Abonné « Plus » (ADR-073) : vidéos jusqu'à 2 Go.
+    var isPlus = false
 }
 
 // Ce que l'API reçoit en plus à la création de l'envoi (ADR-065) : `coverSize` demande une URL pour la couverture.

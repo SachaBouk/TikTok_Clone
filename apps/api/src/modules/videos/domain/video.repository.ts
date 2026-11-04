@@ -19,7 +19,8 @@ export abstract class VideoRepository {
   abstract findById(id: string): Promise<Video | null>;
   // Passe la vidéo de `uploading` à `processing` et efface l'uploadId, de façon atomique.
   // Renvoie null si la vidéo n'est plus en `uploading` (confirmation concurrente ou déjà faite).
-  abstract markUploaded(id: string): Promise<Video | null>;
+  // `maxDurationSeconds` : durée maximale permise (ADR-073), nulle pour la durée par défaut.
+  abstract markUploaded(id: string, maxDurationSeconds: number | null): Promise<Video | null>;
   abstract markFailed(id: string): Promise<void>;
   // Applique le résultat du transcodage, seulement si la vidéo est encore en `processing`.
   // Renvoie false sinon (résultat en double, vidéo supprimée entre-temps). Vidéo publiée : ses `hashtags` (noms

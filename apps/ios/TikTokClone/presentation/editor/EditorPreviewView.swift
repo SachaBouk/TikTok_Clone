@@ -146,6 +146,8 @@ struct EditorPreviewView: View {
     var onSaveDraft: (() -> Void)? = nil
     @State private var editingText: TextDraft?
     @State private var isDraggingText = false
+    // Vidéo trop longue sans abonnement : paywall « Plus » (ADR-073, vidéos de 10 minutes).
+    @State private var isPresentingPlus = false
     @State private var isPickingFilter = false
     @State private var isPickingSticker = false
     @State private var isEditingEffects = false
@@ -234,6 +236,7 @@ struct EditorPreviewView: View {
         }
         .animation(.snappy(duration: 0.25), value: isPickingSound)
         .animation(.snappy(duration: 0.25), value: isShowingVolume)
+        .sheet(isPresented: $isPresentingPlus) { PlusSheet(source: .longVideo, container: container) }
         .sheet(isPresented: $isTrimmingSound) {
             SoundTrimSheet(model: model).presentationDetents([.height(280)])
         }
@@ -358,6 +361,13 @@ struct EditorPreviewView: View {
         .accessibilityIdentifier(identifier)
     }
 
+    // Vidéo trop longue pour un compte sans abonnement, qui tiendrait dans les 10 minutes de « Plus » (ADR-073).
+    private var offersPlus: Bool {
+        guard !model.request.isPlus, !container.plus.isActive, model.plan.kind == .video else { return false }
+        let total = model.plan.sources.reduce(Duration.zero) { $0 + $1.duration }
+        return model.plan.kind.isTooLong(max(total, model.plan.outputDuration)) && !model.plan.kind.isTooLong(model.plan.outputDuration, isPlus: true)
+    }
+
     // Problème en cours (orange), sinon le message de départ (vidéo de la galerie trop longue).
     @ViewBuilder
     private var notice: some View {
@@ -371,6 +381,15 @@ struct EditorPreviewView: View {
                 .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 72)
                 .accessibilityIdentifier("editor.problem")
+            if offersPlus {
+                Button("Jusqu’à 10 minutes avec Plus") { isPresentingPlus = true }
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.brandPink, in: Capsule())
+                    .accessibilityIdentifier("editor.plus")
+            }
         } else if preview.isSimplified {
             Text("Aperçu simplifié : filtre et cadre non affichés")
                 .font(.caption.weight(.semibold))

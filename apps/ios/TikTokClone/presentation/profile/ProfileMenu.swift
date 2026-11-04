@@ -38,6 +38,7 @@ struct ProfileMenuOverlay: View {
             VStack(alignment: .leading, spacing: 0) {
                 header("Ressources")
                 row("Solde", systemImage: "wallet.bifold", route: .wallet(.menu), id: "wallet")
+                row("Plus", systemImage: "plus.square.on.square", route: .plus(.menu), id: "plus")
                 Divider().padding(.vertical, 12)
                 header("Outils personnels")
                 row("Centre des activités", systemImage: "clock", route: .activityCenter, id: "activityCenter")

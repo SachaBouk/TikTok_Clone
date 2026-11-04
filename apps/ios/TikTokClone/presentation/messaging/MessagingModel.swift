@@ -227,7 +227,7 @@ final class MessagingModel {
             showTyping(userID, in: conversationID)
         case .connected, .videoProcessed, .storyProcessed, .notificationCreated, .unreadNotificationsChanged, .notificationsRemoved,
             .profileCountersChanged,
-            .walletUpdated:
+            .walletUpdated, .plusChanged:
             break
         }
     }

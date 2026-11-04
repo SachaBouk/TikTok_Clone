@@ -44,6 +44,7 @@ export class InMemoryVideoRepository extends VideoRepository {
       aiGenerated: video.aiGenerated ?? false,
       locationName: video.locationName ?? null,
       locationAddress: video.locationAddress ?? null,
+      maxDurationSeconds: null,
       id: randomUUID(),
       status: 'uploading',
       hlsUrl: null,
@@ -61,10 +62,10 @@ export class InMemoryVideoRepository extends VideoRepository {
     return video ? toVideo(video) : null;
   }
 
-  async markUploaded(id: string): Promise<Video | null> {
+  async markUploaded(id: string, maxDurationSeconds: number | null): Promise<Video | null> {
     const video = this.videos.get(id);
     if (!video || video.status !== 'uploading') return null;
-    Object.assign(video, { status: 'processing', uploadId: null, updatedAt: this.now() });
+    Object.assign(video, { status: 'processing', uploadId: null, maxDurationSeconds, updatedAt: this.now() });
     return toVideo(video);
   }
 

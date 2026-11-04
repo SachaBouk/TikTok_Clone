@@ -28,6 +28,7 @@ import {
 } from '../modules/live/interfaces/live.events';
 import { StoryProcessedEvent } from '../modules/stories/interfaces/stories.events';
 import { VideoProcessedEvent } from '../modules/videos/interfaces/videos.events';
+import { PlusChangedEvent } from '../modules/subscriptions/interfaces/subscriptions.events';
 import { WalletUpdatedEvent } from '../modules/wallet/interfaces/wallet.events';
 
 const BEARER = 'bearer';
@@ -49,6 +50,7 @@ const REALTIME_EVENTS = {
   typing: TypingEvent,
   profileCountersChanged: ProfileCountersChangedEvent,
   walletUpdated: WalletUpdatedEvent,
+  plusChanged: PlusChangedEvent,
 };
 // Messages de l'app vers le serveur (union `RealtimeClientMessage`), à encoder avec les types générés.
 const REALTIME_CLIENT_MESSAGES = {
