@@ -220,8 +220,16 @@ struct FeedView: View {
         .overlay {
             // Au-dessus des pages, sous l'onboarding : attend la fin de celui-ci pour être vue.
             if showsSwipeHint, container.onboarding.showsFeedSwipeHint, isTabActive, !container.onboarding.isPresented {
-                FeedSwipeHint { container.onboarding.feedSwipeHintSeen() }
-                    .transition(.opacity)
+                FeedSwipeHint {
+                    container.onboarding.feedSwipeHintSeen()
+                } next: {
+                    container.onboarding.feedSwipeHintSeen()
+                    let pages = viewModel.pages
+                    if let index = pages.firstIndex(where: { $0.id == viewModel.currentEntryID }), pages.indices.contains(index + 1) {
+                        withAnimation(.easeInOut(duration: 0.3)) { scrolledID = pages[index + 1].id }
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)

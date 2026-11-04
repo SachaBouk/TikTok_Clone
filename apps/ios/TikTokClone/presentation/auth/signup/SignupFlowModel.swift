@@ -53,6 +53,8 @@ final class SignupFlowModel {
     private let saveInterests: SaveInterestsUseCase
     private let session: SessionStore
     private let analytics: AnalyticsModel
+    // Fin du tutoriel : l'indication « Balaie vers le haut » revient sur le feed (`OnboardingModel.showFeedSwipeHint`).
+    private let onFinish: () -> Void
     private let today: @Sendable () -> Date
     // Délai sans frappe avant de vérifier un pseudo.
     private let usernameDebounce: Duration
@@ -60,8 +62,10 @@ final class SignupFlowModel {
     init(
         register: RegisterUseCase, checkUsername: CheckUsernameUseCase, loadCatalog: LoadInterestCatalogUseCase,
         saveInterests: SaveInterestsUseCase, session: SessionStore, analytics: AnalyticsModel,
-        today: @escaping @Sendable () -> Date = { Date() }, usernameDebounce: Duration = .milliseconds(300)
+        today: @escaping @Sendable () -> Date = { Date() }, usernameDebounce: Duration = .milliseconds(300),
+        onFinish: @escaping () -> Void = {}
     ) {
+        self.onFinish = onFinish
         self.register = register
         self.checkUsername = checkUsername
         self.loadCatalog = loadCatalog
@@ -216,9 +220,11 @@ final class SignupFlowModel {
 
     // MARK: Fin
 
-    // « Commencer à regarder » : la session est annoncée, la feuille ou l'onboarding se ferment.
+    // « Commencer à regarder » : la session est annoncée, la feuille ou l'onboarding se ferment ; le feed montre
+    // l'indication « Balaie vers le haut pour en voir plus », même si elle a déjà été vue sur cet iPhone.
     func finish() {
         guard let createdProfile else { return }
+        onFinish()
         session.signedIn(createdProfile)
     }
 }

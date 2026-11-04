@@ -1,10 +1,14 @@
 import SwiftUI
 
 // Indication « Balaie vers le haut pour en voir plus » sur la première vidéo du feed (ADR-055), comme TikTok : fond
-// assombri, téléphone et main qui glisse. Un toucher la ferme ; le premier défilement aussi (FeedView). Le défilement
-// passe au travers : seul un toucher bref est intercepté.
+// assombri, téléphone et main qui glisse. Un toucher la ferme ; balayer vers le haut la ferme et passe à la vidéo
+// suivante (`next`). Posée par-dessus le feed, elle prend les gestes : le défilement ne passait pas au travers (bug
+// rencontré, l'indication restait affichée).
 struct FeedSwipeHint: View {
     let dismiss: () -> Void
+    let next: () -> Void
+    // Distance vers le haut au-delà de laquelle un glissement passe à la vidéo suivante.
+    static let swipeDistance: CGFloat = 40
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -35,6 +39,11 @@ struct FeedSwipeHint: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: dismiss)
+        .gesture(
+            DragGesture(minimumDistance: 12).onEnded { value in
+                if value.translation.height < -Self.swipeDistance { next() } else { dismiss() }
+            }
+        )
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Touche pour fermer")

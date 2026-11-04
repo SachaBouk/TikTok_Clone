@@ -13,7 +13,7 @@ struct SignupTests {
     let signup = FakeSignupRepository()
     let service = FakeAnalyticsService()
 
-    func makeModel(session: SessionStore? = nil) -> (SignupFlowModel, SessionStore) {
+    func makeModel(session: SessionStore? = nil, onFinish: @escaping () -> Void = {}) -> (SignupFlowModel, SessionStore) {
         let session = session ?? makeSession(auth: auth)
         let today: @Sendable () -> Date = { Self.now }
         let model = SignupFlowModel(
@@ -24,7 +24,8 @@ struct SignupTests {
             session: session,
             analytics: makeAnalytics(service),
             today: today,
-            usernameDebounce: .zero
+            usernameDebounce: .zero,
+            onFinish: onFinish
         )
         return (model, session)
     }
@@ -176,6 +177,22 @@ struct SignupTests {
         #expect(!onboarding.showsFeedSwipeHint)
         #expect(preferences.feedSwipeHintShown)
         #expect(!OnboardingModel(preferences: preferences).showsFeedSwipeHint)
+    }
+
+    @Test("indication du feed : de nouveau après une inscription, même déjà vue")
+    func feedSwipeHintAfterSignup() async {
+        let preferences = InMemoryPreferencesStore(feedSwipeHintShown: true)
+        let onboarding = OnboardingModel(preferences: preferences)
+        #expect(!onboarding.showsFeedSwipeHint)
+        let (model, session) = makeModel(onFinish: { onboarding.showFeedSwipeHint() })
+        await fill(model)
+        #expect(await model.submit() == .interests)
+        #expect(!onboarding.showsFeedSwipeHint)
+        model.finish()
+        #expect(session.isSignedIn)
+        #expect(onboarding.showsFeedSwipeHint)
+        onboarding.feedSwipeHintSeen()
+        #expect(!onboarding.showsFeedSwipeHint)
     }
 
     @Test("paramètres : centres d'intérêt relus, modifiés puis enregistrés")

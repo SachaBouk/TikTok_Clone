@@ -467,7 +467,8 @@ final class AppContainer {
             loadCatalog: LoadInterestCatalogUseCase(signup: signupRepository),
             saveInterests: SaveInterestsUseCase(signup: signupRepository),
             session: session,
-            analytics: analytics
+            analytics: analytics,
+            onFinish: { [onboarding] in onboarding.showFeedSwipeHint() }
         )
     }
 
