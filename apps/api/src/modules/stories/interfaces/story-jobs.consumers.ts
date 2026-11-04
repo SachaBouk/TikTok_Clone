@@ -116,9 +116,10 @@ export class StoriesMaintenanceScheduler implements OnModuleInit, OnModuleDestro
 
   private async run() {
     const report = await this.stories.runMaintenance();
-    if (report.expired || report.purged || report.requeued) {
+    if (report.expired || report.purged || report.requeued || report.synced) {
       this.logger.log(
-        `${report.expired} story(s) expirée(s), ${report.purged} non publiée(s) supprimée(s), ${report.requeued} transcodage(s) relancé(s)`,
+        `${report.expired} story(s) expirée(s), ${report.purged} non publiée(s) supprimée(s), ${report.requeued} transcodage(s) relancé(s), ` +
+          `${report.synced} story(s) Mux relue(s)`,
       );
     }
     return report;

@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
+import { HostedVideos } from '../../mux/hosted-videos';
 import { PlusMembers } from '../../plus/plus-members';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { PushModule } from '../push/push.module';
@@ -21,7 +22,8 @@ import { VideosController } from './interfaces/videos.controller';
 import { VideosMaintenanceScheduler } from './interfaces/videos-maintenance.scheduler';
 import { StorageConfig } from '../../storage/storage.config';
 
-// Vidéos : upload direct (ADR-007), transcodage asynchrone via BullMQ (ADR-012) par apps/worker (ADR-008).
+// Vidéos : upload direct (ADR-007), transcodage asynchrone via BullMQ (ADR-012) par apps/worker (ADR-008), ou envoi,
+// encodage et lecture chez Mux (`VIDEO_PROVIDER=mux`, ADR-074 ; port `HostedVideos` du module global `MuxModule`).
 // Fin du transcodage envoyée à l'auteur par WebSocket (module realtime, ADR-011) et notification push.
 @Module({
   imports: [RealtimeModule, PushModule],
@@ -43,8 +45,23 @@ import { StorageConfig } from '../../storage/storage.config';
         cleanup: VideoCleanupQueue,
         rateLimiter: RateLimiter,
         plus: PlusMembers,
-      ) => new VideosService(videos, storage, transcoding, events, cleanup, rateLimiter, () => new Date(), plus),
-      inject: [VideoRepository, VideoStorage, TranscodingQueue, VideoEventPublisher, VideoCleanupQueue, RateLimiter, PlusMembers],
+        hosted: HostedVideos,
+      ) => {
+        const logger = new Logger('Videos');
+        return new VideosService(
+          videos,
+          storage,
+          transcoding,
+          events,
+          cleanup,
+          rateLimiter,
+          () => new Date(),
+          plus,
+          hosted,
+          (message) => logger.warn(message),
+        );
+      },
+      inject: [VideoRepository, VideoStorage, TranscodingQueue, VideoEventPublisher, VideoCleanupQueue, RateLimiter, PlusMembers, HostedVideos],
     },
     TranscodeResultsConsumer,
     VideoCleanupConsumer,

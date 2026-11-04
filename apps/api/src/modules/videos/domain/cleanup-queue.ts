@@ -7,6 +7,9 @@ export interface VideoFilesCleanup {
   uploadId: string | null;
   // Couverture envoyée par l'app (ADR-065) ; absente des jobs programmés avant elle.
   coverKey?: string | null;
+  // Vidéo Mux (ADR-074) : envoi direct à annuler, asset à supprimer.
+  muxUploadId?: string | null;
+  muxAssetId?: string | null;
 }
 
 // Programmé AVANT de supprimer la vidéo en base, avec ce délai : si la suppression échoue, l'exécution

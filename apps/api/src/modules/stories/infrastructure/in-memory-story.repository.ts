@@ -1,3 +1,4 @@
+import type { VideoProvider } from '../../videos/domain/video';
 import type { NewStory, Story, StoryAuthorSummary, StoryStats, StoryTranscodeOutcome, StoryView, StoryViewPosition } from '../domain/story';
 import { StoryRepository } from '../domain/story.repository';
 
@@ -20,6 +21,10 @@ export class InMemoryStoryRepository extends StoryRepository {
   async create(story: NewStory): Promise<Story> {
     const created = {
       ...story,
+      provider: story.provider ?? 'local',
+      muxUploadId: story.muxUploadId ?? null,
+      muxAssetId: null,
+      muxPlaybackId: null,
       status: 'uploading' as const,
       mediaUrl: null,
       thumbnailUrl: null,
@@ -35,6 +40,30 @@ export class InMemoryStoryRepository extends StoryRepository {
   async findById(id: string): Promise<Story | null> {
     const story = this.stories.get(id);
     return story ? strip(story) : null;
+  }
+
+  async findByMuxUpload(uploadId: string): Promise<Story | null> {
+    const story = [...this.stories.values()].find((s) => s.muxUploadId === uploadId);
+    return story ? strip(story) : null;
+  }
+
+  async findByMuxAsset(assetId: string): Promise<Story | null> {
+    const story = [...this.stories.values()].find((s) => s.muxAssetId === assetId);
+    return story ? strip(story) : null;
+  }
+
+  async setMuxAsset(id: string, assetId: string): Promise<Story | null> {
+    const story = this.stories.get(id);
+    if (!story) return null;
+    Object.assign(story, { muxAssetId: assetId, updatedAt: this.now() });
+    return strip(story);
+  }
+
+  async setMuxPlayback(id: string, playbackId: string): Promise<Story | null> {
+    const story = this.stories.get(id);
+    if (!story) return null;
+    Object.assign(story, { muxPlaybackId: playbackId, updatedAt: this.now() });
+    return strip(story);
   }
 
   async countActiveOrPending(userId: string, now: Date): Promise<number> {
@@ -151,9 +180,9 @@ export class InMemoryStoryRepository extends StoryRepository {
       .map(strip);
   }
 
-  async findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Story[]> {
+  async findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Story[]> {
     return [...this.stories.values()]
-      .filter((s) => s.status === 'processing' && s.updatedAt < updatedBefore)
+      .filter((s) => s.status === 'processing' && s.provider === provider && s.updatedAt < updatedBefore)
       .slice(0, limit)
       .map(strip);
   }

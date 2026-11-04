@@ -137,6 +137,7 @@ Création façon TikTok (ADR-062) : le bouton « + » de la barre d'onglets ouvr
 - L'envoi continue hors de la création (`PublishingModel`, partagé) ; les publications passent une par une. Badge du « + » : publications en cours. **Page « Publications »** (toucher une vignette « Publication… » de son profil) : « Envoi… 42 % », « Traitement en cours… », puis « Publiée » (« Voir ») ou « Échec du traitement » ; glisser pour annuler ou supprimer.
 - **Reprise** : le fichier et l'état de l'envoi (URLs signées, ETag de chaque partie reçue, audience et commentaires) sont enregistrés dans `Application Support/Uploads` après chaque partie de 10 Mio. Après une coupure, un passage en arrière-plan ou une relance de l'app, l'envoi reprend à la première partie non reçue.
 - URLs expirées (2 h) ou refusées : l'envoi repart de zéro sur une nouvelle vidéo, à partir du fichier local.
+- **Envoi direct chez Mux** (ADR-074, quand l'API est en `VIDEO_PROVIDER=mux`) : le ticket porte `directUploadURL` au lieu des parties ; le fichier part par morceaux de 10 Mio (PUT avec `Content-Range`, `308` tant qu'il en manque, `200`/`201` une fois complet ; `URLSessionPartUploader`, port `DirectUploadTransport`), puis la confirmation part sans parties. L'octet confirmé (`PendingUpload.directSentBytes`) est enregistré après chaque morceau ; après une coupure ou une relance, Mux est interrogé (`Content-Range: bytes */<total>`, en-tête `Range` de la réponse) et l'envoi reprend là. Envoi expiré (404, 410) : il repart de zéro. Stories vidéo : même chemin.
 - **Vidéo privée** (ADR-061) : « Rendre privée » / « Rendre publique » dans la feuille de partage de ses vidéos (`setVideoVisibility`). Une vidéo privée n'apparaît que dans l'onglet « cadenas » de son profil (`listMyPrivateVideos`), avec la pastille « Toi uniquement » dans le lecteur.
 - **Commentaires désactivés** (ADR-062) : choisis à la publication (`commentsEnabled` de `createUpload`), puis « Désactiver / Activer les commentaires » dans la feuille de partage de ses vidéos (`setVideoCommentSettings`). La feuille des commentaires affiche alors « Les commentaires sont désactivés pour cette vidéo. », sans champ ; l'auteur garde la liste.
 - Pour tester en simulateur : `xcrun simctl addmedia booted video.mp4` ajoute une vidéo à la galerie (autoriser l'accès aux Photos à la première ouverture).
@@ -230,6 +231,11 @@ Création façon TikTok (ADR-062) : le bouton « + » de la barre d'onglets ouvr
 - Compte identifié par son seul identifiant, sans nom, pseudo ni email.
 - Événements : visionnage (durée, complétion, moment du swipe), réactions, commentaires, partages, abonnements, messages, parcours de connexion et d'inscription, publication ; ouverture de l'app (rétention).
 - Expérience `guest-signup-prompt` (variantes `control` et `prompt`, à créer dans PostHog) : en variante, la connexion s'ouvre avec une invitation après 5 vidéos regardées sans compte.
+- **Mux Data** (ADR-074) : qualité de lecture (démarrage, coupures, débit) de chaque vidéo du pool et des stories, Mux et MinIO compris (`MuxDataMonitor`, port `PlaybackMonitor`, SDK `MUXSDKStats` à version figée). Clé d'environnement dans `Config/Local.xcconfig`, non versionné :
+  ```
+  MUX_DATA_ENV_KEY = …
+  ```
+  Sans clé, rien n'est mesuré. Même consentement que PostHog (démarré après l'accord, arrêté au retrait) ; aucun identifiant de compte envoyé.
 
 ## Jetons et paywall (ADR-009)
 

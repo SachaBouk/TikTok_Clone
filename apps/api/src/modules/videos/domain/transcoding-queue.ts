@@ -5,6 +5,8 @@ export interface TranscodingJob {
   coverKey?: string;
   // Durée maximale permise (ADR-073, abonné « Plus ») ; absente : celle du worker (ADR-040).
   maxDurationSeconds?: number;
+  // Vidéo Mux (ADR-074) : couverture seule, la vidéo est encodée par Mux.
+  coverOnly?: boolean;
 }
 
 // File de transcodage (ADR-012 : BullMQ, queue `video-transcode`), consommée par apps/worker (ADR-008).

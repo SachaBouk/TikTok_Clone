@@ -11,6 +11,7 @@ import type {
   VideoDetails,
   VideoFilter,
   VideoPosition,
+  VideoProvider,
   VideoStatus,
   VideoVisibility,
 } from '../domain/video';
@@ -45,7 +46,12 @@ export class InMemoryVideoRepository extends VideoRepository {
       locationName: video.locationName ?? null,
       locationAddress: video.locationAddress ?? null,
       maxDurationSeconds: null,
-      id: randomUUID(),
+      provider: video.provider ?? 'local',
+      muxUploadId: video.muxUploadId ?? null,
+      muxAssetId: null,
+      muxPlaybackId: null,
+      muxSigned: video.muxSigned ?? false,
+      id: video.id ?? randomUUID(),
       status: 'uploading',
       hlsUrl: null,
       thumbnailUrl: null,
@@ -60,6 +66,54 @@ export class InMemoryVideoRepository extends VideoRepository {
   async findById(id: string): Promise<Video | null> {
     const video = this.videos.get(id);
     return video ? toVideo(video) : null;
+  }
+
+  async findByMuxUpload(uploadId: string): Promise<Video | null> {
+    const video = [...this.videos.values()].find((v) => v.muxUploadId === uploadId);
+    return video ? toVideo(video) : null;
+  }
+
+  async findByMuxAsset(assetId: string): Promise<Video | null> {
+    const video = [...this.videos.values()].find((v) => v.muxAssetId === assetId);
+    return video ? toVideo(video) : null;
+  }
+
+  async setMuxAsset(id: string, assetId: string): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { muxAssetId: assetId, updatedAt: this.now() });
+    return toVideo(video);
+  }
+
+  async setMuxPlayback(
+    id: string,
+    playbackId: string,
+    signed: boolean,
+    urls: { hlsUrl: string; thumbnailUrl: string | null; audioUrl: string } | null,
+  ): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { muxPlaybackId: playbackId, muxSigned: signed, updatedAt: this.now() });
+    if (urls) {
+      video.hlsUrl = urls.hlsUrl;
+      if (urls.thumbnailUrl) video.thumbnailUrl = urls.thumbnailUrl;
+      for (const sound of this.sounds.values()) if (sound.videoId === id) sound.audioUrl = urls.audioUrl;
+    }
+    return toVideo(video);
+  }
+
+  async setThumbnail(id: string, thumbnailUrl: string): Promise<boolean> {
+    const video = this.videos.get(id);
+    if (!video) return false;
+    video.thumbnailUrl = thumbnailUrl;
+    return true;
+  }
+
+  async addSound(videoId: string, audioUrl: string, durationMs: number): Promise<void> {
+    const video = this.videos.get(videoId);
+    if (!video || [...this.sounds.values()].some((stored) => stored.videoId === videoId)) return;
+    const created = { id: randomUUID(), videoId, userId: video.userId, audioUrl, durationMs, createdAt: this.now() };
+    this.sounds.set(created.id, created);
   }
 
   async markUploaded(id: string, maxDurationSeconds: number | null): Promise<Video | null> {
@@ -174,9 +228,9 @@ export class InMemoryVideoRepository extends VideoRepository {
       .map(toVideo);
   }
 
-  async findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Video[]> {
+  async findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Video[]> {
     return [...this.videos.values()]
-      .filter((v) => v.status === 'processing' && v.updatedAt < updatedBefore)
+      .filter((v) => v.status === 'processing' && v.provider === provider && v.updatedAt < updatedBefore)
       .slice(0, limit)
       .map(toVideo);
   }
@@ -373,6 +427,8 @@ function toDetails(v: StoredVideo): VideoDetails {
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,
+    muxPlaybackId: v.muxPlaybackId,
+    muxSigned: v.muxSigned,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,
@@ -393,6 +449,8 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,
+    muxPlaybackId: v.muxPlaybackId,
+    muxSigned: v.muxSigned,
     hlsUrl: v.hlsUrl,
     thumbnailUrl: v.thumbnailUrl,
     ...v.counters,

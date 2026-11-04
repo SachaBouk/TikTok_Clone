@@ -959,7 +959,7 @@
         },
         "responses": {
           "201": {
-            "description": "Vidéo créée en `uploading`. Envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, garder les en-têtes `ETag`, puis appeler `completeUpload`. Une partie en échec se renvoie sur la même URL tant qu’elle est valide.",
+            "description": "Vidéo créée en `uploading`. `s3Multipart` : envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, garder les en-têtes `ETag`, puis appeler `completeUpload`. Une partie en échec se renvoie sur la même URL tant qu’elle est valide. `muxDirect` (ADR-074) : envoyer le fichier par morceaux sur `directUploadUrl`, puis `completeUpload` sans parties.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1058,7 +1058,7 @@
             }
           },
           "400": {
-            "description": "Parties manquantes ou ETags incorrects : renvoyer les parties, puis réessayer.",
+            "description": "Parties manquantes ou ETags incorrects : renvoyer les parties, puis réessayer. Mux (ADR-074) : fichier pas entièrement reçu, ou envoi perdu.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1409,7 +1409,7 @@
             }
           },
           "404": {
-            "description": "Vidéo inconnue, ou pas encore prête et appartenant à un autre utilisateur.",
+            "description": "Vidéo inconnue, ou pas encore prête ou privée et appartenant à un autre utilisateur.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10723,6 +10723,13 @@
           "createdAt"
         ]
       },
+      "UploadMethod": {
+        "type": "string",
+        "enum": [
+          "s3Multipart",
+          "muxDirect"
+        ]
+      },
       "UploadPartUrlResponse": {
         "type": "object",
         "properties": {
@@ -10747,6 +10754,14 @@
           "video": {
             "$ref": "#/components/schemas/VideoResponse"
           },
+          "method": {
+            "$ref": "#/components/schemas/UploadMethod"
+          },
+          "directUploadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "`muxDirect` : URL d’envoi direct chez Mux. Envoyer le fichier en PUT par morceaux de `partSize` octets (multiples de 256 Kio, le dernier plus petit), avec `Content-Range: bytes début-fin/total` ; `308` : continuer, `200`/`201` : terminé. Puis `completeUpload` sans parties."
+          },
           "partSize": {
             "type": "integer",
             "description": "Taille de chaque partie en octets ; la dernière peut être plus petite."
@@ -10770,6 +10785,7 @@
         },
         "required": [
           "video",
+          "method",
           "partSize",
           "parts",
           "expiresAt"
@@ -10797,7 +10813,6 @@
         "type": "object",
         "properties": {
           "parts": {
-            "minItems": 1,
             "maxItems": 10000,
             "type": "array",
             "items": {
@@ -11890,6 +11905,14 @@
           "story": {
             "$ref": "#/components/schemas/StoryResponse"
           },
+          "method": {
+            "$ref": "#/components/schemas/UploadMethod"
+          },
+          "directUploadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "`muxDirect` : URL d’envoi direct chez Mux, PUT par morceaux de `partSize` octets (comme une vidéo), puis confirmation sans parties."
+          },
           "partSize": {
             "type": "integer",
             "description": "Taille de chaque partie en octets ; la dernière peut être plus petite."
@@ -11908,6 +11931,7 @@
         },
         "required": [
           "story",
+          "method",
           "partSize",
           "parts",
           "expiresAt"

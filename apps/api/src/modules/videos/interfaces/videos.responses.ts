@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { PendingVideosDto, UploadPartUrlDto, VideoDto, VideoLocationDto, VideoStatus, VideoUploadDto, VideoVisibility } from '@repo/shared';
+import type {
+  PendingVideosDto,
+  UploadMethod,
+  UploadPartUrlDto,
+  VideoDto,
+  VideoLocationDto,
+  VideoStatus,
+  VideoUploadDto,
+  VideoVisibility,
+} from '@repo/shared';
+import { UPLOAD_METHODS } from '../domain/upload-rules';
 import { VIDEO_VISIBILITIES, type Video } from '../domain/video';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
@@ -67,6 +77,18 @@ export class UploadPartUrlResponse implements UploadPartUrlDto {
 export class VideoUploadResponse implements VideoUploadDto {
   @ApiProperty({ type: VideoResponse })
   video!: VideoResponse;
+
+  // `s3Multipart` : une URL signée par partie ; `muxDirect` (ADR-074) : envoi direct chez Mux, `directUploadUrl`.
+  @ApiProperty({ enum: UPLOAD_METHODS, enumName: 'UploadMethod' })
+  method!: UploadMethod;
+
+  @ApiPropertyOptional({
+    format: 'uri',
+    description:
+      '`muxDirect` : URL d’envoi direct chez Mux. Envoyer le fichier en PUT par morceaux de `partSize` octets (multiples de 256 Kio, ' +
+      'le dernier plus petit), avec `Content-Range: bytes début-fin/total` ; `308` : continuer, `200`/`201` : terminé. Puis `completeUpload` sans parties.',
+  })
+  directUploadUrl?: string;
 
   @ApiProperty({ type: 'integer', description: 'Taille de chaque partie en octets ; la dernière peut être plus petite.' })
   partSize!: number;

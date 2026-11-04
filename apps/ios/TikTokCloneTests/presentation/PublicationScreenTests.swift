@@ -303,7 +303,7 @@ struct PublicationScreenTests {
 }
 
 // Couverture refusée la première fois (URL expirée), le reste passe.
-private final class FailingOnCover: UploadPartTransport {
+private final class FailingOnCover: PartsOnlyTransport {
     let inner: FakePartTransport
     private let refused = Mutex(false)
 

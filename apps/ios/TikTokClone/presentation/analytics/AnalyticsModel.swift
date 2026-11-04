@@ -14,6 +14,9 @@ final class AnalyticsModel {
     // Feuille de consentement à montrer.
     var isAskingConsent = false
 
+    // Prévenu à chaque changement du consentement (Mux Data, ADR-074, suit le même accord).
+    @ObservationIgnored var consentChanged: ((Bool) -> Void)?
+
     private let service: any AnalyticsService
     private let preferences: any PreferencesStore
     // Compte identifié auprès du service, pour ne l'identifier qu'une fois par connexion.
@@ -38,6 +41,7 @@ final class AnalyticsModel {
         guard consent != granted else { return }
         consent = granted
         preferences.setAnalyticsConsent(granted)
+        consentChanged?(granted)
         if granted {
             service.start()
             if let identifiedUserID { service.identify(userID: identifiedUserID) }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryHostedVideos } from '../../../mux/in-memory-hosted-videos';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { InMemorySuspendedAccounts } from '../../../suspension/in-memory-suspended-accounts';
 import { InteractionsService } from '../../interactions/application/interactions.service';
@@ -411,11 +412,11 @@ describe('StoriesService (ADR-051)', () => {
       stories.transcoding.jobs.length = 0;
 
       advance(2 * HOUR);
-      expect(await stories.service.runMaintenance()).toEqual({ expired: 0, purged: 0, requeued: 1 });
+      expect(await stories.service.runMaintenance()).toEqual({ expired: 0, purged: 0, requeued: 1, synced: 0 });
       expect(stories.transcoding.jobs.map((j) => j.storyId)).toEqual([stuck.story.id]);
 
       advance(STORY_LIFETIME_MS);
-      expect(await stories.service.runMaintenance()).toEqual({ expired: 1, purged: 2, requeued: 0 });
+      expect(await stories.service.runMaintenance()).toEqual({ expired: 1, purged: 2, requeued: 0, synced: 0 });
       for (const id of [photo.id, abandoned.story.id, stuck.story.id]) await expect(stories.repository.findById(id)).resolves.toBeNull();
       // Envoi abandonné : l'upload multipart est annulé par le nettoyage.
       expect(stories.lifecycle.cleanups.some((c) => c.files.storyId === abandoned.story.id && c.files.uploadId !== null)).toBe(true);
@@ -428,6 +429,72 @@ describe('StoriesService (ADR-051)', () => {
       await expect(stories.service.scheduleAuthorFilesCleanup('alice')).resolves.toBe(2);
       expect(stories.lifecycle.cleanups.map((c) => c.files.mediaType)).toEqual(['photo', 'video']);
       await expect(stories.service.scheduleAuthorFilesCleanup('bob')).resolves.toBe(0);
+    });
+  });
+
+  describe('Mux (ADR-074)', () => {
+    let mux: InMemoryHostedVideos;
+    let hosted: ReturnType<typeof inMemoryStories>;
+
+    beforeEach(() => {
+      mux = new InMemoryHostedVideos(true);
+      hosted = inMemoryStories(users, interactions, () => clock, mux);
+    });
+
+    async function sendVideoStory() {
+      const upload = await hosted.service.createUpload('alice', { contentType: 'video/mp4', fileSize: 5000 });
+      const assetId = mux.finish(upload.story.muxUploadId!);
+      const story = await hosted.service.completeUpload('alice', upload.story.id, []);
+      return { upload, assetId, story };
+    }
+
+    it('une story vidéo part chez Mux (lecture publique, sans versions statiques) ; une photo reste dans MinIO', async () => {
+      const upload = await hosted.service.createUpload('alice', { contentType: 'video/mp4', fileSize: 5000 });
+      expect(upload).toMatchObject({ method: 'muxDirect', parts: [], story: { provider: 'mux', uploadId: null } });
+      expect(mux.uploads.get(upload.story.muxUploadId!)?.input).toMatchObject({
+        passthrough: `story:${upload.story.id}`,
+        policy: 'public',
+        staticRenditions: false,
+      });
+      const photo = await hosted.service.createUpload('alice', { contentType: 'image/jpeg', fileSize: 1000 });
+      expect(photo).toMatchObject({ method: 's3Multipart', story: { provider: 'local' } });
+    });
+
+    it('confirmée puis publiée au webhook avec les URLs de Mux, pour 24 h', async () => {
+      const { assetId, story } = await sendVideoStory();
+      expect(story.status).toBe('processing');
+      mux.makeReady(assetId, 12);
+      expect(await hosted.service.syncHostedStoryByRef({ storyId: null, uploadId: null, assetId })).toBe(true);
+      const playbackId = mux.assets.get(assetId)!.playbackIds[0].id;
+      const published = await hosted.repository.findById(story.id);
+      expect(published).toMatchObject({
+        status: 'ready',
+        muxPlaybackId: playbackId,
+        mediaUrl: `https://mux.test/${playbackId}.m3u8`,
+        thumbnailUrl: `https://mux.test/${playbackId}/thumbnail.jpg`,
+      });
+      expect(published?.expiresAt?.getTime()).toBe(clock.getTime() + STORY_LIFETIME_MS);
+      expect(hosted.events.processed.map((s) => s.status)).toEqual(['ready']);
+    });
+
+    it('story de plus de 60 s : échec, asset supprimé', async () => {
+      const { assetId, story } = await sendVideoStory();
+      mux.makeReady(assetId, 75);
+      await hosted.service.syncHostedStory(story.id);
+      expect((await hosted.repository.findById(story.id))?.status).toBe('failed');
+      expect(mux.deletedAssets).toContain(assetId);
+    });
+
+    it('confirmation refusée avant la fin de l’envoi ; asset supprimé avec la story', async () => {
+      const upload = await hosted.service.createUpload('alice', { contentType: 'video/mp4', fileSize: 5000 });
+      await expect(hosted.service.completeUpload('alice', upload.story.id, [])).rejects.toThrow(StoryUploadIncompleteError);
+
+      const { assetId, story } = await sendVideoStory();
+      await hosted.service.deleteStory('alice', story.id);
+      const cleanup = hosted.lifecycle.cleanups.at(-1)!.files;
+      expect(cleanup).toMatchObject({ muxAssetId: assetId });
+      await hosted.service.cleanupFiles(cleanup);
+      expect(mux.deletedAssets).toContain(assetId);
     });
   });
 });

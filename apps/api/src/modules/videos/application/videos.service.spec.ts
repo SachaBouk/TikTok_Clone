@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { HOSTED_AUDIO_FILE, HOSTED_MP4_FILE } from '../../../mux/hosted-videos';
+import { InMemoryHostedVideos } from '../../../mux/in-memory-hosted-videos';
 import { InMemoryPlusMembers } from '../../../plus/in-memory-plus-members';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -760,6 +762,15 @@ describe('VideosService', () => {
 
       await expect(service.getVideo(video.id, null)).resolves.toMatchObject({ status: 'ready' });
     });
+
+    it('ne montre une vidéo privée qu’à son auteur (ADR-061)', async () => {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, visibility: 'private' });
+      videos.videos.get(video.id)!.status = 'ready';
+
+      await expect(service.getVideo(video.id, ALICE)).resolves.toMatchObject({ visibility: 'private' });
+      await expect(service.getVideo(video.id, BOB)).rejects.toBeInstanceOf(VideoNotFoundError);
+      await expect(service.getVideo(video.id, null)).rejects.toBeInstanceOf(VideoNotFoundError);
+    });
   });
 
   describe('backoffice (ADR-004)', () => {
@@ -826,6 +837,228 @@ describe('VideosService', () => {
           [BOB, 1],
         ]),
       );
+    });
+  });
+
+  describe('Mux (ADR-074)', () => {
+    let mux: InMemoryHostedVideos;
+    let plus: InMemoryPlusMembers;
+    let warnings: string[];
+
+    beforeEach(() => {
+      mux = new InMemoryHostedVideos(true);
+      plus = new InMemoryPlusMembers();
+      warnings = [];
+      service = new VideosService(
+        videos,
+        storage,
+        queue,
+        events,
+        cleanup,
+        new InMemoryRateLimiter(),
+        () => new Date('2026-01-01T00:00:00Z'),
+        plus,
+        mux,
+        (message) => warnings.push(message),
+      );
+    });
+
+    // L'app envoie le fichier, Mux crée l'asset ; l'app confirme.
+    async function publishOnMux(input: { visibility?: 'public' | 'private'; cover?: boolean } = {}) {
+      const upload = await service.createUpload(ALICE, {
+        contentType: 'video/mp4',
+        fileSize: 12 * MIB,
+        visibility: input.visibility,
+        ...(input.cover ? { cover: { fileSize: 1000 } } : {}),
+      });
+      const uploadId = upload.video.muxUploadId!;
+      const assetId = mux.finish(uploadId);
+      const confirmed = await service.completeUpload(ALICE, upload.video.id, []);
+      return { upload, uploadId, assetId, confirmed };
+    }
+
+    it('crée un envoi direct chez Mux : pas d’upload S3, URL unique, passthrough de la vidéo', async () => {
+      const upload = await service.createUpload(ALICE, {
+        contentType: 'video/mp4',
+        fileSize: 12 * MIB,
+        visibility: 'private',
+        cover: { fileSize: 1000 },
+      });
+
+      expect(upload).toMatchObject({ method: 'muxDirect', parts: [], partSize: UPLOAD_PART_SIZE_BYTES });
+      expect(upload.directUploadUrl).toBe(`https://mux.test/upload/${upload.video.muxUploadId}`);
+      expect(upload.coverUrl).not.toBeNull();
+      expect(upload.video).toMatchObject({ provider: 'mux', uploadId: null, status: 'uploading' });
+      expect(mux.uploads.get(upload.video.muxUploadId!)?.input).toEqual({
+        passthrough: `video:${upload.video.id}`,
+        policy: 'signed',
+        staticRenditions: true,
+        timeoutSeconds: 7200,
+      });
+    });
+
+    it('bascule sur le pipeline maison si Mux refuse l’envoi, ou si Mux n’est pas choisi', async () => {
+      mux.failNextCreate = true;
+      const fallback = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 12 * MIB });
+      expect(fallback).toMatchObject({ method: 's3Multipart', directUploadUrl: null, video: { provider: 'local' } });
+      expect(fallback.parts).toHaveLength(2);
+      expect(warnings[0]).toMatch(/Mux a refusé l'envoi/);
+
+      mux.uploadsEnabled = false;
+      expect((await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MIB })).method).toBe('s3Multipart');
+    });
+
+    it('confirme l’envoi une fois l’asset créé : traitement, puis publication au webhook avec les URLs de Mux et le son', async () => {
+      const { confirmed, assetId, upload } = await publishOnMux();
+      expect(confirmed).toMatchObject({ status: 'processing', muxAssetId: assetId });
+      expect(queue.jobs).toEqual([]);
+
+      mux.makeReady(assetId, 42.5, { [HOSTED_MP4_FILE]: 8_000_000, [HOSTED_AUDIO_FILE]: 700_000 });
+      expect(await service.syncHostedVideoByRef({ videoId: null, uploadId: null, assetId })).toBe(true);
+
+      const playbackId = mux.assets.get(assetId)!.playbackIds[0].id;
+      const video = await service.getVideo(upload.video.id, null);
+      expect(video).toMatchObject({
+        status: 'ready',
+        muxPlaybackId: playbackId,
+        muxSigned: false,
+        hlsUrl: `https://mux.test/${playbackId}.m3u8`,
+        thumbnailUrl: `https://mux.test/${playbackId}/thumbnail.jpg`,
+      });
+      expect(events.processed.at(-1)?.status).toBe('ready');
+      expect([...videos.sounds.values()]).toEqual([
+        expect.objectContaining({ videoId: video.id, audioUrl: `https://mux.test/${playbackId}/audio.m4a`, durationMs: 42_500 }),
+      ]);
+      // Webhook en double : rien ne change.
+      await service.syncHostedVideo(video.id);
+      expect(events.processed.filter((v) => v.status === 'ready')).toHaveLength(1);
+    });
+
+    it('refuse une confirmation avant que Mux ait reçu le fichier, et un envoi perdu', async () => {
+      const upload = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MIB });
+      await expect(service.completeUpload(ALICE, upload.video.id, [])).rejects.toThrow(UploadIncompleteError);
+      expect((await videos.findById(upload.video.id))?.status).toBe('uploading');
+
+      await mux.cancelUpload(upload.video.muxUploadId!);
+      await expect(service.completeUpload(ALICE, upload.video.id, [])).rejects.toThrow(UploadIncompleteError);
+      expect((await videos.findById(upload.video.id))?.status).toBe('failed');
+    });
+
+    it('vidéo trop longue chez Mux : échec et asset supprimé ; un abonné « Plus » a 10 minutes', async () => {
+      const first = await publishOnMux();
+      mux.makeReady(first.assetId, 200);
+      await service.syncHostedVideo(first.confirmed.id);
+      expect((await videos.findById(first.confirmed.id))?.status).toBe('failed');
+      expect(mux.deletedAssets).toContain(first.assetId);
+
+      await plus.set(ALICE, new Date('2026-02-01T00:00:00Z'));
+      const second = await publishOnMux();
+      mux.makeReady(second.assetId, PLUS_MAX_VIDEO_DURATION_SECONDS);
+      await service.syncHostedVideo(second.confirmed.id);
+      expect((await videos.findById(second.confirmed.id))?.status).toBe('ready');
+    });
+
+    it('asset en erreur : échec', async () => {
+      const { assetId, confirmed } = await publishOnMux();
+      mux.makeErrored(assetId);
+      await service.syncHostedVideoByRef({ videoId: confirmed.id, uploadId: null, assetId: null });
+      expect((await videos.findById(confirmed.id))?.status).toBe('failed');
+    });
+
+    it('vidéo privée : URLs signées à chaque lecture, jeton sur la miniature de Mux seulement', async () => {
+      const { assetId, confirmed } = await publishOnMux({ visibility: 'private' });
+      mux.makeReady(assetId, 10);
+      await service.syncHostedVideo(confirmed.id);
+      const playbackId = mux.assets.get(assetId)!.playbackIds[0].id;
+
+      const [mine] = await service.getPublishedVideos([confirmed.id], ALICE);
+      expect(mine).toMatchObject({
+        muxSigned: true,
+        hlsUrl: `https://mux.test/${playbackId}.m3u8?token=token-${playbackId}-v`,
+        thumbnailUrl: `https://mux.test/${playbackId}/thumbnail.jpg?token=token-${playbackId}-t`,
+      });
+      // En base, les URLs restent sans jeton.
+      expect((await videos.findById(confirmed.id))?.hlsUrl).toBe(`https://mux.test/${playbackId}.m3u8`);
+      await expect(service.getPublishedVideos([confirmed.id], BOB)).resolves.toEqual([]);
+    });
+
+    it('changer la visibilité remplace l’identifiant de lecture et supprime l’ancien', async () => {
+      const { assetId, confirmed } = await publishOnMux();
+      mux.makeReady(assetId, 10, { [HOSTED_AUDIO_FILE]: 1000 });
+      await service.syncHostedVideo(confirmed.id);
+      const publicId = mux.assets.get(assetId)!.playbackIds[0].id;
+
+      const privateVideo = await service.setVisibility(ALICE, confirmed.id, 'private');
+      const [signed] = mux.assets.get(assetId)!.playbackIds;
+      expect(signed).toMatchObject({ policy: 'signed' });
+      expect(signed.id).not.toBe(publicId);
+      expect(mux.assets.get(assetId)!.playbackIds).toHaveLength(1);
+      expect(privateVideo.hlsUrl).toBe(`https://mux.test/${signed.id}.m3u8?token=token-${signed.id}-v`);
+
+      await service.setVisibility(ALICE, confirmed.id, 'public');
+      const [again] = mux.assets.get(assetId)!.playbackIds;
+      expect(again.policy).toBe('public');
+      expect([...videos.sounds.values()][0].audioUrl).toBe(`https://mux.test/${again.id}/audio.m4a`);
+    });
+
+    it('couverture choisie : job « couverture seule », elle reste la miniature après la publication', async () => {
+      const { assetId, confirmed } = await publishOnMux({ cover: true });
+      expect(queue.jobs).toEqual([{ videoId: confirmed.id, rawKey: confirmed.rawKey, coverKey: confirmed.coverKey, coverOnly: true }]);
+      await service.applyCoverThumbnail(confirmed.id, 'https://cdn.test/cover.jpg');
+      mux.makeReady(assetId, 10);
+      await service.syncHostedVideo(confirmed.id);
+      expect((await videos.findById(confirmed.id))?.thumbnailUrl).toBe('https://cdn.test/cover.jpg');
+
+      expect(await service.applyCoverThumbnail('supprimee', 'https://cdn.test/x.jpg')).toBe(false);
+      expect(cleanup.scheduled.at(-1)?.cleanup.videoId).toBe('supprimee');
+    });
+
+    it('téléchargement : version MP4 de Mux une fois prête, signée pour une vidéo privée', async () => {
+      const { assetId, confirmed } = await publishOnMux({ visibility: 'private' });
+      mux.makeReady(assetId, 10);
+      await service.syncHostedVideo(confirmed.id);
+      await expect(service.presignDownload(confirmed.id)).rejects.toThrow(VideoNotFoundError);
+
+      mux.makeReady(assetId, 10, { [HOSTED_MP4_FILE]: 9_000_000 });
+      const playbackId = mux.assets.get(assetId)!.playbackIds[0].id;
+      await expect(service.presignDownload(confirmed.id)).resolves.toMatchObject({
+        url: `https://mux.test/${playbackId}/highest.mp4?token=token-${playbackId}-v`,
+        contentType: 'video/mp4',
+        fileName: `${confirmed.id}.mp4`,
+        size: 9_000_000,
+      });
+    });
+
+    it('suppression : le nettoyage supprime l’asset ; un envoi jamais terminé est annulé', async () => {
+      const { assetId, confirmed } = await publishOnMux();
+      await service.deleteVideo(ALICE, confirmed.id);
+      const job = cleanup.scheduled.at(-1)!.cleanup;
+      expect(job).toMatchObject({ muxAssetId: assetId });
+      expect(await service.cleanupFiles(job)).toBe(true);
+      expect(mux.deletedAssets).toContain(assetId);
+
+      const pending = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: MIB });
+      await service.deleteVideo(ALICE, pending.video.id);
+      await service.cleanupFiles(cleanup.scheduled.at(-1)!.cleanup);
+      expect(mux.cancelledUploads).toContain(pending.video.muxUploadId);
+    });
+
+    it('webhook pour une vidéo supprimée : son asset est supprimé ; inconnu sans passthrough : laissé aux stories', async () => {
+      expect(await service.syncHostedVideoByRef({ videoId: randomUUID(), uploadId: null, assetId: 'orphelin' })).toBe(true);
+      expect(mux.deletedAssets).toContain('orphelin');
+      expect(await service.syncHostedVideoByRef({ videoId: null, uploadId: 'inconnu', assetId: null })).toBe(false);
+    });
+
+    it('maintenance : les vidéos Mux restées en traitement sont relues chez Mux, pas renvoyées au worker', async () => {
+      let now = new Date('2026-01-01T00:00:00Z');
+      videos = new InMemoryVideoRepository(() => now);
+      service = new VideosService(videos, storage, queue, events, cleanup, new InMemoryRateLimiter(), () => now, plus, mux);
+      const { assetId, confirmed } = await publishOnMux();
+      mux.makeReady(assetId, 10);
+      now = new Date('2026-01-01T00:20:00Z');
+      expect(await service.requeueStuckTranscodes()).toBe(0);
+      expect(await service.syncStuckHostedVideos()).toBe(1);
+      expect((await videos.findById(confirmed.id))?.status).toBe('ready');
     });
   });
 });

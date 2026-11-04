@@ -9,6 +9,19 @@
         "dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "api-worker",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec",
+        "turbo",
+        "run",
+        "dev",
+        "--filter=api",
+        "--filter=worker"
+      ],
+      "port": 3000
     }
   ]
 }

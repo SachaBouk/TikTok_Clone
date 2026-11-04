@@ -165,7 +165,7 @@ struct PublishingUseCasesTests {
 }
 
 // Réussit `successes` envois, puis échoue toujours (réseau).
-private final class FailingAfter: UploadPartTransport {
+private final class FailingAfter: PartsOnlyTransport {
     let inner: FakePartTransport
     let remaining: Mutex<Int>
 

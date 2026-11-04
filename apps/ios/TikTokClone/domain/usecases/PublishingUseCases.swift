@@ -85,10 +85,13 @@ struct CreatePublicationUseCase: Sendable {
 // - URLs expirées ou refusées, vidéo supprimée entre-temps : l'envoi repart une fois de zéro, sur une nouvelle
 //   vidéo, à partir du fichier local (l'ancienne est supprimée).
 // - Succès : l'envoi et son fichier local sont oubliés.
+// - Envoi direct chez Mux (ADR-074) : morceaux successifs sur une seule URL ; après une coupure ou une relance, l'envoi
+//   reprend à l'octet que Mux dit avoir reçu (sinon au dernier morceau confirmé).
 struct UploadVideoUseCase: Sendable {
     let videos: any VideoPublishingRepository
     let stories: any StoryPublishingRepository
-    let transport: any UploadPartTransport
+    // Parties sur des URLs signées (pipeline maison) et envoi direct chez Mux (ADR-074).
+    let transport: any UploadPartTransport & DirectUploadTransport
     let store: any UploadStore
     var now: @Sendable () -> Date = { Date() }
     var retryDelays: [Duration] = [.seconds(1), .seconds(3)]
@@ -118,6 +121,9 @@ struct UploadVideoUseCase: Sendable {
         progress(upload.progress)
 
         let total = Double(upload.fileSize)
+        if let url = ticket.directUploadURL {
+            try await sendDirect(&upload, to: url, chunkSize: ticket.partSize, progress: progress)
+        }
         for part in ticket.parts where upload.sentParts[part.number] == nil {
             try Task.checkCancellation()
             let range = UploadRules.range(ofPart: part.number, partSize: ticket.partSize, fileSize: upload.fileSize)
@@ -152,6 +158,52 @@ struct UploadVideoUseCase: Sendable {
         }
     }
 
+    // Envoi direct chez Mux (ADR-074) : morceaux de `chunkSize` octets à partir du dernier octet confirmé, enregistré après
+    // chaque morceau. Reprise (relance, coupure) : Mux est d'abord interrogé sur ce qu'il a reçu.
+    private func sendDirect(
+        _ upload: inout PendingUpload, to url: URL, chunkSize: Int, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let total = upload.fileSize
+        if upload.directSentBytes > 0, let received = try? await transport.receivedBytes(at: url, total: total) {
+            upload.directSentBytes = min(received, total)
+            try store.save(upload)
+        }
+        var failures = 0
+        while upload.directSentBytes < total {
+            try Task.checkCancellation()
+            let range = upload.directSentBytes..<min(upload.directSentBytes + chunkSize, total)
+            let data = try store.read(fileName: upload.fileName, range: range)
+            let before = upload.directSentBytes
+            let result: DirectChunkResult
+            do {
+                result = try await transport.uploadChunk(data, to: url, range: range, total: total) { sent in
+                    progress(Double(before + sent) / Double(total))
+                }
+                failures = 0
+            } catch AppError.network {
+                guard failures < retryDelays.count else { throw AppError.network }
+                try await Task.sleep(for: retryDelays[failures])
+                failures += 1
+                if let received = try? await transport.receivedBytes(at: url, total: total) {
+                    upload.directSentBytes = min(received, total)
+                    try store.save(upload)
+                }
+                continue
+            }
+            switch result {
+            case .complete: upload.directSentBytes = total
+            case .incomplete(let received): upload.directSentBytes = min(max(received ?? range.upperBound, before), total)
+            }
+            // Morceau accepté sans rien garder : comme une coupure, pas de boucle sans fin.
+            if upload.directSentBytes == before {
+                failures += 1
+                guard failures <= retryDelays.count else { throw AppError.network }
+            }
+            try store.save(upload)
+            progress(upload.progress)
+        }
+    }
+
     // Couverture choisie (ADR-065) : un seul PUT, avant la confirmation (le worker la lit au transcodage). URL refusée :
     // l'envoi repart de zéro ; une autre erreur que le réseau la laisse de côté (la miniature viendra de la vidéo).
     private func sendCover(_ upload: inout PendingUpload, ticket: UploadTicket) async throws {
@@ -177,6 +229,7 @@ struct UploadVideoUseCase: Sendable {
         if let old = upload.ticket {
             upload.ticket = nil
             upload.sentParts = [:]
+            upload.directSentBytes = 0
             upload.coverSent = false
             try store.save(upload)
             switch upload.kind {

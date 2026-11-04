@@ -7,7 +7,7 @@ import SwiftUI
 struct StoryViewerView: View {
     @State private var model: StoryViewerModel
     let container: AppContainer
-    @State private var player = StoryPlayerController()
+    @State private var player: StoryPlayerController
     @State private var replyText = ""
     @State private var isSending = false
     @FocusState private var isReplying: Bool
@@ -21,6 +21,7 @@ struct StoryViewerView: View {
 
     init(model: StoryViewerModel, container: AppContainer) {
         _model = State(initialValue: model)
+        _player = State(initialValue: StoryPlayerController(monitor: container.playbackMonitor))
         self.container = container
     }
 
@@ -62,7 +63,7 @@ struct StoryViewerView: View {
             if story.mediaType == .video {
                 player.onProgress = { model.videoProgress($0) }
                 player.onEnd = { model.videoEnded() }
-                player.load(story.mediaURL)
+                player.load(story.mediaURL, storyID: story.id)
                 if !model.isPaused { player.play() }
             } else {
                 player.stop()
@@ -320,15 +321,23 @@ private struct StoryProgressBar: View {
 @Observable
 final class StoryPlayerController {
     let player = AVPlayer()
+    // Qualité de lecture (Mux Data, ADR-074) : une mesure par story lue.
+    private let monitor: (any PlaybackMonitor)?
     var onProgress: ((Double) -> Void)?
     var onEnd: (() -> Void)?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: (any NSObjectProtocol)?
 
-    func load(_ url: URL) {
+    init(monitor: (any PlaybackMonitor)? = nil) {
+        self.monitor = monitor
+    }
+
+    func load(_ url: URL, storyID: String) {
         removeObservers()
         let item = AVPlayerItem(url: url)
         player.replaceCurrentItem(with: item)
+        monitor?.stop(player)
+        monitor?.start(player, video: MonitoredVideo(id: storyID, url: url))
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self, let duration = self.player.currentItem?.duration, duration.isNumeric, duration.seconds > 0 else { return }
@@ -351,6 +360,7 @@ final class StoryPlayerController {
 
     func stop() {
         player.pause()
+        monitor?.stop(player)
         removeObservers()
         player.replaceCurrentItem(with: nil)
     }

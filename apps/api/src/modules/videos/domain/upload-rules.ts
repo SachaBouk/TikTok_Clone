@@ -24,6 +24,16 @@ export const UPLOAD_URL_TTL_SECONDS = 2 * 60 * 60;
 
 export const MAX_DESCRIPTION_LENGTH = 2200;
 
+// Comment l'app envoie le fichier (ADR-074) : parties sur des URLs S3 signées (pipeline maison), ou envoi direct chez Mux
+// (une seule URL, PUT par morceaux de `UPLOAD_PART_SIZE_BYTES`, multiples de 256 Kio comme Mux l'exige).
+export type UploadMethod = 's3Multipart' | 'muxDirect';
+export const UPLOAD_METHODS: UploadMethod[] = ['s3Multipart', 'muxDirect'];
+
+// Durée maximale d'une vidéo (ADR-040), à une seconde près, comme le worker (`apps/worker/src/media/rules.ts`) : vérifiée
+// par l'API pour une vidéo Mux (ADR-074), d'après la durée annoncée par Mux.
+export const MAX_VIDEO_DURATION_SECONDS = 180;
+export const DURATION_TOLERANCE_SECONDS = 1;
+
 // Couverture choisie dans l'app (ADR-065) : un JPEG envoyé en un seul PUT, à côté du brut.
 export const COVER_CONTENT_TYPE = 'image/jpeg';
 export const MAX_COVER_SIZE_BYTES = 2 * 1024 ** 2; // 2 Mio

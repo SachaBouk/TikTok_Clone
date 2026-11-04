@@ -34,9 +34,11 @@ export class VideosMaintenanceScheduler implements OnModuleInit, OnModuleDestroy
   private async run() {
     const purged = await this.videos.purgeAbandonedUploads();
     const requeued = await this.videos.requeueStuckTranscodes();
-    if (purged || requeued) {
-      this.logger.log(`${purged} upload(s) abandonné(s) supprimé(s), ${requeued} transcodage(s) relancé(s)`);
+    // Vidéos Mux (ADR-074) restées en traitement : état relu chez Mux.
+    const synced = await this.videos.syncStuckHostedVideos();
+    if (purged || requeued || synced) {
+      this.logger.log(`${purged} upload(s) abandonné(s) supprimé(s), ${requeued} transcodage(s) relancé(s), ${synced} vidéo(s) Mux relue(s)`);
     }
-    return { purged, requeued };
+    return { purged, requeued, synced };
   }
 }

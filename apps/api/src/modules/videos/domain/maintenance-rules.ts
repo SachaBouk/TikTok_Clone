@@ -10,3 +10,9 @@ export const STUCK_TRANSCODE_AFTER_MS = 60 * 60 * 1000;
 
 // Nombre maximal de vidéos traitées par passage, pour borner la durée de chaque exécution.
 export const MAINTENANCE_BATCH_SIZE = 100;
+
+// Vidéo Mux (ADR-074) en `processing` depuis 15 min : son état est relu chez Mux (webhook perdu, tunnel coupé).
+export const STUCK_HOSTED_VIDEO_AFTER_MS = 15 * 60 * 1000;
+
+// Confirmation d'un envoi direct chez Mux : attentes successives (ms) avant que Mux ait créé l'asset.
+export const HOSTED_ASSET_WAIT_MS = [300, 700, 1500];

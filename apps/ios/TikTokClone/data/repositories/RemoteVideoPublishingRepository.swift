@@ -114,8 +114,21 @@ extension UploadTicket {
             guard let url = URL(string: part.url) else { throw AppError.unexpected }
             return Part(number: part.partNumber, url: url)
         }
+        // Envoi direct chez Mux (ADR-074) : une seule URL, sans parties.
+        let direct = try Self.directURL(dto.method, dto.directUploadUrl)
         self.init(
-            videoID: dto.video.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt, coverURL: dto.coverUrl.flatMap(URL.init(string:)))
+            videoID: dto.video.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt, coverURL: dto.coverUrl.flatMap(URL.init(string:)),
+            directUploadURL: direct)
+    }
+
+    // `muxDirect` sans URL lisible : envoi impossible.
+    static func directURL(_ method: Components.Schemas.UploadMethod, _ url: String?) throws -> URL? {
+        switch method {
+        case .s3Multipart: return nil
+        case .muxDirect:
+            guard let url = url.flatMap(URL.init(string:)) else { throw AppError.unexpected }
+            return url
+        }
     }
 }
 

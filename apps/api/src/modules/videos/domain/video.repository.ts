@@ -10,6 +10,7 @@ import type {
   VideoDetails,
   VideoFilter,
   VideoPosition,
+  VideoProvider,
   VideoStatus,
   VideoVisibility,
 } from './video';
@@ -17,6 +18,23 @@ import type {
 export abstract class VideoRepository {
   abstract create(video: NewVideo): Promise<Video>;
   abstract findById(id: string): Promise<Video | null>;
+  // Vidéo Mux retrouvée par son envoi direct ou son asset (webhooks, ADR-074).
+  abstract findByMuxUpload(uploadId: string): Promise<Video | null>;
+  abstract findByMuxAsset(assetId: string): Promise<Video | null>;
+  // Asset Mux créé par l'envoi direct. Null si la vidéo n'existe plus.
+  abstract setMuxAsset(id: string, assetId: string): Promise<Video | null>;
+  // Identifiant de lecture Mux (signé pour une vidéo privée) ; `urls` : nouvelles URLs sans jeton d'une vidéo publiée (vidéo,
+  // miniature tirée par Mux, son repris, ADR-064), réécrites dans la même transaction. Null si la vidéo n'existe plus.
+  abstract setMuxPlayback(
+    id: string,
+    playbackId: string,
+    signed: boolean,
+    urls: { hlsUrl: string; thumbnailUrl: string | null; audioUrl: string } | null,
+  ): Promise<Video | null>;
+  // Miniature tirée de la couverture choisie (ADR-065), pour une vidéo Mux : faux si la vidéo n'existe plus.
+  abstract setThumbnail(id: string, thumbnailUrl: string): Promise<boolean>;
+  // Son d'une vidéo publiée, arrivé après sa publication (version audio de Mux, ADR-064) ; sans effet s'il existe déjà.
+  abstract addSound(videoId: string, audioUrl: string, durationMs: number): Promise<void>;
   // Passe la vidéo de `uploading` à `processing` et efface l'uploadId, de façon atomique.
   // Renvoie null si la vidéo n'est plus en `uploading` (confirmation concurrente ou déjà faite).
   // `maxDurationSeconds` : durée maximale permise (ADR-073), nulle pour la durée par défaut.
@@ -42,8 +60,9 @@ export abstract class VideoRepository {
   abstract findFavoritedSoundIds(userId: string, soundIds: string[]): Promise<Set<string>>;
   // Vidéos restées en `uploading` depuis avant `createdBefore` (uploads abandonnés).
   abstract findAbandonedUploads(createdBefore: Date, limit: number): Promise<Video[]>;
-  // Vidéos en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu).
-  abstract findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Video[]>;
+  // Vidéos de l'hébergeur `provider` en `processing` sans changement depuis `updatedBefore` (job de transcodage perdu,
+  // webhook de Mux perdu).
+  abstract findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Video[]>;
   abstract delete(id: string): Promise<void>;
   // Toutes les vidéos de `userId`, quel que soit leur statut (suppression du compte).
   abstract findAllByAuthor(userId: string): Promise<Video[]>;

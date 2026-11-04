@@ -24,11 +24,16 @@ export interface TranscodeJobData {
   // Durée maximale permise par l'API pour cette vidéo (abonné « Plus », ADR-073 : 600 s). Absente : celle de la file
   // (ADR-040). Ignorée dans la file des stories.
   maxDurationSeconds?: number;
+  // Vidéo hébergée par Mux (ADR-074) : seule la couverture est traitée (miniature sous `<videoId>/thumbnail.jpg`), pas la
+  // vidéo, que Mux encode. `rawKey` n'est alors pas lu. Couverture illisible : aucun résultat publié.
+  coverOnly?: boolean;
 }
 
 export type TranscodeResult =
   // `soundUrl` / `soundDurationSeconds` : piste son extraite en AAC (ADR-064), seulement pour une vidéo (pas une
   // story) qui a du son.
   | { videoId: string; status: 'ready'; hlsUrl: string; thumbnailUrl: string; soundUrl?: string; soundDurationSeconds?: number }
-  // Publié après la dernière tentative en échec.
+  // Couverture seule d'une vidéo Mux (ADR-074) : la miniature est prête.
+  | { videoId: string; status: 'cover'; thumbnailUrl: string }
+  // Publié après la dernière tentative en échec (jamais pour une couverture seule).
   | { videoId: string; status: 'failed'; reason: string };

@@ -17,7 +17,7 @@ import { loadConfig, type WorkerConfig } from './config';
 import { InvalidMediaError, supportsToneMapping } from './media/ffmpeg';
 import { MAX_STORY_DURATION_SECONDS, MAX_VIDEO_DURATION_SECONDS } from './media/rules';
 import { RawVideoNotFoundError, VideoStorage } from './storage';
-import { transcode } from './transcode';
+import { transcode, transcodeCover } from './transcode';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,6 +92,13 @@ function startConsumer(
     queue,
     async (job) => {
       const started = Date.now();
+      // Vidéo Mux (ADR-074) : couverture seule, la vidéo est encodée par Mux.
+      if (job.data.coverOnly) {
+        const thumbnailUrl = await transcodeCover(job.data, config, storage, toneMapping);
+        if (thumbnailUrl) await publish({ videoId: job.data.videoId, status: 'cover', thumbnailUrl });
+        console.log(`[worker] ${queue} : couverture de ${job.data.videoId} ${thumbnailUrl ? 'traitée' : 'ignorée'}`);
+        return;
+      }
       let output;
       try {
         // Durée permise par l'API pour cette vidéo (abonné « Plus », ADR-073), sinon celle de la file.
@@ -124,6 +131,11 @@ function startConsumer(
 async function onFailed(job: Job<TranscodeJobData>, error: Error, publish: (result: TranscodeResult) => Promise<unknown>) {
   const attempts = job.opts.attempts ?? 1;
   const final = error instanceof UnrecoverableError || job.attemptsMade >= attempts;
+  // Couverture seule d'une vidéo Mux : son échec ne touche pas la vidéo, qui garde la miniature de Mux.
+  if (final && job.data.coverOnly) {
+    console.error(`[worker] couverture de ${job.data.videoId} abandonnée (${error.message})`);
+    return;
+  }
   if (!final) {
     console.warn(`[worker] ${job.data.videoId} : tentative ${job.attemptsMade}/${attempts} en échec (${error.message}), nouvel essai prévu`);
     return;

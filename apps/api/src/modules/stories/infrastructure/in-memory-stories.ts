@@ -1,3 +1,5 @@
+import type { HostedVideos } from '../../../mux/hosted-videos';
+import { InMemoryHostedVideos } from '../../../mux/in-memory-hosted-videos';
 import { InMemoryRateLimiter } from '../../../rate-limit/in-memory-rate-limiter';
 import type { InteractionsService } from '../../interactions/application/interactions.service';
 import type { UsersService } from '../../users/application/users.service';
@@ -9,7 +11,13 @@ import { InMemoryStoryStorage } from './in-memory-story-storage';
 
 // Service des stories avec tous ses adaptateurs en mémoire, pour les tests des modules qui en dépendent (messaging,
 // reports, admin, feed) et pour les siens.
-export function inMemoryStories(users: UsersService, interactions: InteractionsService, now: () => Date = () => new Date()) {
+// `hosted` : Mux (ADR-074), sans envoi chez Mux par défaut.
+export function inMemoryStories(
+  users: UsersService,
+  interactions: InteractionsService,
+  now: () => Date = () => new Date(),
+  hosted: HostedVideos = new InMemoryHostedVideos(false),
+) {
   const repository = new InMemoryStoryRepository(now);
   const storage = new InMemoryStoryStorage();
   const transcoding = new InMemoryStoryTranscodingQueue();
@@ -19,7 +27,7 @@ export function inMemoryStories(users: UsersService, interactions: InteractionsS
   let sequence = 0;
   // Identifiants ordonnés (comme des UUID v7) et lisibles dans les tests.
   const makeId = () => `00000000-0000-7000-8000-${String(++sequence).padStart(12, '0')}`;
-  const service = new StoriesService(repository, storage, transcoding, lifecycle, events, users, interactions, rateLimiter, now, makeId);
+  const service = new StoriesService(repository, storage, transcoding, lifecycle, events, users, interactions, rateLimiter, now, makeId, hosted);
   return { service, repository, storage, transcoding, lifecycle, events, rateLimiter };
 }
 

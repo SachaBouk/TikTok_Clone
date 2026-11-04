@@ -13,9 +13,11 @@ import type {
   StoryViewerDto,
   StoryViewerStateDto,
   StoryViewersPageDto,
+  UploadMethod,
   UserStoriesDto,
 } from '@repo/shared';
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
+import { UPLOAD_METHODS } from '../../videos/domain/upload-rules';
 import { UploadPartUrlResponse } from '../../videos/interfaces/videos.responses';
 import type { StoryItem, StoryTrayEntry, StoryUpload, StoryViewerEntry, StoryViewersPage, UserStories } from '../application/stories.service';
 import type { ActiveStory, Story } from '../domain/story';
@@ -54,6 +56,17 @@ export class StoryResponse implements StoryDto {
 export class StoryUploadResponse implements StoryUploadDto {
   @ApiProperty({ type: StoryResponse })
   story!: StoryResponse;
+
+  // `s3Multipart` : une URL signée par partie ; `muxDirect` (story vidéo chez Mux, ADR-074) : `directUploadUrl`.
+  @ApiProperty({ enum: UPLOAD_METHODS, enumName: 'UploadMethod' })
+  method!: UploadMethod;
+
+  @ApiPropertyOptional({
+    format: 'uri',
+    description:
+      '`muxDirect` : URL d’envoi direct chez Mux, PUT par morceaux de `partSize` octets (comme une vidéo), puis confirmation sans parties.',
+  })
+  directUploadUrl?: string;
 
   @ApiProperty({ type: 'integer', description: 'Taille de chaque partie en octets ; la dernière peut être plus petite.' })
   partSize!: number;
@@ -178,6 +191,8 @@ export function toStoryDto(story: Story): StoryDto {
 export function toStoryUploadDto(upload: StoryUpload): StoryUploadDto {
   return {
     story: toStoryDto(upload.story),
+    method: upload.method,
+    ...(upload.directUploadUrl ? { directUploadUrl: upload.directUploadUrl } : {}),
     partSize: upload.partSize,
     parts: upload.parts.map((part) => ({ partNumber: part.partNumber, url: part.url })),
     expiresAt: upload.expiresAt.toISOString(),

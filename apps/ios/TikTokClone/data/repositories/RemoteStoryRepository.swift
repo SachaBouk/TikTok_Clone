@@ -131,7 +131,10 @@ extension UploadTicket {
             guard let url = URL(string: part.url) else { throw AppError.unexpected }
             return Part(number: part.partNumber, url: url)
         }
-        self.init(videoID: dto.story.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt)
+        // Story vidéo chez Mux (ADR-074) : envoi direct, comme une vidéo.
+        self.init(
+            videoID: dto.story.id, partSize: dto.partSize, parts: parts, expiresAt: dto.expiresAt,
+            directUploadURL: try Self.directURL(dto.method, dto.directUploadUrl))
     }
 }
 

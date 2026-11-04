@@ -26,7 +26,7 @@ struct RemoteVideoPublishingRepositoryTests {
     @Test("createUpload : une URL par partie, taille des parties, expiration")
     func createUpload() async throws {
         let body = """
-            {"video":\(videoJSON),"partSize":10485760,"parts":[{"partNumber":1,"url":"http://localhost:9000/videos-raw/a?partNumber=1"},\
+            {"video":\(videoJSON),"method":"s3Multipart","partSize":10485760,"parts":[{"partNumber":1,"url":"http://localhost:9000/videos-raw/a?partNumber=1"},\
             {"partNumber":2,"url":"http://localhost:9000/videos-raw/a?partNumber=2"}],"expiresAt":"2026-09-25T14:00:00.000Z"}
             """
         let ticket = try await repository { _ in json(.created, body) }.createUpload(
@@ -35,6 +35,23 @@ struct RemoteVideoPublishingRepositoryTests {
         #expect(ticket.partSize == 10_485_760)
         #expect(ticket.parts.map(\.number) == [1, 2])
         #expect(ticket.parts[1].url.absoluteString == "http://localhost:9000/videos-raw/a?partNumber=2")
+    }
+
+    @Test("createUpload chez Mux (ADR-074) : une seule URL d'envoi direct, sans parties ; muxDirect sans URL : impossible")
+    func createDirectUpload() async throws {
+        let body = """
+            {"video":\(videoJSON),"method":"muxDirect","directUploadUrl":"https://storage.googleapis.com/video-storage/up-1",\
+            "partSize":10485760,"parts":[],"expiresAt":"2026-09-25T14:00:00.000Z"}
+            """
+        let ticket = try await repository { _ in json(.created, body) }.createUpload(
+            contentType: .mp4, fileSize: 12_000_000, description: nil, visibility: .everyone, commentsEnabled: true)
+        #expect(ticket.directUploadURL?.absoluteString == "https://storage.googleapis.com/video-storage/up-1")
+        #expect(ticket.parts.isEmpty)
+        let broken = body.replacingOccurrences(of: #""directUploadUrl":"https://storage.googleapis.com/video-storage/up-1","#, with: "")
+        await #expect(throws: AppError.unexpected) {
+            try await repository { _ in json(.created, broken) }.createUpload(
+                contentType: .mp4, fileSize: 1, description: nil, visibility: .everyone, commentsEnabled: true)
+        }
     }
 
     @Test("createUpload refusé : message de l'API")

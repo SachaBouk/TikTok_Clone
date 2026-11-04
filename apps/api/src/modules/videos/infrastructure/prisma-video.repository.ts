@@ -13,6 +13,7 @@ import type {
   VideoDetails,
   VideoFilter,
   VideoPosition,
+  VideoProvider,
   VideoStatus,
   VideoVisibility,
 } from '../domain/video';
@@ -36,6 +37,11 @@ const videoSelect = {
   locationName: true,
   locationAddress: true,
   maxDurationSeconds: true,
+  provider: true,
+  muxUploadId: true,
+  muxAssetId: true,
+  muxPlaybackId: true,
+  muxSigned: true,
   hlsUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -53,6 +59,52 @@ export class PrismaVideoRepository extends VideoRepository {
 
   findById(id: string): Promise<Video | null> {
     return this.prisma.video.findUnique({ where: { id }, select: videoSelect });
+  }
+
+  findByMuxUpload(uploadId: string): Promise<Video | null> {
+    return this.prisma.video.findUnique({ where: { muxUploadId: uploadId }, select: videoSelect });
+  }
+
+  findByMuxAsset(assetId: string): Promise<Video | null> {
+    return this.prisma.video.findUnique({ where: { muxAssetId: assetId }, select: videoSelect });
+  }
+
+  async setMuxAsset(id: string, assetId: string): Promise<Video | null> {
+    const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { muxAssetId: assetId }, select: videoSelect });
+    return video ?? null;
+  }
+
+  // Dans une transaction : identifiant de lecture, URLs de la vidéo publiée et de son son changent ensemble.
+  setMuxPlayback(
+    id: string,
+    playbackId: string,
+    signed: boolean,
+    urls: { hlsUrl: string; thumbnailUrl: string | null; audioUrl: string } | null,
+  ): Promise<Video | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const [video] = await tx.video.updateManyAndReturn({
+        where: { id },
+        data: {
+          muxPlaybackId: playbackId,
+          muxSigned: signed,
+          ...(urls ? { hlsUrl: urls.hlsUrl, ...(urls.thumbnailUrl ? { thumbnailUrl: urls.thumbnailUrl } : {}) } : {}),
+        },
+        select: videoSelect,
+      });
+      if (video && urls) await tx.sound.updateMany({ where: { videoId: id }, data: { audioUrl: urls.audioUrl } });
+      return video ?? null;
+    });
+  }
+
+  async setThumbnail(id: string, thumbnailUrl: string): Promise<boolean> {
+    const { count } = await this.prisma.video.updateMany({ where: { id }, data: { thumbnailUrl } });
+    return count > 0;
+  }
+
+  async addSound(videoId: string, audioUrl: string, durationMs: number): Promise<void> {
+    const video = await this.prisma.video.findUnique({ where: { id: videoId }, select: { userId: true } });
+    if (!video) return;
+    await this.prisma.sound.createMany({ data: [{ videoId, userId: video.userId, audioUrl, durationMs }], skipDuplicates: true });
   }
 
   // `status: 'uploading'` dans le WHERE rend la transition atomique : une seule confirmation l'emporte.
@@ -177,9 +229,9 @@ export class PrismaVideoRepository extends VideoRepository {
     });
   }
 
-  findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Video[]> {
+  findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Video[]> {
     return this.prisma.video.findMany({
-      where: { status: 'processing', updatedAt: { lt: updatedBefore } },
+      where: { status: 'processing', provider, updatedAt: { lt: updatedBefore } },
       orderBy: { updatedAt: 'asc' },
       take: limit,
       select: videoSelect,
@@ -352,6 +404,8 @@ const detailsSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  muxPlaybackId: true,
+  muxSigned: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,
@@ -374,6 +428,8 @@ const publishedSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  muxPlaybackId: true,
+  muxSigned: true,
   hlsUrl: true,
   thumbnailUrl: true,
   viewsCount: true,

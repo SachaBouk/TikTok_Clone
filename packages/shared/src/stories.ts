@@ -1,4 +1,4 @@
-import type { UploadPartUrlDto } from './videos.js';
+import type { UploadMethod, UploadPartUrlDto } from './videos.js';
 import type { UserSummaryDto } from './users.js';
 
 // Stories (ADR-051) : vidéo (60 s au plus) ou photo, visibles 24 h après leur publication, puis supprimées.
@@ -23,6 +23,9 @@ export interface StoryDto {
 
 export interface StoryUploadDto {
   story: StoryDto;
+  // Comme une vidéo (ADR-074) : `muxDirect` pour une story vidéo chez Mux, avec `directUploadUrl` et `parts` vide.
+  method: UploadMethod;
+  directUploadUrl?: string;
   // Taille de chaque partie en octets (la dernière peut être plus petite).
   partSize: number;
   parts: UploadPartUrlDto[];

@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
+import { HostedVideos } from '../../mux/hosted-videos';
 import { RateLimiter } from '../../rate-limit/rate-limiter';
 import { StorageConfig } from '../../storage/storage.config';
 import { InteractionsService } from '../interactions/application/interactions.service';
@@ -8,6 +9,7 @@ import { UsersService } from '../users/application/users.service';
 import { UsersModule } from '../users/users.module';
 import { StoriesService } from './application/stories.service';
 import { StoryEventPublisher } from './domain/story-events';
+import { newStoryId } from './domain/story-id';
 import { StoryLifecycleQueue, StoryTranscodingQueue } from './domain/story-queues';
 import { StoryRepository } from './domain/story.repository';
 import { StoryStorage } from './domain/story-storage';
@@ -48,8 +50,23 @@ import {
         users: UsersService,
         interactions: InteractionsService,
         rateLimiter: RateLimiter,
+        hosted: HostedVideos,
       ) => {
-        const service = new StoriesService(stories, storage, transcoding, lifecycle, events, users, interactions, rateLimiter);
+        const logger = new Logger('Stories');
+        const service = new StoriesService(
+          stories,
+          storage,
+          transcoding,
+          lifecycle,
+          events,
+          users,
+          interactions,
+          rateLimiter,
+          () => new Date(),
+          () => newStoryId(),
+          hosted,
+          (message) => logger.warn(message),
+        );
         users.onAccountDeleting(async (userId) => {
           await service.scheduleAuthorFilesCleanup(userId);
         });
@@ -64,6 +81,7 @@ import {
         UsersService,
         InteractionsService,
         RateLimiter,
+        HostedVideos,
       ],
     },
     StoryTranscodeResultsConsumer,

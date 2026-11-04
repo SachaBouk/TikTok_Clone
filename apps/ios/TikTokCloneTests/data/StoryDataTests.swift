@@ -74,7 +74,8 @@ struct StoryDataTests {
                     case 1:
                         return json(
                             .created,
-                            #"{"story":"# + Self.story.replacingOccurrences(of: "\"ready\"", with: "\"uploading\"") + #"},"partSize":10485760,"#
+                            #"{"story":"# + Self.story.replacingOccurrences(of: "\"ready\"", with: "\"uploading\"")
+                                + #"},"method":"s3Multipart","partSize":10485760,"#
                                 + #""parts":[{"partNumber":1,"url":"http://storage.test/1"}],"expiresAt":"2026-10-08T12:00:00.000Z"}"#)
                     case 2: return json(.conflict, errorJSON(409, "Tu as déjà 30 stories en ligne"))
                     default: return tooManyRequests(retryAfter: 120)

@@ -2,7 +2,18 @@ import type { InteractionsService } from '../../interactions/application/interac
 import type { UsersService } from '../../users/application/users.service';
 import type { User } from '../../users/domain/user';
 import { UserNotFoundError } from '../../users/domain/user.errors';
-import { partCount, UPLOAD_PART_SIZE_BYTES, UPLOAD_RATE_LIMITS, UPLOAD_URL_TTL_SECONDS, uploadRateLimitKey } from '../../videos/domain/upload-rules';
+import { HOSTED_ASSET_WAIT_MS } from '../../videos/domain/maintenance-rules';
+import {
+  DURATION_TOLERANCE_SECONDS,
+  partCount,
+  UPLOAD_PART_SIZE_BYTES,
+  UPLOAD_RATE_LIMITS,
+  UPLOAD_URL_TTL_SECONDS,
+  type UploadMethod,
+  uploadRateLimitKey,
+} from '../../videos/domain/upload-rules';
+import type { HostedVideos } from '../../../mux/hosted-videos';
+import { InMemoryHostedVideos } from '../../../mux/in-memory-hosted-videos';
 import type { RateLimiter } from '../../../rate-limit/rate-limiter';
 import {
   type ActiveStory,
@@ -12,6 +23,7 @@ import {
   isSupportedStoryType,
   isValidStoryPhoto,
   MAX_ACTIVE_STORIES,
+  MAX_STORY_DURATION_SECONDS,
   MAX_TRAY_ACCOUNTS,
   maxStorySize,
   mediaTypeOf,
@@ -26,6 +38,7 @@ import {
   type StoryStats,
   type StoryTranscodeOutcome,
   storyRawKey,
+  STUCK_HOSTED_STORY_AFTER_MS,
   STUCK_STORY_TRANSCODE_AFTER_MS,
   UNPUBLISHED_STORY_TTL_MS,
 } from '../domain/story';
@@ -56,6 +69,9 @@ export interface CreateStoryUploadInput {
 
 export interface StoryUpload {
   story: Story;
+  // Comme une vidéo (ADR-074) : parties S3, ou envoi direct chez Mux (story vidéo, `VIDEO_PROVIDER=mux`).
+  method: UploadMethod;
+  directUploadUrl: string | null;
   partSize: number;
   parts: PresignedPart[];
   expiresAt: Date;
@@ -96,6 +112,15 @@ export interface StoryMaintenanceReport {
   expired: number;
   purged: number;
   requeued: number;
+  // Stories Mux en traitement relues chez Mux (ADR-074).
+  synced: number;
+}
+
+// Où relire une story Mux depuis un webhook (ADR-074).
+export interface HostedStoryRef {
+  storyId: string | null;
+  uploadId: string | null;
+  assetId: string | null;
 }
 
 // Service applicatif du module stories (ADR-051, ADR-003).
@@ -117,6 +142,9 @@ export class StoriesService {
     private readonly rateLimiter: RateLimiter,
     private readonly now: () => Date = () => new Date(),
     private readonly makeId: () => string = () => newStoryId(),
+    // Mux (ADR-074) : stories vidéo envoyées et lues chez Mux ; par défaut, aucune.
+    private readonly hosted: HostedVideos = new InMemoryHostedVideos(false),
+    private readonly warn: (message: string) => void = () => {},
   ) {}
 
   // ─── Publication ───────────────────────────────────────────────────────────
@@ -136,6 +164,30 @@ export class StoriesService {
 
     const id = this.makeId();
     const rawKey = storyRawKey(userId, id, input.contentType);
+    const expiresAt = new Date(this.now().getTime() + UPLOAD_URL_TTL_SECONDS * 1000);
+
+    // Story vidéo chez Mux (ADR-074) ; refusée par Mux, pipeline maison.
+    const hosted = mediaType === 'video' ? await this.startHostedUpload(id) : null;
+    if (hosted) {
+      let story: Story;
+      try {
+        story = await this.stories.create({
+          id,
+          userId,
+          mediaType,
+          rawKey,
+          uploadId: null,
+          rawSize: input.fileSize,
+          provider: 'mux',
+          muxUploadId: hosted.uploadId,
+        });
+      } catch (error) {
+        await this.hosted.cancelUpload(hosted.uploadId);
+        throw error;
+      }
+      return { story, method: 'muxDirect', directUploadUrl: hosted.url, partSize: UPLOAD_PART_SIZE_BYTES, parts: [], expiresAt };
+    }
+
     const bucket = bucketOf(mediaType);
     const uploadId = await this.storage.startMultipartUpload(bucket, rawKey, input.contentType);
     let story: Story;
@@ -146,7 +198,7 @@ export class StoriesService {
       throw error;
     }
     const parts = await this.storage.presignPartUrls(bucket, rawKey, uploadId, partCount(input.fileSize), UPLOAD_URL_TTL_SECONDS);
-    return { story, partSize: UPLOAD_PART_SIZE_BYTES, parts, expiresAt: new Date(this.now().getTime() + UPLOAD_URL_TTL_SECONDS * 1000) };
+    return { story, method: 's3Multipart', directUploadUrl: null, partSize: UPLOAD_PART_SIZE_BYTES, parts, expiresAt };
   }
 
   // Confirme l'envoi : assemble les parties et vérifie l'objet (mêmes contrôles que les vidéos). Une photo est vérifiée
@@ -154,6 +206,7 @@ export class StoriesService {
   async completeUpload(userId: string, storyId: string, parts: UploadedPart[]): Promise<Story> {
     const story = await this.stories.findById(storyId);
     if (!story || story.userId !== userId) throw new StoryNotFoundError(storyId);
+    if (story.provider === 'mux') return this.completeHostedUpload(story);
     if (story.status !== 'uploading' || !story.uploadId) throw new StoryNotAwaitingUploadError(storyId);
     const bucket = bucketOf(story.mediaType);
 
@@ -211,6 +264,57 @@ export class StoriesService {
     if (story.status === 'ready') await this.scheduleExpiry(story);
     await this.events.storyProcessed(story);
     return true;
+  }
+
+  // Webhook de Mux (ADR-074) : retrouve la story et relit son état chez Mux. Faux si aucune story ne correspond. Asset d'une
+  // story supprimée entre-temps : supprimé chez Mux.
+  async syncHostedStoryByRef(ref: HostedStoryRef): Promise<boolean> {
+    const story =
+      (ref.storyId ? await this.stories.findById(ref.storyId) : null) ??
+      (ref.uploadId ? await this.stories.findByMuxUpload(ref.uploadId) : null) ??
+      (ref.assetId ? await this.stories.findByMuxAsset(ref.assetId) : null);
+    if (story) {
+      await this.syncHostedStory(story.id);
+      return true;
+    }
+    if (!ref.storyId) return false;
+    if (ref.assetId) await this.hosted.deleteAsset(ref.assetId);
+    return true;
+  }
+
+  // Relit chez Mux l'état d'une story vidéo hébergée (ADR-074) et l'applique, comme pour une vidéo : envoi perdu ou asset en
+  // erreur → `failed` ; asset prêt → durée vérifiée (60 s), identifiant de lecture public, publication (24 h). Idempotent.
+  async syncHostedStory(storyId: string): Promise<void> {
+    let story = await this.stories.findById(storyId);
+    if (!story || story.provider !== 'mux' || !story.muxUploadId) return;
+    if (!story.muxAssetId) {
+      const upload = await this.hosted.getUpload(story.muxUploadId);
+      if (upload?.status !== 'assetCreated' || !upload.assetId) {
+        if ((!upload || upload.status === 'failed') && story.status === 'processing') await this.applyTranscodeResult(story.id, { status: 'failed' });
+        return;
+      }
+      story = (await this.stories.setMuxAsset(story.id, upload.assetId)) ?? story;
+    }
+    const assetId = story.muxAssetId;
+    if (!assetId || story.status !== 'processing') return;
+    const asset = await this.hosted.getAsset(assetId);
+    if (!asset || asset.status === 'errored') {
+      await this.applyTranscodeResult(story.id, { status: 'failed' });
+      return;
+    }
+    if (asset.status !== 'ready') return;
+    if (asset.durationSeconds !== null && asset.durationSeconds > MAX_STORY_DURATION_SECONDS + DURATION_TOLERANCE_SECONDS) {
+      this.warn(`Story ${story.id} trop longue chez Mux (${asset.durationSeconds} s) : échec`);
+      if (await this.applyTranscodeResult(story.id, { status: 'failed' })) await this.hosted.deleteAsset(assetId);
+      return;
+    }
+    const playbackId = asset.playbackIds.find((entry) => entry.policy === 'public')?.id ?? (await this.hosted.addPlaybackId(assetId, 'public'));
+    if (playbackId !== story.muxPlaybackId) await this.stories.setMuxPlayback(story.id, playbackId);
+    await this.applyTranscodeResult(story.id, {
+      status: 'ready',
+      mediaUrl: this.hosted.streamUrl(playbackId, false),
+      thumbnailUrl: this.hosted.thumbnailUrl(playbackId, false),
+    });
   }
 
   // Suppression par son auteur, quel que soit le statut.
@@ -388,6 +492,7 @@ export class StoriesService {
   // supprimé et renvoie false. Idempotent : un fichier déjà absent n'est pas une erreur.
   async cleanupFiles(files: StoryFiles): Promise<boolean> {
     if (await this.stories.findById(files.storyId)) return false;
+    if (files.muxUploadId || files.muxAssetId) await this.discardHosted(files.muxUploadId ?? null, files.muxAssetId ?? null);
     if (files.rawKey) {
       const bucket = bucketOf(files.mediaType);
       if (files.uploadId) await this.storage.abortMultipartUpload(bucket, files.rawKey, files.uploadId);
@@ -408,9 +513,20 @@ export class StoriesService {
       STORY_MAINTENANCE_BATCH_SIZE,
     );
     for (const story of unpublished) await this.remove(story);
-    const stuck = await this.stories.findStuckTranscodes(new Date(now.getTime() - STUCK_STORY_TRANSCODE_AFTER_MS), STORY_MAINTENANCE_BATCH_SIZE);
+    const stuck = await this.stories.findStuckTranscodes(
+      new Date(now.getTime() - STUCK_STORY_TRANSCODE_AFTER_MS),
+      STORY_MAINTENANCE_BATCH_SIZE,
+      'local',
+    );
     for (const story of stuck) await this.transcoding.enqueue({ storyId: story.id, rawKey: story.rawKey });
-    return { expired: expired.length, purged: unpublished.length, requeued: stuck.length };
+    // Stories Mux (ADR-074) restées en traitement : état relu chez Mux (webhook perdu).
+    const hostedStuck = await this.stories.findStuckTranscodes(
+      new Date(now.getTime() - STUCK_HOSTED_STORY_AFTER_MS),
+      STORY_MAINTENANCE_BATCH_SIZE,
+      'mux',
+    );
+    for (const story of hostedStuck) await this.syncHostedStory(story.id);
+    return { expired: expired.length, purged: unpublished.length, requeued: stuck.length, synced: hostedStuck.length };
   }
 
   // Suppression réelle : nettoyage des fichiers programmé d'abord (sans effet tant que la story existe), job de
@@ -419,6 +535,50 @@ export class StoriesService {
     await this.lifecycle.scheduleCleanup([filesOf(story)], STORY_CLEANUP_DELAY_MS);
     if (story.status === 'processing') await this.transcoding.cancel(story.id);
     await this.stories.delete(story.id);
+  }
+
+  // Envoi direct chez Mux (ADR-074), si `VIDEO_PROVIDER=mux` ; refusé (plan gratuit plein, Mux injoignable) : null.
+  private async startHostedUpload(storyId: string): Promise<{ uploadId: string; url: string } | null> {
+    if (!this.hosted.uploadsEnabled) return null;
+    try {
+      return await this.hosted.createUpload({
+        passthrough: `story:${storyId}`,
+        policy: 'public',
+        staticRenditions: false,
+        timeoutSeconds: UPLOAD_URL_TTL_SECONDS,
+      });
+    } catch (error) {
+      this.warn(`Mux a refusé l'envoi de la story (${(error as Error).message}) : pipeline maison`);
+      return null;
+    }
+  }
+
+  // Confirmation d'un envoi direct chez Mux : l'asset doit exister, puis `processing` et lecture de l'asset.
+  private async completeHostedUpload(story: Story): Promise<Story> {
+    if (story.status !== 'uploading' || !story.muxUploadId) throw new StoryNotAwaitingUploadError(story.id);
+    let state = await this.hosted.getUpload(story.muxUploadId);
+    for (const delay of HOSTED_ASSET_WAIT_MS) {
+      if (state?.status !== 'waiting') break;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      state = await this.hosted.getUpload(story.muxUploadId);
+    }
+    if (!state || state.status === 'failed') {
+      await this.stories.markFailed(story.id);
+      throw new StoryUploadIncompleteError('envoi refusé ou expiré chez Mux');
+    }
+    if (state.status !== 'assetCreated' || !state.assetId) throw new StoryUploadIncompleteError('fichier pas encore reçu par Mux');
+    await this.stories.setMuxAsset(story.id, state.assetId);
+    const uploaded = await this.stories.markUploaded(story.id);
+    if (!uploaded) throw new StoryNotAwaitingUploadError(story.id);
+    await this.syncHostedStory(uploaded.id);
+    return (await this.stories.findById(uploaded.id)) ?? uploaded;
+  }
+
+  // Envoi direct annulé, ou asset supprimé s'il a été créé.
+  private async discardHosted(uploadId: string | null, assetId: string | null): Promise<void> {
+    const asset = assetId ?? (uploadId ? ((await this.hosted.getUpload(uploadId))?.assetId ?? null) : null);
+    if (asset) await this.hosted.deleteAsset(asset);
+    else if (uploadId) await this.hosted.cancelUpload(uploadId);
   }
 
   // Au mieux : si Redis est indisponible, la story reste invisible après son échéance (lectures filtrées) et la maintenance

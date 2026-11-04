@@ -1,6 +1,7 @@
 import type { RateLimitRule } from '../../../rate-limit/rate-limiter';
 import { readJpegDimensions, type ImageDimensions } from '../../users/domain/image-dimensions';
 import { MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../../videos/domain/upload-rules';
+import type { VideoProvider } from '../../videos/domain/video';
 
 // Stories (ADR-051) : vidéo (60 s au plus) ou photo, visibles 24 h après leur publication, puis supprimées avec leurs
 // vues et leurs fichiers. Publiques comme les vidéos ; masquées pour un compte suspendu ou bloqué (ADR-029, ADR-037).
@@ -16,9 +17,14 @@ export interface Story {
   status: StoryStatus;
   // Vidéo : clé du brut dans le bucket des uploads. Photo : clé de la photo dans le bucket public des médias.
   rawKey: string;
-  // Upload multipart en cours ; nul une fois l'upload terminé.
+  // Upload multipart en cours ; nul une fois l'upload terminé (toujours nul pour une story Mux).
   uploadId: string | null;
   rawSize: number;
+  // Story vidéo chez Mux (ADR-074) : envoi direct, asset, identifiant de lecture (public). Jamais exposés.
+  provider: VideoProvider;
+  muxUploadId: string | null;
+  muxAssetId: string | null;
+  muxPlaybackId: string | null;
   mediaUrl: string | null;
   thumbnailUrl: string | null;
   createdAt: Date;
@@ -40,8 +46,11 @@ export interface NewStory {
   userId: string;
   mediaType: StoryMediaType;
   rawKey: string;
-  uploadId: string;
+  // Upload multipart S3 ; nul pour une story vidéo envoyée chez Mux (ADR-074).
+  uploadId: string | null;
   rawSize: number;
+  provider?: VideoProvider;
+  muxUploadId?: string | null;
 }
 
 // Vue d'une story par un compte (un like vaut vue).
@@ -79,6 +88,9 @@ export interface StoryFiles {
   mediaType: StoryMediaType;
   rawKey: string | null;
   uploadId: string | null;
+  // Story Mux (ADR-074) : envoi direct à annuler, asset à supprimer.
+  muxUploadId?: string | null;
+  muxAssetId?: string | null;
 }
 
 // Résultat du transcodage d'une story vidéo (ADR-012).
@@ -121,6 +133,10 @@ export const STORY_VIEW_RATE_LIMITS: RateLimitRule[] = [{ limit: 600, windowSeco
 // supprimée ; un transcodage sans nouvelles depuis 1 h est relancé (sans effet si le job existe encore).
 export const UNPUBLISHED_STORY_TTL_MS = 24 * 60 * 60 * 1000;
 export const STUCK_STORY_TRANSCODE_AFTER_MS = 60 * 60 * 1000;
+// Story Mux (ADR-074) en traitement depuis 15 min : son état est relu chez Mux (webhook perdu).
+export const STUCK_HOSTED_STORY_AFTER_MS = 15 * 60 * 1000;
+// Durée maximale d'une story vidéo, à une seconde près, comme le worker : vérifiée par l'API pour une story Mux (ADR-074).
+export const MAX_STORY_DURATION_SECONDS = 60;
 export const STORY_MAINTENANCE_BATCH_SIZE = 100;
 
 // Rangée de stories : 100 comptes au plus, sans pagination.
@@ -160,5 +176,11 @@ export function isActive(story: Story, now: Date): story is ActiveStory {
 }
 
 export function filesOf(story: Story): StoryFiles {
-  return { storyId: story.id, mediaType: story.mediaType, rawKey: story.rawKey, uploadId: story.uploadId };
+  return {
+    storyId: story.id,
+    mediaType: story.mediaType,
+    rawKey: story.rawKey,
+    uploadId: story.uploadId,
+    ...(story.muxUploadId ? { muxUploadId: story.muxUploadId, muxAssetId: story.muxAssetId } : {}),
+  };
 }

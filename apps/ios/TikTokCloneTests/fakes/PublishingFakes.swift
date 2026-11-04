@@ -25,6 +25,8 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
         // Réglages de l'écran de publication (ADR-065), par vidéo créée.
         var extras: [String: UploadExtras] = [:]
         var visibilityError: AppError?
+        // Envoi direct chez Mux (ADR-074) : les tickets portent une URL unique, sans parties.
+        var direct = false
     }
 
     let state = Mutex(State())
@@ -76,8 +78,9 @@ final class FakeVideoPublishingRepository: VideoPublishingRepository {
             let count = max(1, (fileSize + state.partSize - 1) / state.partSize)
             let parts = (1...count).map { UploadTicket.Part(number: $0, url: URL(string: "http://storage.test/\(id)/\($0)")!) }
             return UploadTicket(
-                videoID: id, partSize: state.partSize, parts: parts, expiresAt: state.expiresAt,
-                coverURL: extras.coverSize == nil ? nil : URL(string: "http://storage.test/\(id)/cover"))
+                videoID: id, partSize: state.partSize, parts: state.direct ? [] : parts, expiresAt: state.expiresAt,
+                coverURL: extras.coverSize == nil ? nil : URL(string: "http://storage.test/\(id)/cover"),
+                directUploadURL: state.direct ? URL(string: "https://mux.test/upload/\(id)") : nil)
         }
     }
 
@@ -122,6 +125,12 @@ final class FakePartTransport: UploadPartTransport {
         var delay: Duration = .zero
         // Type envoyé pour chaque URL (couverture, ADR-065).
         var contentTypes: [URL: String] = [:]
+        // Envoi direct chez Mux (ADR-074).
+        var direct: [URL: Data] = [:]
+        var chunks: [Range<Int>] = []
+        var keepAtMost: Int?
+        var unknownReceived = false
+        var statusQueries = 0
     }
 
     let state = Mutex(State())
@@ -144,6 +153,41 @@ final class FakePartTransport: UploadPartTransport {
             return "\"etag-\(url.absoluteString)\""
         }
     }
+}
+
+// Envoi direct chez Mux (ADR-074) en mémoire : garde les octets reçus par URL, dans l'ordre ; `keepAtMost` simule un morceau
+// gardé en partie (308 avec un `Range` plus court), `unknownReceived` une réponse sans `Range` lisible.
+extension FakePartTransport: DirectUploadTransport {
+    func uploadChunk(_ data: Data, to url: URL, range: Range<Int>, total: Int, sent: @escaping @Sendable (Int) -> Void) async throws
+        -> DirectChunkResult
+    {
+        try state.withLock { state in
+            state.calls.append(url)
+            state.chunks.append(range)
+            if !state.errors.isEmpty { throw state.errors.removeFirst() }
+            sent(data.count)
+            var file = state.direct[url] ?? Data()
+            guard range.lowerBound <= file.count else { throw AppError.unexpected }
+            file = file.prefix(range.lowerBound)
+            let kept = state.keepAtMost.map { min($0, data.count) } ?? data.count
+            state.keepAtMost = nil
+            file.append(data.prefix(kept))
+            state.direct[url] = file
+            if file.count == total { return .complete }
+            return .incomplete(received: state.unknownReceived ? nil : file.count)
+        }
+    }
+
+    func receivedBytes(at url: URL, total: Int) async throws -> Int? {
+        state.withLock { state in
+            state.statusQueries += 1
+            return state.direct[url]?.count ?? 0
+        }
+    }
+
+    func directFile(_ url: String) -> Data? { state.withLock { $0.direct[URL(string: url)!] } }
+    var chunks: [Range<Int>] { state.withLock { $0.chunks } }
+    var statusQueries: Int { state.withLock { $0.statusQueries } }
 }
 
 // Stockage local des envois en mémoire. Les fichiers « choisis » sont déclarés par `addPickedFile`.
@@ -266,4 +310,18 @@ final class InMemoryPublishingPreferences: PublishingPreferences {
     func setDefaultVisibility(_ visibility: VideoVisibility) { state.withLock { $0 = visibility } }
     var saveToDevice: Bool { saving.withLock { $0 } }
     func setSaveToDevice(_ enabled: Bool) { saving.withLock { $0 = enabled } }
+}
+
+// Transport de test qui ne sait envoyer que des parties (pipeline maison) : l'envoi direct chez Mux (ADR-074) n'est pas
+// attendu.
+protocol PartsOnlyTransport: UploadPartTransport, DirectUploadTransport {}
+
+extension PartsOnlyTransport {
+    func uploadChunk(_ data: Data, to url: URL, range: Range<Int>, total: Int, sent: @escaping @Sendable (Int) -> Void) async throws
+        -> DirectChunkResult
+    {
+        throw AppError.unexpected
+    }
+
+    func receivedBytes(at url: URL, total: Int) async throws -> Int? { nil }
 }

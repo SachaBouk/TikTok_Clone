@@ -20,6 +20,7 @@ export class BullmqTranscodingQueue extends TranscodingQueue implements OnModule
         rawKey: job.rawKey,
         ...(job.coverKey ? { coverKey: job.coverKey } : {}),
         ...(job.maxDurationSeconds ? { maxDurationSeconds: job.maxDurationSeconds } : {}),
+        ...(job.coverOnly ? { coverOnly: true } : {}),
       },
       {
         // Un job par vidéo : une nouvelle publication pour une vidéo déjà dans la file est ignorée.

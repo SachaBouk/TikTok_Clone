@@ -3,7 +3,6 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
@@ -155,9 +154,9 @@ export class UploadedPartRequest {
 }
 
 export class CompleteUploadRequest {
-  @ApiProperty({ type: [UploadedPartRequest], minItems: 1, maxItems: MAX_PARTS })
+  // Vide pour un envoi direct chez Mux (ADR-074).
+  @ApiProperty({ type: [UploadedPartRequest], maxItems: MAX_PARTS })
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(MAX_PARTS)
   @ValidateNested({ each: true })
   @Type(() => UploadedPartRequest)

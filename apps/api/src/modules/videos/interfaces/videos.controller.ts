@@ -39,8 +39,9 @@ export class VideosController {
   @ApiCreatedResponse({
     type: VideoUploadResponse,
     description:
-      'Vidéo créée en `uploading`. Envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, ' +
-      'garder les en-têtes `ETag`, puis appeler `completeUpload`. Une partie en échec se renvoie sur la même URL tant qu’elle est valide.',
+      'Vidéo créée en `uploading`. `s3Multipart` : envoyer chaque partie (`partSize` octets, la dernière plus petite) en PUT sur son URL, ' +
+      'garder les en-têtes `ETag`, puis appeler `completeUpload`. Une partie en échec se renvoie sur la même URL tant qu’elle est valide. ' +
+      '`muxDirect` (ADR-074) : envoyer le fichier par morceaux sur `directUploadUrl`, puis `completeUpload` sans parties.',
   })
   @ApiBadRequestResponse({ type: ErrorResponse, description: 'Format non pris en charge ou fichier trop volumineux.' })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
@@ -67,7 +68,11 @@ export class VideosController {
   @Patch(':id/uploaded')
   @HttpCode(200)
   @ApiOkResponse({ type: VideoResponse, description: 'Upload assemblé : la vidéo passe en `processing` et le transcodage est lancé.' })
-  @ApiBadRequestResponse({ type: ErrorResponse, description: 'Parties manquantes ou ETags incorrects : renvoyer les parties, puis réessayer.' })
+  @ApiBadRequestResponse({
+    type: ErrorResponse,
+    description:
+      'Parties manquantes ou ETags incorrects : renvoyer les parties, puis réessayer. Mux (ADR-074) : fichier pas entièrement reçu, ou envoi perdu.',
+  })
   @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
   @ApiConflictResponse({ type: ErrorResponse, description: 'Upload déjà confirmé.' })
@@ -146,11 +151,11 @@ export class VideosController {
     await this.videos.deleteVideo(user.userId, id);
   }
 
-  // Public (mode invité) pour une vidéo `ready` ; l'auteur, connecté, voit aussi ses vidéos en cours de traitement.
+  // Public (mode invité) pour une vidéo `ready` et publique ; l'auteur, connecté, voit aussi ses vidéos en traitement et privées.
   @Public()
   @Get(':id')
   @ApiOkResponse({ type: VideoResponse })
-  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, ou pas encore prête et appartenant à un autre utilisateur.' })
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue, ou pas encore prête ou privée et appartenant à un autre utilisateur.' })
   async getVideo(@CurrentUser() user: AuthenticatedUser | undefined, @Param('id', new ParseUUIDPipe()) id: string): Promise<VideoDto> {
     return toVideoDto(await this.videos.getVideo(id, user?.userId ?? null));
   }
@@ -159,6 +164,8 @@ export class VideosController {
 function toUploadDto(upload: VideoUpload): VideoUploadDto {
   return {
     video: toVideoDto(upload.video),
+    method: upload.method,
+    ...(upload.directUploadUrl ? { directUploadUrl: upload.directUploadUrl } : {}),
     partSize: upload.partSize,
     parts: upload.parts.map((part) => ({ partNumber: part.partNumber, url: part.url })),
     expiresAt: upload.expiresAt.toISOString(),

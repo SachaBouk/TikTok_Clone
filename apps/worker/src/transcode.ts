@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TranscodeJobData } from '@repo/shared';
@@ -60,6 +60,34 @@ export async function transcode(
       thumbnailUrl: `${base}/thumbnail.jpg`,
       ...(sound ? { soundUrl: `${base}/sound.m4a`, soundDurationSeconds: media.durationSeconds } : {}),
     };
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+// Couverture seule d'une vidéo hébergée par Mux (ADR-074) : réencodée comme pour le pipeline maison, envoyée sous
+// `<videoId>/thumbnail.jpg`. Null si elle est absente ou illisible (la miniature de Mux reste).
+export async function transcodeCover(
+  job: TranscodeJobData,
+  config: WorkerConfig,
+  storage: VideoStorage,
+  toneMapping: boolean,
+): Promise<string | null> {
+  if (!job.coverKey) return null;
+  const options: FfmpegOptions = {
+    ffmpegPath: config.ffmpegPath,
+    ffprobePath: config.ffprobePath,
+    x264Preset: config.x264Preset,
+    timeoutMs: config.ffmpegTimeoutMs,
+    toneMapping,
+  };
+  const workDir = await mkdtemp(join(tmpdir(), `cover-${job.videoId}-`));
+  try {
+    const output = join(workDir, 'hls');
+    await mkdir(output);
+    if (!(await coverThumbnail(job.coverKey, workDir, join(output, 'thumbnail.jpg'), storage, options))) return null;
+    await storage.uploadHls(output, job.videoId);
+    return `${config.hlsPublicBaseUrl}/${job.videoId}/thumbnail.jpg`;
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

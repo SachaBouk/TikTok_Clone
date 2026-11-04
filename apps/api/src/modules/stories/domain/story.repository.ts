@@ -1,3 +1,4 @@
+import type { VideoProvider } from '../../videos/domain/video';
 import type { NewStory, Story, StoryAuthorSummary, StoryStats, StoryTranscodeOutcome, StoryView, StoryViewPosition } from './story';
 
 // Port des stories (ADR-051). Les lectures « actives » ne rendent que les stories `ready` dont `expires_at` est passé
@@ -5,6 +6,12 @@ import type { NewStory, Story, StoryAuthorSummary, StoryStats, StoryTranscodeOut
 export abstract class StoryRepository {
   abstract create(story: NewStory): Promise<Story>;
   abstract findById(id: string): Promise<Story | null>;
+  // Story Mux retrouvée par son envoi direct ou son asset (webhooks, ADR-074).
+  abstract findByMuxUpload(uploadId: string): Promise<Story | null>;
+  abstract findByMuxAsset(assetId: string): Promise<Story | null>;
+  // Asset Mux créé par l'envoi direct, puis identifiant de lecture. Null si la story n'existe plus.
+  abstract setMuxAsset(id: string, assetId: string): Promise<Story | null>;
+  abstract setMuxPlayback(id: string, playbackId: string): Promise<Story | null>;
   // Stories qui comptent dans la limite : en envoi, en traitement, ou publiées et pas expirées.
   abstract countActiveOrPending(userId: string, now: Date): Promise<number>;
   // Passe la story de `uploading` à `processing` (vidéo) et efface l'uploadId, de façon atomique ; null si elle n'est plus
@@ -37,7 +44,8 @@ export abstract class StoryRepository {
   // Maintenance et aperçus.
   abstract findExpired(now: Date, limit: number): Promise<Story[]>;
   abstract findUnpublishedCreatedBefore(createdBefore: Date, limit: number): Promise<Story[]>;
-  abstract findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Story[]>;
+  // Stories de l'hébergeur `provider` en traitement sans changement depuis `updatedBefore`.
+  abstract findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Story[]>;
   // Stories existantes parmi `ids`, quel que soit leur statut.
   abstract findByIds(ids: string[]): Promise<Story[]>;
 }

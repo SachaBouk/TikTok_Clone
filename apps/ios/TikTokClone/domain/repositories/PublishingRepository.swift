@@ -36,6 +36,16 @@ protocol UploadPartTransport: Sendable {
     func upload(_ data: Data, to url: URL, contentType: String?, sent: @escaping @Sendable (Int) -> Void) async throws -> String
 }
 
+// Port de l'envoi direct chez Mux (ADR-074) : morceaux successifs sur une seule URL (PUT avec `Content-Range`).
+protocol DirectUploadTransport: Sendable {
+    // Envoie `data`, octets `range` d'un fichier de `total` octets. Lève AppError.network (coupure : relire ce que Mux a
+    // reçu, puis reprendre) ou UploadFailure.restartNeeded (envoi expiré ou annulé).
+    func uploadChunk(_ data: Data, to url: URL, range: Range<Int>, total: Int, sent: @escaping @Sendable (Int) -> Void) async throws
+        -> DirectChunkResult
+    // Octets déjà reçus par Mux pour cet envoi (reprise après une coupure ou une relance) ; nil s'il ne le dit pas.
+    func receivedBytes(at url: URL, total: Int) async throws -> Int?
+}
+
 extension UploadPartTransport {
     func upload(_ data: Data, to url: URL, sent: @escaping @Sendable (Int) -> Void) async throws -> String {
         try await upload(data, to: url, contentType: nil, sent: sent)

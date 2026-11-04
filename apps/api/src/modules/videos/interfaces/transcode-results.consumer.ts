@@ -29,13 +29,19 @@ export class TranscodeResultsConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handle({ data }: Job<TranscodeResult>) {
+    // Couverture seule d'une vidéo Mux (ADR-074) : elle devient la miniature.
+    if (data.status === 'cover') {
+      if (!(await this.videos.applyCoverThumbnail(data.videoId, data.thumbnailUrl)))
+        this.logger.log(`Couverture ignorée pour ${data.videoId} (vidéo supprimée)`);
+      return;
+    }
     const applied = await this.videos.applyTranscodeResult(data.videoId, toOutcome(data));
     if (data.status === 'failed') this.logger.warn(`Transcodage en échec pour ${data.videoId} : ${data.reason}`);
     if (!applied) this.logger.log(`Résultat ignoré pour ${data.videoId} (vidéo plus en processing)`);
   }
 }
 
-function toOutcome(result: TranscodeResult): TranscodeOutcome {
+function toOutcome(result: Exclude<TranscodeResult, { status: 'cover' }>): TranscodeOutcome {
   if (result.status === 'failed') return { status: 'failed' };
   // Son réutilisable (ADR-064) : présent pour une vidéo qui a du son.
   const sound =

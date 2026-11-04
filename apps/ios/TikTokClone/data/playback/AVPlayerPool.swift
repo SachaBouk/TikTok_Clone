@@ -34,6 +34,8 @@ final class AVPlayerPool: VideoPlayback {
     @ObservationIgnored private var seekTargets: [String: CMTime] = [:]
     // Vidéos qui jouaient au début d'un glissement sur la barre de progression.
     @ObservationIgnored private var resumeAfterScrub: Set<String> = []
+    // Mesure de la qualité de lecture (Mux Data, ADR-074) : chaque lecteur, de sa création à sa libération.
+    @ObservationIgnored var monitor: (any PlaybackMonitor)?
 
     init() {
         // Le son joue même en mode silencieux, comme une app vidéo.
@@ -47,6 +49,7 @@ final class AVPlayerPool: VideoPlayback {
     func keepLoaded(_ videos: [FeedVideo]) {
         let keep = Set(videos.map(\.id))
         for (id, entry) in entries where !keep.contains(id) {
+            monitor?.stop(entry.player)
             entry.looper.disableLooping()
             entry.player.pause()
             entry.loops.invalidate()
@@ -67,6 +70,7 @@ final class AVPlayerPool: VideoPlayback {
                 Task { @MainActor in self?.lastLoopEnd = LoopEnd(videoID: id, count: count) }
             }
             entries[video.id] = Entry(player: player, looper: looper, loops: loops)
+            monitor?.start(player, video: MonitoredVideo(id: video.id, url: video.hlsURL))
         }
         if let currentID, !keep.contains(currentID) { self.currentID = nil }
     }

@@ -10,6 +10,8 @@ final class AppContainer {
     let session: SessionStore
     // Lecteurs vidéo partagés par les écrans qui lisent des vidéos (feed, vidéo seule, puis grilles).
     let playerPool = AVPlayerPool()
+    // Qualité de lecture (Mux Data, ADR-074) : nil sans clé d'environnement.
+    let playbackMonitor: (any PlaybackMonitor)?
     let router = AppRouter()
     // État des interactions partagé par tous les écrans vidéo (un like dans l'un se voit dans l'autre).
     let videoInteractions: VideoInteractionsModel
@@ -116,6 +118,16 @@ final class AppContainer {
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
         analytics = AnalyticsModel(service: analyticsService, preferences: UserDefaultsPreferencesStore())
+        // Mux Data (ADR-074) : seulement avec une clé d'environnement, et le même consentement que PostHog.
+        if let key = configuration.muxDataEnvironmentKey {
+            let monitor = MuxDataMonitor(environmentKey: key)
+            monitor.setEnabled(analytics.isEnabled)
+            analytics.consentChanged = { [weak monitor] granted in monitor?.setEnabled(granted) }
+            playerPool.monitor = monitor
+            playbackMonitor = monitor
+        } else {
+            playbackMonitor = nil
+        }
         playbackOptions = PlaybackOptionsModel(playback: playerPool, analytics: analytics)
         downloads = VideoDownloadModel(
             download: DownloadVideoUseCase(

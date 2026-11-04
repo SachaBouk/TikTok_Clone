@@ -40,6 +40,61 @@ struct URLSessionPartUploader: UploadPartTransport {
     }
 }
 
+// Envoi direct chez Mux (ADR-074) : chaque morceau en PUT sur la même URL, avec `Content-Range` ; Mux répond 308 tant
+// qu'il en manque (en-tête `Range` : octets gardés), 200 ou 201 une fois le fichier complet. Interroger : PUT vide avec
+// `Content-Range: bytes */<total>`.
+extension URLSessionPartUploader: DirectUploadTransport {
+    func uploadChunk(_ data: Data, to url: URL, range: Range<Int>, total: Int, sent: @escaping @Sendable (Int) -> Void) async throws
+        -> DirectChunkResult
+    {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(UploadRules.contentRange(range, total: total), forHTTPHeaderField: "Content-Range")
+        let http = try await send(request, data: data, sent: sent)
+        switch http.statusCode {
+        case 200, 201: return .complete
+        case 308: return .incomplete(received: UploadRules.receivedBytes(rangeHeader: http.value(forHTTPHeaderField: "Range")))
+        default: throw Self.failure(http.statusCode)
+        }
+    }
+
+    func receivedBytes(at url: URL, total: Int) async throws -> Int? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("bytes */\(total)", forHTTPHeaderField: "Content-Range")
+        let http = try await send(request, data: Data(), sent: { _ in })
+        switch http.statusCode {
+        case 200, 201: return total
+        case 308: return UploadRules.receivedBytes(rangeHeader: http.value(forHTTPHeaderField: "Range"))
+        default: throw Self.failure(http.statusCode)
+        }
+    }
+
+    private func send(_ request: URLRequest, data: Data, sent: @escaping @Sendable (Int) -> Void) async throws -> HTTPURLResponse {
+        let response: URLResponse
+        do {
+            (_, response) = try await session.upload(for: request, from: data, delegate: PartProgressDelegate(sent: sent))
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw AppError.network
+        }
+        guard let http = response as? HTTPURLResponse else { throw AppError.unexpected }
+        return http
+    }
+
+    // Envoi expiré, annulé ou inconnu (404, 410) : il faut repartir de zéro ; Mux indisponible : comme une coupure.
+    private static func failure(_ status: Int) -> any Error {
+        switch status {
+        case 404, 410: UploadFailure.restartNeeded
+        case 429, 500...: AppError.network
+        default: AppError.unexpected
+        }
+    }
+}
+
 // Progression de l'envoi d'une partie (octets envoyés).
 private final class PartProgressDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     let sent: @Sendable (Int) -> Void

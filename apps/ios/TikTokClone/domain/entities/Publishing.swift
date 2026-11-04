@@ -88,7 +88,8 @@ struct UploadExtras: Equatable, Sendable {
     var coverSize: Int?
 }
 
-// Réponse à la demande d'upload : une URL signée par partie, valable jusqu'à `expiresAt` (2 h).
+// Réponse à la demande d'upload : une URL signée par partie, valable jusqu'à `expiresAt` (2 h). Envoi direct chez Mux
+// (ADR-074) : `directUploadURL`, une seule URL, et pas de parties.
 struct UploadTicket: Codable, Equatable, Sendable {
     struct Part: Codable, Equatable, Sendable {
         let number: Int
@@ -102,6 +103,15 @@ struct UploadTicket: Codable, Equatable, Sendable {
     let expiresAt: Date
     // Couverture demandée (ADR-065) : un seul PUT du JPEG, `Content-Type: image/jpeg`.
     var coverURL: URL?
+    // Envoi direct chez Mux (ADR-074) : le fichier part par morceaux de `partSize` octets sur cette URL.
+    var directUploadURL: URL?
+}
+
+// Réponse de Mux à un morceau d'un envoi direct (ADR-074) : il en faut encore (octets reçus en tout, si Mux les donne), ou
+// le fichier est complet.
+enum DirectChunkResult: Equatable, Sendable {
+    case incomplete(received: Int?)
+    case complete
 }
 
 // Partie reçue par le stockage : son numéro et l'en-tête `ETag` de la réponse au PUT, tel quel.
@@ -141,10 +151,13 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var coverSent = false
     // « Autoriser le téléchargement » (ADR-067).
     var downloadsEnabled = true
+    // Envoi direct chez Mux (ADR-074) : octets confirmés par Mux, d'où l'envoi reprend.
+    var directSentBytes = 0
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
         guard let ticket else { return 0 }
+        if ticket.directUploadURL != nil { return directSentBytes }
         return sentParts.keys.reduce(0) { total, number in
             total + UploadRules.range(ofPart: number, partSize: ticket.partSize, fileSize: fileSize).count
         }
@@ -158,13 +171,13 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
 extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
         case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
-        case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent, downloadsEnabled
+        case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent, downloadsEnabled, directSentBytes
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
     // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés ; avant l'ADR-064, son
     // partagé, sans son repris ; avant l'ADR-065, sans étiquette IA, lieu ni couverture ; avant l'ADR-067, téléchargement
-    // autorisé.
+    // autorisé ; avant l'ADR-074, rien d'envoyé chez Mux.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -187,7 +200,8 @@ extension PendingUpload {
             coverFileName: try container.decodeIfPresent(String.self, forKey: .coverFileName),
             coverSize: try container.decodeIfPresent(Int.self, forKey: .coverSize),
             coverSent: try container.decodeIfPresent(Bool.self, forKey: .coverSent) ?? false,
-            downloadsEnabled: try container.decodeIfPresent(Bool.self, forKey: .downloadsEnabled) ?? true
+            downloadsEnabled: try container.decodeIfPresent(Bool.self, forKey: .downloadsEnabled) ?? true,
+            directSentBytes: try container.decodeIfPresent(Int.self, forKey: .directSentBytes) ?? 0
         )
     }
 }
@@ -230,6 +244,20 @@ enum UploadRules {
 
     static func isAbandoned(_ upload: PendingUpload, at now: Date) -> Bool {
         now.timeIntervalSince(upload.createdAt) >= abandonedAfter
+    }
+
+    // En-tête `Content-Range` d'un morceau d'envoi direct chez Mux (ADR-074) : octets `range` sur `total`.
+    static func contentRange(_ range: Range<Int>, total: Int) -> String {
+        "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(total)"
+    }
+
+    // Octets reçus d'après l'en-tête `Range` d'une réponse 308 de Mux (`bytes=0-1048575` → 1 048 576) ; sans en-tête, rien
+    // n'a été gardé (0) ; illisible : nil.
+    static func receivedBytes(rangeHeader: String?) -> Int? {
+        guard let rangeHeader else { return 0 }
+        let parts = rangeHeader.replacingOccurrences(of: "bytes=", with: "").split(separator: "-")
+        guard parts.count == 2, Int(parts[0]) == 0, let last = Int(parts[1]), last >= 0 else { return nil }
+        return last + 1
     }
 }
 

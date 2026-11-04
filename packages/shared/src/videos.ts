@@ -34,6 +34,10 @@ export interface VideoDto {
   createdAt: string;
 }
 
+// Comment envoyer le fichier (ADR-074) : `s3Multipart` (une URL signée par partie, pipeline maison) ou `muxDirect` (une
+// seule URL d'envoi direct chez Mux, PUT par morceaux de `partSize` octets avec `Content-Range`).
+export type UploadMethod = 's3Multipart' | 'muxDirect';
+
 // URL signée pour envoyer une partie directement au stockage (PUT, ADR-007).
 export interface UploadPartUrlDto {
   partNumber: number;
@@ -42,6 +46,9 @@ export interface UploadPartUrlDto {
 
 export interface VideoUploadDto {
   video: VideoDto;
+  method: UploadMethod;
+  // `muxDirect` (ADR-074) : URL d'envoi direct ; `parts` est alors vide.
+  directUploadUrl?: string;
   // Taille de chaque partie en octets (la dernière peut être plus petite).
   partSize: number;
   parts: UploadPartUrlDto[];

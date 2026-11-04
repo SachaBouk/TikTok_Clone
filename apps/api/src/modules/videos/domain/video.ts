@@ -5,14 +5,30 @@ export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'failed';
 export type VideoVisibility = 'public' | 'private';
 export const VIDEO_VISIBILITIES: VideoVisibility[] = ['public', 'private'];
 
+// Hébergeur (ADR-074) : pipeline maison (MinIO, worker FFmpeg) ou Mux, retenu à l'envoi et gardé par la vidéo.
+export type VideoProvider = 'local' | 'mux';
+
+// Lecture d'une vidéo Mux : identifiant de lecture, signé (jeton dans les URLs) pour une vidéo privée (ADR-061). Les URLs
+// gardées en base sont celles sans jeton ; le service y ajoute le jeton à chaque lecture.
+export interface MuxPlayback {
+  muxPlaybackId?: string | null;
+  muxSigned?: boolean;
+}
+
 export interface Video {
   id: string;
   userId: string;
   description: string | null;
-  // Clé de l'objet brut dans le bucket des uploads.
+  // Clé de l'objet brut dans le bucket des uploads. Vidéo Mux (ADR-074) : jamais écrite, elle situe la couverture.
   rawKey: string;
-  // Upload multipart en cours ; nul une fois l'upload terminé.
+  // Upload multipart en cours ; nul une fois l'upload terminé (toujours nul pour une vidéo Mux).
   uploadId: string | null;
+  provider: VideoProvider;
+  // Mux (ADR-074) : envoi direct, puis asset et identifiant de lecture (signé pour une vidéo privée). Jamais exposés.
+  muxUploadId: string | null;
+  muxAssetId: string | null;
+  muxPlaybackId: string | null;
+  muxSigned: boolean;
   // Taille déclarée du fichier brut, en octets.
   rawSize: number;
   status: VideoStatus;
@@ -40,7 +56,7 @@ export interface Video {
 }
 
 // Vidéo publiée (`ready`), telle que diffusée dans le feed : lecture HLS et compteurs dénormalisés (ADR-006).
-export interface PublishedVideo {
+export interface PublishedVideo extends MuxPlayback {
   id: string;
   userId: string;
   description: string | null;
@@ -67,7 +83,7 @@ export interface PublishedVideo {
 }
 
 // Vidéo vue par le backoffice (ADR-004) : quel que soit son statut, avec ses compteurs.
-export interface VideoDetails {
+export interface VideoDetails extends MuxPlayback {
   id: string;
   userId: string;
   description: string | null;
@@ -122,11 +138,18 @@ export type TranscodeOutcome =
   { status: 'ready'; hlsUrl: string; thumbnailUrl: string; sound?: { audioUrl: string; durationMs: number } } | { status: 'failed' };
 
 export interface NewVideo {
+  // Choisi par le service pour une vidéo Mux (`passthrough`, ADR-074) ; sinon généré par la base.
+  id?: string;
   userId: string;
   description: string | null;
   rawKey: string;
-  uploadId: string;
+  // Upload multipart S3 (pipeline maison) ; nul pour une vidéo Mux.
+  uploadId: string | null;
   rawSize: number;
+  // Pipeline maison par défaut ; Mux : identifiant de l'envoi direct, identifiant de lecture signé ou non.
+  provider?: VideoProvider;
+  muxUploadId?: string | null;
+  muxSigned?: boolean;
   // Publique par défaut (ADR-061).
   visibility?: VideoVisibility;
   // Autorisés par défaut (ADR-062).

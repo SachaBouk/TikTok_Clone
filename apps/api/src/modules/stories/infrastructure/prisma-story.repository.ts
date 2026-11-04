@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
+import type { VideoProvider } from '../../videos/domain/video';
 import type { NewStory, Story, StoryAuthorSummary, StoryStats, StoryTranscodeOutcome, StoryView, StoryViewPosition } from '../domain/story';
 import { StoryRepository } from '../domain/story.repository';
 
@@ -11,6 +12,10 @@ const storySelect = {
   rawKey: true,
   uploadId: true,
   rawSize: true,
+  provider: true,
+  muxUploadId: true,
+  muxAssetId: true,
+  muxPlaybackId: true,
   mediaUrl: true,
   thumbnailUrl: true,
   createdAt: true,
@@ -33,6 +38,24 @@ export class PrismaStoryRepository extends StoryRepository {
 
   findById(id: string): Promise<Story | null> {
     return this.prisma.story.findUnique({ where: { id }, select: storySelect });
+  }
+
+  findByMuxUpload(uploadId: string): Promise<Story | null> {
+    return this.prisma.story.findUnique({ where: { muxUploadId: uploadId }, select: storySelect });
+  }
+
+  findByMuxAsset(assetId: string): Promise<Story | null> {
+    return this.prisma.story.findUnique({ where: { muxAssetId: assetId }, select: storySelect });
+  }
+
+  async setMuxAsset(id: string, assetId: string): Promise<Story | null> {
+    const [story] = await this.prisma.story.updateManyAndReturn({ where: { id }, data: { muxAssetId: assetId }, select: storySelect });
+    return story ?? null;
+  }
+
+  async setMuxPlayback(id: string, playbackId: string): Promise<Story | null> {
+    const [story] = await this.prisma.story.updateManyAndReturn({ where: { id }, data: { muxPlaybackId: playbackId }, select: storySelect });
+    return story ?? null;
   }
 
   countActiveOrPending(userId: string, now: Date): Promise<number> {
@@ -180,9 +203,9 @@ export class PrismaStoryRepository extends StoryRepository {
     });
   }
 
-  findStuckTranscodes(updatedBefore: Date, limit: number): Promise<Story[]> {
+  findStuckTranscodes(updatedBefore: Date, limit: number, provider: VideoProvider): Promise<Story[]> {
     return this.prisma.story.findMany({
-      where: { status: 'processing', updatedAt: { lt: updatedBefore } },
+      where: { status: 'processing', provider, updatedAt: { lt: updatedBefore } },
       orderBy: { updatedAt: 'asc' },
       take: limit,
       select: storySelect,
