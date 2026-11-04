@@ -115,7 +115,7 @@ xcodebuild -project TikTokClone.xcodeproj -scheme TikTokClone \
 `scripts/test.sh` lit le résultat sur la ligne de fin de `xcodebuild` (`** TEST SUCCEEDED/FAILED **`) et l'arrête 60 s après s'il reste bloqué (piège rencontré). Variables : `DERIVED_DATA_PATH` (défaut `build/DerivedData`, ignoré par git), `SPM_DIR`, `RESULT_BUNDLE_PATH`, `TEST_LOG`, `IOS_DESTINATION`.
 Piège rencontré : `~/Documents` est synchronisé par iCloud (File Provider), qui pose parfois des attributs Finder sur les dossiers du build ; la signature du bundle de tests échoue alors (« resource fork, Finder information, or similar detritus not allowed »). Construire hors de `Documents` : `DERIVED_DATA_PATH=$HOME/Library/Developer/Xcode/DerivedData/TikTokClone-cli scripts/test.sh`.
 
-Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clone (privé).
+Git : branche `main`, remote `origin` = https://github.com/SachaBouk/TikTok_Clone (public).
 
 CI GitHub Actions (`.github/workflows/ci.yml`), à chaque push sur `main` et sur chaque pull request, sans secret :
 - `verify` : `pnpm install --frozen-lockfile`, `typecheck`, `lint`, `format:check` (ADR-041), `test` (FFmpeg de la distribution Ubuntu pour le worker), `build`, `openapi:check` ;
