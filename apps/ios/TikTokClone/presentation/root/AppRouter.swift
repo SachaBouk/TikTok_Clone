@@ -116,6 +116,56 @@ final class AppRouter {
         }
     }
 
+    // Liste des conversations de l'onglet Messages à l'écran (posé par MainTabView) : pas de bandeau de message (ADR-078).
+    var isInboxListShown = false
+
+    // Page d'un onglet ouverte par un bandeau (ADR-078) : l'onglet est choisi, sa pile vidée puis la page poussée
+    // (MainTabView), après la fermeture des écrans par-dessus.
+    struct TabRequest: Identifiable, Equatable {
+        enum Page: Equatable {
+            case conversation(Conversation)
+            case activity
+            case publications
+        }
+
+        let id = UUID()
+        let page: Page
+        // Un écran plein écran ou une feuille vient d'être fermé : attendre la fin de l'animation.
+        let afterDismissal: Bool
+    }
+
+    var tabRequest: TabRequest?
+
+    // Toucher d'un bandeau (ADR-078). `me` : son compte, pour ses stories.
+    func open(_ target: InAppBanner.Target, me: UserSummary?) {
+        switch target {
+        case .video(let id):
+            presentedVideo = VideoRoute(id: id)
+        case .profile(let username):
+            presentedProfile = ProfileSheetRoute(username: username)
+        case .live(let id):
+            openLive(id, source: .activity)
+        case .ownStories:
+            if let me { openStories([me], source: .profile) }
+        case .conversation(let conversation):
+            openTab(.conversation(conversation))
+        case .activity:
+            openTab(.activity)
+        case .publications:
+            openTab(.publications)
+        }
+    }
+
+    private func openTab(_ page: TabRequest.Page) {
+        let covered = presentedVideo != nil || presentedStories != nil || presentedProfile != nil || presentedCollection != nil
+        presentedVideo = nil
+        presentedStories = nil
+        presentedProfile = nil
+        presentedCollection = nil
+        isProfileMenuOpen = false
+        tabRequest = TabRequest(page: page, afterDismissal: covered)
+    }
+
     // Onboarding animé affiché (ADR-075) : plein écran du premier lancement, ou fin du parcours dans la feuille d'un
     // invité. Le feed chargé derrière ne doit pas jouer (son par-dessus l'onboarding, bug rencontré).
     var isOnboardingShown = false

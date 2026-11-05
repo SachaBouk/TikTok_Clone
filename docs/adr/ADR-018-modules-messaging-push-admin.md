@@ -38,3 +38,4 @@ Précisions sur les frontières :
 - ADR-022 — Temps réel : protocole
 - Complété par [ADR-058](ADR-058-onglet-messages.md) — Onglet « Messages » : activité filtrée, nouveaux followers, comptes suggérés, recherche dans les messages
 - Complété par [ADR-059](ADR-059-chats-de-groupe.md) — Chats de groupe
+- Complété par [ADR-078](ADR-078-notifications-dans-l-app.md) — Notifications dans l'app : bandeaux à partir du temps réel

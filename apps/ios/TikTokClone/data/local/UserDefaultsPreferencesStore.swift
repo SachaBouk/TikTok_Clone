@@ -21,6 +21,8 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let onboardingAnswers = "onboardingAnswers"
         static let defaultVideoVisibility = "defaultVideoVisibility"
         static let saveToDevice = "saveToDevice"
+        static let experimentAssignments = "experimentAssignments"
+        static let disabledBannerCategories = "disabledBannerCategories"
     }
 
     var analyticsConsent: Bool? {
@@ -71,6 +73,39 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
             }
         }
     #endif
+}
+
+// Groupes des expériences A/B tirés sur cet appareil (ADR-077).
+extension UserDefaultsPreferencesStore {
+    var experimentAssignments: [String: String] {
+        defaults.dictionary(forKey: Key.experimentAssignments) as? [String: String] ?? [:]
+    }
+
+    func setExperimentAssignment(_ variant: String, of flag: String) {
+        var assignments = experimentAssignments
+        assignments[flag] = variant
+        defaults.set(assignments, forKey: Key.experimentAssignments)
+    }
+
+    func clearExperimentAssignments() {
+        defaults.removeObject(forKey: Key.experimentAssignments)
+        defaults.removeObject(forKey: Key.guestPromptDecided)
+    }
+}
+
+// Sortes de bandeaux coupées (ADR-078) : sur l'appareil seulement.
+extension UserDefaultsPreferencesStore: InAppBannerSettingsStore {
+    var disabledBannerCategories: Set<InAppBannerCategory> {
+        Set((defaults.stringArray(forKey: Key.disabledBannerCategories) ?? []).compactMap(InAppBannerCategory.init(rawValue:)))
+    }
+
+    func setDisabledBannerCategories(_ categories: Set<InAppBannerCategory>) {
+        if categories.isEmpty {
+            defaults.removeObject(forKey: Key.disabledBannerCategories)
+        } else {
+            defaults.set(categories.map(\.rawValue).sorted(), forKey: Key.disabledBannerCategories)
+        }
+    }
 }
 
 // Historique des recherches (ADR-049) : sur l'appareil seulement.

@@ -78,6 +78,8 @@
 | [ADR-074](ADR-074-mux-video-data.md) | Mux Video et Mux Data, au choix à côté du pipeline maison (complète ADR-007, ADR-008, ADR-012, ADR-013, ADR-015, ADR-040, ADR-051 et ADR-061) | Accepté |
 | [ADR-075](ADR-075-onboarding-anime.md) | Onboarding animé : mascotte Tempo, questions, tutoriels interactifs, sons synthétisés, vibrations, paywall « Plus » (complète ADR-055, ADR-073 et ADR-013) | Proposé |
 | [ADR-076](ADR-076-accessibilite-voiceover.md) | Accessibilité VoiceOver : vidéo, stories, messages et éditeur parcourables les yeux fermés, texte alternatif des vidéos et description automatique (complète ADR-002, ADR-016, ADR-052, ADR-062, ADR-065 et ADR-006) | Proposé |
+| [ADR-077](ADR-077-experiences-ab.md) | Expériences A/B : catalogue, groupe gardé sur l'appareil, variantes forcées en Debug (complète ADR-013 et ADR-024) | Proposé |
+| [ADR-078](ADR-078-notifications-dans-l-app.md) | Notifications dans l'app : bandeaux en haut de l'écran, à partir du temps réel (complète ADR-011, ADR-022 et ADR-018) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

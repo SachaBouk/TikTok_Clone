@@ -38,3 +38,4 @@ L'ADR-011 fixe le WebSocket natif, l'authentification au handshake, la reconnexi
 - Complété par [ADR-043](ADR-043-notifications-supprimees-en-direct.md) — Notifications supprimées annoncées en direct
 - Complété par [ADR-044](ADR-044-renvoi-message-identifiant-envoi.md) — Renvoi d'un message en échec : identifiant d'envoi
 - Complété par [ADR-045](ADR-045-compteurs-profil-en-direct.md) — Compteurs de son profil en direct
+- Complété par [ADR-078](ADR-078-notifications-dans-l-app.md) — Notifications dans l'app : bandeaux à partir du temps réel

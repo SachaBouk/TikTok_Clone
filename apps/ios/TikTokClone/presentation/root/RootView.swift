@@ -19,6 +19,8 @@ struct RootView: View {
                 content
             }
         }
+        // Bandeaux de notification dans l'app (ADR-078), dans leur propre fenêtre au-dessus de tout.
+        .background(InAppBannerWindowInstaller(container: container))
         .task { await session.restore() }
         .task {
             try? await Task.sleep(for: LaunchView.minimumDuration)

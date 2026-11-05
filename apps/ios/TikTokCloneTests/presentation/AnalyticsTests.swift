@@ -123,7 +123,7 @@ struct AnalyticsModelTests {
 
         service.flags[GuestPromptExperiment.flag] = GuestPromptExperiment.promptVariant
         #expect(model.shouldPromptGuest())
-        #expect(service.eventNames == ["guest_prompt_shown"])
+        #expect(service.eventNames == ["experiment_exposed", "guest_prompt_shown"])
         #expect(!model.shouldPromptGuest())
 
         let control = FakeAnalyticsService()
@@ -131,7 +131,7 @@ struct AnalyticsModelTests {
         let controlModel = makeAnalytics(control)
         #expect(!controlModel.shouldPromptGuest())
         #expect(control.flagReads == [GuestPromptExperiment.flag])
-        #expect(control.events.isEmpty)
+        #expect(control.eventNames == ["experiment_exposed"])
     }
 
     @Test("sans consentement : pas d'expérience (groupe témoin), le flag n'est pas lu")

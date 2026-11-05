@@ -43,6 +43,7 @@ final class FakeAnalyticsService: AnalyticsService {
 final class InMemoryPreferencesStore: PreferencesStore {
     private let state: Mutex<(consent: Bool?, guestPromptDecided: Bool, onboardingCompleted: Bool, feedSwipeHintShown: Bool)>
     private let answers = Mutex(OnboardingAnswers())
+    private let assignments = Mutex([String: String]())
 
     init(consent: Bool? = nil, onboardingCompleted: Bool = false, feedSwipeHintShown: Bool = false) {
         state = Mutex((consent, false, onboardingCompleted, feedSwipeHintShown))
@@ -58,13 +59,24 @@ final class InMemoryPreferencesStore: PreferencesStore {
     func markFeedSwipeHintShown() { state.withLock { $0.feedSwipeHintShown = true } }
     var onboardingAnswers: OnboardingAnswers { answers.withLock { $0 } }
     func setOnboardingAnswers(_ answers: OnboardingAnswers) { self.answers.withLock { $0 = answers } }
+    var experimentAssignments: [String: String] { assignments.withLock { $0 } }
+    func setExperimentAssignment(_ variant: String, of flag: String) { assignments.withLock { $0[flag] = variant } }
+    func clearExperimentAssignments() { assignments.withLock { $0 = [:] } }
+}
+
+// Variantes forcées (écran « Expériences » du build Debug), en mémoire.
+final class InMemoryExperimentOverrides: ExperimentOverrides {
+    private let forced = Mutex([String: String]())
+
+    func forcedVariant(of flag: String) -> String? { forced.withLock { $0[flag] } }
+    func setForcedVariant(_ variant: String?, of flag: String) { forced.withLock { $0[flag] = variant } }
 }
 
 // Mesure d'audience acceptée, avec un service simulé.
 @MainActor
 func makeAnalytics(
     _ service: FakeAnalyticsService = FakeAnalyticsService(), consent: Bool? = true,
-    preferences: InMemoryPreferencesStore? = nil
+    preferences: InMemoryPreferencesStore? = nil, overrides: InMemoryExperimentOverrides = InMemoryExperimentOverrides()
 ) -> AnalyticsModel {
-    AnalyticsModel(service: service, preferences: preferences ?? InMemoryPreferencesStore(consent: consent))
+    AnalyticsModel(service: service, preferences: preferences ?? InMemoryPreferencesStore(consent: consent), overrides: overrides)
 }

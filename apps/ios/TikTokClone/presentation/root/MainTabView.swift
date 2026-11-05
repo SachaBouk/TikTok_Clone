@@ -181,6 +181,29 @@ struct MainTabView: View {
             ProfileMenuOverlay(isOpen: $router.isProfileMenuOpen) { route in profilePath.append(route) }
         }
         .onChange(of: selection) { router.isProfileMenuOpen = false }
+        // Bandeau touché (ADR-078) : son onglet, pile vidée, puis sa page.
+        .onChange(of: router.tabRequest) { _, request in
+            guard let request else { return }
+            Task {
+                if request.afterDismissal { try? await Task.sleep(for: .milliseconds(600)) }
+                guard router.tabRequest?.id == request.id else { return }
+                router.tabRequest = nil
+                switch request.page {
+                case .conversation(let conversation):
+                    selection = .inbox
+                    inboxPath = NavigationPath()
+                    inboxPath.append(ConversationRoute(conversation))
+                case .activity:
+                    selection = .inbox
+                    inboxPath = NavigationPath()
+                    inboxPath.append(InboxView.Route.activity)
+                case .publications:
+                    selection = .profile
+                    profilePath = NavigationPath()
+                    profilePath.append(AccountRoute.publications)
+                }
+            }
+        }
         .onChange(of: router.isHomeRefreshing) { _, refreshing in
             if refreshing { startIconAnimation(.home) }
         }

@@ -21,6 +21,8 @@ final class AppContainer {
     let activity: ActivityModel
     // Messagerie : badges, conversations et demandes, suivis en direct.
     let messaging: MessagingModel
+    // Notifications dans l'app (ADR-078) : bandeaux en haut de l'écran, à partir du temps réel.
+    let banners: InAppBannerModel
     let realtime: RealtimeCoordinator
     // Mesure d'audience et tests A/B (ADR-013), après consentement.
     let analytics: AnalyticsModel
@@ -121,7 +123,8 @@ final class AppContainer {
         let analyticsService: any AnalyticsService =
             configuration.analytics.map { PostHogAnalyticsService(configuration: $0) }
             ?? LoggingAnalyticsService()
-        analytics = AnalyticsModel(service: analyticsService, preferences: UserDefaultsPreferencesStore())
+        analytics = AnalyticsModel(
+            service: analyticsService, preferences: UserDefaultsPreferencesStore(), overrides: UserDefaultsExperimentOverrides())
         // Mux Data (ADR-074) : seulement avec une clé d'environnement, et le même consentement que PostHog.
         if let key = configuration.muxDataEnvironmentKey {
             let monitor = MuxDataMonitor(environmentKey: key)
@@ -213,9 +216,23 @@ final class AppContainer {
             loadStatus: LoadPlusStatusUseCase(plus: RemotePlusRepository(client: client)), purchases: purchases, session: session,
             analytics: analytics)
         plus.onStatusApplied = { isPlus in AppIconReset.applyIfNeeded(isPlus: isPlus) }
+        banners = InAppBannerModel(
+            settings: UserDefaultsPreferencesStore(), ownID: { [session] in session.profile?.id },
+            resolveConversation: { [messaging] id in
+                if let conversation = messaging.loadedConversation(id) { return conversation }
+                return await messaging.fetchConversation(id)
+            })
         realtime = RealtimeCoordinator(
             channel: channel, publishing: publishing, activity: activity, messaging: messaging, wallet: wallet, stories: stories,
-            ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)), plus: plus)
+            ownProfile: OwnProfileSync(session: session, getMyProfile: GetMyProfileUseCase(profiles: profiles)), plus: plus,
+            banners: banners)
+        banners.context = { [router, onboarding, messaging, activity] in
+            InAppBannerContext(
+                isOnboardingShown: router.isOnboardingShown || onboarding.isPresented, isCreating: router.presentedCreation != nil,
+                isWatchingLive: router.presentedLive != nil, openConversationIDs: messaging.openConversationIDs,
+                isInboxListShown: router.isInboxListShown, isActivityShown: activity.isVisible)
+        }
+        banners.onShow = { banner in InAppBannerFeedback.play(for: banner) }
     }
 
     // RevenueCat avec une clé (Config/Local.xcconfig) ; sinon achats indisponibles. En Debug, `-fakePurchases`
@@ -251,6 +268,7 @@ final class AppContainer {
         }
         realtime.update(signedIn: signedIn, active: active)
         Task { await publishing.update(signedIn: signedIn, active: active) }
+        if !signedIn || !active { banners.reset() }
         if !signedIn {
             activity.reset()
             messaging.reset()

@@ -98,6 +98,11 @@ struct AccountSettingsView: View {
                     Label("Centres d’intérêt", systemImage: "heart.text.square.fill")
                 }
                 .accessibilityIdentifier("settings.interests")
+                // Bandeaux dans l'app (ADR-078).
+                NavigationLink(value: AccountRoute.notifications) {
+                    Label("Notifications", systemImage: "bell.badge.fill")
+                }
+                .accessibilityIdentifier("settings.notifications")
                 // Icônes au choix des abonnés « Plus » (ADR-073).
                 NavigationLink(value: AccountRoute.appIcon) {
                     Label("Icône de l’app", systemImage: "app.badge.fill")
@@ -166,6 +171,16 @@ struct AccountSettingsView: View {
                     Button("Se déconnecter", role: .destructive) { Task { await viewModel.signOut() } }
                 }
             }
+            #if DEBUG
+                Section("Développement") {
+                    NavigationLink {
+                        ExperimentsDebugView()
+                    } label: {
+                        Label("Expériences", systemImage: "flask")
+                    }
+                    .accessibilityIdentifier("settings.experiments")
+                }
+            #endif
         }
         .labelStyle(SettingsLabelStyle())
         .navigationBarTitleDisplayMode(.inline)

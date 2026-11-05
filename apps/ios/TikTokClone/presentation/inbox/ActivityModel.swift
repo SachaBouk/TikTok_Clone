@@ -30,7 +30,8 @@ final class ActivityModel {
     private let session: SessionStore
     private let markReadDelay: Duration
     // Centre d'activité affiché (onglet sélectionné, app au premier plan).
-    private var isVisible = false
+    // Centre d'activité à l'écran (marquage lu ; pas de bandeau d'activité pendant ce temps, ADR-078).
+    private(set) var isVisible = false
     private var markTask: Task<Void, Never>?
     // Plus récente notification déjà marquée lue : pas de nouvel appel pour la même.
     private var lastMarkedID: String?

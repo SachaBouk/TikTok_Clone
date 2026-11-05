@@ -216,6 +216,12 @@ extension AnalyticsEvent {
             properties: ["count": .int(codes.count), "skipped": .bool(skipped), "interests": .string(codes.joined(separator: ","))])
     }
 
+    // Expérience A/B (ADR-077) : groupe tiré sur cet appareil, une fois par expérience et par installation, au moment où
+    // il change ce que l'utilisateur voit (en plus de `$feature_flag_called`, envoyé par le SDK à chaque lecture).
+    static func experimentExposed(_ experiment: Experiment, variant: String) -> AnalyticsEvent {
+        AnalyticsEvent(name: "experiment_exposed", properties: ["experiment": .string(experiment.flag), "variant": .string(variant)])
+    }
+
     // Expérience « invitation invité » : invitation affichée (variante seulement).
     static let guestPromptShown = AnalyticsEvent(name: "guest_prompt_shown", properties: [:])
 

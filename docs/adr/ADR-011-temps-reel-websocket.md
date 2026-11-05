@@ -30,3 +30,4 @@ Ces flux nécessitent une connexion persistante, séparée du flux REST.
 - Complété par [ADR-022](ADR-022-temps-reel-protocole.md) — Temps réel : protocole
 - Complété par [ADR-043](ADR-043-notifications-supprimees-en-direct.md) — Notifications supprimées annoncées en direct
 - Complété par [ADR-045](ADR-045-compteurs-profil-en-direct.md) — Compteurs de son profil en direct
+- Complété par [ADR-078](ADR-078-notifications-dans-l-app.md) — Notifications dans l'app : bandeaux à partir du temps réel

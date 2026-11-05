@@ -34,3 +34,4 @@ L'ADR-013 retient PostHog (événements, feature flags, A/B) et laisse ouvert l'
 ## Liens
 - ADR-013 — Analytics et A/B testing avec PostHog
 - ADR-015 — Hébergement
+- Complété par [ADR-077](ADR-077-experiences-ab.md) — Expériences A/B : catalogue, groupe gardé, variantes forcées en Debug

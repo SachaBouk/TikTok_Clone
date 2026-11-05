@@ -236,7 +236,7 @@ struct FeedView: View {
         .accessibilityIdentifier("feed.pages")
         .overlay {
             // Au-dessus des pages, sous l'onboarding : attend la fin de celui-ci pour être vue.
-            if showsSwipeHint, container.onboarding.showsFeedSwipeHint, isTabActive, !container.onboarding.isPresented {
+            if wantsSwipeHint, container.onboarding.isFeedSwipeHintAllowed {
                 FeedSwipeHint {
                     container.onboarding.feedSwipeHintSeen()
                 } next: {
@@ -250,6 +250,16 @@ struct FeedView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: container.onboarding.showsFeedSwipeHint)
+        // Expérience « feed-swipe-hint » (ADR-077) : groupe tiré quand l'indication s'afficherait, une fois la question
+        // du consentement tranchée (sinon tout le monde serait témoin au premier lancement).
+        .task(id: wantsSwipeHint && container.analytics.consent != nil) {
+            guard wantsSwipeHint, container.analytics.consent != nil else { return }
+            await container.onboarding.decideFeedSwipeHint { await container.analytics.decideWhenLoaded(Experiments.feedSwipeHint).variant }
+        }
+    }
+
+    private var wantsSwipeHint: Bool {
+        showsSwipeHint && container.onboarding.showsFeedSwipeHint && isTabActive && !container.onboarding.isPresented
     }
 
     private func videoPage(_ entry: FeedViewModel.Entry, bottomInset: CGFloat) -> some View {

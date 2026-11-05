@@ -10,12 +10,14 @@ struct SuggestionCarouselTests {
 
     private func ids(_ count: Int, from start: Int = 1) -> [String] { (start..<(start + count)).map { "v\($0)" } }
 
-    private func makeViewModel(_ pages: [Result<FeedPage, AppError>], mode: FeedViewModel.Mode = .endlessFeed) async -> FeedViewModel {
+    private func makeViewModel(
+        _ pages: [Result<FeedPage, AppError>], mode: FeedViewModel.Mode = .endlessFeed, analytics: AnalyticsModel? = nil
+    ) async -> FeedViewModel {
         let session = makeSession(auth: FakeAuthRepository(hasSession: true))
         await session.restore()
         return FeedViewModel(
             loadPage: LoadFeedPageUseCase(feed: FakeFeedRepository(pages)), recordView: RecordViewUseCase(history: FakeViewHistoryRepository()),
-            playback: playback, session: session, analytics: makeAnalytics(), mode: mode, viewDelay: .milliseconds(20))
+            playback: playback, session: session, analytics: analytics ?? makeAnalytics(), mode: mode, viewDelay: .milliseconds(20))
     }
 
     private func suggestion(followsYou: Bool = false, followedBy: [String] = [], count: Int = 0) -> AccountSuggestion {
@@ -84,6 +86,23 @@ struct SuggestionCarouselTests {
             return
         }
         if case .video(let entry) = viewModel.pages[7] { #expect(entry.video.id == "v8") }
+    }
+
+    @Test("expérience « suggestion-carousel-slot » : variante after-4 → carrousel après la 4e vidéo, puis la 34e ; exposé")
+    func earlySlot() async {
+        #expect(SuggestionCarouselRules.isSlot(afterVideo: 4, firstSlot: 4))
+        #expect(SuggestionCarouselRules.isSlot(afterVideo: 34, firstSlot: 4))
+        #expect(!SuggestionCarouselRules.isSlot(afterVideo: 8, firstSlot: 4))
+        let service = FakeAnalyticsService()
+        service.flags[Experiments.suggestionCarouselSlot.flag] = "after-4"
+        let viewModel = await makeViewModel([.success(page(ids(10), next: "c1"))], analytics: makeAnalytics(service))
+        await viewModel.start()
+        viewModel.setShowsSuggestions(true)
+        guard case .suggestions = viewModel.pages[4] else {
+            Issue.record("carrousel attendu après la 4e vidéo")
+            return
+        }
+        #expect(service.eventNames == ["experiment_exposed"])
     }
 
     @Test("feed des abonnements : jamais de carrousel")

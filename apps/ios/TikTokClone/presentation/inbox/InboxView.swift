@@ -15,6 +15,8 @@ struct InboxView: View {
     let container: AppContainer
     @Environment(\.navigationPath) private var navigationPath
     @State private var openedConversation: ConversationRoute?
+    @State private var isListOnScreen = false
+    @Environment(\.isTabActive) private var isTabActive
     @State private var deleting: Conversation?
     @State private var alertMessage: String?
     @State private var isCreatingGroup = false
@@ -111,6 +113,16 @@ struct InboxView: View {
         }
         .navigationDestination(item: $openedConversation) { route in
             ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
+        }
+        // Conversation ouverte par un bandeau (ADR-078), ajoutée à la pile de l'onglet.
+        .navigationDestination(for: ConversationRoute.self) { route in
+            ConversationView(viewModel: container.makeConversationViewModel(route), container: container)
+        }
+        // Liste à l'écran (onglet affiché, rien par-dessus) : pas de bandeau de message, ils s'y voient déjà.
+        .onAppear { isListOnScreen = true }
+        .onDisappear { isListOnScreen = false }
+        .onChange(of: isListOnScreen && isTabActive, initial: true) { _, shown in
+            container.router.isInboxListShown = shown
         }
         .confirmationDialog(
             "Supprimer la conversation ?",

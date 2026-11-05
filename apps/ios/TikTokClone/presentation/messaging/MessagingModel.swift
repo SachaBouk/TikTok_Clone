@@ -86,6 +86,21 @@ final class MessagingModel {
 
     // MARK: - Écrans
 
+    // Conversations ouvertes (pas de bandeau pour elles, ADR-078).
+    var openConversationIDs: Set<String> {
+        Set(observers.compactMap { $0.value?.conversationID })
+    }
+
+    // Conversation déjà chargée dans la boîte de réception ou les demandes.
+    func loadedConversation(_ id: String) -> Conversation? {
+        row(id)
+    }
+
+    // Relue par l'API (bandeau d'un message d'une conversation pas encore chargée) ; nil en cas d'échec.
+    func fetchConversation(_ id: String) async -> Conversation? {
+        try? await loadConversation(id: id)
+    }
+
     func observe(_ observer: any ConversationObserver) {
         observers.removeAll { $0.value == nil || $0.value === observer }
         observers.append(WeakConversationObserver(value: observer))

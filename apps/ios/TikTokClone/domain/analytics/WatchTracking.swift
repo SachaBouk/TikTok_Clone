@@ -73,7 +73,7 @@ struct WatchTimer: Sendable {
 // Le flag est lu une seule fois par installation, au moment où l'invitation serait montrée : les deux groupes sont
 // exposés au même moment (événement `$feature_flag_called` de PostHog).
 enum GuestPromptExperiment {
-    static let flag = "guest-signup-prompt"
+    static let flag = Experiments.guestSignupPrompt.flag
     static let promptVariant = "prompt"
     // Vidéos différentes regardées au moins 1 s (comme une vue) avant l'invitation.
     static let videosBeforePrompt = 5

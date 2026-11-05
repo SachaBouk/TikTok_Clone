@@ -24,6 +24,8 @@ enum AccountRoute: Hashable {
     case searchHistory
     case blockedAccounts
     case interests
+    // Sortes de bandeaux dans l'app (ADR-078).
+    case notifications
     // Page « Solde » : portefeuille de jetons (ADR-009, ADR-057).
     case wallet(PaywallSource)
     // Code QR de son profil (ADR-057).
@@ -113,6 +115,7 @@ extension View {
                 case .commentHistory: CommentHistoryView(viewModel: container.makeCommentHistoryViewModel(), router: container.router)
                 case .blockedAccounts: BlockedAccountsView(viewModel: container.makeBlockedAccountsViewModel())
                 case .interests: InterestsSettingsView(viewModel: container.makeInterestsSettingsViewModel())
+                case .notifications: NotificationSettingsView(banners: container.banners)
                 case .wallet(let source): WalletView(source: source, container: container)
                 case .publications: PublicationsView(publishing: container.publishing, router: container.router)
                 case .drafts: DraftsView(drafts: container.drafts, router: container.router)

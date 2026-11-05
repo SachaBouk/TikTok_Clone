@@ -16,7 +16,7 @@ protocol AnalyticsService: AnyObject {
 }
 
 // Réglages locaux de l'appareil (hors compte).
-protocol PreferencesStore: Sendable {
+protocol PreferencesStore: ExperimentAssignmentsStore {
     // Consentement à la mesure d'audience : nil tant que la question n'a pas été posée.
     var analyticsConsent: Bool? { get }
     func setAnalyticsConsent(_ consent: Bool)

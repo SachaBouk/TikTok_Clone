@@ -16,6 +16,8 @@ final class RealtimeCoordinator {
     private let ownProfile: OwnProfileSync
     private let lives: LiveModel?
     private let plus: PlusModel?
+    // Notifications dans l'app (ADR-078) : après les autres modèles (la conversation d'un message est déjà à jour).
+    private let banners: InAppBannerModel?
     private var wantsConnection = false
     // Connexions et déconnexions appliquées dans l'ordre.
     private var lastOperation: Task<Void, Never>?
@@ -23,7 +25,8 @@ final class RealtimeCoordinator {
 
     init(
         channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel,
-        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil, plus: PlusModel? = nil
+        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil, plus: PlusModel? = nil,
+        banners: InAppBannerModel? = nil
     ) {
         self.channel = channel
         self.publishing = publishing
@@ -34,6 +37,7 @@ final class RealtimeCoordinator {
         self.ownProfile = ownProfile
         self.lives = lives
         self.plus = plus
+        self.banners = banners
     }
 
     func update(signedIn: Bool, active: Bool) {
@@ -59,6 +63,11 @@ final class RealtimeCoordinator {
     }
 
     private func handle(_ update: RealtimeUpdate) {
+        dispatch(update)
+        banners?.handle(update)
+    }
+
+    private func dispatch(_ update: RealtimeUpdate) {
         switch update {
         case .connected:
             // Rien n'est rejoué : les événements manqués pendant la coupure sont relus par l'API REST.

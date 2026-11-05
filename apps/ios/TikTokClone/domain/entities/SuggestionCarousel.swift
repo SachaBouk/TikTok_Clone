@@ -6,8 +6,15 @@ enum SuggestionCarouselRules {
     static let firstSlot = 8
     static let interval = 30
 
+    // Expérience « suggestion-carousel-slot » (ADR-077) : premier carrousel après la 4e vidéo en variante.
+    static let earlyFirstSlot = 4
+
+    static func firstSlot(forVariant variant: String) -> Int {
+        variant == "after-4" ? earlyFirstSlot : firstSlot
+    }
+
     // Le carrousel suit-il la `count`-ième vidéo de la session (à partir de 1) ?
-    static func isSlot(afterVideo count: Int) -> Bool {
+    static func isSlot(afterVideo count: Int, firstSlot: Int = firstSlot) -> Bool {
         count >= firstSlot && (count - firstSlot) % interval == 0
     }
 

@@ -2,17 +2,12 @@ import Foundation
 import os
 
 // Sans jeton PostHog (développement) : les événements sont journalisés dans la console, rien n'est envoyé.
-// Les feature flags se forcent par argument de lancement, pour essayer une variante sans PostHog :
-// `-featureFlag.guest-signup-prompt prompt` (lu dans UserDefaults).
+// Aucun feature flag n'est connu : tout le monde est dans le témoin des expériences, sauf variante forcée dans le
+// build Debug (ADR-077 : `-experiment.<flag> <variante>` ou écran « Expériences », `UserDefaultsExperimentOverrides`).
 @MainActor
 final class LoggingAnalyticsService: AnalyticsService {
     private let logger = Logger(subsystem: "com.sachabouk.tiktokclone", category: "analytics")
-    private let defaults: UserDefaults
     private var isStarted = false
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
 
     func start() {
         isStarted = true
@@ -42,9 +37,8 @@ final class LoggingAnalyticsService: AnalyticsService {
 
     func variant(of flag: String) -> String? {
         guard isStarted else { return nil }
-        let variant = defaults.string(forKey: "featureFlag.\(flag)")
-        logger.info("feature flag \(flag, privacy: .public) = \(variant ?? "nil", privacy: .public)")
-        return variant
+        logger.info("feature flag \(flag, privacy: .public) inconnu (pas de PostHog)")
+        return nil
     }
 }
 

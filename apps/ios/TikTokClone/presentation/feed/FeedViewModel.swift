@@ -365,13 +365,23 @@ final class FeedViewModel {
 
     private func append(_ page: FeedPage) {
         let generation = generation
+        let firstSlot = carouselFirstSlot()
         for video in page.videos {
             let entry = Entry(id: "\(generation)-\(video.id)", video: video)
             entries.append(entry)
             videoCount += 1
-            if case .endlessFeed = mode, SuggestionCarouselRules.isSlot(afterVideo: videoCount) { suggestionAnchors.append(entry.id) }
+            if case .endlessFeed = mode, SuggestionCarouselRules.isSlot(afterVideo: videoCount, firstSlot: firstSlot) {
+                suggestionAnchors.append(entry.id)
+            }
         }
         nextCursor = page.nextCursor
+    }
+
+    // Expérience « suggestion-carousel-slot » (ADR-077) : le carrousel n'est montré qu'à un compte connecté du feed
+    // « Pour toi » ; le groupe n'est tiré que pour lui, à l'arrivée des vidéos.
+    private func carouselFirstSlot() -> Int {
+        guard case .endlessFeed = mode, session.isSignedIn else { return SuggestionCarouselRules.firstSlot }
+        return SuggestionCarouselRules.firstSlot(forVariant: analytics.decide(Experiments.suggestionCarouselSlot).variant)
     }
 
     // Vue comptée après `viewDelay` de lecture continue, pour un compte connecté, une fois par session du feed.
