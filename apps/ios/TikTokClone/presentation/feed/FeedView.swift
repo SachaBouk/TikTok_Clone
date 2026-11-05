@@ -93,7 +93,12 @@ struct FeedView: View {
             }
         }
         .onAppear { isOnScreen = true }
-        .onDisappear { isOnScreen = false }
+        // Mise en pause ici, et pas seulement par `onChange(of: isOnScreen)` : un lecteur retiré de la pile (retour depuis
+        // le lecteur d'une grille) ne voit plus ses `onChange`, et la vidéo continuait sans lui (bug rencontré).
+        .onDisappear {
+            isOnScreen = false
+            viewModel.setActive(false)
+        }
         .onChange(of: isTabActive, initial: true) { updateActivity() }
         .onChange(of: isOnScreen) { updateActivity() }
         .onChange(of: scenePhase) { updateActivity() }
