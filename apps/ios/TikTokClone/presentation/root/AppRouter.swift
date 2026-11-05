@@ -116,9 +116,13 @@ final class AppRouter {
         }
     }
 
+    // Onboarding animé affiché (ADR-075) : plein écran du premier lancement, ou fin du parcours dans la feuille d'un
+    // invité. Le feed chargé derrière ne doit pas jouer (son par-dessus l'onboarding, bug rencontré).
+    var isOnboardingShown = false
+
     // Un écran plein écran couvre les onglets : le feed est en pause.
     var coversTabs: Bool {
-        presentedVideo != nil || presentedStories != nil || presentedLive != nil || presentedCreation != nil
+        presentedVideo != nil || presentedStories != nil || presentedLive != nil || presentedCreation != nil || isOnboardingShown
     }
 
     // Renvoie false si le lien n'est pas reconnu.

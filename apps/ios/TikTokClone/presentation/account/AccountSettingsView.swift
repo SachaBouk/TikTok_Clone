@@ -103,6 +103,11 @@ struct AccountSettingsView: View {
                     Label("Icône de l’app", systemImage: "app.badge.fill")
                 }
                 .accessibilityIdentifier("settings.appIcon")
+                // Tutoriels de l'onboarding animé (ADR-075).
+                NavigationLink(value: AccountRoute.tutorialReplay) {
+                    Label("Revoir la présentation", systemImage: "sparkles.rectangle.stack.fill")
+                }
+                .accessibilityIdentifier("settings.tutorialReplay")
             }
             Section("Compte") {
                 NavigationLink(value: AccountRoute.account) {

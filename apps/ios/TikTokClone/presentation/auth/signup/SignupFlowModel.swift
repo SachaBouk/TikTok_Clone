@@ -40,6 +40,7 @@ final class SignupFlowModel {
     private(set) var isSubmitting = false
     // Compte créé (étape du pseudo franchie) : plus de retour en arrière ni de fermeture par glissement.
     private(set) var createdProfile: UserProfile?
+    private(set) var sessionAnnounced = false
 
     private(set) var catalog: [Interest] = []
     private(set) var catalogState: CatalogState = .loading
@@ -223,7 +224,14 @@ final class SignupFlowModel {
     // « Commencer à regarder » : la session est annoncée, la feuille ou l'onboarding se ferment ; le feed montre
     // l'indication « Balaie vers le haut pour en voir plus », même si elle a déjà été vue sur cet iPhone.
     func finish() {
-        guard let createdProfile else { return }
+        announceSession()
+    }
+
+    // Session annoncée une seule fois : au paywall « Plus » de l'onboarding animé (ADR-075, l'achat demande un compte
+    // connecté), sinon à la fin du parcours.
+    func announceSession() {
+        guard let createdProfile, !sessionAnnounced else { return }
+        sessionAnnounced = true
         onFinish()
         session.signedIn(createdProfile)
     }

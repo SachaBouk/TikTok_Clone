@@ -29,6 +29,10 @@ struct RootView: View {
             container.activityChanged(signedIn: state[0], active: state[1])
         }
         .onOpenURL { container.router.open($0) }
+        // Feed en pause sous l'onboarding (ADR-075).
+        .onChange(of: container.onboarding.isPresented, initial: true) { _, presented in
+            container.router.isOnboardingShown = presented
+        }
         // Session reprise et écran de lancement terminé : onboarding du premier lancement (ADR-055), puis consentement à
         // la mesure d'audience (ADR-013), après l'onboarding et pas par-dessus.
         .onChange(of: isLaunching) { _, launching in
@@ -45,13 +49,11 @@ struct RootView: View {
             isPresented: Binding(get: { container.onboarding.isPresented }, set: { if !$0 { finishOnboarding() } }),
             onDismiss: { analytics.askConsentIfNeeded() }
         ) {
+            // Le parcours se termine lui-même (ADR-075) : après le paywall pour une inscription, après le consentement
+            // pour une connexion ou un invité.
             OnboardingView(container: container) { finishOnboarding() }
                 .environment(session)
                 .environment(analytics)
-                // Connexion ou inscription faite pendant l'onboarding : il se termine.
-                .onChange(of: session.isSignedIn) { _, signedIn in
-                    if signedIn { finishOnboarding() }
-                }
         }
         .onChange(of: session.profile?.id, initial: true) { _, userID in
             analytics.sessionChanged(userID: userID)

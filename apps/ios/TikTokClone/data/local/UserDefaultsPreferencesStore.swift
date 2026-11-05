@@ -18,6 +18,7 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
         static let recentSounds = "recentSounds"
         static let onboardingCompleted = "onboardingCompleted"
         static let feedSwipeHintShown = "feedSwipeHintShown"
+        static let onboardingAnswers = "onboardingAnswers"
         static let defaultVideoVisibility = "defaultVideoVisibility"
         static let saveToDevice = "saveToDevice"
     }
@@ -53,6 +54,23 @@ struct UserDefaultsPreferencesStore: PreferencesStore, @unchecked Sendable {
     func markFeedSwipeHintShown() {
         defaults.set(true, forKey: Key.feedSwipeHintShown)
     }
+
+    var onboardingAnswers: OnboardingAnswers {
+        defaults.data(forKey: Key.onboardingAnswers).flatMap { try? JSONDecoder().decode(OnboardingAnswers.self, from: $0) } ?? OnboardingAnswers()
+    }
+
+    func setOnboardingAnswers(_ answers: OnboardingAnswers) {
+        if let data = try? JSONEncoder().encode(answers) { defaults.set(data, forKey: Key.onboardingAnswers) }
+    }
+
+    #if DEBUG
+        // Argument de lancement `-resetOnboarding` (ADR-075) : l'onboarding et l'indication du feed reviennent.
+        func resetOnboarding() {
+            for key in [Key.onboardingCompleted, Key.feedSwipeHintShown, Key.onboardingAnswers, Key.analyticsConsent] {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    #endif
 }
 
 // Historique des recherches (ADR-049) : sur l'appareil seulement.

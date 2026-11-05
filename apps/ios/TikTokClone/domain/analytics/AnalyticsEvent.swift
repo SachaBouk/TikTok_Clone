@@ -58,6 +58,8 @@ enum PlusPaywallSource: String, Hashable, Sendable {
     case longVideo = "long_video"
     case appIcon = "app_icon"
     case profile
+    // Fin de l'onboarding (ADR-075).
+    case onboarding
 }
 
 // Comment la vidéo a cessé d'être regardée.
@@ -185,6 +187,20 @@ extension AnalyticsEvent {
     // par une action d'invité, ADR-055), inscription commencée puis terminée, connexion.
     static func authSheetShown(source: AuthSource) -> AnalyticsEvent {
         AnalyticsEvent(name: "auth_sheet_shown", properties: ["source": .string(source.rawValue)])
+    }
+    // Onboarding animé (ADR-075). Les réponses partent une fois, à la fin, avec le consentement seulement.
+    static func onboardingStepViewed(_ step: OnboardingStep) -> AnalyticsEvent {
+        AnalyticsEvent(name: "onboarding_step_viewed", properties: ["step": .string(step.rawValue)])
+    }
+    static func onboardingCompleted(
+        path: OnboardingPath, answers: OnboardingAnswers, durationSeconds: Int, tutorialsCompleted: Int
+    ) -> AnalyticsEvent {
+        var properties: [String: AnalyticsValue] = [
+            "path": .string(path.rawValue), "duration_s": .int(durationSeconds), "tutorials_completed": .int(tutorialsCompleted),
+        ]
+        if let source = answers.source { properties["source"] = .string(source.rawValue) }
+        if let goal = answers.goal { properties["goal"] = .string(goal.rawValue) }
+        return AnalyticsEvent(name: "onboarding_completed", properties: properties)
     }
     static let signupStarted = AnalyticsEvent(name: "signup_started", properties: [:])
     static let signupCompleted = AnalyticsEvent(name: "signup_completed", properties: [:])

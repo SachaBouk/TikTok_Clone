@@ -19,6 +19,8 @@ struct AuthFlowView: View {
     @State private var path: [Route] = []
     // Créé à la première ouverture de l'inscription, gardé pour tout le parcours (retour en arrière compris).
     @State private var signup: SignupFlowModel?
+    // Fin du parcours après les centres d'intérêt (ADR-075) : tutoriels, paywall « Plus ».
+    @State private var finale: OnboardingFlowModel?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -54,10 +56,16 @@ struct AuthFlowView: View {
                 signup = container.makeSignupFlowModel()
                 container.analytics.track(.signupStarted)
             }
+            if path.contains(.signup(.tutorial)), finale == nil, let signup {
+                finale = container.makeOnboardingFlow(path: .promptSignup, signup: signup) { [dismiss] in
+                    if skip == nil { dismiss() }
+                }
+            }
         }
-        // Présentée aussi depuis d'autres feuilles (commentaires) : se ferme d'elle-même une fois connecté.
+        // Présentée aussi depuis d'autres feuilles (commentaires) : se ferme d'elle-même une fois connecté. Après une
+        // inscription, la session est annoncée au paywall : la fin du parcours ferme la feuille (ADR-075).
         .onChange(of: session.isSignedIn) { _, signedIn in
-            if signedIn, skip == nil { dismiss() }
+            if signedIn, skip == nil, signup?.accountCreated != true { dismiss() }
         }
     }
 
@@ -69,7 +77,8 @@ struct AuthFlowView: View {
         case .password: SignupPasswordView(model: model, next: show)
         case .username: SignupUsernameView(model: model, next: show)
         case .interests: SignupInterestsView(model: model, next: show)
-        case .tutorial: SignupTutorialView(model: model)
+        case .tutorial:
+            if let finale { OnboardingSequenceView(container: container, model: finale) }
         }
     }
 

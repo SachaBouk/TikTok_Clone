@@ -57,49 +57,41 @@ extension UnderlinedField where Trailing == EmptyView {
     }
 }
 
-// Bouton plein rose, gris tant qu'il n'est pas utilisable ; points d'attente pendant l'envoi.
+// Bouton plein rose en relief (ADR-075, façon Duolingo), gris tant qu'il n'est pas utilisable ; points d'attente pendant
+// l'envoi.
 struct SignupPrimaryButton: View {
     let title: String
     var isEnabled = true
     var isLoading = false
     let action: () -> Void
+    @Environment(\.onboardingFeedback) private var feedback
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            feedback?.play(.tap)
+            action()
+        } label: {
             ZStack {
                 if isLoading {
                     DotsLoader(size: 10, colors: (.white, .white.opacity(0.6)))
                 } else {
-                    Text(title).font(.headline)
+                    Text(title)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .foregroundStyle(isEnabled ? Color.white : Color.secondary)
-            .background(isEnabled ? Color.brandPink : Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChunkyButtonStyle())
         .disabled(!isEnabled || isLoading)
     }
 }
 
-// Bouton gris clair (« Passer »).
+// Bouton à contour en relief (« Passer »).
 struct SignupSecondaryButton: View {
     let title: String
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .foregroundStyle(.primary)
-                .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        Button(title, action: action)
+            .buttonStyle(ChunkyOutlineButtonStyle(foreground: .primary))
     }
 }
 

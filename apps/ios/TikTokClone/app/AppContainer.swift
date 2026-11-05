@@ -50,6 +50,8 @@ final class AppContainer {
     let downloads: VideoDownloadModel
     // Onboarding du premier lancement (ADR-055).
     let onboarding = OnboardingModel(preferences: UserDefaultsPreferencesStore())
+    // Sons de l'onboarding animé (ADR-075), synthétisés au premier usage.
+    private lazy var uiSounds: any UISoundPlayer = SynthesizedSoundPlayer()
     private let auth: any AuthRepository
     private let profiles: any ProfileRepository
     private let signupRepository: any SignupRepository
@@ -548,6 +550,14 @@ final class AppContainer {
             analytics: analytics,
             onFinish: { [onboarding] in onboarding.showFeedSwipeHint() }
         )
+    }
+
+    // Onboarding animé (ADR-075) : premier lancement (`signup`), fin d'une inscription ouverte depuis la feuille d'un
+    // invité (`promptSignup`, avec son inscription), ou « Revoir la présentation » (`replay`).
+    func makeOnboardingFlow(path: OnboardingPath, signup: SignupFlowModel? = nil, onFinish: @escaping () -> Void) -> OnboardingFlowModel {
+        OnboardingFlowModel(
+            path: path, signup: signup, preferences: UserDefaultsPreferencesStore(), analytics: analytics,
+            feedback: OnboardingFeedback(sounds: uiSounds), makeSignup: { [unowned self] in makeSignupFlowModel() }, onFinish: onFinish)
     }
 
     func makeInterestsSettingsViewModel() -> InterestsSettingsViewModel {

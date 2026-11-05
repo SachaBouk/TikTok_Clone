@@ -39,6 +39,8 @@ enum AccountRoute: Hashable {
     // Abonnement « Plus » (ADR-073) et icônes de l'app au choix.
     case plus(PlusPaywallSource)
     case appIcon
+    // « Revoir la présentation » (ADR-075) : les tutoriels de l'onboarding.
+    case tutorialReplay
 }
 
 // Recherche (ADR-049), ouverte par la loupe du feed ; avec une recherche de l'historique, relancée (ADR-057).
@@ -116,6 +118,7 @@ extension View {
                 case .drafts: DraftsView(drafts: container.drafts, router: container.router)
                 case .plus(let source): PlusView(source: source, container: container)
                 case .appIcon: AppIconSettingsView(container: container)
+                case .tutorialReplay: TutorialReplayView(container: container)
                 }
             }
     }

@@ -5,6 +5,7 @@ import SwiftUI
 struct SignupInterestsView: View {
     @Bindable var model: SignupFlowModel
     let next: (SignupStep) -> Void
+    @Environment(\.onboardingFeedback) private var feedback
 
     var body: some View {
         ScrollView {
@@ -28,7 +29,10 @@ struct SignupInterestsView: View {
                         Button("Réessayer") { Task { await model.loadInterests() } }
                     }
                 case .loaded:
-                    InterestChips(catalog: model.catalog, selected: model.selectedInterests) { model.toggle($0) }
+                    InterestChips(catalog: model.catalog, selected: model.selectedInterests) {
+                        model.toggle($0)
+                        feedback?.play(model.selectedInterests.contains($0.code) ? .select : .tap)
+                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -96,7 +100,8 @@ struct InterestChips: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .animation(.snappy(duration: 0.2), value: isSelected)
+                .scaleEffect(isSelected ? 1.05 : 1)
+                .animation(.spring(duration: 0.3, bounce: 0.55), value: isSelected)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
                 .accessibilityIdentifier("signup.interest.\(interest.code)")
             }

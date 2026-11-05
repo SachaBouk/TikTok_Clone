@@ -29,4 +29,7 @@ protocol PreferencesStore: Sendable {
     // Indication « Balaie vers le haut » déjà montrée sur le feed (ADR-055, une fois par installation).
     var feedSwipeHintShown: Bool { get }
     func markFeedSwipeHintShown()
+    // Réponses aux questions de l'onboarding animé (ADR-075), sur l'appareil seulement.
+    var onboardingAnswers: OnboardingAnswers { get }
+    func setOnboardingAnswers(_ answers: OnboardingAnswers)
 }
