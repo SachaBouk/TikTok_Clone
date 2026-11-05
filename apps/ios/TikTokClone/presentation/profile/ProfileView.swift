@@ -295,13 +295,13 @@ struct ProfileView: View {
                         .foregroundStyle(.primary)
                 }
                 .accessibilityIdentifier("profile.addBio")
-                Text("·").foregroundStyle(.secondary)
+                Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
             }
             Button {
                 navigationPath?.wrappedValue.append(AccountRoute.interests)
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "heart").foregroundStyle(Color.brandPink)
+                    Image(systemName: "heart").foregroundStyle(Color.brandPink).accessibilityHidden(true)
                     Text("Je m'intéresse à…").foregroundStyle(.secondary).lineLimit(1)
                 }
                 .font(.subheadline)
@@ -592,6 +592,13 @@ struct ProfileAvatar: View {
         }
         .buttonStyle(.plain)
         .disabled(ring == nil && live == nil && !isOwn)
+        // Sur le bouton de la photo, pas sur l'ensemble : le « + » garde son propre nom (ADR-076).
+        .accessibilityLabel(
+            live != nil
+                ? "@\(profile.username) est en direct"
+                : ring != nil ? "Stories de @\(profile.username)" : isOwn ? "Changer la photo de profil" : "Photo de profil de @\(profile.username)"
+        )
+        .accessibilityIdentifier("profile.avatar")
         .overlay(alignment: .bottomTrailing) {
             if isOwn, live == nil {
                 Button(action: changePhoto) {
@@ -606,10 +613,6 @@ struct ProfileAvatar: View {
                 .accessibilityIdentifier("profile.changePhoto")
             }
         }
-        .accessibilityLabel(
-            live != nil ? "@\(profile.username) est en direct" : ring == nil ? "Photo de profil" : "Stories de @\(profile.username)"
-        )
-        .accessibilityIdentifier("profile.avatar")
         .task(id: profile.id) { await container.stories.loadRing(for: summary) }
         .task(id: profile.id) { await container.lives.load(for: summary) }
     }

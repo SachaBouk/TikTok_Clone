@@ -417,6 +417,25 @@ describe('VideosService', () => {
     });
   });
 
+  describe('texte alternatif (ADR-076)', () => {
+    it('nettoyé à l’envoi, absent par défaut, changé ou retiré par l’auteur seulement', async () => {
+      const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });
+      expect((await service.getVideo(video.id, ALICE)).altText).toBeNull();
+      const { video: described } = await service.createUpload(ALICE, {
+        contentType: 'video/mp4',
+        fileSize: 1000,
+        altText: '  Un chat\n saute   sur un canapé  ',
+      });
+      expect((await service.getVideo(described.id, ALICE)).altText).toBe('Un chat saute sur un canapé');
+      const { video: blank } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000, altText: '   ' });
+      expect((await service.getVideo(blank.id, ALICE)).altText).toBeNull();
+      await expect(service.setAltText(BOB, video.id, 'Volé')).rejects.toBeInstanceOf(VideoNotFoundError);
+      await expect(service.setAltText(ALICE, video.id, ' Un  chien ')).resolves.toMatchObject({ altText: 'Un chien' });
+      await expect(service.setAltText(ALICE, video.id, '')).resolves.toMatchObject({ altText: null });
+      await expect(service.setAltText(ALICE, video.id, null)).resolves.toMatchObject({ altText: null });
+    });
+  });
+
   describe('téléchargement (ADR-067)', () => {
     it('autorisé par défaut, choisi à l’envoi, changé par l’auteur seulement', async () => {
       const { video } = await service.createUpload(ALICE, { contentType: 'video/mp4', fileSize: 1000 });

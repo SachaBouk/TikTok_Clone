@@ -103,7 +103,8 @@ extension FeedVideo {
             commentsEnabled: dto.commentsEnabled,
             location: dto.location.map { VideoLocation(name: $0.name, address: $0.address) },
             aiGenerated: dto.aiGenerated,
-            downloadsEnabled: dto.downloadsEnabled
+            downloadsEnabled: dto.downloadsEnabled,
+            altText: dto.altText
         )
     }
 }

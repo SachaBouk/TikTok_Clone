@@ -159,6 +159,7 @@ struct ViewHistoryView: View {
                     thumbnail.overlay(alignment: .topTrailing) { SelectionMark(isSelected: selection.contains(video.id)) }
                 }
                 .buttonStyle(.plain)
+                .accessibilityVideoCell(video)
                 .accessibilityAddTraits(selection.contains(video.id) ? .isSelected : [])
             } else if let index = viewModel.list.items.firstIndex(where: { $0.id == video.id }) {
                 NavigationLink(
@@ -166,6 +167,7 @@ struct ViewHistoryView: View {
                         list: .myHistory, page: FeedPage(videos: viewModel.list.items, nextCursor: viewModel.list.nextCursor), startIndex: index)
                 ) { thumbnail }
                 .buttonStyle(.plain)
+                .accessibilityVideoCell(video)
                 .contextMenu {
                     Button("Retirer de l’historique", systemImage: "minus.circle", role: .destructive) {
                         Task { await viewModel.remove(video) }

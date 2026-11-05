@@ -91,7 +91,7 @@ struct WalletView: View {
                         .font(.system(size: 64, weight: .bold, design: .rounded))
                         .contentTransition(.numericText())
                         .animation(.default, value: wallet.earned)
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
@@ -141,7 +141,7 @@ struct WalletView: View {
                 Text("Transactions").font(.title3.bold())
                 Spacer()
                 Text("Tout voir").foregroundStyle(.secondary)
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").accessibilityHidden(true).foregroundStyle(.secondary)
             }
             .padding(20)
             .background(.background, in: RoundedRectangle(cornerRadius: 16))

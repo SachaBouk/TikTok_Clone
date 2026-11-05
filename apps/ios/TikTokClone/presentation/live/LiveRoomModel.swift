@@ -95,6 +95,11 @@ final class LiveRoomModel {
     private let hiddenUserIDs: @MainActor () -> Set<String>
     private let sleep: @Sendable (Duration) async throws -> Void
     private var heartBatch = HeartBatch()
+    // Annonces VoiceOver du chat, sans inonder (ADR-076) : au plus une toutes les 3 s, les autres regroupées.
+    private var chatAnnouncer = LiveChatAnnouncer()
+    private var chatFlushTask: Task<Void, Never>?
+    // Annonces VoiceOver : messages du chat, cadeaux reçus, fin du live. Remplacé dans les tests.
+    @ObservationIgnored var announce: @MainActor (String) -> Void = { Accessibility.announce($0) }
     private var heartTask: Task<Void, Never>?
     private var myLikesGeneration = 0
     // Identifiant d'envoi de la Rose, gardé après une coupure (pas de second débit, ADR-050).
@@ -382,7 +387,11 @@ final class LiveRoomModel {
     private func apply(_ event: LiveRoomEvent) {
         switch event {
         case .chatMessage(let message):
+            let isNew = !chat.messages.contains { $0.id == message.id }
             chat.append(message)
+            if isNew, message.user.id != session.profile?.id, !hiddenUserIDs().contains(message.user.id) {
+                announceChat(LiveChatSpeech.message(message, isHost: message.user.id == live?.host.id))
+            }
         case .chatMessageDeleted(let id):
             chat.remove(id: id)
         case .hearts(let count, let total):
@@ -391,6 +400,7 @@ final class LiveRoomModel {
         case .gift(let sender, let gift, _, _, _):
             let event = GiftEvent(sender: sender, gift: gift)
             gifts.append(event)
+            announce(LiveChatSpeech.gift(sender: sender, gift: gift))
             Task { [weak self, sleep] in
                 try? await sleep(Self.giftDisplay)
                 self?.gifts.removeAll { $0.id == event.id }
@@ -412,6 +422,7 @@ final class LiveRoomModel {
         let ended = isHost ? (try? await loadLive(liveID: live.id)) ?? live : live
         self.live = ended
         phase = .ended(ended, reason: reason)
+        announce(reason.message)
         if isHost { analytics.track(.liveEnded(ended.stats)) }
     }
 
@@ -423,6 +434,23 @@ final class LiveRoomModel {
             return
         }
         phase = .failed("Connexion au live perdue.")
+        announce("Connexion au live perdue.")
+    }
+
+    // Message du chat dit par VoiceOver : tout de suite, ou avec les suivants quelques secondes plus tard.
+    private func announceChat(_ line: String) {
+        if let text = chatAnnouncer.receive(line, at: .now) {
+            announce(text)
+            return
+        }
+        guard chatFlushTask == nil, let delay = chatAnnouncer.delayBeforeFlush(at: .now) else { return }
+        let due = Date.now.addingTimeInterval(delay)
+        chatFlushTask = Task { [weak self, sleep] in
+            try? await sleep(.milliseconds(Int(delay * 1000)))
+            guard let self else { return }
+            self.chatFlushTask = nil
+            if let text = self.chatAnnouncer.flush(at: max(.now, due)) { self.announce(text) }
+        }
     }
 
     private func addFloatingHearts(_ count: Int) {

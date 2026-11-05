@@ -127,6 +127,8 @@ struct VideoMenuSheet: View {
         HStack(spacing: 14) {
             AutoScrollIcon(color: .black).frame(width: 26)
             Text("Défilement automatique").font(.system(size: 17, weight: .semibold)).foregroundStyle(.black)
+                // Dit par l'interrupteur (ADR-076).
+                .accessibilityHidden(true)
             Spacer(minLength: 0)
             Toggle(
                 "Défilement automatique",

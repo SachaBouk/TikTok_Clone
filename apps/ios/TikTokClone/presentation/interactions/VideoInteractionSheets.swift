@@ -14,7 +14,10 @@ extension VideoPageActions {
         openMention: @escaping (String) -> Void = { _ in },
         gift: @escaping () -> Void = {},
         openStories: (() -> Void)? = nil,
-        openMenu: @escaping () -> Void = {}
+        openMenu: @escaping () -> Void = {},
+        openAuthorProfile: (() -> Void)? = nil,
+        next: (() -> Void)? = nil,
+        previous: (() -> Void)? = nil
     ) {
         self.init(
             togglePause: togglePause,
@@ -27,7 +30,10 @@ extension VideoPageActions {
             openMention: openMention,
             gift: gift,
             openStories: openStories,
-            openMenu: openMenu
+            openMenu: openMenu,
+            openAuthorProfile: openAuthorProfile,
+            next: next,
+            previous: previous
         )
     }
 }

@@ -65,7 +65,7 @@ struct CollectionsGrid: View {
                         Image(systemName: "plus").font(.title3.weight(.medium))
                         Text("Créer une nouvelle collection").font(.headline)
                         Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").accessibilityHidden(true).foregroundStyle(.secondary)
                     }
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 16)

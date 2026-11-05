@@ -45,6 +45,7 @@ export class InMemoryVideoRepository extends VideoRepository {
       aiGenerated: video.aiGenerated ?? false,
       locationName: video.locationName ?? null,
       locationAddress: video.locationAddress ?? null,
+      altText: video.altText ?? null,
       maxDurationSeconds: null,
       provider: video.provider ?? 'local',
       muxUploadId: video.muxUploadId ?? null,
@@ -155,6 +156,13 @@ export class InMemoryVideoRepository extends VideoRepository {
     const video = this.videos.get(id);
     if (!video) return null;
     Object.assign(video, { soundShared: shared, updatedAt: this.now() });
+    return toVideo(video);
+  }
+
+  async setAltText(id: string, altText: string | null): Promise<Video | null> {
+    const video = this.videos.get(id);
+    if (!video) return null;
+    Object.assign(video, { altText, updatedAt: this.now() });
     return toVideo(video);
   }
 
@@ -427,6 +435,7 @@ function toDetails(v: StoredVideo): VideoDetails {
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,
+    altText: v.altText,
     muxPlaybackId: v.muxPlaybackId,
     muxSigned: v.muxSigned,
     hlsUrl: v.hlsUrl,
@@ -449,6 +458,7 @@ function toPublished(v: StoredVideo): PublishedVideo | null {
     aiGenerated: v.aiGenerated,
     locationName: v.locationName,
     locationAddress: v.locationAddress,
+    altText: v.altText,
     muxPlaybackId: v.muxPlaybackId,
     muxSigned: v.muxSigned,
     hlsUrl: v.hlsUrl,

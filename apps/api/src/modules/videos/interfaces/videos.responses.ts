@@ -56,6 +56,9 @@ export class VideoResponse implements VideoDto {
   @ApiPropertyOptional({ type: VideoLocationResponse })
   location?: VideoLocationResponse;
 
+  @ApiPropertyOptional({ description: "Texte alternatif écrit par l'auteur (ADR-076), absent sans texte." })
+  altText?: string;
+
   @ApiProperty({ type: String, nullable: true, format: 'uri', description: 'Manifeste HLS, quand la vidéo est `ready`.' })
   hlsUrl!: string | null;
 
@@ -125,10 +128,16 @@ export function toVideoDto(video: Video): VideoDto {
     downloadsEnabled: video.downloadsEnabled,
     aiGenerated: video.aiGenerated,
     ...locationOf(video),
+    ...altTextOf(video),
     hlsUrl: video.hlsUrl,
     thumbnailUrl: video.thumbnailUrl,
     createdAt: video.createdAt.toISOString(),
   };
+}
+
+// Texte alternatif (ADR-076) : absent sans texte. Partagé avec le feed.
+export function altTextOf(video: { altText: string | null }): { altText?: string } {
+  return video.altText ? { altText: video.altText } : {};
 }
 
 // Lieu (ADR-065) : `location` absent sans lieu, `address` absente sans adresse. Partagé avec le feed.

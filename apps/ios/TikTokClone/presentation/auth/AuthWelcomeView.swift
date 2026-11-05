@@ -80,6 +80,7 @@ private struct AuthMethodButton: View {
                     .frame(maxWidth: .infinity)
                 HStack {
                     Image(systemName: systemImage)
+                        .accessibilityHidden(true)
                         .font(.title3)
                     Spacer()
                 }

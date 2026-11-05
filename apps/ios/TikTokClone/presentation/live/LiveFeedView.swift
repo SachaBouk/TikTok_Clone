@@ -79,12 +79,20 @@ struct LiveFeedScreen: View {
             LiveView(
                 model: current.setup.model, room: current.setup.room, container: container, hasNextLive: model.hasNext(after: live.id),
                 isInFeed: true,
-                insets: insets, feedComposer: $isComposing
+                insets: insets, feedComposer: $isComposing,
+                onNextLive: model.hasNext(after: live.id) ? { move(model, by: 1) } : nil,
+                onPreviousLive: model.hasPrevious(before: live.id) ? { move(model, by: -1) } : nil
             )
             .id(live.id)
         } else {
             LiveLoadingView(host: live.host)
         }
+    }
+
+    // Live suivant ou précédent demandé par VoiceOver (ADR-076) : la page défile, puis le live est annoncé.
+    private func move(_ model: LiveFeedModel, by offset: Int) {
+        guard model.move(by: offset), let live = model.lives.first(where: { $0.id == model.currentID }) else { return }
+        Accessibility.announce("Live de \(live.host.displayName)", delay: .milliseconds(400))
     }
 
     // Arrivée sur une page : sa salle est créée ; la précédente disparaît de l'écran, et `LiveView` la quitte.
@@ -126,6 +134,8 @@ struct LiveFeedbackView: View {
     let hasNextLive: Bool
     let isInFeed: Bool
     var insets = EdgeInsets()
+    // Live suivant, pour VoiceOver (ADR-076) : le balayage vers le haut a son bouton.
+    var next: (() -> Void)? = nil
     let close: () -> Void
 
     var body: some View {
@@ -144,6 +154,7 @@ struct LiveFeedbackView: View {
                 Text("Comment s’est passé ce live ?")
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
+                    .accessibilityHeading()
                 Text((reason ?? live?.endReason ?? .host).message)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
@@ -199,6 +210,10 @@ struct LiveFeedbackView: View {
                     }
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.bottom, 24)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Live suivant")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { next?() }
                 } else if !isInFeed {
                     Button("Fermer", action: close)
                         .buttonStyle(.borderedProminent)
@@ -256,7 +271,9 @@ struct LiveHostSheet: View {
                 AvatarView(url: host.avatarURL, name: host.displayName, size: 82)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(host.displayName).font(.system(size: 30, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                        .accessibilityHeading()
                     Text(host.username).font(.title3).foregroundStyle(.secondary).lineLimit(1)
+                        .accessibilityLabel("@\(host.username)")
                 }
                 Spacer()
                 if !isOwn {
@@ -280,6 +297,9 @@ struct LiveHostSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(count(profile.followersCount, "abonné")) · \(count(profile.followingCount, "abonnement"))")
                         .font(.title3.weight(.medium))
+                        .accessibilityLabel(
+                            "\(SpokenText.count(profile.followersCount, "abonné", "abonnés")), \(SpokenText.count(profile.followingCount, "abonnement", "abonnements"))"
+                        )
                     if let bio = profile.bio, !bio.isEmpty {
                         Text(bio).font(.body).foregroundStyle(.secondary).lineLimit(3)
                     }

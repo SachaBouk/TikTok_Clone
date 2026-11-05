@@ -34,6 +34,19 @@ final class LiveFeedModel {
         }
     }
 
+    // Live suivant (1) ou précédent (-1), pour les actions de VoiceOver (ADR-076) : faux s'il n'y en a pas.
+    @discardableResult
+    func move(by offset: Int) -> Bool {
+        guard let currentID, let index = lives.firstIndex(where: { $0.id == currentID }), lives.indices.contains(index + offset) else { return false }
+        self.currentID = lives[index + offset].id
+        return true
+    }
+
+    func hasPrevious(before liveID: String) -> Bool {
+        guard let index = lives.firstIndex(where: { $0.id == liveID }) else { return false }
+        return index > 0
+    }
+
     // Y a-t-il un live après celui-ci (« Balaie vers le haut pour le live suivant ») ?
     func hasNext(after liveID: String) -> Bool {
         guard let index = lives.firstIndex(where: { $0.id == liveID }) else { return false }

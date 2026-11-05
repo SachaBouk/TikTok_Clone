@@ -51,6 +51,8 @@ struct FeedVideo: Identifiable, Equatable, Sendable {
     var aiGenerated = false
     // « Autoriser le téléchargement » (ADR-067) : refusé, seul l'auteur télécharge la vidéo.
     var downloadsEnabled = true
+    // Texte alternatif écrit par l'auteur (ADR-076), lu par VoiceOver.
+    var altText: String? = nil
 }
 
 // Page du feed (ADR-016 : ordre aléatoire propre à une session de scroll).

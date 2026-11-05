@@ -12,7 +12,7 @@ struct LocationPickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                Text("Ajouter un lieu").font(.headline)
+                Text("Ajouter un lieu").font(.headline).accessibilityHeading()
                 HStack {
                     Button("Fermer", systemImage: "xmark") { dismiss() }
                         .labelStyle(.iconOnly)
@@ -24,7 +24,7 @@ struct LocationPickerView: View {
             .padding(.horizontal, 20)
             .frame(height: 52)
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                 TextField("Rechercher des lieux", text: $text)
                     .focused($searching)
                     .submitLabel(.search)
@@ -32,7 +32,7 @@ struct LocationPickerView: View {
                     .onChange(of: text) { _, value in model.search(value) }
                     .accessibilityIdentifier("location.search")
                 if !text.isEmpty {
-                    Button("Effacer", systemImage: "xmark.circle.fill") { text = "" }
+                    Button("Effacer la recherche", systemImage: "xmark.circle.fill") { text = "" }
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.secondary)
                 }
@@ -75,7 +75,7 @@ struct LocationPickerView: View {
                 Section {
                     ForEach(model.nearby) { row($0) }
                 } header: {
-                    Text("Lieux populaires près de toi").font(.subheadline).foregroundStyle(.secondary).textCase(nil)
+                    Text("Lieux populaires près de toi").font(.subheadline).foregroundStyle(.secondary).textCase(nil).accessibilityHeading()
                 }
             }
         case .notDetermined:
@@ -113,6 +113,13 @@ struct LocationPickerView: View {
         }
         .buttonStyle(.plain)
         .listRowSeparator(.hidden)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SpokenText.join([place.name, place.address]))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            onPick(place)
+            dismiss()
+        }
         .accessibilityIdentifier("location.place.\(place.name)")
     }
 }

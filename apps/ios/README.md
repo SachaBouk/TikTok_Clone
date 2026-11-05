@@ -111,6 +111,27 @@ Le client est généré à chaque build par le plugin de `swift-openapi-generato
 
 - **Icônes de la barre d'onglets** (`TabBarIcon`) : dessinées comme celles de TikTok, contour ou pleines selon l'onglet sélectionné ; « + » de la création en couleurs et sans texte, touche blanche sur une barre sombre, noire sur une barre claire.
 
+## Accessibilité VoiceOver (ADR-076)
+
+Une personne aveugle doit pouvoir parcourir toute l'app avec VoiceOver (création et éditeur compris). Règles pour tout
+nouvel écran :
+- tout ce qui se touche a un nom et son état (`.isSelected`, valeur) ; le décor est masqué (`.accessibilityDecorative()`) ;
+- une carte de liste est **un** élément, lu en une phrase ; ses boutons secondaires deviennent des actions
+  (`.accessibilityAction(named:)`) ;
+- chaque geste (double toucher, appui long, balayage, glisser) a son équivalent : action, `accessibilityAdjustableAction`
+  ou `accessibilityScrollAction` ;
+- un changement à l'écran est annoncé avec `Accessibility.announce(_:)` (`presentation/common/Accessibility.swift`) ;
+- les phrases avec de la logique vont dans des règles pures testées (`AccessibilityText.swift`, `SocialSpeech.swift`,
+  `CreationSpeech.swift`) ; nombres lus en entier (`SpokenText.number`), durées parlées (`SpokenText.duration`).
+
+Dans le feed : la vidéo est un élément (toucher deux fois = pause, défilement à trois doigts = vidéo suivante, actions
+J'aime, Menu, Profil, Vitesse ×2…), Magic Tap met en pause d'où que soit le curseur. Les vidéos ont un texte alternatif
+écrit par l'auteur (écran de publication, feuille de partage), sinon une description automatique faite sur l'iPhone
+(Vision, seulement avec VoiceOver).
+
+Vérifier : Réglages › Accessibilité › VoiceOver sur un iPhone (le raccourci d'accessibilité, triple clic latéral, aide),
+ou Xcode › Open Developer Tool › Accessibility Inspector sur le simulateur (audit, inspection, actions).
+
 ## Recherche et hashtags (ADR-049)
 
 - Loupe en haut à droite du feed : écran de recherche (comptes et hashtags). Avant la saisie : recherches récentes (sur l'appareil seulement, effacées à la connexion et à la déconnexion) et hashtags tendance.

@@ -49,6 +49,8 @@ final class VideoInteractionsModel {
     private var commentsOverrides: [String: Bool] = [:]
     // Téléchargement autorisé ou refusé depuis l'app (ADR-067), par vidéo.
     private var downloadsOverrides: [String: Bool] = [:]
+    // Texte alternatif changé depuis l'app (ADR-076) : `.some(nil)` = retiré.
+    private var altTextOverrides: [String: String?] = [:]
     // Incrémenté à chaque changement de visibilité : les grilles « Vidéos » et « cadenas » du profil se rechargent.
     private(set) var visibilityVersion = 0
     // Incrémenté à chaque abonnement ou désabonnement fait dans l'app (blocage compris) : le feed des abonnements
@@ -62,6 +64,7 @@ final class VideoInteractionsModel {
     private let setVisibility: SetVideoVisibilityUseCase?
     private let setCommentsEnabled: SetCommentsEnabledUseCase?
     private let setDownloadsEnabled: SetDownloadsEnabledUseCase?
+    private let setAltText: SetVideoAltTextUseCase?
     private let session: SessionStore
     private let analytics: AnalyticsModel
 
@@ -73,12 +76,14 @@ final class VideoInteractionsModel {
         setVisibility: SetVideoVisibilityUseCase? = nil,
         setCommentsEnabled: SetCommentsEnabledUseCase? = nil,
         setDownloadsEnabled: SetDownloadsEnabledUseCase? = nil,
+        setAltText: SetVideoAltTextUseCase? = nil,
         session: SessionStore,
         analytics: AnalyticsModel
     ) {
         self.setVisibility = setVisibility
         self.setCommentsEnabled = setCommentsEnabled
         self.setDownloadsEnabled = setDownloadsEnabled
+        self.setAltText = setAltText
         self.setReaction = setReaction
         self.setFollow = setFollow
         self.recordShare = recordShare
@@ -97,6 +102,7 @@ final class VideoInteractionsModel {
         if let visibility = visibilityOverrides[video.id] { result = result.with(viewer: result.viewer, visibility: visibility) }
         if let enabled = commentsOverrides[video.id] { result = result.with(viewer: result.viewer, commentsEnabled: enabled) }
         if let enabled = downloadsOverrides[video.id] { result = result.with(viewer: result.viewer, downloadsEnabled: enabled) }
+        if let altText = altTextOverrides[video.id] { result.altText = altText }
         return result
     }
 
@@ -267,6 +273,19 @@ final class VideoInteractionsModel {
             return nil
         } catch {
             downloadsOverrides[video.id] = before
+            return handle(error)
+        }
+    }
+
+    // Texte alternatif de sa vidéo (ADR-076), lu par VoiceOver : enregistré, puis affiché partout. Message d'erreur ou nil.
+    func setAltText(_ text: String?, of video: FeedVideo) async -> String? {
+        guard isOwn(video), let setAltText else { return nil }
+        guard pending.insert("altText-\(video.id)").inserted else { return nil }
+        defer { pending.remove("altText-\(video.id)") }
+        do {
+            altTextOverrides[video.id] = .some(try await setAltText(videoID: video.id, altText: text))
+            return nil
+        } catch {
             return handle(error)
         }
     }

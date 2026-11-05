@@ -56,7 +56,8 @@ private struct GroupTypeRow: View {
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.brandPink, lineWidth: 1.5))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Privé, sélectionné. Pour les amis : seuls les membres ajoutés voient le groupe.")
         .accessibilityIdentifier("createGroup.type")
     }
 }
@@ -221,7 +222,10 @@ private struct FriendRow: View {
         }
         .opacity(isDisabled ? 0.4 : 1)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        // Case à cocher (ADR-076) : nom et pseudo, puis l'état, sans lire les icônes.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(user.displayName), @\(user.username)")
+        .accessibilityValue(isSelected ? "sélectionné" : "non sélectionné")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

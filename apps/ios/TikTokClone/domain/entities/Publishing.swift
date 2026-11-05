@@ -76,6 +76,8 @@ struct PublicationExtras: Equatable, Sendable {
     var downloadsEnabled = true
     var location: VideoLocation?
     var cover: URL?
+    // Texte alternatif lu par VoiceOver (ADR-076), déjà nettoyé ; nil sans texte.
+    var altText: String?
     // Abonné « Plus » (ADR-073) : vidéos jusqu'à 2 Go.
     var isPlus = false
 }
@@ -86,6 +88,8 @@ struct UploadExtras: Equatable, Sendable {
     var downloadsEnabled = true
     var location: VideoLocation?
     var coverSize: Int?
+    // Texte alternatif (ADR-076).
+    var altText: String?
 }
 
 // Réponse à la demande d'upload : une URL signée par partie, valable jusqu'à `expiresAt` (2 h). Envoi direct chez Mux
@@ -153,6 +157,8 @@ struct PendingUpload: Codable, Identifiable, Equatable, Sendable {
     var downloadsEnabled = true
     // Envoi direct chez Mux (ADR-074) : octets confirmés par Mux, d'où l'envoi reprend.
     var directSentBytes = 0
+    // Texte alternatif lu par VoiceOver (ADR-076).
+    var altText: String?
 
     // Octets déjà reçus par le stockage.
     var sentBytes: Int {
@@ -172,12 +178,13 @@ extension PendingUpload {
     private enum CodingKeys: String, CodingKey {
         case id, userID, fileName, contentType, fileSize, description, createdAt, ticket, sentParts, kind, visibility, commentsEnabled
         case soundShared, soundID, aiGenerated, location, coverFileName, coverSize, coverSent, downloadsEnabled, directSentBytes
+        case altText
     }
 
     // Un envoi enregistré avant les stories n'a pas de `kind` : c'est une vidéo ; avant les vidéos privées, pas de
     // `visibility` : elle est publique ; avant l'ADR-062, pas de `commentsEnabled` : ils sont autorisés ; avant l'ADR-064, son
     // partagé, sans son repris ; avant l'ADR-065, sans étiquette IA, lieu ni couverture ; avant l'ADR-067, téléchargement
-    // autorisé ; avant l'ADR-074, rien d'envoyé chez Mux.
+    // autorisé ; avant l'ADR-074, rien d'envoyé chez Mux ; avant l'ADR-076, sans texte alternatif.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -201,7 +208,8 @@ extension PendingUpload {
             coverSize: try container.decodeIfPresent(Int.self, forKey: .coverSize),
             coverSent: try container.decodeIfPresent(Bool.self, forKey: .coverSent) ?? false,
             downloadsEnabled: try container.decodeIfPresent(Bool.self, forKey: .downloadsEnabled) ?? true,
-            directSentBytes: try container.decodeIfPresent(Int.self, forKey: .directSentBytes) ?? 0
+            directSentBytes: try container.decodeIfPresent(Int.self, forKey: .directSentBytes) ?? 0,
+            altText: try container.decodeIfPresent(String.self, forKey: .altText)
         )
     }
 }

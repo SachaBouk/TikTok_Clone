@@ -43,6 +43,8 @@ final class ConversationViewModel: ConversationObserver {
     // Un message de l'autre attend d'être marqué lu.
     private var needsMarkRead = false
     private var lastTypingSent: Date?
+    // Annonces VoiceOver (ADR-076) : message reçu, envoi réussi ou en échec, limite d'envoi. Remplacé dans les tests.
+    @ObservationIgnored var announce: @MainActor (String) -> Void = { Accessibility.announce($0) }
 
     private let loadConversation: LoadConversationUseCase
     private let loadMessages: LoadMessagesUseCase
@@ -125,6 +127,11 @@ final class ConversationViewModel: ConversationObserver {
         guard let conversationID, let group else { return nil }
         let names = messaging.typingUserIDs(in: conversationID).compactMap { id in group.members.first { $0.user.id == id }?.user.displayName }
         return GroupRules.typingLabel(names)
+    }
+
+    // « Inès écrit… », dit par VoiceOver au début d'un épisode (ADR-076).
+    var typingSpeech: String {
+        ConversationSpeech.typing(participant: conversation?.participant, groupLabel: typingLabel)
     }
 
     var isAdmin: Bool { group?.isAdmin(ownID) == true }
@@ -337,7 +344,11 @@ final class ConversationViewModel: ConversationObserver {
         guard message.conversationID == conversationID else { return }
         // Son propre envoi (ici ou sur un autre appareil) : MessagingModel a retiré sa bulle en attente.
         if message.senderID != ownID { needsMarkRead = true }
+        let isNew = !messages.contains { $0.id == message.id }
         insert(message)
+        if isNew, let arrival = ConversationSpeech.arrival(of: message, ownID: ownID, participant: conversation?.participant, inGroup: group != nil) {
+            announce(arrival)
+        }
         conversation?.lastMessage = messages.last
         markReadIfNeeded()
     }
@@ -418,6 +429,7 @@ final class ConversationViewModel: ConversationObserver {
             let message = try await sendMessage(conversationID: outgoing.conversationID, text: outgoing.content, clientMessageID: outgoing.id)
             messaging.removeOutgoing(outgoing.id, in: outgoing.conversationID)
             insert(message)
+            announce("Message envoyé")
             guard let conversation else { return }
             analytics.track(.messageSent(conversationID: conversation.id, status: conversation.status))
             let updated = conversation.afterSending(message)
@@ -425,6 +437,7 @@ final class ConversationViewModel: ConversationObserver {
             messaging.sent(message, in: updated)
         } catch {
             messaging.setOutgoing(outgoing.id, in: outgoing.conversationID, state: .failed)
+            announce("Message non envoyé")
             await handleSendError(error)
         }
     }
@@ -438,6 +451,7 @@ final class ConversationViewModel: ConversationObserver {
             break
         case .rateLimited(let seconds):
             sendBlockedUntil = now().addingTimeInterval(TimeInterval(seconds))
+            announce("Trop de messages envoyés. Réessaie dans \(seconds) s.")
         case .rejected(let message):
             // Blocage ou demande épuisée : la conversation relue dit ce qui est encore possible.
             errorMessage = message

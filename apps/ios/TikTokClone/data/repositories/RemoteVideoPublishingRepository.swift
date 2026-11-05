@@ -17,7 +17,7 @@ struct RemoteVideoPublishingRepository: VideoPublishingRepository {
             contentType: type, fileSize: fileSize, description: description, visibility: Components.Schemas.VideoVisibility(visibility),
             commentsEnabled: commentsEnabled, soundShared: soundShared, downloadsEnabled: extras.downloadsEnabled, soundId: soundID,
             cover: extras.coverSize.map { .init(fileSize: $0) }, aiGenerated: extras.aiGenerated,
-            location: extras.location.map { .init(name: $0.name, address: $0.address) })
+            location: extras.location.map { .init(name: $0.name, address: $0.address) }, altText: extras.altText)
         switch try await mappingErrors({ try await client.createUpload(body: .json(body)) }) {
         case .created(let created): return try UploadTicket(created.body.json)
         case .notFound: throw AppError.rejected("Ce son n'est plus disponible. Choisis-en un autre.")

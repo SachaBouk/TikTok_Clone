@@ -42,7 +42,12 @@ struct HomeFeedView: View {
             }
         }
         .background(.black)
-        .overlay(alignment: .top) { FeedSelector(selection: $selection).opacity(barOpacity) }
+        .overlay(alignment: .top) {
+            FeedSelector(selection: $selection).opacity(barOpacity)
+                .accessibilityHidden(barOpacity == 0)
+                // Lus avant les vidéos (ADR-076) : sinon VoiceOver les atteint après tout le feed.
+                .accessibilitySortPriority(3)
+        }
         // Lives à faire défiler (ADR-066).
         .overlay(alignment: .topLeading) {
             Button {
@@ -57,6 +62,8 @@ struct HomeFeedView: View {
             .accessibilityLabel("Lives")
             .accessibilityIdentifier("feed.lives")
             .opacity(barOpacity)
+            .accessibilityHidden(barOpacity == 0)
+            .accessibilitySortPriority(4)
         }
         // Recherche de comptes et hashtags (ADR-049).
         .overlay(alignment: .topTrailing) {
@@ -66,6 +73,7 @@ struct HomeFeedView: View {
                         .frame(width: 44, height: 36)
                         .transition(.scale.combined(with: .opacity))
                         .accessibilityIdentifier("feed.refreshing")
+                        .onAppear { Accessibility.announce("Actualisation du feed") }
                 } else {
                     NavigationLink(value: SearchRoute()) {
                         Image(systemName: "magnifyingglass")
@@ -82,8 +90,12 @@ struct HomeFeedView: View {
             }
             .padding(.trailing, 8)
             .opacity(barOpacity)
+            .accessibilityHidden(barOpacity == 0)
+            .accessibilitySortPriority(2)
         }
         .animation(.easeInOut(duration: 0.15), value: barOpacity)
+        // Conteneur : les priorités ci-dessus mettent « Lives », le sélecteur et la loupe avant les vidéos (ADR-076).
+        .accessibilityElement(children: .contain)
         // Affichage allégé (ADR-067) : sans barre d'onglets ; les barres du haut ne se touchent plus.
         .toolbarVisibility(container.playbackOptions.isClearMode ? .hidden : .automatic, for: .tabBar)
         .onChange(of: container.router.homeRefreshRequests) { Task { await refreshShownFeed() } }

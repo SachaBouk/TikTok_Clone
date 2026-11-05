@@ -17,11 +17,14 @@ extension View {
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
                     .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("toast")
             }
         }
         .onChange(of: message.wrappedValue) { _, text in
             guard let text else { return }
+            // Lu à voix haute (ADR-076) : la pastille disparaît avant que VoiceOver l'ait trouvée.
+            Accessibility.announce(text)
             Task {
                 try? await Task.sleep(for: .seconds(2))
                 if message.wrappedValue == text { withAnimation { message.wrappedValue = nil } }

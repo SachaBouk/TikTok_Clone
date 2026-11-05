@@ -53,6 +53,7 @@ export abstract class VideoRepository {
   abstract setSoundShared(id: string, shared: boolean): Promise<Video | null>;
   // « Autoriser le téléchargement » (ADR-067).
   abstract setDownloadsEnabled(id: string, enabled: boolean): Promise<Video | null>;
+  abstract setAltText(id: string, altText: string | null): Promise<Video | null>;
   // Sons proposés (ADR-064), auteurs `excludedAuthorIds` exclus, à partir de la position `offset`.
   abstract findSounds(query: SoundQuery, excludedAuthorIds: string[], offset: number, limit: number): Promise<Sound[]>;
   // Favori ajouté ou retiré ; faux si le son n'existe pas.

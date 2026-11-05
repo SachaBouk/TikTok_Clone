@@ -20,6 +20,8 @@ struct LibraryAsset: Identifiable, Hashable, Sendable {
     let isVideo: Bool
     // Vidéos seulement.
     let duration: Duration?
+    // Date de prise de vue, lue par VoiceOver (ADR-076) ; nil si la galerie ne la donne pas.
+    var creationDate: Date? = nil
 }
 
 // Album ; `nil` désigne « Récents » (toute la galerie).

@@ -16,7 +16,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MAX_COVER_SIZE_BYTES, MAX_DESCRIPTION_LENGTH, PLUS_MAX_VIDEO_SIZE_BYTES, SUPPORTED_VIDEO_TYPES } from '../domain/upload-rules';
-import { MAX_LOCATION_ADDRESS_LENGTH, MAX_LOCATION_NAME_LENGTH, VIDEO_VISIBILITIES, type VideoVisibility } from '../domain/video';
+import {
+  MAX_ALT_TEXT_LENGTH,
+  MAX_LOCATION_ADDRESS_LENGTH,
+  MAX_LOCATION_NAME_LENGTH,
+  VIDEO_VISIBILITIES,
+  type VideoVisibility,
+} from '../domain/video';
 
 // Corps de requête validés par le ValidationPipe global (main.ts) ; limites issues des règles du domaine.
 
@@ -113,6 +119,12 @@ export class CreateUploadRequest {
   @ValidateNested()
   @Type(() => VideoLocationRequest)
   location?: VideoLocationRequest;
+
+  @ApiPropertyOptional({ maxLength: MAX_ALT_TEXT_LENGTH, description: 'Texte alternatif lu par VoiceOver (ADR-076).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_ALT_TEXT_LENGTH)
+  altText?: string;
 }
 
 export class SetSoundSettingsRequest {
@@ -125,6 +137,15 @@ export class SetDownloadSettingsRequest {
   @ApiProperty({ description: '« Autoriser le téléchargement » (ADR-067).' })
   @IsBoolean()
   downloadsEnabled!: boolean;
+}
+
+export class SetAltTextRequest {
+  // Vide ou nul : texte alternatif retiré.
+  @ApiProperty({ type: String, nullable: true, maxLength: MAX_ALT_TEXT_LENGTH, description: 'Texte alternatif (ADR-076).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_ALT_TEXT_LENGTH)
+  altText!: string | null;
 }
 
 export class SetVideoVisibilityRequest {

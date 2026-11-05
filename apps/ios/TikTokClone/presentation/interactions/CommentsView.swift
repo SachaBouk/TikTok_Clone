@@ -49,6 +49,8 @@ struct CommentsView: View {
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         Text(title).font(.subheadline.weight(.semibold))
+                            .accessibilityLabel(SpokenText.count(viewModel.count, "commentaire", "commentaires"))
+                            .accessibilityHeading()
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Fermer", systemImage: "xmark") { close() }
@@ -164,7 +166,10 @@ struct CommentsView: View {
                     if viewModel.isSignedIn { isComposing = true }
                 },
                 like: { Task { await viewModel.toggleLike(comment) } },
-                dislike: { viewModel.toggleDislike(comment) }
+                dislike: { viewModel.toggleDislike(comment) },
+                showReplies: !comment.isReply && comment.repliesCount > 0 && !viewModel.expandedThreads.contains(comment.id)
+                    ? { Task { await viewModel.showReplies(of: comment) } } : nil,
+                hideReplies: viewModel.expandedThreads.contains(comment.id) ? { viewModel.hideReplies(of: comment) } : nil
             )
         )
         .swipeActions(edge: .trailing) {
@@ -366,6 +371,9 @@ struct CommentRow: View {
         var reply: () -> Void
         var like: () -> Void
         var dislike: () -> Void
+        // Fil de réponses (commentaire d'origine) : actions VoiceOver « Afficher les réponses » / « Masquer les réponses ».
+        var showReplies: (() -> Void)? = nil
+        var hideReplies: (() -> Void)? = nil
     }
 
     // Retrait des réponses sous leur commentaire.
@@ -406,7 +414,32 @@ struct CommentRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if !isDisliked { reactions }
         }
-        .accessibilityElement(children: .contain)
+        // Un commentaire = un élément (ADR-076), lu en une phrase ; ses boutons et ses liens dans le rotor « Actions ».
+        // Supprimer et Signaler (glisser) y sont aussi, ajoutés par la liste.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(CommentRowSpeech.label(comment, isCreator: isCreator, isDisliked: isDisliked))
+        .accessibilityActions {
+            if isDisliked {
+                Button("Afficher le commentaire", action: actions.dislike)
+            } else {
+                Button("Répondre", action: actions.reply)
+                Button(comment.viewerLiked == true ? "Je n’aime plus" : "J’aime", action: actions.like)
+                Button("Je n’aime pas", action: actions.dislike)
+            }
+            Button("Profil de \(comment.author.displayName)") { actions.openProfile(comment.author.username) }
+            if !isDisliked {
+                ForEach(CommentRowSpeech.links(in: comment.content), id: \.self) { link in
+                    Button(link.actionName) {
+                        switch link {
+                        case .mention(let username): actions.openProfile(username)
+                        case .hashtag(let name): actions.openHashtag(name)
+                        }
+                    }
+                }
+            }
+            if let show = actions.showReplies { Button("Afficher les réponses", action: show) }
+            if let hide = actions.hideReplies { Button("Masquer les réponses", action: hide) }
+        }
         .accessibilityIdentifier("comment.\(comment.id)")
     }
 

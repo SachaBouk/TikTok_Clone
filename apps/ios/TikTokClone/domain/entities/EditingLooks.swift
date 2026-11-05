@@ -339,6 +339,15 @@ struct EffectTrack: Equatable, Sendable {
         effects.removeAll { $0.id == id }
     }
 
+    // Plage déplacée d'un bloc (action VoiceOver, ADR-076) : même durée, toujours dans la vidéo.
+    mutating func move(_ id: UUID, by delta: Duration) {
+        guard let index = effects.firstIndex(where: { $0.id == id }) else { return }
+        let length = effects[index].duration
+        let start = min(max(effects[index].start + delta, .zero), duration - length)
+        effects[index].start = start
+        effects[index].end = start + length
+    }
+
     // Effets actifs à `time`, dans l'ordre où ils ont été posés.
     static func active(_ effects: [TimedEffect], at time: Duration) -> [VideoEffect] {
         effects.filter { $0.contains(time) }.map(\.effect)

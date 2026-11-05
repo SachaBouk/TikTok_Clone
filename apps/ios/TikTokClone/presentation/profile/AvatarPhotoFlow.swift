@@ -127,7 +127,7 @@ struct AvatarCropView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text("Aperçu")
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.right").accessibilityHidden(true)
                     }
                     .foregroundStyle(.secondary)
                 }

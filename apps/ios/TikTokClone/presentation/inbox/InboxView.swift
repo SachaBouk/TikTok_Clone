@@ -74,6 +74,9 @@ struct InboxView: View {
                     .swipeActions {
                         Button("Supprimer", systemImage: "trash", role: .destructive) { deleting = conversation }
                     }
+                    .accessibilityActions {
+                        Button("Supprimer la conversation") { deleting = conversation }
+                    }
                     .onAppear { Task { await messaging.inbox.loadMore(ifNeededAfter: conversation) } }
                     .accessibilityIdentifier("inbox.conversation")
                 }
@@ -206,6 +209,9 @@ private struct InboxShortcutRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        // Une phrase (ADR-076) : l'icône est un décor.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SpokenText.join([title, subtitle, count > 0 ? SpokenText.count(count, "non lu", "non lus") : nil]))
     }
 }
 
@@ -250,6 +256,9 @@ struct ConversationRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        // Une phrase (ADR-076) : nom, aperçu, date dite en entier, non lus ; ni « · » ni photos.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ConversationSpeech.rowLabel(conversation, ownID: ownID, isTyping: isTyping))
     }
 
     private var subtitle: String {

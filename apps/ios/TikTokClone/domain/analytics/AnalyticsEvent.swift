@@ -400,6 +400,7 @@ extension PublicationDetails {
         properties["mention_count"] = .int(mentionCount)
         properties["ai_generated"] = .bool(aiGenerated)
         properties["saved_to_device"] = .bool(savedToDevice)
+        properties["alt_text"] = .bool(altText)
         return properties
     }
 }

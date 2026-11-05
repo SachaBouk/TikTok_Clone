@@ -4,7 +4,7 @@ import type { FeedItemDto, FeedPageDto, FeedViewerStateDto, VideoPageDto } from 
 import { toUserSummary, UserSummaryResponse } from '../../users/interfaces/user-summary.response';
 import type { FeedItem } from '../application/feed.service';
 import { VIDEO_VISIBILITIES, type VideoVisibility } from '../../videos/domain/video';
-import { locationOf, VideoLocationResponse } from '../../videos/interfaces/videos.responses';
+import { altTextOf, locationOf, VideoLocationResponse } from '../../videos/interfaces/videos.responses';
 
 // Schémas OpenAPI des DTO partagés : `implements` garantit à la compilation que chaque classe suit son type.
 
@@ -54,6 +54,9 @@ export class FeedItemResponse implements FeedItemDto {
   // Absent sans lieu (ADR-065). Sans description : elle produirait un `allOf`.
   @ApiPropertyOptional({ type: VideoLocationResponse })
   location?: VideoLocationResponse;
+
+  @ApiPropertyOptional({ description: "Texte alternatif écrit par l'auteur (ADR-076), absent sans texte." })
+  altText?: string;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -128,6 +131,7 @@ export function toFeedItemDto({ video, author, viewer, authorStory, viewedAt }: 
     downloadsEnabled: video.downloadsEnabled,
     aiGenerated: video.aiGenerated,
     ...locationOf(video),
+    ...altTextOf(video),
     createdAt: video.createdAt.toISOString(),
     viewsCount: video.viewsCount,
     likesCount: video.likesCount,

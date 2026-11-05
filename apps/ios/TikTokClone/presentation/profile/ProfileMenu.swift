@@ -52,6 +52,11 @@ struct ProfileMenuOverlay: View {
         .scrollBounceBehavior(.basedOnSize)
         .containerRelativeFrame(.horizontal) { width, _ in width * 0.85 }
         .background(Color(.systemBackground).ignoresSafeArea())
+        // Panneau modal pour VoiceOver (ADR-076) : le curseur y reste ; geste d'échappement (Z à deux doigts) = fermer.
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { isOpen = false }
+        .onAppear { Accessibility.screenChanged() }
         .accessibilityIdentifier("profileMenu")
     }
 
@@ -72,9 +77,10 @@ struct ProfileMenuOverlay: View {
                 Image(systemName: systemImage)
                     .font(.title3)
                     .frame(width: 28)
+                    .accessibilityHidden(true)
                 Text(title).font(.title3.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .padding(.vertical, 16)
             .contentShape(Rectangle())

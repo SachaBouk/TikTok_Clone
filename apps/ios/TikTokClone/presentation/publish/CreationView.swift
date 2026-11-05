@@ -183,6 +183,8 @@ private struct PhotoStoryPreview: View {
                     if let preview = video.preview { Image(uiImage: preview).resizable().scaledToFit() }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement()
+                .accessibilityLabel("Photo de la story")
                 .overlay(alignment: .topLeading) {
                     Button("Retour", systemImage: "chevron.left", action: onBack)
                         .labelStyle(.iconOnly)
@@ -198,6 +200,7 @@ private struct PhotoStoryPreview: View {
                     AvatarView(url: container.session.profile?.avatarURL, name: container.session.profile?.displayName ?? "", size: 28)
                         .padding(2)
                         .overlay(Circle().stroke(Color.brandCyan, lineWidth: 2))
+                        .accessibilityHidden(true)
                     Text("Ta story").font(.headline)
                 }
                 .foregroundStyle(.white)
@@ -207,6 +210,7 @@ private struct PhotoStoryPreview: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
+            .accessibilityLabel("Publier en story")
             .accessibilityIdentifier("publish.submit")
         }
         .background(Color.black.ignoresSafeArea())

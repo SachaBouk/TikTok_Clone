@@ -47,7 +47,8 @@ struct PhotoKitMediaLibrary: MediaLibrary {
             let isVideo = asset.mediaType == .video
             assets.append(
                 LibraryAsset(
-                    id: asset.localIdentifier, isVideo: isVideo, duration: isVideo ? .milliseconds(Int64(asset.duration * 1000)) : nil))
+                    id: asset.localIdentifier, isVideo: isVideo, duration: isVideo ? .milliseconds(Int64(asset.duration * 1000)) : nil,
+                    creationDate: asset.creationDate))
         }
         return assets
     }

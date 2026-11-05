@@ -49,6 +49,8 @@ export interface Video {
   aiGenerated: boolean;
   locationName: string | null;
   locationAddress: string | null;
+  // Texte alternatif écrit par l'auteur (ADR-076), lu par VoiceOver ; nul sans texte.
+  altText: string | null;
   // Durée maximale permise (ADR-073) : fixée à la confirmation de l'envoi, 600 s pour un abonné « Plus » ; nulle sinon
   // (durée par défaut du worker, ADR-040).
   maxDurationSeconds: number | null;
@@ -71,6 +73,8 @@ export interface PublishedVideo extends MuxPlayback {
   aiGenerated: boolean;
   locationName: string | null;
   locationAddress: string | null;
+  // Texte alternatif écrit par l'auteur (ADR-076), lu par VoiceOver ; nul sans texte.
+  altText: string | null;
   hlsUrl: string;
   thumbnailUrl: string;
   viewsCount: number;
@@ -99,6 +103,8 @@ export interface VideoDetails extends MuxPlayback {
   aiGenerated: boolean;
   locationName: string | null;
   locationAddress: string | null;
+  // Texte alternatif écrit par l'auteur (ADR-076), lu par VoiceOver ; nul sans texte.
+  altText: string | null;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
   viewsCount: number;
@@ -165,11 +171,22 @@ export interface NewVideo {
   aiGenerated?: boolean;
   locationName?: string | null;
   locationAddress?: string | null;
+  // Texte alternatif (ADR-076).
+  altText?: string | null;
 }
 
 // Lieu de la publication (ADR-065), longueurs bornées (aussi par une contrainte CHECK).
 export const MAX_LOCATION_NAME_LENGTH = 100;
 export const MAX_LOCATION_ADDRESS_LENGTH = 200;
+
+// Texte alternatif d'une vidéo (ADR-076) : espaces et retours à la ligne réduits, vide = retiré. Longueur bornée
+// (aussi par une contrainte CHECK).
+export const MAX_ALT_TEXT_LENGTH = 300;
+
+export function cleanAltText(text: string | null | undefined): string | null {
+  const cleaned = (text ?? '').replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
 
 // Son d'une vidéo publiée, réutilisable par les autres (ADR-064) : « Son original - @pseudo ».
 export interface Sound {

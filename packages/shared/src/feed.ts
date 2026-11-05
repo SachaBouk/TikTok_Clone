@@ -29,6 +29,8 @@ export interface FeedItemDto {
   downloadsEnabled: boolean;
   // Étiquette « Contenu généré par l'IA » (ADR-065).
   aiGenerated: boolean;
+  // Texte alternatif écrit par l'auteur (ADR-076), absent sans texte.
+  altText?: string;
   // Lieu (ADR-065), absent sans lieu.
   location?: VideoLocationDto;
   createdAt: string;

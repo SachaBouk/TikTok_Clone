@@ -207,7 +207,7 @@ struct GiftSheet: View {
                 HStack(spacing: 8) {
                     TokenCoin(size: 22)
                     Text("Recharger").font(.title3.weight(.medium))
-                    Image(systemName: "chevron.right").font(.subheadline.weight(.semibold))
+                    Image(systemName: "chevron.right").accessibilityHidden(true).font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)

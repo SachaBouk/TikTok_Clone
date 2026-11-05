@@ -28,6 +28,8 @@ struct ProfileTitleHeader: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                     .plusBadge(profile.isPlus || isPlus, size: 22)
+                    // Titre de l'écran pour VoiceOver (ADR-076).
+                    .accessibilityAddTraits(.isHeader)
                 HStack(spacing: 4) {
                     Text("@\(profile.username)").lineLimit(1)
                     if let pronouns = profile.pronouns, !pronouns.isEmpty {
@@ -37,14 +39,23 @@ struct ProfileTitleHeader: View {
                 }
                 .font(.body)
                 .foregroundStyle(.secondary)
+                // Une phrase : « @pseudo, pronoms il/lui » (le « · » serait lu « point »).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    SpokenText.join(["@\(profile.username)", profile.pronouns.flatMap { $0.isEmpty ? nil : "pronoms \($0)" }]))
                 HStack(spacing: 26) {
                     NavigationLink(value: FollowListRoute(kind: .following, username: profile.username)) {
                         counter(profile.followingCount, "Suivis")
                     }
+                    .accessibilityLabel(SpokenText.count(profile.followingCount, "abonnement", "abonnements"))
                     NavigationLink(value: FollowListRoute(kind: .followers, username: profile.username)) {
                         counter(profile.followersCount, "Followers")
                     }
+                    .accessibilityLabel(SpokenText.count(profile.followersCount, "abonné", "abonnés"))
                     counter(profile.likesCount, "J’aime")
+                        // Nombres en entier (« 1,2 k » serait lu tel quel).
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(SpokenText.count(profile.likesCount, "j'aime reçu", "j'aime reçus"))
                         .accessibilityIdentifier("profile.likes")
                 }
                 .buttonStyle(.plain)
@@ -309,7 +320,7 @@ struct ProfileSuggestionsRow: View {
                 Button(action: showAll) {
                     HStack(spacing: 4) {
                         Text("Tout voir")
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                        Image(systemName: "chevron.right").accessibilityHidden(true).font(.footnote.weight(.semibold))
                     }
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -753,6 +764,7 @@ struct ProfileShareSheet: View {
     private func copyLink() {
         UIPasteboard.general.string = sharedText
         copied = true
+        Accessibility.announce("Lien copié")
         Task {
             try? await Task.sleep(for: .milliseconds(700))
             dismiss()

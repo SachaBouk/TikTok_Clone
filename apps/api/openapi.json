@@ -1283,6 +1283,66 @@
         ]
       }
     },
+    "/videos/{id}/alt-text": {
+      "patch": {
+        "operationId": "setVideoAltText",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAltTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token absent, invalide ou expiré.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Vidéo inconnue ou appartenant à un autre utilisateur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "videos"
+        ]
+      }
+    },
     "/videos/{id}/download-settings": {
       "patch": {
         "operationId": "setVideoDownloadSettings",
@@ -10621,6 +10681,11 @@
           },
           "location": {
             "$ref": "#/components/schemas/VideoLocationRequest"
+          },
+          "altText": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Texte alternatif lu par VoiceOver (ADR-076)."
           }
         },
         "required": [
@@ -10691,6 +10756,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/VideoLocationResponse"
+          },
+          "altText": {
+            "type": "string",
+            "description": "Texte alternatif écrit par l'auteur (ADR-076), absent sans texte."
           },
           "hlsUrl": {
             "type": "string",
@@ -10857,6 +10926,20 @@
         },
         "required": [
           "soundShared"
+        ]
+      },
+      "SetAltTextRequest": {
+        "type": "object",
+        "properties": {
+          "altText": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "description": "Texte alternatif (ADR-076)."
+          }
+        },
+        "required": [
+          "altText"
         ]
       },
       "SetDownloadSettingsRequest": {
@@ -12490,6 +12573,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/VideoLocationResponse"
+          },
+          "altText": {
+            "type": "string",
+            "description": "Texte alternatif écrit par l'auteur (ADR-076), absent sans texte."
           },
           "createdAt": {
             "type": "string",

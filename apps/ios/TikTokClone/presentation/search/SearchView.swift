@@ -127,7 +127,7 @@ struct SearchView: View {
                 HStack {
                     label()
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").accessibilityHidden(true).font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 .contentShape(Rectangle())
             }

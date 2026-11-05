@@ -35,6 +35,9 @@ struct FeedView: View {
     @Environment(\.navigationPath) private var navigationPath
     // Faux quand un autre écran est poussé par-dessus (profil, lecteur d'une grille).
     @State private var isOnScreen = false
+    // VoiceOver (ADR-076) : curseur posé sur la vidéo qui devient courante.
+    @AccessibilityFocusState private var focusedEntry: String?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(SessionStore.self) private var session
     @Environment(\.scenePhase) private var scenePhase
 
@@ -85,7 +88,16 @@ struct FeedView: View {
         }
         .onChange(of: viewModel.currentEntryID) { _, id in
             if scrolledID != id { scrolledID = id }
+            // Nouvelle vidéo (défilement, défilement automatique, vidéo retirée) : VoiceOver la lit (ADR-076).
+            if voiceOver, let id, isTabActive, isOnScreen {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    if viewModel.currentEntryID == id { focusedEntry = id }
+                }
+            }
         }
+        // Magic Tap (toucher deux fois avec deux doigts) : pause ou reprise, d'où que soit le curseur (ADR-076).
+        .accessibilityAction(.magicTap) { viewModel.togglePause() }
         .onChange(of: scrolledID) { _, id in
             if let id, id != viewModel.currentEntryID {
                 viewModel.show(id)
@@ -266,7 +278,10 @@ struct FeedView: View {
                 gift: { openGifts(entry.video) },
                 // Avatar entouré de l'anneau (ADR-051) : ses stories, par-dessus le feed (mis en pause).
                 openStories: { container.router.openStories([entry.video.author], source: .feed) },
-                openMenu: { menuVideo = interactions.display(entry.video) }
+                openMenu: { menuVideo = interactions.display(entry.video) },
+                openAuthorProfile: { openProfile(entry.video.author.username) },
+                next: neighbor(of: entry.id, offset: 1).map { id in { scroll(to: id) } },
+                previous: neighbor(of: entry.id, offset: -1).map { id in { scroll(to: id) } }
             ),
             // Barre de progression : la vidéo courante seulement.
             progress: entry.id == viewModel.currentEntryID ? { pool.progress(of: entry.video.id) } : nil,
@@ -276,10 +291,25 @@ struct FeedView: View {
             seek: { pool.seek(entry.video.id, to: $0) },
             scrubbing: { pool.setScrubbing($0, videoID: entry.video.id) },
             openFullScreen: entry.id == viewModel.currentEntryID && isTabActive && isOnScreen
-                ? { withoutAnimation { fullScreenVideo = entry.video } } : nil
+                ? { withoutAnimation { fullScreenVideo = entry.video } } : nil,
+            autoDescription: container.autoDescriptions.description(for: entry.video),
+            focus: $focusedEntry,
+            focusID: entry.id
         )
         .containerRelativeFrame([.horizontal, .vertical])
         .id(entry.id)
+        .onAppear { container.autoDescriptions.prepare(entry.video) }
+    }
+
+    // Page voisine (vidéo ou carrousel), pour les actions « Vidéo suivante / précédente » de VoiceOver (ADR-076).
+    private func neighbor(of id: String, offset: Int) -> String? {
+        let pages = viewModel.pages
+        guard let index = pages.firstIndex(where: { $0.id == id }), pages.indices.contains(index + offset) else { return nil }
+        return pages[index + offset].id
+    }
+
+    private func scroll(to id: String) {
+        withAnimation(.easeInOut(duration: 0.3)) { scrolledID = id }
     }
 
     private var swipeAuthor: UserSummary? {
@@ -359,6 +389,11 @@ struct VideoPageActions {
     var openStories: (() -> Void)? = nil
     // Appui long au milieu de la vidéo (ADR-067) : menu de la vidéo.
     var openMenu: () -> Void = {}
+    // Équivalents VoiceOver des balayages (ADR-076) : profil de l'auteur (vers la gauche), vidéo suivante ou précédente
+    // (vers le haut ou le bas). Nil : pas d'action (dernière vidéo, vidéo seule).
+    var openAuthorProfile: (() -> Void)? = nil
+    var next: (() -> Void)? = nil
+    var previous: (() -> Void)? = nil
 }
 
 // Une page vidéo : miniature, puis vidéo dès que le lecteur est prêt ; pastille de republication, auteur, description
@@ -385,6 +420,10 @@ struct FeedPageView: View {
     // Plein écran en paysage d'une vidéo horizontale : bouton sous la vidéo, ou iPhone tourné. Nil : la page n'est pas
     // celle qu'on regarde (autre page, feed caché ou recouvert).
     var openFullScreen: (() -> Void)? = nil
+    // VoiceOver (ADR-076) : description automatique de la miniature, et curseur posé sur la vidéo à son arrivée.
+    var autoDescription: String? = nil
+    var focus: AccessibilityFocusState<String?>.Binding? = nil
+    var focusID = ""
     @State private var burst: HeartBurst?
     @State private var width: CGFloat = 0
     // Taille affichée de la vidéo, lue sur le lecteur (zéro tant qu'elle n'est pas prête).
@@ -424,6 +463,13 @@ struct FeedPageView: View {
                     model: options, width: width, bottomInset: bottomInset, isEnabled: revealReported == nil,
                     allowsFast: !showsPauseIndicator, openMenu: actions.openMenu)
             )
+            .modifier(
+                VideoAccessibility(
+                    video: video, isPlaying: !showsPauseIndicator, autoDescription: autoDescription, actions: actions, options: options,
+                    focus: focus, focusID: focusID)
+            )
+            // Sous le voile d'un signalement, la vidéo n'est plus proposée à VoiceOver (ADR-076).
+            .accessibilityHidden(revealReported != nil)
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.width
             } action: {
@@ -438,7 +484,8 @@ struct FeedPageView: View {
                         .shadow(color: .black.opacity(0.2), radius: 6)
                         .transition(.scale.combined(with: .opacity))
                         .allowsHitTesting(false)
-                        .accessibilityLabel("En pause")
+                        // L'état est dit par l'élément « vidéo » (ADR-076).
+                        .accessibilityHidden(true)
                 }
             }
             .overlay {
@@ -484,6 +531,7 @@ struct FeedPageView: View {
                                 .padding(.horizontal, 10)
                                 .frame(height: 26)
                                 .background(.white.opacity(0.92), in: Capsule())
+                                .accessibilityHidden(true)
                                 .accessibilityIdentifier("video.private")
                         }
                         authorAndDescription
@@ -499,6 +547,7 @@ struct FeedPageView: View {
                         .allowsHitTesting(false)
                 }
                 .opacity(hidesOverlays ? 0 : 1)
+                .accessibilityHidden(hidesOverlays || revealReported != nil)
             }
             .overlay(alignment: .bottom) {
                 if let progress {
@@ -509,6 +558,7 @@ struct FeedPageView: View {
                         .padding(.vertical, Self.scrubTouchMargin)
                         .contentShape(Rectangle())
                         .gesture(scrubGesture, isEnabled: seek != nil && revealReported == nil && options?.isHolding != true)
+                        .modifier(AccessibleProgress(progress: progress, seek: revealReported == nil ? seek : nil))
                         // Barre de 18 pt (place du gros point) : 6 pt plus bas, la ligne reste où elle était.
                         .padding(.bottom, bottomInset + Self.progressBarGap - Self.scrubTouchMargin - 6)
                         .opacity(hidesOverlays && !scrubbing ? 0 : 1)
@@ -589,7 +639,8 @@ struct FeedPageView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(.black.opacity(0.35), in: Capsule())
-                    .accessibilityLabel("Lieu : \(location.name)")
+                    // Dit par l'élément « vidéo » (ADR-076).
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("video.location")
             }
             NavigationLink(value: ProfileRoute(username: video.author.username)) {
@@ -603,6 +654,8 @@ struct FeedPageView: View {
                     .font(.subheadline).lineLimit(3)
                     .tint(.white)
                     .allowsHitTesting(HashtagText.hasLinks(description, mentions: true))
+                    // Lue par l'élément « vidéo », hashtags et mentions en actions (ADR-076).
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("video.description")
             }
             // Étiquette « Contenu généré par l'IA » (ADR-065).
@@ -612,6 +665,7 @@ struct FeedPageView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(.black.opacity(0.35), in: Capsule())
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("video.aiGenerated")
             }
         }
@@ -659,8 +713,10 @@ struct ReportedVideoMask: View {
                         .foregroundStyle(Color(red: 0.13, green: 0.85, blue: 0.6))
                         .frame(width: 78, height: 78)
                         .background(.white.opacity(0.15), in: Circle())
+                        .accessibilityHidden(true)
                     Text("Merci pour ton signalement")
                         .font(.title3.bold())
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.top, 22)
                     Text("Pour améliorer ton expérience, cette vidéo a été masquée.")
                         .font(.subheadline)
@@ -991,6 +1047,8 @@ struct FollowPlusButton: View {
 
     private func confirm() async {
         phase = .confirming
+        // Le « + » disparaît : l'abonnement est dit à voix haute (ADR-076).
+        Accessibility.announce("Abonné(e) à @\(username)")
         withAnimation(.easeIn(duration: Self.shrink.seconds)) { plusScale = 0 }
         try? await Task.sleep(for: Self.shrink)
         showsCheck = true

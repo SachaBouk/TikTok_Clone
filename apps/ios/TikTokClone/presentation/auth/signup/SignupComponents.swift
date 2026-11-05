@@ -107,6 +107,9 @@ struct SignupErrorText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier(identifier)
+            // Lu à voix haute dès qu'il apparaît (ADR-076).
+            .onAppear { Accessibility.announce(message, important: true) }
+            .onChange(of: message) { _, text in Accessibility.announce(text, important: true) }
     }
 }
 

@@ -227,18 +227,31 @@ struct CoverEditorView: View {
                 if let large { Image(uiImage: large).resizable().scaledToFill() }
             }
             .clipped()
-            .overlay {
-                GeometryReader { proxy in
-                    if let style = choice.style, !isEditingTitle {
-                        CoverTitleView(style: style, text: choice.title, unit: proxy.size.width / 10, placeholder: choice.title.isEmpty)
-                            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                            .onTapGesture { startEditing() }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityIdentifier("cover.title")
-                    }
-                }
-            }
+            .accessibilityElement()
+            .accessibilityLabel("Aperçu de la couverture")
+            .accessibilityValue(CoverSpeech.value(time: choice.time, duration: duration))
+            .overlay { GeometryReader { proxy in title(in: proxy.size) } }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("cover.preview")
+    }
+
+    // Titre de la couverture, au centre : le toucher le modifie.
+    @ViewBuilder
+    private func title(in size: CGSize) -> some View {
+        if let style = choice.style, !isEditingTitle {
+            CoverTitleView(style: style, text: choice.title, unit: size.width / 10, placeholder: choice.title.isEmpty)
+                .position(x: size.width / 2, y: size.height / 2)
+                .onTapGesture { startEditing() }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(titleLabel)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { startEditing() }
+                .accessibilityIdentifier("cover.title")
+        }
+    }
+
+    private var titleLabel: String {
+        choice.title.isEmpty ? "Saisir le titre de la couverture" : "Titre de la couverture : \(choice.title)"
     }
 
     // Frise : une image par dixième de la vidéo ; l'image choisie, plus grande, bordée de rose. Glisser ou toucher choisit.
@@ -280,7 +293,8 @@ struct CoverEditorView: View {
         .frame(height: 76)
         .accessibilityElement()
         .accessibilityLabel("Image de la couverture")
-        .accessibilityValue(TimelineTime.label(choice.time))
+        .accessibilityValue(CoverSpeech.value(time: choice.time, duration: duration))
+        .accessibilityHint("Balaie vers le haut ou le bas pour choisir l’image suivante ou précédente")
         .accessibilityAdjustableAction { direction in
             let step = duration / Double(CoverChoice.frameCount)
             choice.time = direction == .increment ? min(choice.time + step, duration - .milliseconds(100)) : max(.zero, choice.time - step)
@@ -319,12 +333,14 @@ struct CoverEditorView: View {
                         }
                     }
                     .overlay { RoundedRectangle(cornerRadius: 10).stroke(Color.brandPink, lineWidth: selected ? 3 : 0) }
+                    .accessibilityHidden(true)
                 Text(style?.title ?? "Aucun")
                     .font(.subheadline)
                     .foregroundStyle(selected ? Color.brandPink : .primary)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(style.map { "Style de titre \($0.title)" } ?? "Aucun titre")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("cover.style.\(style?.rawValue ?? "none")")
     }
@@ -345,7 +361,7 @@ struct CoverEditorView: View {
                 .padding(.top, 8)
                 Spacer()
                 if let style = choice.style {
-                    CoverTitleView(style: style, text: typing, unit: 40, placeholder: typing.isEmpty)
+                    CoverTitleView(style: style, text: typing, unit: 40, placeholder: typing.isEmpty).accessibilityHidden(true)
                 }
                 // Champ de saisie sous le titre stylé : le titre suit la frappe.
                 TextField("", text: $typing, prompt: Text("Saisis un texte").foregroundStyle(.white.opacity(0.6)))
@@ -361,6 +377,7 @@ struct CoverEditorView: View {
                     .onChange(of: typing) { _, text in
                         if text.count > CoverChoice.maxTitleLength { typing = String(text.prefix(CoverChoice.maxTitleLength)) }
                     }
+                    .accessibilityLabel("Titre de la couverture")
                     .accessibilityIdentifier("cover.titleField")
                 Spacer()
             }

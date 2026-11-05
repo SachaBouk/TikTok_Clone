@@ -31,6 +31,8 @@ struct VideoShareSheet: View {
     @State private var isShowingAllRecipients = false
     // Envoi fait depuis la liste complète : la feuille se ferme à son tour.
     @State private var sentFromList = false
+    // Texte alternatif de sa vidéo (ADR-076).
+    @State private var isEditingAltText = false
     @Environment(\.dismiss) private var dismiss
 
     // SMS ou email pré-rempli (MessageUI).
@@ -84,6 +86,16 @@ struct VideoShareSheet: View {
                 .presentationDetents([.large])
                 .presentationCornerRadius(16)
                 .presentationBackground(.white)
+            }
+        }
+        .sheet(isPresented: $isEditingAltText) {
+            AltTextEditor(initialText: current.altText ?? "") { text in
+                let message = await interactions.setAltText(text, of: video)
+                if message == nil {
+                    Accessibility.announce(AltTextRules.cleaned(text) == nil ? "Texte alternatif retiré" : "Texte alternatif enregistré")
+                    dismiss()
+                }
+                return message
             }
         }
         .sheet(item: $composer) { composer in
@@ -165,8 +177,14 @@ struct VideoShareSheet: View {
         }
     }
 
-    // Ligne 3 : « Signaler », ou « Rendre privée / publique », commentaires et « Supprimer » sur sa vidéo.
+    // Ligne 3 : « Signaler », ou « Rendre privée / publique », commentaires, téléchargement, texte alternatif (ADR-076) et
+    // « Supprimer » sur sa vidéo ; défilante, elle dépasse la largeur de l'écran.
     private var ownerRow: some View {
+        ScrollView(.horizontal) { ownerTargets }
+            .scrollIndicators(.hidden)
+    }
+
+    private var ownerTargets: some View {
         HStack(alignment: .top, spacing: 14) {
             if isOwn {
                 // Vidéo privée ou publique (ADR-061).
@@ -206,6 +224,15 @@ struct VideoShareSheet: View {
                     }
                 }
                 .accessibilityIdentifier("share.downloads")
+                // Texte alternatif lu par VoiceOver (ADR-076).
+                ShareTarget(
+                    title: "Texte alternatif", systemImage: current.altText == nil ? "text.below.photo" : "text.below.photo.fill",
+                    color: Color(.systemGray5), iconColor: .primary
+                ) {
+                    isEditingAltText = true
+                }
+                .accessibilityValue(current.altText == nil ? "Aucun" : "Défini")
+                .accessibilityIdentifier("share.altText")
                 ShareTarget(title: "Supprimer", systemImage: "trash.fill", color: Color(.systemGray5), iconColor: .red) {
                     isConfirmingDelete = true
                 }
@@ -233,7 +260,7 @@ struct VideoShareSheet: View {
 
     private var header: some View {
         ZStack {
-            Text("Envoyer à").font(.headline)
+            Text("Envoyer à").font(.headline).accessibilityAddTraits(.isHeader)
             HStack {
                 // Liste complète et recherche (compte connecté, vidéo publique).
                 if recipients != nil, current.visibility != .onlyMe {
@@ -297,14 +324,25 @@ struct VideoShareSheet: View {
         .buttonStyle(.plain)
         .disabled(model.isSending)
         .accessibilityLabel("Envoyer à \(recipient.label)")
+        .accessibilityValue(Self.deliveryValue(model.deliveries[recipient.id]))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("share.recipient")
+    }
+
+    // État d'un envoi, lu par VoiceOver (ADR-076) : le libellé ne change pas, la coche ne se voit pas.
+    static func deliveryValue(_ delivery: SendVideoViewModel.Delivery?) -> String {
+        switch delivery {
+        case .sending: "Envoi en cours"
+        case .sent: "Envoyé"
+        default: ""
+        }
     }
 
     // Lien copié (message et lien, pour qu'un collage garde le lien), compté comme un partage.
     private func copyLink() {
         UIPasteboard.general.string = content.copiedText
         copied = true
+        Accessibility.announce("Lien copié")
         shared(closing: false)
         Task {
             try? await Task.sleep(for: .milliseconds(700))
@@ -348,6 +386,7 @@ struct ShareTarget: View {
                     .foregroundStyle(iconColor)
                     .frame(width: 64, height: 64)
                     .background(color, in: Circle())
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.footnote)
                     .lineLimit(3)

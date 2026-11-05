@@ -181,7 +181,7 @@ struct EditorPreviewView: View {
                     }
                 }
                 .overlay {
-                    if let flashFilter { FilterFlash(filter: flashFilter) }
+                    if let flashFilter { FilterFlash(filter: flashFilter).accessibilityHidden(true) }
                 }
                 HStack(alignment: .top) {
                     backButton
@@ -249,6 +249,7 @@ struct EditorPreviewView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { preview.play() } else { preview.pause() }
         }
+        .accessibilityAnnounces(model.problem)
         .onChange(of: model.plan.filter) { _, filter in
             if isPickingFilter, filter != .none { flashFilter = filter }
         }
@@ -258,9 +259,13 @@ struct EditorPreviewView: View {
             if !Task.isCancelled { flashFilter = nil }
         }
         .sheet(isPresented: $isPickingSticker) {
-            StickerPickerView { kind, text in model.addSticker(kind, emoji: text) }
-                .presentationDetents([.fraction(0.75), .large])
-                .presentationDragIndicator(.visible)
+            StickerPickerView { kind, text in
+                if model.addSticker(kind, emoji: text) {
+                    Accessibility.announce("Autocollant \(text) ajouté au centre de la vidéo", delay: .milliseconds(700))
+                }
+            }
+            .presentationDetents([.fraction(0.75), .large])
+            .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $isEditingEffects) {
             EffectsEditorView(model: model, preview: preview, thumbnails: thumbnails)
@@ -407,6 +412,7 @@ struct EditorPreviewView: View {
                     AvatarView(url: container.session.profile?.avatarURL, name: container.session.profile?.displayName ?? "", size: 28)
                         .padding(2)
                         .overlay(Circle().stroke(Color.brandCyan, lineWidth: 2))
+                        .accessibilityHidden(true)
                     Text("Ta story").font(.headline)
                 }
                 .foregroundStyle(draft.mode == .story ? .white : .black)
@@ -415,6 +421,7 @@ struct EditorPreviewView: View {
                 .background(draft.mode == .story ? Color.brandPink : .white, in: RoundedRectangle(cornerRadius: 8))
             }
             .disabled(!model.canFinish)
+            .accessibilityLabel("Publier en story")
             .accessibilityIdentifier("editor.story")
             if draft.mode == .video {
                 Button(action: onNext) {
@@ -458,6 +465,17 @@ struct EditorCanvas: View {
         // Aperçu simplifié (simulateur, sans composition) : la vidéo brute est ajustée dans le 9:16, comme à l'export.
         PlayerLayerView(player: preview.player, fills: !preview.isSimplified)
             .aspectRatio(preview.aspectRatio, contentMode: .fit)
+            // La vidéo est un élément VoiceOver (ADR-076) : toucher deux fois met en pause ou reprend.
+            .accessibilityElement()
+            .accessibilityLabel("Aperçu de la vidéo")
+            .accessibilityValue(
+                SpokenText.join([
+                    preview.isPlaying ? "En lecture" : "En pause",
+                    SpokenText.position(preview.currentTime.seconds, of: model.plan.outputDuration.seconds),
+                ])
+            )
+            .accessibilityAddTraits([.isButton, .startsMediaSession])
+            .accessibilityAction { preview.togglePlayback() }
             .overlay {
                 GeometryReader { geometry in
                     ZStack {
@@ -488,8 +506,9 @@ struct EditorCanvas: View {
 
     private func text(_ overlay: TextOverlay, size: CGSize) -> some View {
         DraggableOverlay(
-            center: overlay.center, scale: overlay.scale, size: size, label: overlay.text,
-            hint: "Touche pour modifier le texte, glisse-le pour le déplacer", identifier: "editor.text"
+            center: overlay.center, scale: overlay.scale, size: size, label: OverlaySpeech.textLabel(overlay.text),
+            hint: "Touche deux fois pour modifier le texte. Autres actions : déplacer, agrandir, supprimer.", identifier: "editor.text",
+            scaleRange: TextOverlay.scaleRange
         ) { scale in
             StyledTextBox(text: overlay.text, layout: EditorTextStyle(style: overlay.style, scale: scale, width: size.width))
         } onDragChanged: { center, finger in
@@ -504,14 +523,19 @@ struct EditorCanvas: View {
             model.scaleText(overlay.id, to: scale)
         } onTap: {
             onEditText(overlay)
+        } onMove: { center in
+            model.moveText(overlay.id, to: center)
+        } onDelete: {
+            model.removeText(overlay.id)
         }
     }
 
     private func sticker(_ sticker: StickerOverlay, size: CGSize) -> some View {
         DraggableOverlay(
             center: sticker.center, scale: sticker.scale, size: size,
-            label: sticker.kind == .emoji ? sticker.text : "\(sticker.kind.title) \(sticker.text)",
-            hint: "Glisse-le pour le déplacer, pince-le pour changer sa taille", identifier: "editor.sticker"
+            label: OverlaySpeech.stickerLabel(kind: sticker.kind == .emoji ? nil : sticker.kind.title, text: sticker.text),
+            hint: "Actions : déplacer, agrandir, réduire, supprimer.", identifier: "editor.sticker",
+            scaleRange: StickerOverlay.scaleRange
         ) { scale in
             StickerView(sticker: sticker, scale: scale, width: size.width)
         } onDragChanged: { center, finger in
@@ -524,6 +548,10 @@ struct EditorCanvas: View {
             }
         } onScale: { scale in
             model.scaleSticker(sticker.id, to: scale)
+        } onMove: { center in
+            model.moveSticker(sticker.id, to: center)
+        } onDelete: {
+            model.removeSticker(sticker.id)
         }
     }
 

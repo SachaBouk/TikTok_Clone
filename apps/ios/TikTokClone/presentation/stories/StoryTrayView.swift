@@ -66,12 +66,18 @@ struct StoryTrayView: View {
                         }
                         .buttonStyle(.plain)
                         .offset(x: -2, y: 44)
-                        .accessibilityLabel("Publier une story")
+                        // Imbriqué dans « Ta story », inatteignable avec VoiceOver : action de l'élément extérieur (ADR-076).
+                        .accessibilityHidden(true)
                         .accessibilityIdentifier("stories.tray.add")
                     }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(stories.ownEntry == nil ? "Publier une story" : "Ta story")
+            .accessibilityActions {
+                if stories.ownEntry != nil {
+                    Button("Publier une story") { container.router.openCreation(mode: .story) }
+                }
+            }
             .accessibilityIdentifier("stories.tray.own")
         }
     }

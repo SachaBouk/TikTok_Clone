@@ -22,6 +22,8 @@ struct FramedThumbnail<Placeholder: View>: View {
                 placeholder()
             }
         }
+        // Décor : la vidéo est décrite par son élément (ADR-076).
+        .accessibilityHidden(true)
         .task(id: url) {
             image = nil
             guard let url, let (data, _) = try? await URLSession.shared.data(from: url) else { return }

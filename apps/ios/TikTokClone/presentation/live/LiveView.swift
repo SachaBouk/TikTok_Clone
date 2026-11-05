@@ -71,6 +71,11 @@ struct LiveView: View {
     // Lives à faire défiler : la saisie est affichée par l'écran des lives, au-dessus du clavier (les pages, elles,
     // ignorent le clavier pour garder leur taille). Nil : la saisie est dans cet écran.
     var feedComposer: Binding<Bool>? = nil
+    // Lives à faire défiler : live suivant ou précédent, en actions de VoiceOver (ADR-076) ; nil s'il n'y en a pas.
+    var onNextLive: (() -> Void)? = nil
+    var onPreviousLive: (() -> Void)? = nil
+    // Taille de l'écran : le j'aime de VoiceOver tombe au milieu.
+    @State private var screenSize: CGSize = .zero
     @State private var isConfirmingEnd = false
     @State private var isSharing = false
     @State private var chosenForMessage = false
@@ -196,7 +201,8 @@ struct LiveView: View {
                 LiveEndedView(live: live, reason: reason, isHost: true) { dismiss() }
             } else {
                 LiveFeedbackView(
-                    model: model, live: live ?? model.live, reason: reason, hasNextLive: hasNextLive, isInFeed: isInFeed, insets: insets
+                    model: model, live: live ?? model.live, reason: reason, hasNextLive: hasNextLive, isInFeed: isInFeed, insets: insets,
+                    next: onNextLive
                 ) { dismiss() }
             }
         case .live:
@@ -227,8 +233,27 @@ struct LiveView: View {
                         }
                     }
                 )
+                .onGeometryChange(for: CGSize.self) {
+                    $0.size
+                } action: {
+                    screenSize = $0
+                }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Envoyer un j’aime")
+                .accessibilityValue(model.live.map { "Live de \($0.host.displayName)" } ?? "")
+                // Toucher deux fois : un j'aime au milieu de l'écran (ADR-076) ; lives voisins dans le rotor « Actions ».
+                .accessibilityAction { model.like(x: screenSize.width / 2, y: screenSize.height / 2) }
+                .accessibilityActions {
+                    if let onNextLive { Button("Live suivant", action: onNextLive) }
+                    if let onPreviousLive { Button("Live précédent", action: onPreviousLive) }
+                }
+                .accessibilityScrollAction { edge in
+                    switch edge {
+                    case .bottom: onNextLive?()
+                    case .top: onPreviousLive?()
+                    default: break
+                    }
+                }
                 .accessibilityIdentifier("live.likeArea")
             VStack(spacing: 0) {
                 LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
@@ -237,6 +262,7 @@ struct LiveView: View {
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
             VStack(spacing: 8) {
                 header.padding(.horizontal, 12)
                 Spacer()
@@ -256,8 +282,10 @@ struct LiveView: View {
             LiveTapHeartsView(model: model)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
             FloatingHeartsView(model: model)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .coordinateSpace(.named(Self.screenSpace))
         .onChange(of: isComposing) { _, composing in
@@ -292,7 +320,7 @@ struct LiveView: View {
                 .frame(height: 30)
                 .background(.black.opacity(0.35), in: Capsule())
                 .foregroundStyle(.white)
-                .accessibilityLabel("\(model.viewersCount) spectateurs")
+                .accessibilityLabel(SpokenText.count(model.viewersCount, "spectateur", "spectateurs"))
             closeButton(confirm: model.isHost)
         }
     }
@@ -328,6 +356,11 @@ struct LiveView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Auteur du live : \(host.displayName)")
+            .accessibilityValue(
+                model.showsMyLikes
+                    ? "Tu as envoyé \(SpokenText.count(model.myLikes, "j’aime", "j’aime"))"
+                    : SpokenText.count(model.heartsTotal, "j’aime", "j’aime")
+            )
             .accessibilityIdentifier("live.host")
             if showsFollow && !model.showsMyLikes {
                 Button {
@@ -382,6 +415,8 @@ struct LiveView: View {
                 .background(.black.opacity(0.4), in: Capsule())
                 .foregroundStyle(.white)
                 .transition(.move(edge: .leading).combined(with: .opacity))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(LiveChatSpeech.gift(sender: event.sender, gift: event.gift))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -401,6 +436,13 @@ struct LiveView: View {
                                     if model.canDelete(message) {
                                         Button("Supprimer", systemImage: "trash", role: .destructive) { Task { await model.delete(message) } }
                                     }
+                                }
+                                .accessibilityActions {
+                                    Button("Copier") {
+                                        UIPasteboard.general.string = message.content
+                                        Accessibility.announce("Copié")
+                                    }
+                                    if model.canDelete(message) { Button("Supprimer") { Task { await model.delete(message) } } }
                                 }
                                 .id(entry.id)
                         case .event(let event):
@@ -438,17 +480,21 @@ struct LiveView: View {
                 .background(.white.opacity(0.18), in: Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Commenter")
             .accessibilityIdentifier("live.comment")
             if !model.isHost {
                 barButton(title: "Rose", emoji: "🌹") { Task { await model.sendRose() } }
+                    .accessibilityLabel("Envoyer une Rose")
                     .disabled(model.isSendingRose)
                     .accessibilityIdentifier("live.rose")
                 barButton(title: "Cadeau", emoji: "🎁") {
                     if container.session.isSignedIn { isGiving = true } else { container.session.requestSignIn() }
                 }
+                .accessibilityLabel("Envoyer un cadeau")
                 .accessibilityIdentifier("live.gift")
             }
             barButton(title: "Partager", systemImage: "arrowshape.turn.up.right") { isSharing = true }
+                .accessibilityLabel("Partager le live")
                 .accessibilityIdentifier("live.share")
         }
     }
@@ -502,7 +548,7 @@ struct LiveComposer: View {
                 .submitLabel(.send)
                 .onSubmit { Task { await model.send() } }
                 .accessibilityIdentifier("live.message")
-                Image(systemName: "face.smiling").font(.title3).foregroundStyle(.secondary)
+                Image(systemName: "face.smiling").font(.title3).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -583,6 +629,8 @@ private struct LiveChatRow: View {
             }
         }
         .shadow(color: .black.opacity(0.5), radius: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LiveChatSpeech.message(message, isHost: isHost))
     }
 }
 
@@ -610,7 +658,8 @@ private struct LiveChatEventRow: View {
                 .lineLimit(2)
         }
         .shadow(color: .black.opacity(0.5), radius: 2)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LiveChatSpeech.event(event))
     }
 }
 
@@ -756,6 +805,8 @@ private struct LiveEndedView: View {
             Text(value).font(.title3.bold()).monospacedDigit()
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title) : \(value)")
     }
 }
 

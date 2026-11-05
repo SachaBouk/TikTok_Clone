@@ -46,7 +46,7 @@ struct StickerPickerView: View {
                         Text(option.title)
                             .font(.headline)
                             .foregroundStyle(tab == option ? Color.white : .white.opacity(0.55))
-                        Capsule().fill(tab == option ? Color.white : .clear).frame(width: 64, height: 2)
+                        Capsule().fill(tab == option ? Color.white : .clear).frame(width: 64, height: 2).accessibilityHidden(true)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -63,6 +63,7 @@ struct StickerPickerView: View {
                 Text("Recommandés")
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.6))
+                    .accessibilityHeading()
                 TimelineView(.everyMinute) { context in
                     HStack(spacing: 8) {
                         ForEach([StickerOverlay.Kind.dateSlash, .dateDash, .time], id: \.self) { kind in
@@ -107,6 +108,7 @@ struct EmojiGrid: View {
                             Text(section.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white.opacity(0.6))
+                                .accessibilityHeading()
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                                 ForEach(section.emojis, id: \.self) { emoji in
                                     Button {
@@ -134,7 +136,7 @@ struct EmojiGrid: View {
                             .font(.title2)
                             .frame(maxWidth: .infinity, minHeight: 52)
                     }
-                    .accessibilityLabel(section.title)
+                    .accessibilityLabel("Catégorie \(section.title)")
                 }
             }
             .padding(.horizontal, 8)

@@ -57,7 +57,8 @@ struct VideoGrid: View {
                 Button(removeTitle, systemImage: "minus.circle", role: .destructive) { onRemove(video) }
             }
         }
-        .accessibilityLabel(video.description ?? "Vidéo de @\(video.author.username)")
+        // Une cellule = un élément (ADR-076) : description (ou auteur), puis vues en entier et confidentialité.
+        .accessibilityVideoCell(video)
     }
 
     @ViewBuilder
@@ -159,8 +160,10 @@ private struct PendingVideoCell: View {
                     .foregroundStyle(.white)
                 }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(publication.phase == .failed ? "Publication en échec" : "Publication en cours")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(publication.phase == .failed ? "Toucher deux fois pour la supprimer" : "Toucher deux fois pour voir l'envoi")
     }
 }
 

@@ -32,7 +32,7 @@ struct SuggestedAccountsSection: View {
                     }
                 } header: {
                     HStack(spacing: 6) {
-                        Text("Comptes suggérés").font(.title3.bold()).foregroundStyle(Color.primary)
+                        Text("Comptes suggérés").font(.title3.bold()).foregroundStyle(Color.primary).accessibilityHeading()
                         Button("À propos des comptes suggérés", systemImage: "info.circle") { isShowingInfo = true }
                             .labelStyle(.iconOnly)
                             .foregroundStyle(.secondary)
@@ -112,6 +112,20 @@ private struct SuggestedAccountRow: View {
             .accessibilityIdentifier("suggestion.dismiss")
         }
         .padding(.vertical, 4)
+        // Une ligne = un élément (ADR-076) : toucher deux fois ouvre le profil ; suivre et écarter dans le rotor « Actions ».
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            SpokenText.join([
+                suggestion.user.displayName, showsUsername ? "@\(suggestion.user.username)" : nil, accessibilityReason,
+                isFollowing ? "abonné(e)" : nil,
+            ])
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { open() }
+        .accessibilityActions {
+            Button(isFollowing ? "Ne plus suivre" : FollowStatus(following: false, followedBy: suggestion.followsYou).title, action: toggleFollow)
+            Button("Écarter @\(suggestion.user.username)", action: dismiss)
+        }
     }
 
     private var reason: some View {

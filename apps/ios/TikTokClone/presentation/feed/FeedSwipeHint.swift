@@ -51,6 +51,8 @@ struct FeedSwipeHint: View {
                             .opacity(raw < 0.85 ? 1 : (1 - raw) / 0.15)
                     }
                 }
+                // Animation : décor pour VoiceOver (ADR-076).
+                .accessibilityHidden(true)
                 Text("Balaie vers le haut pour en voir plus")
                     .font(.system(size: 30, weight: .heavy))
                     .multilineTextAlignment(.center)
@@ -75,8 +77,11 @@ struct FeedSwipeHint: View {
             }
         )
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Touche pour fermer")
+        .accessibilityAddTraits([.isButton, .isModal])
+        .accessibilityHint("Touche deux fois pour fermer")
+        // Équivalent du balayage (ADR-076).
+        .accessibilityAction(named: "Vidéo suivante", next)
+        .accessibilityScrollAction { edge in if edge == .bottom { next() } }
         .accessibilityIdentifier("feed.swipeHint")
     }
 }

@@ -91,7 +91,8 @@ private struct PublicationRow: View {
             action
         }
         .padding(.vertical, 2)
-        .accessibilityElement(children: .contain)
+        // Une ligne = un élément (ADR-076) : son bouton devient une action.
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("publication.row")
     }
 
@@ -121,7 +122,7 @@ private struct PublicationRow: View {
 
     private func outcome(_ title: String, systemImage: String, color: Color) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: systemImage)
+            Image(systemName: systemImage).accessibilityHidden(true)
             Text(title)
         }
         .foregroundStyle(color)

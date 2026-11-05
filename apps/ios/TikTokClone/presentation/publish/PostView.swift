@@ -18,7 +18,7 @@ struct PostView: View {
     @FocusState private var isEditingDescription: Bool
 
     enum Sheet: Identifiable {
-        case audience, options, location
+        case audience, options, location, altText
         var id: Self { self }
     }
 
@@ -43,6 +43,7 @@ struct PostView: View {
                             .font(.title3)
                             .lineLimit(5...10)
                             .focused($isEditingDescription)
+                            .accessibilityLabel("Description")
                             .accessibilityIdentifier("publish.description")
                         cover
                     }
@@ -78,6 +79,11 @@ struct PostView: View {
                     settingsRow(title: "Plus d’options", subtitle: optionsSummary, systemImage: "ellipsis", identifier: "publish.moreOptions") {
                         sheet = .options
                     }
+                    // Texte alternatif (ADR-076), sous « Plus d'options ».
+                    settingsRow(
+                        title: "Description pour l’accessibilité", subtitle: AltTextSpeech.summary(draft.altText),
+                        systemImage: "accessibility", identifier: "publish.altText"
+                    ) { sheet = .altText }
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -128,6 +134,7 @@ struct PostView: View {
             case .options: PostSettingsSheet(draft: draft, sections: .options)
             case .location:
                 if let places { LocationPickerView(model: places) { draft.location = $0 } }
+            case .altText: AltTextEditorView(text: $draft.altText)
             }
         }
         .fullScreenCover(isPresented: $isEditingCover) {
@@ -167,6 +174,7 @@ struct PostView: View {
                 }
                 .frame(width: 110, height: 146)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityDecorative()
                 .overlay(alignment: .bottom) {
                     Text("Modifier la couverture")
                         .font(.caption2.weight(.semibold))
@@ -182,6 +190,7 @@ struct PostView: View {
         .buttonStyle(.plain)
         .disabled(video.duration == nil)
         .accessibilityLabel("Modifier la couverture")
+        .accessibilityValue(draft.cover.isCustom ? "Couverture choisie" : "Première image")
         .accessibilityIdentifier("publish.cover")
     }
 
@@ -191,8 +200,8 @@ struct PostView: View {
     private var locationRow: some View {
         if let location = draft.location {
             HStack(spacing: 14) {
-                Image(systemName: "mappin.and.ellipse").font(.title3).frame(width: 28)
-                Text(location.name).font(.title3).lineLimit(1)
+                Image(systemName: "mappin.and.ellipse").font(.title3).frame(width: 28).accessibilityDecorative()
+                Text(location.name).font(.title3).lineLimit(1).accessibilityLabel("Lieu : \(location.name)")
                 Spacer()
                 Button("Retirer le lieu", systemImage: "xmark") { draft.location = nil }
                     .labelStyle(.iconOnly)
@@ -209,6 +218,7 @@ struct PostView: View {
                     HStack(spacing: 8) {
                         ForEach(nearby.prefix(6)) { place in
                             Button(place.name) { draft.location = place }
+                                .accessibilityLabel("Lieu proche : \(place.name)")
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
                                 .padding(.horizontal, 12)
@@ -282,6 +292,9 @@ struct PostView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Mentionner \(user.displayName), @\(user.username)")
+                .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("publish.mention.\(user.username)")
             }
         }
@@ -297,6 +310,7 @@ struct PostView: View {
                 Image(systemName: systemImage)
                     .font(.title3)
                     .frame(width: 28)
+                    .accessibilityDecorative()
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.title3).multilineTextAlignment(.leading)
                     if let subtitle {
@@ -304,8 +318,9 @@ struct PostView: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityDecorative()
             }
+            .accessibilityElement(children: .combine)
             .foregroundStyle(.primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
@@ -343,7 +358,7 @@ struct PostSettingsSheet: View {
         @Bindable var draft = draft
         VStack(spacing: 16) {
             ZStack {
-                Text(sections == .options ? "Plus d’options" : "Réglages").font(.headline)
+                Text(sections == .options ? "Plus d’options" : "Réglages").font(.headline).accessibilityHeading()
                 HStack {
                     Spacer()
                     Button("Fermer", systemImage: "xmark") { dismiss() }
@@ -410,7 +425,7 @@ struct PostSettingsSheet: View {
 
     private var audience: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Qui peut voir cette publication").font(.headline).padding(.bottom, 8)
+            Text("Qui peut voir cette publication").font(.headline).padding(.bottom, 8).accessibilityHeading()
             ForEach(VideoVisibility.allCases, id: \.self) { visibility in
                 Button {
                     draft.visibility = visibility
@@ -422,12 +437,14 @@ struct PostSettingsSheet: View {
                         }
                         Spacer()
                         Image(systemName: draft.visibility == visibility ? "largecircle.fill.circle" : "circle")
+                            .accessibilityDecorative()
                             .font(.title2)
                             .foregroundStyle(draft.visibility == visibility ? Color.brandPink : Color(.systemGray3))
                     }
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(draft.visibility == visibility ? .isSelected : [])
                 .accessibilityIdentifier("settings.visibility.\(visibility.rawValue)")
             }
@@ -448,13 +465,13 @@ struct PostSettingsSheet: View {
     }
 
     private func sectionTitle(_ title: String) -> some View {
-        Text(title).font(.subheadline).foregroundStyle(.secondary).padding(.leading, 4).padding(.top, 4)
+        Text(title).font(.subheadline).foregroundStyle(.secondary).padding(.leading, 4).padding(.top, 4).accessibilityHeading()
     }
 
     private func toggleRow(_ title: String, systemImage: String, isOn: Binding<Bool>, detail: String? = nil, identifier: String) -> some View {
         Toggle(isOn: isOn) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: systemImage).font(.title3).frame(width: 26)
+                Image(systemName: systemImage).font(.title3).frame(width: 26).accessibilityDecorative()
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     if let detail {

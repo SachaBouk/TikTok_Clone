@@ -39,6 +39,7 @@ import {
   uploadRateLimitKey,
 } from '../domain/upload-rules';
 import {
+  cleanAltText,
   MAX_UNPUBLISHED_VIDEOS,
   type PublishedVideo,
   type PublishingAuthor,
@@ -89,6 +90,8 @@ export interface CreateUploadInput {
   cover?: { fileSize: number };
   aiGenerated?: boolean;
   location?: { name: string; address?: string | null };
+  // Texte alternatif (ADR-076).
+  altText?: string;
 }
 
 // Téléchargement de la vidéo d'origine (ADR-067) : URL signée de lecture, valable peu de temps.
@@ -179,6 +182,7 @@ export class VideosService {
       aiGenerated: input.aiGenerated ?? false,
       locationName,
       locationAddress: locationName ? input.location?.address?.trim() || null : null,
+      altText: cleanAltText(input.altText),
     };
     const expiresAt = new Date(this.now().getTime() + UPLOAD_URL_TTL_SECONDS * 1000);
     const presignCover = () =>
@@ -510,6 +514,17 @@ export class VideosService {
     if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
     if (video.soundShared === shared) return this.playable(video);
     const updated = await this.videos.setSoundShared(videoId, shared);
+    if (!updated) throw new VideoNotFoundError(videoId);
+    return this.playable(updated);
+  }
+
+  // Texte alternatif (ADR-076), par l'auteur, quel que soit le statut ; vide ou nul : retiré.
+  async setAltText(userId: string, videoId: string, altText: string | null): Promise<Video> {
+    const video = await this.videos.findById(videoId);
+    if (!video || video.userId !== userId) throw new VideoNotFoundError(videoId);
+    const cleaned = cleanAltText(altText);
+    if (video.altText === cleaned) return this.playable(video);
+    const updated = await this.videos.setAltText(videoId, cleaned);
     if (!updated) throw new VideoNotFoundError(videoId);
     return this.playable(updated);
   }

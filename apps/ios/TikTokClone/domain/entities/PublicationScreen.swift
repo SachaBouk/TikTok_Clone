@@ -110,6 +110,8 @@ struct VideoDraft: Codable, Identifiable, Equatable, Sendable {
     var cover: CoverChoice
     // « Autoriser le téléchargement » (ADR-067) ; absent d'un brouillon enregistré avant : autorisé.
     var downloadsEnabled: Bool?
+    // Texte alternatif (ADR-076) ; absent d'un brouillon enregistré avant.
+    var altText: String?
 
     var duration: Duration { plan.outputDuration }
 }

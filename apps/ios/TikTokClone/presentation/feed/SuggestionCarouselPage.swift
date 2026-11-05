@@ -105,6 +105,7 @@ struct SuggestionCarouselPage: View {
                 Text("Pas intéressé(e)").frame(maxWidth: .infinity, minHeight: 47)
                     .background(Color(white: 0.24), in: Capsule())
             }
+            .accessibilityLabel("Pas intéressé(e) par @\(suggestion.user.username)")
             .accessibilityIdentifier("suggestions.notInterested")
             Button {
                 toggleFollow(suggestion, following: following)
@@ -113,6 +114,7 @@ struct SuggestionCarouselPage: View {
                     .frame(maxWidth: .infinity, minHeight: 47)
                     .background(following ? Color(white: 0.24) : Color.brandPink, in: Capsule())
             }
+            .accessibilityLabel("\(FollowStatus(following: following, followedBy: suggestion.followsYou).title) @\(suggestion.user.username)")
             .accessibilityIdentifier("suggestions.follow")
         }
         .font(.system(size: 17, weight: .semibold))
@@ -157,6 +159,10 @@ struct SuggestionCarouselPage: View {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled, selectedID ?? ids.first == suggestion.id else { return }
             withAnimation(.easeInOut(duration: 0.35)) { selectedID = next }
+            // Carte suivante annoncée (ADR-076).
+            if let user = ids.firstIndex(of: next).map({ model.visible(blocked: interactions.blockedUserIDs)[$0].user }) {
+                Accessibility.announce("Compte suivant : \(user.displayName)")
+            }
         }
     }
 

@@ -77,6 +77,7 @@
 | [ADR-073](ADR-073-abonnement-plus.md) | Abonnement « Plus » : mensuel ou annuel, badge, jetons offerts, cadeaux exclusifs, vidéos de 10 min et lives de 4 h, icônes de l'app (complète ADR-009, ADR-016, ADR-050, ADR-040, ADR-053 et ADR-003) | Accepté |
 | [ADR-074](ADR-074-mux-video-data.md) | Mux Video et Mux Data, au choix à côté du pipeline maison (complète ADR-007, ADR-008, ADR-012, ADR-013, ADR-015, ADR-040, ADR-051 et ADR-061) | Accepté |
 | [ADR-075](ADR-075-onboarding-anime.md) | Onboarding animé : mascotte Tempo, questions, tutoriels interactifs, sons synthétisés, vibrations, paywall « Plus » (complète ADR-055, ADR-073 et ADR-013) | Proposé |
+| [ADR-076](ADR-076-accessibilite-voiceover.md) | Accessibilité VoiceOver : vidéo, stories, messages et éditeur parcourables les yeux fermés, texte alternatif des vidéos et description automatique (complète ADR-002, ADR-016, ADR-052, ADR-062, ADR-065 et ADR-006) | Proposé |
 
 Seul un humain peut passer un ADR au statut `Accepté` ou le remplacer.
 

@@ -68,6 +68,7 @@ struct AppIconSettingsView: View {
             .contentShape(Rectangle())
         }
         .accessibilityAddTraits(current == icon ? .isSelected : [])
+        .accessibilityValue(isLocked ? "Réservée aux abonnés Plus" : "")
         .accessibilityIdentifier("appIcons.\(icon?.rawValue ?? "default")")
     }
 

@@ -32,6 +32,9 @@ struct LoginView: View {
             } footer: {
                 if let error = viewModel.errorMessage {
                     Text(error).foregroundStyle(.red).accessibilityIdentifier("login.error")
+                        // Lue à voix haute dès qu'elle apparaît (ADR-076).
+                        .onAppear { Accessibility.announce(error, important: true) }
+                        .onChange(of: error) { _, text in Accessibility.announce(text, important: true) }
                 }
             }
 

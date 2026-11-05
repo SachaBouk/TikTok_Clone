@@ -6,6 +6,8 @@ import Observation
 // - Toucher à droite : la suivante ; à gauche : la précédente ; après la dernière d'un compte, le compte suivant.
 // - Appui long, réponse en cours d'écriture, feuille ouverte, app en arrière-plan : pause.
 // - Chaque story d'un autre compte est marquée vue à son affichage (compte connecté) ; l'anneau suit (StoriesModel).
+// - Avec VoiceOver (`holdsPhotos`, ADR-076), une photo n'avance pas seule : 5 s ne suffisent pas pour entendre l'écran ;
+//   on passe à la suivante quand on veut. Une vidéo va toujours au bout.
 @MainActor
 @Observable
 final class StoryViewerModel {
@@ -20,6 +22,8 @@ final class StoryViewerModel {
     // Raisons d'être en pause ; la lecture reprend quand il n'en reste aucune.
     enum PauseReason: Hashable {
         case holding, replying, sheet, background
+        // « Pause » demandée par une action de VoiceOver (ADR-076).
+        case user
     }
 
     let authors: [UserSummary]
@@ -32,6 +36,8 @@ final class StoryViewerModel {
     private(set) var pauses: Set<PauseReason> = []
     // Message d'une action (réponse envoyée, erreur), affiché brièvement.
     var notice: String?
+    // VoiceOver actif : les photos restent affichées jusqu'à ce qu'on passe à la suivante (ADR-076).
+    var holdsPhotos = false
     private var loaded: [Int: [Story]] = [:]
     private var likeInFlight: Set<String> = []
 
@@ -101,7 +107,7 @@ final class StoryViewerModel {
 
     // Horloge des photos (la vue l'appelle à intervalle régulier) : 5 s par photo, puis la suivante.
     func tick(_ elapsed: Duration) {
-        guard state == .showing, !isPaused, let current, current.mediaType == .photo else { return }
+        guard state == .showing, !isPaused, !holdsPhotos, let current, current.mediaType == .photo else { return }
         progress = min(1, progress + elapsed / StoryRules.photoDuration)
         if progress >= 1 { next() }
     }
@@ -123,6 +129,40 @@ final class StoryViewerModel {
 
     func previous() {
         navigate(StoryNavigation.previous(from: position))
+    }
+
+    // Compte suivant de la rangée (après le dernier : fermer) et compte précédent (rien avant le premier).
+    var hasPreviousAuthor: Bool { position.author > 0 }
+
+    func nextAuthor() {
+        navigate(position.author + 1 < authors.count ? .author(position.author + 1) : .close)
+    }
+
+    func previousAuthor() {
+        guard hasPreviousAuthor else { return }
+        navigate(.author(position.author - 1))
+    }
+
+    // « Pause » / « Reprendre » (action de VoiceOver).
+    var isPausedByUser: Bool { pauses.contains(.user) }
+
+    func togglePause() {
+        if isPausedByUser { resume(.user) } else { pause(.user) }
+    }
+
+    // ─── VoiceOver (ADR-076) ─────────────────────────────────────────────────
+
+    // « Story 2 sur 5, photo, il y a 3 heures, en pause ».
+    var spokenValue: String {
+        guard let current else { return "" }
+        return StoryViewerSpeech.value(
+            index: position.story, count: stories.count, mediaType: current.mediaType, publishedAt: current.publishedAt, isPaused: isPaused)
+    }
+
+    // Annoncé à l'arrivée sur une story : « @ines, story 1 sur 3 ».
+    var arrivalSpeech: String? {
+        guard let current else { return nil }
+        return StoryViewerSpeech.arrival(username: current.author.username, isOwn: isOwn, index: position.story, count: stories.count)
     }
 
     func pause(_ reason: PauseReason) {

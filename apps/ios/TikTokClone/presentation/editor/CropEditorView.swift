@@ -49,6 +49,7 @@ struct CropEditorView: View {
                         }
                     }
                     .frame(width: fitted.width, height: fitted.height)
+                    .accessibilityHidden(true)
                     cropOverlay(size: fitted)
                 }
                 .frame(width: fitted.width, height: fitted.height)
@@ -61,7 +62,7 @@ struct CropEditorView: View {
                 Button("Annuler") { dismiss() }
                     .accessibilityIdentifier("crop.cancel")
                 Spacer()
-                Text("Recadrer").font(.title3.bold())
+                Text("Recadrer").font(.title3.bold()).accessibilityHeading()
                 Spacer()
                 Button("Enregistrer") {
                     onSave(crop, ratio)
@@ -120,6 +121,18 @@ struct CropEditorView: View {
                         }
                         .onEnded { _ in gestureBase = nil }
                 )
+                // Équivalents VoiceOver du glisser et des coins (ADR-076).
+                .accessibilityElement()
+                .accessibilityLabel("Cadre du recadrage")
+                .accessibilityValue(CropSpeech.value(crop, ratio: ratio))
+                .accessibilityHint("Actions : déplacer, agrandir, réduire")
+                .accessibilityActions {
+                    ForEach(OverlaySpeech.Direction.allCases, id: \.self) { direction in
+                        Button(direction.title) { changeCrop(CropSpeech.moved(crop, direction)) }
+                    }
+                    Button("Agrandir") { changeCrop(CropSpeech.scaled(crop, larger: true, ratio: ratio, frameAspect: frameAspect)) }
+                    Button("Réduire") { changeCrop(CropSpeech.scaled(crop, larger: false, ratio: ratio, frameAspect: frameAspect)) }
+                }
                 .accessibilityIdentifier("crop.frame")
             ForEach(CropRules.Corner.allCases, id: \.self) { corner in
                 cornerHandle(corner)
@@ -135,9 +148,16 @@ struct CropEditorView: View {
                             }
                             .onEnded { _ in gestureBase = nil }
                     )
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    // Cadre changé par une action VoiceOver : la nouvelle position est annoncée.
+    private func changeCrop(_ rect: CropRect) {
+        crop = rect
+        Accessibility.announce(CropSpeech.value(rect, ratio: ratio))
     }
 
     private func position(of corner: CropRules.Corner, in rect: CGRect) -> CGPoint {
@@ -179,12 +199,14 @@ struct CropEditorView: View {
                         ratioIcon(option)
                             .stroke(selected ? Color.brandPink : .white, lineWidth: 2)
                             .frame(width: 34, height: 34)
+                            .accessibilityHidden(true)
                         Text(option.title)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(selected ? Color.brandPink : .white)
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .accessibilityLabel("Proportions \(CropSpeech.ratio(option))")
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 .accessibilityIdentifier("crop.ratio.\(option.rawValue)")
             }

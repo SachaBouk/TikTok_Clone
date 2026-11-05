@@ -60,6 +60,17 @@ final class EffectsSession {
         history.record(base, current: track)
     }
 
+    // Actions VoiceOver d'une plage (ADR-076) : chacune est un pas d'annulation. Renvoie la plage après le changement
+    // (nil si elle a été supprimée).
+    @discardableResult
+    func change(_ id: UUID, _ change: (inout EffectTrack) -> Void) -> TimedEffect? {
+        let before = track
+        change(&track)
+        history.record(before, current: track)
+        if !track.effects.contains(where: { $0.id == id }), selectedID == id { selectedID = nil }
+        return track.effects.first { $0.id == id }
+    }
+
     func undo() {
         guard let previous = history.undo(track) else { return }
         track = previous
@@ -116,13 +127,23 @@ struct EffectsEditorView: View {
                         }
                     }
                     .onTapGesture { preview.togglePlayback() }
+                    .accessibilityElement()
+                    .accessibilityLabel("Aperçu de la vidéo")
+                    .accessibilityValue(
+                        SpokenText.join([
+                            preview.isPlaying ? "En lecture" : "En pause",
+                            SpokenText.position(preview.currentTime.seconds, of: model.plan.outputDuration.seconds),
+                        ])
+                    )
+                    .accessibilityAddTraits([.isButton, .startsMediaSession])
+                    .accessibilityAction { preview.togglePlayback() }
                     .accessibilityIdentifier("effects.preview")
                 Spacer(minLength: 0)
                     .overlay(alignment: .trailing) { sideActions.padding(.trailing, 16) }
             }
             .frame(maxHeight: .infinity)
             .padding(.vertical, 8)
-            Capsule().fill(.white.opacity(0.3)).frame(width: 36, height: 4).padding(.bottom, 14)
+            Capsule().fill(.white.opacity(0.3)).frame(width: 36, height: 4).padding(.bottom, 14).accessibilityHidden(true)
             EffectTimeline(session: session, preview: preview, duration: model.plan.outputDuration)
                 .frame(height: 44)
                 .padding(.horizontal, 16)
@@ -204,7 +225,7 @@ struct EffectsEditorView: View {
                         Text(option.title)
                             .font(.headline)
                             .foregroundStyle(category == option ? Color.white : .white.opacity(0.55))
-                        Capsule().fill(category == option ? Color.white : .clear).frame(height: 2)
+                        Capsule().fill(category == option ? Color.white : .clear).frame(height: 2).accessibilityHidden(true)
                     }
                     .fixedSize()
                 }
@@ -221,7 +242,13 @@ struct EffectsEditorView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 16) {
                 ForEach(category.effects) { effect in
                     Button {
-                        if !session.add(effect, at: preview.currentTime) { limitReached = true }
+                        guard session.add(effect, at: preview.currentTime) else {
+                            limitReached = true
+                            return
+                        }
+                        if let added = session.selected {
+                            Accessibility.announce(TimelineSpeech.effectAdded(effect.title, start: added.start, end: added.end))
+                        }
                     } label: {
                         VStack(spacing: 6) {
                             Group {
@@ -273,6 +300,14 @@ struct EffectTimeline: View {
                                 preview.seek(to: time(at: drag.location.x, width: width))
                             }
                     )
+                    // Avec VoiceOver, la frise est la tête de lecture : balayer vers le haut ou le bas la déplace.
+                    .accessibilityElement()
+                    .accessibilityLabel("Tête de lecture")
+                    .accessibilityValue(SpokenText.position(preview.currentTime.seconds, of: duration.seconds))
+                    .accessibilityAdjustableAction { direction in
+                        preview.pause()
+                        preview.seek(to: ClipSpeech.playhead(preview.currentTime, increment: direction == .increment, total: duration))
+                    }
                 ForEach(session.effects) { effect in
                     segment(effect, width: width)
                 }
@@ -300,10 +335,27 @@ struct EffectTimeline: View {
             .frame(width: max(2, end - start))
             .offset(x: start)
             .onTapGesture { session.selectedID = session.selectedID == effect.id ? nil : effect.id }
-            .accessibilityLabel(effect.effect.title)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(session.selectedID == effect.id ? .isSelected : [])
+            .accessibilityElement()
+            .accessibilityLabel(TimelineSpeech.range(effect.effect.title, start: effect.start, end: effect.end))
+            .accessibilityAddTraits(session.selectedID == effect.id ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { session.selectedID = session.selectedID == effect.id ? nil : effect.id }
+            .accessibilityActions {
+                Button("Déplacer plus tôt") { adjust(effect) { $0.move(effect.id, by: .zero - TimelineSpeech.effectStep) } }
+                Button("Déplacer plus tard") { adjust(effect) { $0.move(effect.id, by: TimelineSpeech.effectStep) } }
+                Button("Allonger") { adjust(effect) { $0.setEnd(effect.end + TimelineSpeech.effectStep, of: effect.id) } }
+                Button("Raccourcir") { adjust(effect) { $0.setEnd(effect.end - TimelineSpeech.effectStep, of: effect.id) } }
+                Button("Supprimer") {
+                    session.change(effect.id) { $0.remove(effect.id) }
+                    Accessibility.announce("Effet \(effect.effect.title) supprimé")
+                }
+            }
             .accessibilityIdentifier("effects.segment")
+    }
+
+    // Action VoiceOver sur une plage : la nouvelle plage est annoncée.
+    private func adjust(_ effect: TimedEffect, _ change: (inout EffectTrack) -> Void) {
+        guard let changed = session.change(effect.id, change) else { return }
+        Accessibility.announce(TimelineSpeech.range(changed.effect.title, start: changed.start, end: changed.end))
     }
 
     // Bordure blanche et poignées de la plage choisie.
@@ -355,7 +407,8 @@ struct EffectTimeline: View {
             .frame(maxHeight: .infinity)
             .background(.white)
             .contentShape(Rectangle().inset(by: -10))
-            .accessibilityLabel(label)
+            // Les actions de la plage les remplacent avec VoiceOver.
+            .accessibilityHidden(true)
     }
 
     private func x(of time: Duration, width: CGFloat) -> CGFloat {

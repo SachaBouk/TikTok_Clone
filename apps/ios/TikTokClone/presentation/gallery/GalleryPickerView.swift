@@ -50,10 +50,13 @@ struct GalleryPickerView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(model.albumTitle).font(.title3.bold())
-                    Image(systemName: "chevron.down").font(.subheadline.bold())
+                    Image(systemName: "chevron.down").font(.subheadline.bold()).accessibilityHidden(true)
                 }
                 .foregroundStyle(.primary)
             }
+            .accessibilityLabel("Album")
+            .accessibilityValue(model.albumTitle)
+            .accessibilityHint("Choisis un autre album")
             .accessibilityIdentifier("gallery.album")
             HStack {
                 Button("Fermer", systemImage: "xmark") { dismiss() }
@@ -83,6 +86,7 @@ struct GalleryPickerView: View {
                         Rectangle()
                             .fill(model.filter == filter ? Color.primary : .clear)
                             .frame(height: 2)
+                            .accessibilityHidden(true)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -156,9 +160,8 @@ struct GalleryPickerView: View {
                         )
                         .frame(width: side, height: side)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            if !model.toggle(asset) { onDone(model.selection) }
-                        }
+                        .onTapGesture { choose(asset) }
+                        .accessibilityAction { choose(asset) }
                         .task { await model.loadThumbnail(of: asset, side: side * 2) }
                     }
                 }
@@ -189,6 +192,7 @@ struct GalleryPickerView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: model.selectsMultiple ? "checkmark.circle.fill" : "circle")
+                                .accessibilityHidden(true)
                                 .font(.title2)
                                 .foregroundStyle(model.selectsMultiple ? Color.brandPink : .secondary)
                             Text("Sélectionner plusieurs")
@@ -199,6 +203,7 @@ struct GalleryPickerView: View {
                         }
                         .fixedSize()
                     }
+                    .accessibilityValue(model.selectsMultiple ? "Activé" : "Désactivé")
                     .accessibilityIdentifier("gallery.multiple")
                 }
                 Button {
@@ -212,6 +217,7 @@ struct GalleryPickerView: View {
                         .background(model.canContinue ? Color.brandPink : Color(.systemGray6), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .disabled(!model.canContinue)
+                .accessibilityLabel(model.selection.count > 1 ? "Suivant, \(GallerySpeech.selection(model.selection.count))" : "Suivant")
                 .accessibilityIdentifier("gallery.next")
             }
             .padding(.horizontal, 16)
@@ -219,6 +225,15 @@ struct GalleryPickerView: View {
         }
         .padding(.top, 8)
         .background(Color(.systemBackground))
+    }
+
+    // Toucher une case : la choisit (ou la retire) ; sans sélection multiple, passe aussitôt à la suite.
+    private func choose(_ asset: LibraryAsset) {
+        if !model.toggle(asset) {
+            onDone(model.selection)
+        } else if model.selectsMultiple {
+            Accessibility.announce(GallerySpeech.selection(model.selection.count))
+        }
     }
 
     private func presentLimitedPicker() {
@@ -274,9 +289,9 @@ private struct GalleryCell: View {
                 if number != nil { Color.white.opacity(0.2) }
             }
             .accessibilityElement()
-            .accessibilityLabel(asset.isVideo ? "Vidéo, \(GalleryDuration.label(asset.duration ?? .zero))" : "Photo")
-            .accessibilityValue(number.map { "Choisie, \($0)" } ?? "")
-            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(GallerySpeech.label(isVideo: asset.isVideo, duration: asset.duration, date: asset.creationDate))
+            .accessibilityValue(GallerySpeech.value(number: number))
+            .accessibilityAddTraits(number != nil ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("gallery.asset")
     }
 }
@@ -303,6 +318,8 @@ private struct SelectedThumbnail: View {
                         .padding(.bottom, 3)
                 }
             }
+            // Le bouton « Retirer » nomme la vidéo : l'image elle-même est masquée.
+            .accessibilityHidden(true)
             .overlay(alignment: .topTrailing) {
                 Button("Retirer", systemImage: "xmark", action: onRemove)
                     .labelStyle(.iconOnly)
@@ -311,6 +328,8 @@ private struct SelectedThumbnail: View {
                     .frame(width: 20, height: 20)
                     .background(.black.opacity(0.5), in: Circle())
                     .offset(x: 4, y: -4)
+                    .accessibilityLabel(
+                        "Retirer : \(GallerySpeech.label(isVideo: asset.isVideo, duration: asset.duration, date: asset.creationDate))")
             }
     }
 }

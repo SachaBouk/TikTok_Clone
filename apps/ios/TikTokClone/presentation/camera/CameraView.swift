@@ -75,6 +75,7 @@ struct CameraView<Preview: View>: View {
                     .shadow(radius: 8)
                     .contentTransition(.numericText(countsDown: true))
                     .accessibilityLabel("Enregistrement dans \(countdown) secondes")
+                    .accessibilityHidden(true)
             }
         }
         .environment(\.colorScheme, .dark)
@@ -86,6 +87,17 @@ struct CameraView<Preview: View>: View {
         }
         .onChange(of: mode, initial: true) { _, mode in
             if mode != .live { model.setKind(mode == .story ? .story : .video) }
+        }
+        // Annonces VoiceOver (ADR-076) : compte à rebours, début d'un segment, segment filmé.
+        .onChange(of: model.countdown) { _, countdown in
+            if let countdown { Accessibility.announce(CameraSpeech.countdown(countdown), important: true) }
+        }
+        .onChange(of: model.isRecording) { _, recording in
+            if recording { Accessibility.announce(CameraSpeech.started(remaining: model.recording.remaining), important: true) }
+        }
+        .onChange(of: model.recording.segments.count) { old, new in
+            guard new > old, let last = model.recording.segments.last else { return }
+            Accessibility.announce(CameraSpeech.segmentRecorded(last.duration, total: model.recording.recordedDuration), important: true)
         }
         .alert(
             "Caméra",
@@ -166,19 +178,16 @@ struct CameraView<Preview: View>: View {
             }
             if mode != .live {
                 if model.canUseTorch {
-                    iconButton(
-                        model.torchOn ? "bolt.fill" : "bolt.slash.fill", label: model.torchOn ? "Éteindre la lampe" : "Allumer la lampe",
-                        enabled: true
-                    ) {
+                    iconButton(model.torchOn ? "bolt.fill" : "bolt.slash.fill", label: "Lampe", enabled: true) {
                         model.toggleTorch()
                     }
+                    .accessibilityValue(model.torchOn ? "Allumée" : "Éteinte")
                 }
                 if model.captureMode == .video {
-                    iconButton(
-                        "timer", label: model.timerEnabled ? "Minuteur de 3 secondes activé" : "Minuteur de 3 secondes", enabled: !model.isBusy
-                    ) {
+                    iconButton("timer", label: "Minuteur de 3 secondes", enabled: !model.isBusy) {
                         model.timerEnabled.toggle()
                     }
+                    .accessibilityValue(model.timerEnabled ? "Activé" : "Désactivé")
                     .overlay(alignment: .bottomTrailing) {
                         if model.timerEnabled {
                             Text("3s")
@@ -187,6 +196,7 @@ struct CameraView<Preview: View>: View {
                                 .padding(.horizontal, 4)
                                 .background(.white, in: Capsule())
                                 .offset(x: 4, y: 2)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
@@ -204,17 +214,21 @@ struct CameraView<Preview: View>: View {
                 }
             } else {
                 ForEach(model.limits) { limit in
-                    optionButton(limit.title, selected: model.limit == limit) { model.setLimit(limit) }
+                    optionButton(limit.title, spoken: "Durée maximale \(CameraSpeech.limit(limit))", selected: model.limit == limit) {
+                        model.setLimit(limit)
+                    }
                 }
             }
         }
         .disabled(!model.canChangeSettings)
         .opacity(model.canChangeSettings ? 1 : 0)
+        // Masqués (figés après le premier segment) : VoiceOver ne les propose plus.
+        .accessibilityHidden(!model.canChangeSettings)
         .padding(.bottom, 18)
         .accessibilityIdentifier("camera.options")
     }
 
-    private func optionButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func optionButton(_ title: String, spoken: String? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(selected ? .bold : .semibold))
@@ -224,6 +238,7 @@ struct CameraView<Preview: View>: View {
                 .background(selected ? Color.white.opacity(0.2) : .clear, in: Capsule())
                 .shadow(radius: 2)
         }
+        .accessibilityLabel(spoken ?? title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -231,7 +246,10 @@ struct CameraView<Preview: View>: View {
         HStack {
             Group {
                 if model.captureMode == .video, model.hasSegments {
-                    iconButton("delete.left", label: "Retirer le dernier segment", enabled: model.canRemoveLast) { model.removeLastSegment() }
+                    iconButton("delete.left", label: "Supprimer le dernier segment", enabled: model.canRemoveLast) {
+                        model.removeLastSegment()
+                        Accessibility.announce(CameraSpeech.segmentRemoved(total: model.recording.recordedDuration))
+                    }
                 } else {
                     Color.clear
                 }
@@ -253,6 +271,7 @@ struct CameraView<Preview: View>: View {
                     }
                     .disabled(!model.canFinish)
                     .accessibilityLabel("Suivant")
+                    .accessibilityHint("Ouvre l’éditeur avec les segments filmés")
                     .accessibilityIdentifier("camera.next")
                 } else {
                     importButton
@@ -277,6 +296,7 @@ struct CameraView<Preview: View>: View {
                 .frame(width: 40, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white, lineWidth: 2))
+                .accessibilityHidden(true)
                 Text("Importer")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
@@ -284,6 +304,8 @@ struct CameraView<Preview: View>: View {
             }
         }
         .disabled(model.isBusy)
+        .accessibilityLabel("Importer")
+        .accessibilityHint("Ouvre la galerie")
         .accessibilityIdentifier("camera.import")
     }
 
@@ -314,6 +336,9 @@ struct CameraView<Preview: View>: View {
         .disabled(model.captureMode == .video ? !(model.canRecord || model.isRecording || model.countdown != nil) : model.isBusy)
         .opacity(model.status == .ready ? 1 : 0.4)
         .accessibilityLabel(shutterLabel)
+        .accessibilityValue(
+            model.captureMode == .video ? CameraSpeech.recorded(model.recording.recordedDuration, of: model.recording.maxDuration) : ""
+        )
         .accessibilityIdentifier("camera.shutter")
     }
 
@@ -321,7 +346,7 @@ struct CameraView<Preview: View>: View {
         if model.captureMode == .photo { return "Prendre la photo" }
         if model.isRecording { return "Arrêter l’enregistrement" }
         if model.countdown != nil { return "Annuler le minuteur" }
-        return model.recording.isFull ? "Durée maximale atteinte" : "Filmer"
+        return model.recording.isFull ? "Durée maximale atteinte" : "Enregistrer"
     }
 
     // Mode Live (ADR-053) : titre facultatif.
@@ -379,10 +404,11 @@ struct CameraView<Preview: View>: View {
                         Text(option.title)
                             .font(.headline)
                             .foregroundStyle(mode == option ? .white : .white.opacity(0.55))
-                        Circle().fill(mode == option ? .white : .clear).frame(width: 5, height: 5)
+                        Circle().fill(mode == option ? .white : .clear).frame(width: 5, height: 5).accessibilityHidden(true)
                     }
                 }
                 .disabled(!model.canChangeSettings)
+                .accessibilityLabel("Mode \(option.title)")
                 .accessibilityAddTraits(mode == option ? .isSelected : [])
                 .accessibilityIdentifier("publish.mode.\(option.rawValue)")
             }
@@ -408,7 +434,7 @@ struct CameraView<Preview: View>: View {
 
     private func unavailable(title: String, message: String, showSettings: Bool) -> some View {
         VStack(spacing: 12) {
-            Image(systemName: "video.slash").font(.largeTitle).foregroundStyle(.white.opacity(0.7))
+            Image(systemName: "video.slash").font(.largeTitle).foregroundStyle(.white.opacity(0.7)).accessibilityHidden(true)
             Text(title).font(.headline).foregroundStyle(.white)
             Text(message)
                 .font(.subheadline)
@@ -446,7 +472,7 @@ private struct SegmentProgressBar: View {
         }
         .accessibilityElement()
         .accessibilityLabel("Durée filmée")
-        .accessibilityValue(Text(model.progress(at: date), format: .percent.precision(.fractionLength(0))))
+        .accessibilityValue(CameraSpeech.recorded(model.recording.recordedDuration, of: model.recording.maxDuration))
     }
 }
 

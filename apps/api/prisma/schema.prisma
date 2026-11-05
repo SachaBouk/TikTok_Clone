@@ -212,6 +212,8 @@ model Video {
   locationAddress    String?         @map("location_address")
   // Étiquette « Contenu généré par l'IA » (ADR-065).
   aiGenerated        Boolean         @default(false) @map("ai_generated")
+  // Texte alternatif écrit par l'auteur, lu par VoiceOver (ADR-076) ; 1 à 300 caractères (CHECK).
+  altText            String?         @map("alt_text")
   // Durée maximale permise (ADR-073), fixée à la confirmation de l'envoi : 600 s pour un abonné « Plus », NULL sinon
   // (durée par défaut du worker, ADR-040). Reprise par le job de transcodage, et à sa relance.
   maxDurationSeconds Int?            @map("max_duration_seconds")

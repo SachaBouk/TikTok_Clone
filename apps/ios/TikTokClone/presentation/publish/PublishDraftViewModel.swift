@@ -66,6 +66,8 @@ final class PublishDraftViewModel {
     // Écran de publication (ADR-065) : étiquette « Contenu généré par l'IA », lieu, couverture (et son image dessinée),
     // « Enregistrer sur l'appareil » (retenu sur l'iPhone).
     var aiGenerated = false
+    // « Description pour l'accessibilité » (ADR-076) : texte alternatif lu par VoiceOver, 300 caractères.
+    var altText = ""
     var location: VideoLocation?
     private(set) var cover = CoverChoice()
     private(set) var coverImage: UIImage?
@@ -266,8 +268,11 @@ final class PublishDraftViewModel {
 
     var canPublish: Bool {
         guard case .ready = state else { return false }
-        return mode == .story || remainingCharacters >= 0
+        return mode == .story || (remainingCharacters >= 0 && altTextRemaining >= 0)
     }
+
+    // Caractères restants du texte alternatif (ADR-076), compté nettoyé comme par l'API.
+    var altTextRemaining: Int { AltTextRules.maxLength - (AltTextRules.cleaned(altText)?.count ?? 0) }
 
     var kind: PublicationKind { mode == .story ? .story : .video }
 
@@ -402,12 +407,13 @@ final class PublishDraftViewModel {
         if isVideo {
             extras = PublicationExtras(
                 aiGenerated: aiGenerated, downloadsEnabled: downloadsEnabled, location: location, cover: cover.isCustom ? coverFile : nil,
-                isPlus: isPlus())
+                altText: AltTextRules.cleaned(altText), isPlus: isPlus())
             details.coverChanged = extras.cover != nil
             details.coverTitle = extras.cover != nil && cover.shownTitle != nil
             details.locationAdded = location != nil
             details.mentionCount = Set(MentionRules.occurrences(in: description).map(\.username)).count
             details.aiGenerated = aiGenerated
+            details.altText = extras.altText != nil
             details.savedToDevice = saveToDevice
         }
         // « Enregistrer sur l'appareil » : une copie de la vidéo (l'originale part dans la file d'envoi).
@@ -449,6 +455,7 @@ final class PublishDraftViewModel {
         soundShared = true
         downloadsEnabled = true
         aiGenerated = false
+        altText = ""
         location = nil
         setCover(CoverChoice(), image: nil)
     }
@@ -488,7 +495,7 @@ final class PublishDraftViewModel {
         let draft = VideoDraft(
             id: UUID().uuidString, userID: userID, savedAt: Date(), plan: plan, source: source, description: description,
             visibility: visibility, commentsEnabled: commentsEnabled, soundShared: soundShared, aiGenerated: aiGenerated,
-            location: location, cover: cover, downloadsEnabled: downloadsEnabled)
+            location: location, cover: cover, downloadsEnabled: downloadsEnabled, altText: AltTextRules.cleaned(altText))
         do {
             try drafts.save(draft, thumbnail: coverImage?.jpegData(compressionQuality: 0.7) ?? thumbnail)
             publishing.track(.draftSaved(fromPost: fromPost))
@@ -509,6 +516,7 @@ final class PublishDraftViewModel {
         soundShared = draft.soundShared
         downloadsEnabled = draft.downloadsEnabled ?? true
         aiGenerated = draft.aiGenerated
+        altText = draft.altText ?? ""
         location = draft.location
         cover = draft.cover
         editorRequest = makeEditorRequest(plan: draft.plan, source: draft.source)

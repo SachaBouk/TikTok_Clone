@@ -57,6 +57,8 @@ final class CommentsViewModel {
     private var replyCursors: [String: String] = [:]
     private var exhaustedThreads: Set<String> = []
     private var pendingLikes: Set<String> = []
+    // Annonces VoiceOver (ADR-076) : commentaire ou réponse publiés, supprimés. Remplacé dans les tests.
+    @ObservationIgnored var announce: @MainActor (String) -> Void = { Accessibility.announce($0) }
 
     init(
         video: FeedVideo,
@@ -239,6 +241,7 @@ final class CommentsViewModel {
             mentionSuggestions = []
             count += 1
             onCountChange(1)
+            announce(CommentRowSpeech.posted(isReply: comment.parentID != nil))
             analytics.track(.commentPosted(videoID: video.id))
         } catch {
             report(error)
@@ -291,6 +294,7 @@ final class CommentsViewModel {
             changeCount(by: -1)
             do {
                 try await deleteComment(id: comment.id)
+                announce("Réponse supprimée")
             } catch {
                 replies[parentID]?.insert(comment, at: min(index, replies[parentID]?.count ?? 0))
                 update(parentID) { $0.repliesCount += 1 }
@@ -306,6 +310,7 @@ final class CommentsViewModel {
         do {
             try await deleteComment(id: comment.id)
             replies[comment.id] = nil
+            announce("Commentaire supprimé")
         } catch {
             comments.insert(removed, at: min(index, comments.count))
             changeCount(by: removedCount)

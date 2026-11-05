@@ -19,6 +19,7 @@ import { VideoErrorFilter } from './video-error.filter';
 import {
   CompleteUploadRequest,
   CreateUploadRequest,
+  SetAltTextRequest,
   SetCommentSettingsRequest,
   SetDownloadSettingsRequest,
   SetSoundSettingsRequest,
@@ -60,6 +61,7 @@ export class VideosController {
         soundId: body.soundId,
         cover: body.cover ? { fileSize: body.cover.fileSize } : undefined,
         aiGenerated: body.aiGenerated,
+        altText: body.altText,
         location: body.location ? { name: body.location.name, address: body.location.address ?? null } : undefined,
       }),
     );
@@ -124,6 +126,20 @@ export class VideosController {
     @Body() body: SetSoundSettingsRequest,
   ): Promise<VideoDto> {
     return toVideoDto(await this.videos.setSoundShared(user.userId, id, body.soundShared));
+  }
+
+  // Texte alternatif (ADR-076), par son auteur, quel que soit son statut.
+  @Patch(':id/alt-text')
+  @HttpCode(200)
+  @ApiOkResponse({ type: VideoResponse })
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
+  @ApiNotFoundResponse({ type: ErrorResponse, description: 'Vidéo inconnue ou appartenant à un autre utilisateur.' })
+  async setVideoAltText(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SetAltTextRequest,
+  ): Promise<VideoDto> {
+    return toVideoDto(await this.videos.setAltText(user.userId, id, body.altText ?? null));
   }
 
   // « Autoriser le téléchargement » (ADR-067), par son auteur, quel que soit son statut.

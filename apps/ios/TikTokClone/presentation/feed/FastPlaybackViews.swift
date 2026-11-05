@@ -316,8 +316,14 @@ struct PlaybackScrubber: View {
             }
             .frame(height: 22)
         }
+        // Réglable par VoiceOver (ADR-076) : balayer vers le haut ou le bas avance ou recule de 5 s.
         .accessibilityElement()
         .accessibilityLabel("Progression de la vidéo")
+        .accessibilityValue(AccessibleProgress.value(progress()))
+        .accessibilityAdjustableAction { direction in
+            guard let current = progress(), let target = AccessibleProgress.target(current, direction: direction) else { return }
+            seek(target)
+        }
     }
 }
 
@@ -355,6 +361,19 @@ struct VideoDownloadOverlay: View {
         .foregroundStyle(.white)
         .animation(.easeInOut(duration: 0.2), value: model.state == .idle)
         .allowsHitTesting(false)
+        // Début, fin ou échec lus à voix haute (ADR-076), pas chaque pourcentage.
+        .onChange(of: Self.announcement(for: model.state)) { _, text in
+            if let text { Accessibility.announce(text) }
+        }
+    }
+
+    static func announcement(for state: VideoDownloadModel.State) -> String? {
+        switch state {
+        case .idle: nil
+        case .downloading: "Enregistrement de la vidéo dans Photos"
+        case .saved: "Enregistrée dans Photos"
+        case .failed(let text): text
+        }
     }
 
     private func message(_ text: String, systemImage: String) -> some View {

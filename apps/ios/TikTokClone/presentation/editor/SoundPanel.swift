@@ -12,10 +12,12 @@ struct SoundPill: View {
         HStack(spacing: 10) {
             Button(action: onOpen) {
                 HStack(spacing: 8) {
-                    Image(systemName: "music.note")
+                    Image(systemName: "music.note").accessibilityHidden(true)
                     Text(model.plan.sound?.sound.title ?? "Ajouter un son").lineLimit(1)
                 }
             }
+            .accessibilityLabel(model.plan.sound.map { "Son : \($0.sound.title)" } ?? "Ajouter un son")
+            .accessibilityHint("Ouvre les sons")
             .accessibilityIdentifier("editor.sound")
             if model.plan.sound != nil {
                 Rectangle().fill(.white.opacity(0.4)).frame(width: 1, height: 18)
@@ -185,7 +187,13 @@ struct SoundPanel: View {
                 }
                 .contentShape(Rectangle())
             }
-            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                SoundSpeech.label(title: sound.title, author: sound.author.displayName, uses: sound.usesCount, duration: sound.duration)
+            )
+            .accessibilityValue(library.downloadingID == sound.id ? "Téléchargement" : "")
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint(selected ? "" : "Touche deux fois pour l’essayer sur la vidéo")
             .accessibilityIdentifier("sounds.row")
             if selected {
                 Button("Choisir le passage", systemImage: "scissors", action: onTrim)
@@ -217,10 +225,11 @@ struct SoundPanel: View {
                 } icon: {
                     Image(systemName: model.plan.isMuted ? "circle" : "checkmark.circle.fill")
                         .foregroundStyle(model.plan.isMuted ? Color.white : .brandPink)
+                        .accessibilityHidden(true)
                 }
                 .font(.title3)
             }
-            .accessibilityAddTraits(model.plan.isMuted ? [] : .isSelected)
+            .accessibilityValue(model.plan.isMuted ? "Désactivé" : "Activé")
             .accessibilityIdentifier("sounds.originalSound")
             Spacer()
             Button(action: onVolume) {
@@ -337,6 +346,7 @@ struct SoundTrimSheet: View {
                         Slider(value: $start, in: 0...maxStart)
                             .tint(Color.brandPink)
                             .accessibilityLabel("Début du son")
+                            .accessibilityValue(SpokenText.position(start, of: sound.sound.duration.seconds))
                             .accessibilityIdentifier("trim.slider")
                         Text(
                             "Le son joue de \(TimelineTime.label(.seconds(start))) à \(TimelineTime.label(.seconds(start) + model.plan.outputDuration))."

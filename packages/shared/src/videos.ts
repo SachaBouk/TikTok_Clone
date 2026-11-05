@@ -26,6 +26,8 @@ export interface VideoDto {
   downloadsEnabled: boolean;
   // Étiquette « Contenu généré par l'IA » (ADR-065).
   aiGenerated: boolean;
+  // Texte alternatif écrit par l'auteur (ADR-076), absent sans texte.
+  altText?: string;
   // Absent sans lieu (ADR-065).
   location?: VideoLocationDto;
   // Renseignés quand la vidéo est `ready` (ADR-008).

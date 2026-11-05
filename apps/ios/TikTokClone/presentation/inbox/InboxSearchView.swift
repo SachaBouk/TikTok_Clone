@@ -143,7 +143,8 @@ struct InboxSearchView: View {
             Section {
                 ForEach(viewModel.accounts.prefix(10)) { result in
                     accountRow(
-                        result.user, detail: "@\(result.user.username) · \(result.followersCount.formatted(.number.notation(.compactName))) abonnés")
+                        result.user, detail: "@\(result.user.username) · \(result.followersCount.formatted(.number.notation(.compactName))) abonnés",
+                        spokenDetail: "@\(result.user.username), \(SpokenText.count(result.followersCount, "abonné", "abonnés"))")
                 }
             } header: {
                 sectionHeader("Comptes")
@@ -178,11 +179,11 @@ struct InboxSearchView: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title).font(.title3.bold()).foregroundStyle(Color.primary).textCase(nil)
+        Text(title).font(.title3.bold()).foregroundStyle(Color.primary).textCase(nil).accessibilityHeading()
     }
 
     // Toucher un compte ouvre la conversation avec lui (l'existante, sinon une nouvelle).
-    private func accountRow(_ user: UserSummary, detail: String) -> some View {
+    private func accountRow(_ user: UserSummary, detail: String, spokenDetail: String? = nil) -> some View {
         Button {
             openedConversation = ConversationRoute(username: user.username)
         } label: {
@@ -198,6 +199,10 @@ struct InboxSearchView: View {
         }
         .buttonStyle(.plain)
         .listRowSeparator(.hidden)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SpokenText.join([user.displayName, spokenDetail ?? detail]))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Ouvre la conversation")
         .accessibilityIdentifier("inboxSearch.account")
     }
 
@@ -228,6 +233,8 @@ private struct MessageResultRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SpokenText.join([result.title(ownID: ownID), senderPrefix + result.content, SocialAge.text(result.createdAt)]))
     }
 
     private var senderPrefix: String {

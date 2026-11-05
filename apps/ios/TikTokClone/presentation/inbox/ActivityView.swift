@@ -112,6 +112,9 @@ struct ActivityView: View {
                 } label: {
                     tabLabel(filter == .all ? "Activité" : filter.title, selected: true, showsChevron: true)
                 }
+                .accessibilityLabel("Activité, filtre : \(filter.title)")
+                .accessibilityHint("Choisis le type d’activité")
+                .accessibilityAddTraits(.isSelected)
                 .accessibilityIdentifier("activity.filter")
             } else {
                 Button {
@@ -119,12 +122,15 @@ struct ActivityView: View {
                 } label: {
                     tabLabel("Activité", selected: false, showsChevron: true)
                 }
+                .accessibilityLabel("Activité")
             }
             Button {
                 tab = .followers
             } label: {
                 tabLabel("Nouveaux followers", selected: tab == .followers, showsChevron: false)
             }
+            .accessibilityLabel("Nouveaux followers")
+            .accessibilityAddTraits(tab == .followers ? .isSelected : [])
             .accessibilityIdentifier("activity.followersTab")
         }
         .buttonStyle(.plain)
@@ -134,12 +140,11 @@ struct ActivityView: View {
         VStack(spacing: 6) {
             HStack(spacing: 3) {
                 Text(title).font(.headline)
-                if showsChevron { Image(systemName: "arrowtriangle.down.fill").font(.system(size: 7)) }
+                if showsChevron { Image(systemName: "arrowtriangle.down.fill").font(.system(size: 7)).accessibilityHidden(true) }
             }
             .foregroundStyle(selected ? Color.primary : Color.secondary)
-            Capsule().fill(selected ? Color.primary : Color.clear).frame(width: 24, height: 3)
+            Capsule().fill(selected ? Color.primary : Color.clear).frame(width: 24, height: 3).accessibilityHidden(true)
         }
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -313,6 +318,23 @@ private struct NewFollowerRow: View {
                 }
             }
             .padding(.vertical, 4)
+            // Une ligne = un élément (ADR-076) : « non lu » dit, boutons dans le rotor « Actions ».
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                ActivityRowSpeech.label(
+                    names: actor.displayName, summary: "s’est abonné(e) à ton compte.", createdAt: notification.createdAt, read: notification.read)
+            )
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { openProfile(actor.username) }
+            .accessibilityActions {
+                if let follow {
+                    if follow.status == .friends {
+                        Button("Message") { message(actor.username) }
+                    } else {
+                        Button(follow.status.isFollowing ? "Ne plus suivre" : follow.status.title, action: follow.toggle)
+                    }
+                }
+            }
         }
     }
 }
@@ -453,6 +475,20 @@ private struct ActivityGroupRow: View {
             if let follow { FollowButton(status: follow.status, action: follow.toggle) }
         }
         .padding(.vertical, 4)
+        // Une ligne = un élément (ADR-076) : phrase, date, « non lu » ; profil et « Suivre en retour » en actions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ActivityRowSpeech.label(
+                names: group.actorNames, summary: group.summary, excerpt: group.moderation?.excerpt, createdAt: group.createdAt, read: group.read)
+        )
+        .accessibilityAddTraits(group.kind.isModeration ? [] : .isButton)
+        .accessibilityAction { if !group.kind.isModeration { open() } }
+        .accessibilityActions {
+            if !group.kind.isModeration {
+                Button(group.count > 1 ? "Voir les \(group.count) comptes" : "Profil de \(group.actors.first?.displayName ?? "")", action: openActor)
+            }
+            if let follow { Button(follow.status.isFollowing ? "Ne plus suivre" : follow.status.title, action: follow.toggle) }
+        }
     }
 }
 
@@ -501,6 +537,20 @@ private struct ActivityRow: View {
             if let follow { FollowButton(status: follow.status, action: follow.toggle) }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ActivityRowSpeech.label(
+                names: notification.actor?.displayName ?? notification.moderation?.title(notification.kind) ?? "", summary: notification.summary,
+                createdAt: notification.createdAt, read: notification.read)
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { primaryAction() }
+        .accessibilityActions {
+            if let actor = notification.actor, notification.video != nil {
+                Button("Profil de \(actor.displayName)") { openProfile(actor.username) }
+            }
+            if let follow { Button(follow.status.isFollowing ? "Ne plus suivre" : follow.status.title, action: follow.toggle) }
+        }
     }
 
     // Toucher : la vidéo concernée, ou le profil pour un abonnement.
@@ -547,6 +597,7 @@ private struct ActivityTrailing: View {
             Image(systemName: "person.badge.plus")
                 .foregroundStyle(.secondary)
                 .frame(width: 44)
+                .accessibilityHidden(true)
         }
     }
 }

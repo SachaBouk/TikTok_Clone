@@ -115,7 +115,7 @@ struct EditProfileView: View {
                     .lineLimit(field == .bio ? 4 : 1)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").accessibilityHidden(true).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)

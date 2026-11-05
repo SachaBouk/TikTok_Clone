@@ -51,6 +51,8 @@ struct CachedThumbnail: View {
                 Color(.secondarySystemBackground)
             }
         }
+        // Décor : la cellule qui la contient dit de quelle vidéo il s'agit (ADR-076).
+        .accessibilityHidden(true)
         .task(id: url) {
             guard ThumbnailCache.shared.image(for: url) == nil else { return }
             loaded = await ThumbnailCache.shared.load(url)

@@ -18,6 +18,7 @@ struct StoryViewerView: View {
     @State private var dragOffset: CGFloat = 0
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     init(model: StoryViewerModel, container: AppContainer) {
         _model = State(initialValue: model)
@@ -51,6 +52,8 @@ struct StoryViewerView: View {
                         .accessibilityIdentifier("story.notice")
                 }
             }
+            // Z à deux doigts : fermer (ADR-076).
+            .accessibilityAction(.escape) { model.close() }
             .offset(y: dragOffset)
             .opacity(1 - min(0.5, dragOffset / 600))
         }
@@ -86,6 +89,12 @@ struct StoryViewerView: View {
             if phase == .active { model.resume(.background) } else { model.pause(.background) }
         }
         .onDisappear { player.stop() }
+        // VoiceOver (ADR-076) : les photos n'avancent pas seules ; chaque story annoncée ; messages annoncés.
+        .onChange(of: voiceOverEnabled, initial: true) { _, enabled in model.holdsPhotos = enabled }
+        .onChange(of: model.current?.id) { _, id in
+            if id != nil, let arrival = model.arrivalSpeech { Accessibility.announce(arrival, delay: .milliseconds(300)) }
+        }
+        .accessibilityAnnounces(model.notice)
         .sheet(item: $viewersStory, onDismiss: { model.resume(.sheet) }) { story in
             StoryViewersView(story: story, list: container.makeStoryViewersList(storyID: story.id))
                 .presentationDetents([.medium, .large])
@@ -122,8 +131,27 @@ struct StoryViewerView: View {
                         if story.mediaType == .video { PlayerLayerView(player: player.player, adaptsToVideo: true) }
                     }
                     .clipped()
+                    // Le geste maison (toucher à gauche ou à droite, appui long, glisser) a ses équivalents (ADR-076) :
+                    // balayer vers le haut ou le bas = suivante ou précédente, toucher deux fois = pause, actions nommées.
                     .accessibilityElement()
-                    .accessibilityLabel(story.mediaType == .photo ? "Story photo" : "Story vidéo")
+                    .accessibilityLabel(StoryViewerSpeech.label(authorName: story.author.displayName, isOwn: model.isOwn))
+                    .accessibilityValue(model.spokenValue)
+                    .accessibilityHint("Balaie vers le haut ou le bas pour changer de story")
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: model.next()
+                        case .decrement: model.previous()
+                        @unknown default: break
+                        }
+                    }
+                    .accessibilityAction { model.togglePause() }
+                    .accessibilityActions {
+                        Button("Story suivante") { model.next() }
+                        Button("Story précédente") { model.previous() }
+                        Button(model.isPausedByUser ? "Reprendre" : "Pause") { model.togglePause() }
+                        Button("Compte suivant") { model.nextAuthor() }
+                        if model.hasPreviousAuthor { Button("Compte précédent") { model.previousAuthor() } }
+                    }
                     .accessibilityIdentifier("story.media")
             }
         }
@@ -223,6 +251,8 @@ struct StoryViewerView: View {
                 Label("\(story.stats?.viewers ?? 0) vue\((story.stats?.viewers ?? 0) > 1 ? "s" : "")", systemImage: "eye")
                     .font(.subheadline.weight(.semibold))
             }
+            .accessibilityLabel(StoryViewerSpeech.viewers(story.stats?.viewers ?? 0))
+            .accessibilityHint("Montre qui a vu ta story")
             .accessibilityIdentifier("story.viewers")
             Spacer()
             Menu {
@@ -257,6 +287,7 @@ struct StoryViewerView: View {
                 .padding(.vertical, 10)
                 .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 1))
                 .disabled(isSending)
+                .accessibilityLabel("Envoyer un message à \(story.author.displayName)")
                 .accessibilityIdentifier("story.reply")
             if isReplying {
                 Button("Envoyer", systemImage: "paperplane.fill") { send() }

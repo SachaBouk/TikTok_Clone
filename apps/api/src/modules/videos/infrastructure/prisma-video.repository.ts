@@ -36,6 +36,7 @@ const videoSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  altText: true,
   maxDurationSeconds: true,
   provider: true,
   muxUploadId: true,
@@ -167,6 +168,12 @@ export class PrismaVideoRepository extends VideoRepository {
     const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { soundShared: shared }, select: videoSelect });
     return video ?? null;
   }
+
+  async setAltText(id: string, altText: string | null): Promise<Video | null> {
+    const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { altText }, select: videoSelect });
+    return video ?? null;
+  }
+
   async setDownloadsEnabled(id: string, enabled: boolean): Promise<Video | null> {
     const [video] = await this.prisma.video.updateManyAndReturn({ where: { id }, data: { downloadsEnabled: enabled }, select: videoSelect });
     return video ?? null;
@@ -404,6 +411,7 @@ const detailsSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  altText: true,
   muxPlaybackId: true,
   muxSigned: true,
   hlsUrl: true,
@@ -428,6 +436,7 @@ const publishedSelect = {
   aiGenerated: true,
   locationName: true,
   locationAddress: true,
+  altText: true,
   muxPlaybackId: true,
   muxSigned: true,
   hlsUrl: true,

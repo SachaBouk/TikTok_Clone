@@ -156,7 +156,12 @@ struct ConversationView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 8)
+                                // L'heure est dite dans chaque bulle (ADR-076).
+                                .accessibilityHidden(true)
                         }
+                        let seenLabel = message.id == seen?.messageID ? seen?.label : nil
+                        let spoken = ConversationSpeech.label(
+                            of: message, ownID: ownID, participant: viewModel.conversation?.participant, inGroup: inGroup, seen: seenLabel)
                         if let event = message.event {
                             Text(event.text(actor: message.sender, ownID: ownID))
                                 .font(.caption)
@@ -165,13 +170,16 @@ struct ConversationView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 4)
                                 .id(message.id)
+                                .accessibilityLabel(spoken)
                                 .accessibilityIdentifier("conversation.groupEvent")
                         } else {
                             // Groupe : photo et nom de l'expéditeur au premier message d'une suite.
                             let previous = index > 0 ? viewModel.messages[index - 1] : nil
                             let showsSender = inGroup && !isOwn && (previous?.senderID != message.senderID || previous?.event != nil)
-                            MessageBubble(message: message, isOwn: isOwn, sender: inGroup && !isOwn ? message.sender : nil, showsSender: showsSender)
-                            {
+                            MessageBubble(
+                                message: message, isOwn: isOwn, sender: inGroup && !isOwn ? message.sender : nil, showsSender: showsSender,
+                                spokenLabel: spoken
+                            ) {
                                 videoID in
                                 container.router.presentedVideo = AppRouter.VideoRoute(id: videoID)
                             } openLive: { liveID in
@@ -191,6 +199,20 @@ struct ConversationView: View {
                                     Button("Signaler", systemImage: "flag") { reportTarget = .message(id: message.id) }
                                 }
                             }
+                            // Les mêmes choix que l'appui long, dans le rotor « Actions » de VoiceOver (ADR-076).
+                            .accessibilityActions {
+                                if !message.content.isEmpty {
+                                    Button("Copier") {
+                                        UIPasteboard.general.string = message.content
+                                        Accessibility.announce("Copié")
+                                    }
+                                }
+                                if isOwn {
+                                    Button("Retirer") { retracting = message }
+                                } else {
+                                    Button("Signaler") { reportTarget = .message(id: message.id) }
+                                }
+                            }
                             .id(message.id)
                         }
                         if message.id == seen?.messageID, let label = seen?.label {
@@ -198,6 +220,8 @@ struct ConversationView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
+                                // Dit avec la bulle (« …, vu »).
+                                .accessibilityHidden(true)
                                 .accessibilityIdentifier("conversation.seen")
                         }
                     }
@@ -219,6 +243,8 @@ struct ConversationView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.opacity)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(viewModel.typingSpeech)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomID)
                 }
@@ -231,6 +257,10 @@ struct ConversationView: View {
             .onChange(of: viewModel.pending.map(\.id)) { scrollToBottom(proxy) }
             .onChange(of: viewModel.isOtherTyping) { scrollToBottom(proxy) }
             .onChange(of: isComposing) { scrollToBottom(proxy) }
+            // « Inès écrit… » dit une fois par épisode (ADR-076), pas à chaque événement reçu.
+            .onChange(of: viewModel.isOtherTyping) { _, typing in
+                if typing { Accessibility.announce(viewModel.typingSpeech) }
+            }
         }
     }
 
@@ -340,6 +370,10 @@ private struct ConversationHeader: View {
             .padding(.vertical, 16)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Profil de \(user.displayName), @\(user.username)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { openProfile() }
     }
 }
 
@@ -359,6 +393,11 @@ private struct GroupHeader: View {
             .padding(.vertical, 16)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(group.title(ownID: ownID)), \(SpokenText.count(group.members.count, "membre", "membres")), groupe privé")
+        .accessibilityHint("Ouvre les réglages du groupe")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { openSettings() }
         .accessibilityIdentifier("conversation.groupHeader")
     }
 }
@@ -381,10 +420,12 @@ private struct RequestBar: View {
                 Button("Refuser", role: .destructive, action: decline)
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Refuser la demande de @\(username)")
                     .accessibilityIdentifier("conversation.decline")
                 Button("Accepter", action: accept)
                     .buttonStyle(.borderedProminent)
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Accepter la demande de @\(username)")
                     .accessibilityIdentifier("conversation.accept")
             }
         }
@@ -398,12 +439,35 @@ private struct MessageBubble: View {
     // Groupe : l'expéditeur d'un message d'un autre (photo à gauche, nom au premier message d'une suite).
     var sender: UserSummary? = nil
     var showsSender = false
+    // Phrase lue par VoiceOver : la bulle entière est un seul élément (ADR-076).
+    var spokenLabel = ""
     let openVideo: (String) -> Void
     let openLive: (String) -> Void
     var openProfile: (String) -> Void = { _ in }
     var openCollection: (VideoCollection) -> Void = { _ in }
 
     var body: some View {
+        bubble
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenLabel)
+            .accessibilityAddTraits(primaryAction == nil ? [] : .isButton)
+            .modifier(OptionalDefaultAction(action: primaryAction))
+            .accessibilityActions {
+                if let sender { Button("Profil de \(sender.displayName)") { openProfile(sender.username) } }
+            }
+    }
+
+    // Carte à ouvrir en touchant deux fois la bulle (vidéo, live, profil, collection encore disponibles).
+    private var primaryAction: (() -> Void)? {
+        if let video = message.sharedVideo, video.available { return { openVideo(video.id) } }
+        if let live = message.live, live.available { return { openLive(live.id) } }
+        if let user = message.profile?.user { return { openProfile(user.username) } }
+        if let collection = message.collection?.collection { return { openCollection(collection) } }
+        return nil
+    }
+
+    @ViewBuilder
+    private var bubble: some View {
         if let sender {
             HStack(alignment: .bottom, spacing: 8) {
                 Button {
@@ -466,7 +530,8 @@ private struct OutgoingBubble: View {
             TextBubble(text: message.content, isOwn: true)
                 .opacity(0.5)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .accessibilityLabel("Envoi : \(message.content)")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(ConversationSpeech.outgoingLabel(content: message.content, state: .sending))
         case .failed:
             Menu {
                 if canRetry { Button("Réessayer", systemImage: "arrow.clockwise", action: retry) }
@@ -486,7 +551,16 @@ private struct OutgoingBubble: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .accessibilityLabel("Non envoyé : \(message.content)")
+            .accessibilityLabel(ConversationSpeech.outgoingLabel(content: message.content, state: .failed))
+            .accessibilityHint("Touche deux fois pour les options")
+            .accessibilityActions {
+                if canRetry { Button("Réessayer", action: retry) }
+                Button("Copier") {
+                    UIPasteboard.general.string = message.content
+                    Accessibility.announce("Copié")
+                }
+                Button("Supprimer", action: discard)
+            }
             .accessibilityIdentifier("conversation.failedMessage")
         }
     }
@@ -707,5 +781,18 @@ private struct TypingBubble: View {
         }
         .accessibilityLabel("En train d’écrire")
         .accessibilityIdentifier("conversation.typing")
+    }
+}
+
+// Action par défaut (toucher deux fois) seulement quand il y a quelque chose à ouvrir.
+private struct OptionalDefaultAction: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.accessibilityAction { action() }
+        } else {
+            content
+        }
     }
 }

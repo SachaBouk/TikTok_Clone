@@ -33,6 +33,8 @@ struct LandscapePlayerView: View {
     // Change à chaque toucher sur les commandes : relance le délai de masquage.
     @State private var activity = 0
     @State private var scrubbing = false
+    // Avec VoiceOver, les commandes restent affichées (ADR-076) : masquées, on ne les retrouverait plus.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var expanded = false
     // Panneau des commentaires à droite, comme TikTok en plein écran (la vidéo se range à gauche).
     @State private var comments: CommentsViewModel?
@@ -60,9 +62,13 @@ struct LandscapePlayerView: View {
         .animation(.easeInOut(duration: 0.2), value: controlsShown)
         .statusBarHidden(!controlsShown)
         .persistentSystemOverlays(.hidden)
+        .onChange(of: voiceOver) { _, on in if on { setControls(true) } }
+        // Magic Tap : pause ou reprise ; geste d'échappement : quitter le plein écran (ADR-076).
+        .accessibilityAction(.magicTap) { actions.togglePause() }
+        .accessibilityAction(.escape) { actions.close() }
         // Masquées seules pendant la lecture, après le délai ; jamais en pause ni pendant un glissement.
         .task(id: [activity, isPaused ? 1 : 0, scrubbing ? 1 : 0, controlsShown ? 1 : 0]) {
-            guard controlsShown, !isPaused, !scrubbing else { return }
+            guard controlsShown, !isPaused, !scrubbing, !voiceOver else { return }
             try? await Task.sleep(for: Self.controlsDelay)
             if !Task.isCancelled { controlsShown = false }
         }
@@ -97,6 +103,7 @@ struct LandscapePlayerView: View {
                 .onTapGesture {
                     if comments != nil { closeComments() } else { setControls(!controlsShown) }
                 }
+                .accessibilityHidden(true)
             // Panneau ouvert : seule la vidéo reste, comme TikTok.
             if controlsShown && comments == nil {
                 controls.transition(.opacity)

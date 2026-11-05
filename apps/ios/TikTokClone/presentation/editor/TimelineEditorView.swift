@@ -91,6 +91,7 @@ struct TimelineEditorView: View {
             scroll.scrollTo(x: time.seconds * VideoEditorViewModel.pointsPerSecond)
         }
         .onAppear { scroll.scrollTo(x: preview.currentTime.seconds * VideoEditorViewModel.pointsPerSecond) }
+        .accessibilityAnnounces(model.problem)
     }
 
     private var topBar: some View {
@@ -127,8 +128,11 @@ struct TimelineEditorView: View {
     private var controls: some View {
         ZStack {
             HStack(spacing: 4) {
-                Text(TimelineTime.label(preview.currentTime)).foregroundStyle(.white)
-                Text("/ \(TimelineTime.label(model.plan.outputDuration))").foregroundStyle(.white.opacity(0.6))
+                Group {
+                    Text(TimelineTime.label(preview.currentTime)).foregroundStyle(.white)
+                    Text("/ \(TimelineTime.label(model.plan.outputDuration))").foregroundStyle(.white.opacity(0.6))
+                }
+                .accessibilityHidden(true)
                 Spacer()
                 Button("Annuler", systemImage: "arrow.uturn.backward") { model.undo() }
                     .disabled(!model.canUndo)
@@ -173,8 +177,8 @@ struct TimelineEditorView: View {
                         TimelineRuler(duration: model.plan.outputDuration)
                             .frame(height: Self.rulerHeight)
                         HStack(spacing: 2) {
-                            ForEach(model.plan.clips) { clip in
-                                ClipStrip(model: model, clip: clip, height: Self.stripHeight)
+                            ForEach(Array(model.plan.clips.enumerated()), id: \.element.id) { index, clip in
+                                ClipStrip(model: model, clip: clip, index: index, height: Self.stripHeight) { split() }
                             }
                             Button("Ajouter des vidéos", systemImage: "plus") {
                                 preview.pause()
@@ -221,12 +225,23 @@ struct TimelineEditorView: View {
                 )
                 .offset(y: Self.rulerHeight / 2 + 3)
                 .accessibilityIdentifier("timeline.mute")
-                // Tête de lecture.
+                // Tête de lecture ; avec VoiceOver, balayer vers le haut ou le bas la déplace (équivalent du défilement de la
+                // frise, ADR-076).
                 Rectangle()
                     .fill(.white)
                     .frame(width: 2, height: Self.rulerHeight + Self.stripHeight + 30)
                     .offset(x: half - 1)
                     .allowsHitTesting(false)
+                    .accessibilityElement()
+                    .accessibilityLabel("Tête de lecture")
+                    .accessibilityValue(SpokenText.position(preview.currentTime.seconds, of: model.plan.outputDuration.seconds))
+                    .accessibilityHint("Balaie vers le haut ou le bas pour avancer ou reculer d’une demi-seconde")
+                    .accessibilityAdjustableAction { direction in
+                        preview.pause()
+                        preview.seek(
+                            to: ClipSpeech.playhead(preview.currentTime, increment: direction == .increment, total: model.plan.outputDuration))
+                    }
+                    .accessibilityIdentifier("timeline.playhead")
             }
         }
     }
@@ -246,8 +261,8 @@ struct TimelineEditorView: View {
                     .accessibilityIdentifier("timeline.deselect")
                 ScrollView(.horizontal) {
                     HStack(spacing: 4) {
-                        toolButton("Diviser", systemImage: "square.split.2x1", identifier: "timeline.split") { model.split(at: preview.currentTime) }
-                        toolButton("Supprimer", systemImage: "trash", identifier: "timeline.delete") { model.deleteSelectedClip() }
+                        toolButton("Diviser", systemImage: "square.split.2x1", identifier: "timeline.split") { split() }
+                        toolButton("Supprimer", systemImage: "trash", identifier: "timeline.delete") { deleteClip() }
                             .disabled(!model.canDeleteClip)
                         toolButton("Vitesse", systemImage: "gauge.with.dots.needle.67percent", identifier: "timeline.speed") {
                             appliesToAll = false
@@ -258,7 +273,10 @@ struct TimelineEditorView: View {
                             appliesToAll = false
                             model.panel = .volume
                         }
-                        toolButton("Rotation", systemImage: "rotate.right", identifier: "timeline.rotate") { model.rotateSelectedClip() }
+                        toolButton("Rotation", systemImage: "rotate.right", identifier: "timeline.rotate") {
+                            model.rotateSelectedClip()
+                            Accessibility.announce("Clip tourné d’un quart de tour")
+                        }
                     }
                     .padding(.horizontal, 8)
                 }
@@ -281,7 +299,7 @@ struct TimelineEditorView: View {
     private func toolButton(_ title: String, systemImage: String, identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: systemImage).font(.title2.weight(.semibold))
+                Image(systemName: systemImage).font(.title2.weight(.semibold)).accessibilityHidden(true)
                 Text(title).font(.caption.weight(.medium))
             }
             .foregroundStyle(.white)
@@ -307,6 +325,7 @@ struct TimelineEditorView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(appliesToAll ? Color.brandPink : .white)
                 }
+                .accessibilityAddTraits(appliesToAll ? .isSelected : [])
                 .accessibilityIdentifier("timeline.applyAll")
                 Spacer()
                 Button("Fermer", systemImage: "xmark") {
@@ -323,8 +342,8 @@ struct TimelineEditorView: View {
             switch panel {
             case .speed:
                 MarkedSlider(
-                    value: SpeedScale.fraction(of: clip?.speed ?? 1), marks: SpeedScale.marks.map(SpeedScale.label),
-                    bubble: { SpeedScale.label(SpeedScale.speed(at: $0)) }
+                    label: "Vitesse du clip", value: SpeedScale.fraction(of: clip?.speed ?? 1), marks: SpeedScale.marks.map(SpeedScale.label),
+                    bubble: { SpeedScale.label(SpeedScale.speed(at: $0)) }, spoken: { EditorValueSpeech.speed(SpeedScale.speed(at: $0)) }
                 ) { fraction in
                     model.setSpeed(SpeedScale.speed(at: fraction), applyToAll: appliesToAll)
                 } onEnded: {
@@ -333,7 +352,8 @@ struct TimelineEditorView: View {
                 .accessibilityIdentifier("timeline.speedSlider")
             case .volume:
                 MarkedSlider(
-                    value: clip?.volume ?? 1, marks: ["0", "50", "100"], bubble: { "\(Int(($0 * 100).rounded()))" }
+                    label: "Volume du clip", value: clip?.volume ?? 1, marks: ["0", "50", "100"], bubble: { "\(Int(($0 * 100).rounded()))" },
+                    spoken: { EditorValueSpeech.percent($0) }
                 ) { fraction in
                     model.setVolume((fraction * 100).rounded() / 100, applyToAll: appliesToAll)
                 } onEnded: {
@@ -344,6 +364,19 @@ struct TimelineEditorView: View {
         }
         .padding(16)
         .background(Color(white: 0.13), in: UnevenRoundedRectangle(topLeadingRadius: 16, topTrailingRadius: 16))
+    }
+
+    // Divise le clip sous la tête de lecture (bouton, ou action VoiceOver d'un clip).
+    private func split() {
+        let count = model.plan.clips.count
+        model.split(at: preview.currentTime)
+        if model.plan.clips.count > count { Accessibility.announce("Clip divisé, \(SpokenText.count(model.plan.clips.count, "clip", "clips"))") }
+    }
+
+    private func deleteClip() {
+        let count = model.plan.clips.count
+        model.deleteSelectedClip()
+        if model.plan.clips.count < count { Accessibility.announce("Clip supprimé, \(SpokenText.count(model.plan.clips.count, "clip", "clips"))") }
     }
 
     private func openCrop() {
@@ -411,7 +444,10 @@ private struct TimelineRuler: View {
 private struct ClipStrip: View {
     let model: VideoEditorViewModel
     let clip: EditClip
+    let index: Int
     let height: CGFloat
+    // « Diviser à la tête de lecture » (action VoiceOver).
+    let onSplit: () -> Void
     @State private var dragBase: (start: Duration, end: Duration)?
 
     private static let handleWidth: CGFloat = 16
@@ -438,6 +474,27 @@ private struct ClipStrip: View {
                 RoundedRectangle(cornerRadius: 6).stroke(.white, lineWidth: 2)
             }
         }
+        // Un clip = un élément VoiceOver (ADR-076), ses poignées à part ; les gestes ont leurs actions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ClipSpeech.label(
+                index: index, count: model.plan.clips.count, duration: clip.outputDuration, speed: clip.speed, volume: clip.volume,
+                muted: model.plan.isMuted)
+        )
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(selected ? "Touche deux fois pour fermer ses outils" : "Touche deux fois pour le choisir")
+        .accessibilityAction { model.select(clip.id) }
+        .accessibilityAction(named: "Diviser à la tête de lecture", onSplit)
+        .accessibilityAction(named: "Supprimer le clip") {
+            guard model.canDeleteClip else {
+                Accessibility.announce("La vidéo doit garder au moins un clip")
+                return
+            }
+            if model.selectedClipID != clip.id { model.select(clip.id) }
+            model.deleteSelectedClip()
+            Accessibility.announce("Clip supprimé")
+        }
+        .accessibilityIdentifier("timeline.clip")
         .overlay(alignment: .leading) {
             if selected { handle(isStart: true).offset(x: -Self.handleWidth) }
         }
@@ -447,10 +504,6 @@ private struct ClipStrip: View {
         .contentShape(Rectangle())
         .onTapGesture { model.select(clip.id) }
         .task(id: key) { await model.loadThumbnails(key) }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Clip de \(clip.outputDuration.seconds.formatted(.number.precision(.fractionLength(1)))) secondes")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("timeline.clip")
     }
 
     private var badges: some View {
@@ -495,16 +548,27 @@ private struct ClipStrip: View {
                         model.endInteraction()
                     }
             )
+            .accessibilityElement()
             .accessibilityLabel(isStart ? "Début du clip" : "Fin du clip")
+            .accessibilityValue(ClipSpeech.handle(isStart ? clip.start : clip.end, of: clip.source.duration))
+            .accessibilityHint("Balaie vers le haut ou le bas pour déplacer d’un dixième de seconde")
+            .accessibilityAdjustableAction { direction in
+                let step = direction == .increment ? ClipSpeech.trimStep : .zero - ClipSpeech.trimStep
+                if isStart { model.setStart(clip.start + step, of: clip.id) } else { model.setEnd(clip.end + step, of: clip.id) }
+                model.endInteraction()
+            }
             .accessibilityIdentifier(isStart ? "timeline.trimStart" : "timeline.trimEnd")
     }
 }
 
 // Curseur à graduations, comme TikTok : repères en haut, traits, rond blanc ; bulle de la valeur pendant le geste.
 private struct MarkedSlider: View {
+    let label: String
     let value: Double
     let marks: [String]
     let bubble: (Double) -> String
+    // Valeur lue par VoiceOver (« 1,5 fois », « 80 % »).
+    let spoken: (Double) -> String
     let onChange: (Double) -> Void
     let onEnded: () -> Void
     @State private var dragging: Double?
@@ -563,7 +627,8 @@ private struct MarkedSlider: View {
         .frame(height: 64)
         .padding(.horizontal, 14)
         .accessibilityElement()
-        .accessibilityValue(bubble(value))
+        .accessibilityLabel(label)
+        .accessibilityValue(spoken(value))
         .accessibilityAdjustableAction { direction in
             let step = 1.0 / Double(Self.ticks)
             onChange(min(max(value + (direction == .increment ? step : -step), 0), 1))

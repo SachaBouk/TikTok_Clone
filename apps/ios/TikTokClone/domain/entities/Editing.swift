@@ -898,6 +898,8 @@ struct PublicationDetails: Equatable, Sendable {
     var mentionCount = 0
     var aiGenerated = false
     var savedToDevice = false
+    // Texte alternatif écrit (ADR-076) ; jamais son contenu.
+    var altText = false
 
     init(source: MediaSource = .gallery, plan: EditPlan? = nil) {
         self.source = source

@@ -467,6 +467,7 @@ struct EditingRulesTests {
                 "sticker_count": .int(1), "effect_count": .int(1), "voiceover_count": .int(0), "voice_effect": .string("none"),
                 "sound_used": .bool(false), "sound_shared": .bool(true), "cover_changed": .bool(false), "cover_title": .bool(false),
                 "location_added": .bool(false), "mention_count": .int(0), "ai_generated": .bool(false), "saved_to_device": .bool(false),
+                "alt_text": .bool(false),
             ])
         #expect(PublicationDetails().properties(photo: true) == ["source": .string("gallery")])
         let story = AnalyticsEvent.storyUploadStarted(photo: true, details: PublicationDetails(source: .camera))

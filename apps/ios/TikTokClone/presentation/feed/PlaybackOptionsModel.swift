@@ -101,6 +101,8 @@ final class PlaybackOptionsModel {
 
     private func show(_ notice: FastPlayback.Notice) {
         self.notice = notice
+        // Lu à voix haute (ADR-076) : le message disparaît après 2 s.
+        Accessibility.announce(notice.text)
         noticeTask?.cancel()
         noticeTask = Task { [noticeDuration] in
             try? await Task.sleep(for: noticeDuration)

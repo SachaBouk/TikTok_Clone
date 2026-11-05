@@ -42,7 +42,12 @@ struct DraftsView: View {
                         .contextMenu {
                             Button("Supprimer", systemImage: "trash", role: .destructive) { deleting = draft }
                         }
-                        .accessibilityLabel(draft.description.isEmpty ? "Brouillon" : draft.description)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(DraftSpeech.label(description: draft.description, duration: draft.duration))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint("Touche deux fois pour reprendre le montage")
+                        .accessibilityAction { open(draft) }
+                        .accessibilityAction(named: "Supprimer") { deleting = draft }
                         .accessibilityIdentifier("drafts.item")
                     }
                 }

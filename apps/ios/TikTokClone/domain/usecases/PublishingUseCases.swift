@@ -67,6 +67,7 @@ struct CreatePublicationUseCase: Sendable {
             upload.aiGenerated = extras.aiGenerated
             upload.downloadsEnabled = extras.downloadsEnabled
             upload.location = extras.location
+            upload.altText = extras.altText
             if let (url, size) = cover, size > 0, size <= UploadRules.maxCoverFileSize, let name = try? store.adoptFile(at: url, id: "\(id)-cover") {
                 upload.coverFileName = name
                 upload.coverSize = size
@@ -246,7 +247,7 @@ struct UploadVideoUseCase: Sendable {
                     commentsEnabled: request.commentsEnabled, soundShared: request.soundShared, soundID: request.soundID,
                     extras: UploadExtras(
                         aiGenerated: request.aiGenerated, downloadsEnabled: request.downloadsEnabled, location: request.location,
-                        coverSize: request.coverFileName == nil ? nil : request.coverSize))
+                        coverSize: request.coverFileName == nil ? nil : request.coverSize, altText: request.altText))
             case .story: try await stories.createUpload(contentType: request.contentType, fileSize: request.fileSize)
             }
         }

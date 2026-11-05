@@ -90,6 +90,7 @@ struct FilterPanel: View {
                                 Capsule()
                                     .fill(category == option ? Color.white : .clear)
                                     .frame(height: 2)
+                                    .accessibilityHidden(true)
                             }
                             .fixedSize()
                         }
@@ -176,7 +177,7 @@ struct IntensitySlider: View {
         .frame(height: 56)
         .accessibilityElement()
         .accessibilityLabel("Intensité du filtre")
-        .accessibilityValue("\(Int((value * 100).rounded()))")
+        .accessibilityValue(EditorValueSpeech.percent(value))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: onChange(min(value + 0.1, 1))

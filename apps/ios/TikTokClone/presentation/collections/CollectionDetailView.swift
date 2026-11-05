@@ -264,6 +264,7 @@ struct CollectionDetailView: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityVideoCell(video, showsViews: false)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
                 .accessibilityIdentifier("collection.selectVideo")
                 .task { await model.videos.loadMore(ifNeededAfter: video) }

@@ -45,8 +45,29 @@ private struct DotsRefreshModifier: ViewModifier {
     let action: @MainActor () async -> Void
     @State private var pull: CGFloat = 0
     @State private var isRefreshing = false
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
+    // Avec VoiceOver (ADR-076), le geste maison ne se déclenche pas (le défilement à trois doigts ne tire pas au-delà du
+    // haut) : `refreshable` natif (balayer à trois doigts vers le bas tout en haut), plus une action « Actualiser ».
     func body(content: Content) -> some View {
+        if voiceOver {
+            content
+                .refreshable {
+                    await action()
+                    Accessibility.announce("Actualisé")
+                }
+                .accessibilityAction(named: "Actualiser") {
+                    Task {
+                        await action()
+                        Accessibility.announce("Actualisé")
+                    }
+                }
+        } else {
+            dots(content)
+        }
+    }
+
+    private func dots(_ content: Content) -> some View {
         content
             // Contenu gardé descendu pendant l'actualisation.
             .contentMargins(.top, isRefreshing ? PullToRefresh.refreshingHeight : 0, for: .scrollContent)

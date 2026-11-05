@@ -72,12 +72,17 @@ struct DraggableOverlay<Content: View>: View {
     let label: String
     let hint: String
     let identifier: String
+    // Échelles permises (actions « Agrandir » / « Réduire » de VoiceOver, ADR-076).
+    var scaleRange: ClosedRange<Double> = 0.3...4
     @ViewBuilder let content: (Double) -> Content
     // Centre (aimanté) et position du doigt pendant le glissement.
     let onDragChanged: (CGPoint, CGPoint) -> Void
     let onDragEnded: (CGPoint, CGPoint) -> Void
     let onScale: (Double) -> Void
     var onTap: (() -> Void)?
+    // Équivalents VoiceOver du glisser et de la corbeille (ADR-076) : nouveau centre, suppression.
+    var onMove: ((CGPoint) -> Void)?
+    var onDelete: (() -> Void)?
     @State private var dragOffset: CGSize = .zero
     @State private var magnification: CGFloat = 1
     @State private var isOverTrash = false
@@ -117,10 +122,49 @@ struct DraggableOverlay<Content: View>: View {
                     }
             )
             .onTapGesture { onTap?() }
-            .accessibilityAddTraits(.isButton)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(onTap == nil ? [] : .isButton)
             .accessibilityLabel(label)
+            .accessibilityValue(OverlaySpeech.value(center: center, scale: scale))
             .accessibilityHint(hint)
+            .accessibilityAction { onTap?() }
+            .accessibilityActions { accessibilityActions }
             .accessibilityIdentifier(identifier)
+    }
+
+    // Rotor « Actions » : modifier, déplacer d'un pas, centrer, agrandir, réduire, supprimer ; chaque changement est annoncé.
+    @ViewBuilder
+    private var accessibilityActions: some View {
+        if let onTap {
+            Button("Modifier", action: onTap)
+        }
+        if let onMove {
+            ForEach(OverlaySpeech.Direction.allCases, id: \.self) { direction in
+                Button(direction.title) {
+                    let moved = OverlaySpeech.moved(center, direction)
+                    onMove(moved)
+                    Accessibility.announce(PlacementSpeech.region(moved))
+                }
+            }
+            Button("Centrer") {
+                onMove(CGPoint(x: 0.5, y: 0.5))
+                Accessibility.announce("Centré")
+            }
+        }
+        Button("Agrandir") { rescale(larger: true) }
+        Button("Réduire") { rescale(larger: false) }
+        if let onDelete {
+            Button("Supprimer") {
+                onDelete()
+                Accessibility.announce("\(label) supprimé")
+            }
+        }
+    }
+
+    private func rescale(larger: Bool) {
+        let scaled = OverlaySpeech.scaled(scale, larger: larger, range: scaleRange)
+        onScale(scaled)
+        Accessibility.announce("Taille \(Int((scaled * 100).rounded())) %")
     }
 
     // Centre pendant le glissement, aimanté au repère vertical.
@@ -298,6 +342,7 @@ struct TextEditorOverlay: View {
                                     RoundedRectangle(cornerRadius: 8).stroke(
                                         selected ? Color.white : .white.opacity(0.35), lineWidth: selected ? 2 : 1))
                         }
+                        .accessibilityLabel("Police \(font.title)")
                         .accessibilityAddTraits(selected ? .isSelected : [])
                         .accessibilityIdentifier("textEditor.font.\(font.rawValue)")
                     }
@@ -325,7 +370,7 @@ struct TextEditorOverlay: View {
                             .frame(width: selected ? 34 : 28, height: selected ? 34 : 28)
                             .frame(width: 36, height: 36)
                     }
-                    .accessibilityLabel(color.title)
+                    .accessibilityLabel("Couleur \(color.title)")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                     .accessibilityIdentifier("textEditor.color.\(color.rawValue)")
                 }

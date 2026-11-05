@@ -158,7 +158,8 @@ struct VideoDetailView: View {
                     openMention: { path.append(ProfileRoute(username: $0)) },
                     gift: { if session.isSignedIn { giftVideo = video } else { session.requestSignIn() } },
                     openStories: { container.router.openStories([video.author], source: .feed) },
-                    openMenu: { menuVideo = interactions.display(video) }
+                    openMenu: { menuVideo = interactions.display(video) },
+                    openAuthorProfile: { openAuthorProfile(video.author) }
                 ),
                 progress: { pool.progress(of: video.id) },
                 revealReported: viewModel.isMasked ? { interactions.showReported(videoID: video.id) } : nil,
@@ -167,8 +168,12 @@ struct VideoDetailView: View {
                 scrubbing: { pool.setScrubbing($0, videoID: video.id) },
                 // Plein écran : seulement quand la vidéo est affichée (pas sous une page poussée ni des stories).
                 openFullScreen: path.isEmpty && container.router.presentedStories == nil
-                    ? { withoutAnimation { fullScreenVideo = video } } : nil
+                    ? { withoutAnimation { fullScreenVideo = video } } : nil,
+                autoDescription: container.autoDescriptions.description(for: interactions.display(video))
             )
+            .onAppear { container.autoDescriptions.prepare(video) }
+            // Magic Tap : pause ou reprise (ADR-076).
+            .accessibilityAction(.magicTap) { viewModel.togglePause() }
         }
     }
 }

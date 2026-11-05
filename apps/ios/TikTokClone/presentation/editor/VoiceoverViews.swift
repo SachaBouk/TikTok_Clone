@@ -117,6 +117,11 @@ struct VoiceoverRecorderView: View {
                     }
                 }
                 .onTapGesture { if !session.isRecording { preview.togglePlayback() } }
+                .accessibilityElement()
+                .accessibilityLabel("Aperçu de la vidéo")
+                .accessibilityValue(preview.isPlaying ? "En lecture" : "En pause")
+                .accessibilityAddTraits([.isButton, .startsMediaSession])
+                .accessibilityAction { if !session.isRecording { preview.togglePlayback() } }
                 .frame(maxHeight: .infinity)
                 .padding(.top, 8)
             panel
@@ -131,6 +136,14 @@ struct VoiceoverRecorderView: View {
             session.stopRecording()
             preview.player.isMuted = false
             preview.loops = true
+        }
+        // Annonces VoiceOver (ADR-076) : début de l'enregistrement, voix off enregistrée (avec sa durée).
+        .onChange(of: session.isRecording) { _, recording in
+            if recording, let start = session.recordingStart { Accessibility.announce(TimelineSpeech.voiceoverStarted(at: start), important: true) }
+        }
+        .onChange(of: session.clips.map(\.id)) { old, new in
+            guard let added = session.clips.first(where: { new.contains($0.id) && !old.contains($0.id) }) else { return }
+            Accessibility.announce(TimelineSpeech.voiceoverRecorded(added.duration), important: true)
         }
         .alert("Voix off", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -147,12 +160,15 @@ struct VoiceoverRecorderView: View {
             ZStack {
                 recordButton
                 if !session.clips.isEmpty && !session.isRecording {
-                    Button("Supprimer le dernier enregistrement", systemImage: "delete.left.fill") { session.removeLast() }
-                        .labelStyle(.iconOnly)
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .offset(x: 110)
-                        .accessibilityIdentifier("voiceover.removeLast")
+                    Button("Supprimer le dernier enregistrement", systemImage: "delete.left.fill") {
+                        session.removeLast()
+                        Accessibility.announce("Dernier enregistrement supprimé")
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .offset(x: 110)
+                    .accessibilityIdentifier("voiceover.removeLast")
                 }
             }
             HStack {
@@ -164,10 +180,11 @@ struct VoiceoverRecorderView: View {
                     } icon: {
                         Image(systemName: session.originalSound ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(session.originalSound ? Color.brandPink : .white)
+                            .accessibilityHidden(true)
                     }
                     .font(.title3)
                 }
-                .accessibilityAddTraits(session.originalSound ? .isSelected : [])
+                .accessibilityValue(session.originalSound ? "Activé" : "Désactivé")
                 .accessibilityIdentifier("voiceover.originalSound")
                 Spacer()
                 Button("Terminé") {
@@ -222,7 +239,6 @@ struct VoiceoverRecorderView: View {
                         .fill(Color(red: 0.1, green: 0.6, blue: 0.7).opacity(0.75))
                         .frame(width: CGFloat(clip.duration.seconds) * Self.pointsPerSecond, height: 56)
                         .offset(x: CGFloat(clip.start.seconds) * Self.pointsPerSecond)
-                        .accessibilityLabel("Voix off")
                         .accessibilityIdentifier("voiceover.clip")
                 }
                 if let start = session.recordingStart {
@@ -252,6 +268,21 @@ struct VoiceoverRecorderView: View {
             )
             .clipped()
         }
+        // Avec VoiceOver, la frise est la tête de lecture (ADR-076) : balayer vers le haut ou le bas la déplace ; la valeur
+        // dit les voix off posées.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tête de lecture")
+        .accessibilityValue(
+            SpokenText.join(
+                [SpokenText.position(preview.currentTime.seconds, of: model.plan.outputDuration.seconds)]
+                    + session.clips.map { TimelineSpeech.range("Voix off", start: $0.start, end: $0.start + $0.duration) })
+        )
+        .accessibilityAdjustableAction { direction in
+            guard !session.isRecording else { return }
+            preview.pause()
+            preview.seek(to: ClipSpeech.playhead(preview.currentTime, increment: direction == .increment, total: model.plan.outputDuration))
+        }
+        .accessibilityIdentifier("voiceover.strip")
     }
 
     @ViewBuilder
@@ -306,6 +337,11 @@ struct VoiceEffectsView: View {
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
                 .background(Color.black)
                 .onTapGesture { preview.togglePlayback() }
+                .accessibilityElement()
+                .accessibilityLabel("Aperçu de la vidéo")
+                .accessibilityValue(preview.isPlaying ? "En lecture" : "En pause")
+                .accessibilityAddTraits([.isButton, .startsMediaSession])
+                .accessibilityAction { preview.togglePlayback() }
                 .frame(maxHeight: .infinity)
             progress
                 .padding(.horizontal, 20)
@@ -360,8 +396,12 @@ struct VoiceEffectsView: View {
         }
         .frame(height: 20)
         .accessibilityElement()
-        .accessibilityLabel("Lecture")
-        .accessibilityValue(TimelineTime.label(preview.currentTime))
+        .accessibilityLabel("Progression")
+        .accessibilityValue(SpokenText.position(preview.currentTime.seconds, of: model.plan.outputDuration.seconds))
+        .accessibilityAdjustableAction { direction in
+            preview.pause()
+            preview.seek(to: ClipSpeech.playhead(preview.currentTime, increment: direction == .increment, total: model.plan.outputDuration))
+        }
     }
 
     private var tabs: some View {
@@ -376,6 +416,7 @@ struct VoiceEffectsView: View {
             }
             .disabled(!hasVoice)
             .accessibilityLabel("Aucun effet de voix")
+            .accessibilityAddTraits(model.plan.voiceEffect == .none ? .isSelected : [])
             .accessibilityIdentifier("voiceEffects.none")
             Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 26)
             ForEach(VoiceEffect.Category.allCases) { option in

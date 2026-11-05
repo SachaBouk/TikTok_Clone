@@ -38,6 +38,8 @@ final class AppContainer {
     let collections: CollectionsModel
     // Brouillons de la création, sur l'iPhone (ADR-065).
     let drafts: DraftsModel
+    // Descriptions automatiques des vidéos pour VoiceOver (ADR-076), sur l'iPhone.
+    let autoDescriptions = AutoDescriptionModel(describe: DescribeImageUseCase(describer: VisionImageDescriber()))
     // « Je n'aime pas » sur les commentaires, sur l'appareil (ADR-060).
     let commentDislikes = CommentDislikesModel(store: UserDefaultsPreferencesStore())
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
@@ -143,6 +145,7 @@ final class AppContainer {
             setVisibility: SetVideoVisibilityUseCase(videos: videos),
             setCommentsEnabled: SetCommentsEnabledUseCase(videos: videos),
             setDownloadsEnabled: SetDownloadsEnabledUseCase(videos: videos),
+            setAltText: SetVideoAltTextUseCase(videos: RemoteVideoAltTextRepository(client: client)),
             session: session,
             analytics: analytics
         )

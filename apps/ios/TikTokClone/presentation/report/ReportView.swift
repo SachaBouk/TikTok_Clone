@@ -130,6 +130,7 @@ struct ReportView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill")
+                        .accessibilityHidden(true)
                         .font(.system(size: 64))
                         .foregroundStyle(.white, .green)
                         .padding(.top, 40)

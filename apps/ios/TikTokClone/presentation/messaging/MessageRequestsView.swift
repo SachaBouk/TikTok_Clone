@@ -24,6 +24,9 @@ struct MessageRequestsView: View {
                             Task { alertMessage = await messaging.decline(conversation) }
                         }
                     }
+                    .accessibilityActions {
+                        Button("Refuser la demande") { Task { alertMessage = await messaging.decline(conversation) } }
+                    }
                     .onAppear { Task { await messaging.requests.loadMore(ifNeededAfter: conversation) } }
                     .accessibilityIdentifier("requests.conversation")
                 }
