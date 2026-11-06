@@ -50,7 +50,7 @@ struct CreationView: View {
                 }
             } else {
                 CameraView(
-                    model: camera.model, preview: CameraPreview(session: camera.session), mode: $draft.mode, liveTitle: $draft.liveTitle,
+                    model: camera.model, preview: CameraPreview(session: camera.session), mode: $draft.mode,
                     importThumbnail: importThumbnail
                 ) { outcome in
                     switch outcome {
@@ -60,9 +60,7 @@ struct CreationView: View {
                 } onImport: {
                     gallery = container.makeGallery(kind: draft.kind)
                 } onStartLive: {
-                    let title = draft.liveTitle
-                    draft.liveTitle = ""
-                    container.router.startLive(title: title)
+                    container.router.startLive()
                 } onClose: {
                     onClose()
                 }

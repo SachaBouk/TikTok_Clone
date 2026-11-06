@@ -10,4 +10,6 @@ REVENUECAT_API_KEY =
 
 // Mux Data (ADR-074) : clé d'environnement de production, à définir ; vide : qualité de lecture non mesurée.
 MUX_DATA_ENV_KEY =
+// Live commun (ADR-079) : serveur hébergé par echimine, partagé par les apps clones.
+LIVE_SDK_SERVER_URL = https:/$()/live.echimine.fr
 #include? "Local.xcconfig"

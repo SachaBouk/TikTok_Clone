@@ -3,8 +3,7 @@ import Foundation
 // Ouvre la connexion temps réel quand un compte est connecté et l'app au premier plan, la ferme sinon
 // (l'app suspendue ne reçoit rien ; les notifications push prendront le relais), et distribue les événements
 // aux écrans : fin du transcodage des publications (vidéos et stories), centre d'activité, messagerie, solde de jetons,
-// compteurs du profil ; la rangée de stories et les lives des abonnements (ADR-053) sont relus à chaque (re)connexion, et
-// les lives à l'annonce d'un nouveau live.
+// compteurs du profil ; la rangée de stories est relue à chaque (re)connexion.
 @MainActor
 final class RealtimeCoordinator {
     private let channel: any RealtimeChannel
@@ -14,7 +13,6 @@ final class RealtimeCoordinator {
     private let wallet: WalletModel
     private let stories: StoriesModel
     private let ownProfile: OwnProfileSync
-    private let lives: LiveModel?
     private let plus: PlusModel?
     // Notifications dans l'app (ADR-078) : après les autres modèles (la conversation d'un message est déjà à jour).
     private let banners: InAppBannerModel?
@@ -25,7 +23,7 @@ final class RealtimeCoordinator {
 
     init(
         channel: any RealtimeChannel, publishing: PublishingModel, activity: ActivityModel, messaging: MessagingModel, wallet: WalletModel,
-        stories: StoriesModel, ownProfile: OwnProfileSync, lives: LiveModel? = nil, plus: PlusModel? = nil,
+        stories: StoriesModel, ownProfile: OwnProfileSync, plus: PlusModel? = nil,
         banners: InAppBannerModel? = nil
     ) {
         self.channel = channel
@@ -35,7 +33,6 @@ final class RealtimeCoordinator {
         self.wallet = wallet
         self.stories = stories
         self.ownProfile = ownProfile
-        self.lives = lives
         self.plus = plus
         self.banners = banners
     }
@@ -77,7 +74,6 @@ final class RealtimeCoordinator {
             Task { await wallet.refresh() }
             Task { await ownProfile.refresh() }
             Task { await stories.refresh() }
-            Task { await lives?.refresh() }
             Task { await plus?.refresh() }
         case .videoProcessed(let video):
             publishing.videoProcessed(video)
@@ -85,7 +81,6 @@ final class RealtimeCoordinator {
             publishing.storyProcessed(story)
         case .notificationCreated(let notification, let unreadCount):
             activity.received(notification, unreadCount: unreadCount)
-            if notification.kind == .live { Task { await lives?.refresh() } }
         case .unreadNotificationsChanged(let count):
             activity.unreadChanged(count)
         case .notificationsRemoved(let removed, let groups, let unreadCount):

@@ -68,7 +68,6 @@ final class SendVideoViewModel {
     // Ce qui est envoyé.
     enum Item: Equatable {
         case video(FeedVideo)
-        case live(LiveStream)
         // Profil d'un compte (ADR-069).
         case profile(UserSummary)
         // Collection publique (ADR-072).
@@ -112,7 +111,6 @@ final class SendVideoViewModel {
 
     private let messaging: MessagingModel
     private let share: ShareVideoByMessageUseCase
-    private let shareLive: ShareLiveByMessageUseCase?
     private let shareProfile: ShareProfileByMessageUseCase?
     private let shareCollection: ShareCollectionByMessageUseCase?
     private let interactions: VideoInteractionsModel
@@ -127,7 +125,7 @@ final class SendVideoViewModel {
         session: SessionStore
     ) {
         self.init(
-            item: .video(video), messaging: messaging, loadFollows: loadFollows, share: share, shareLive: nil, interactions: interactions,
+            item: .video(video), messaging: messaging, loadFollows: loadFollows, share: share, interactions: interactions,
             session: session)
     }
 
@@ -136,14 +134,12 @@ final class SendVideoViewModel {
         messaging: MessagingModel,
         loadFollows: LoadFollowsUseCase,
         share: ShareVideoByMessageUseCase,
-        shareLive: ShareLiveByMessageUseCase?,
         shareProfile: ShareProfileByMessageUseCase? = nil,
         shareCollection: ShareCollectionByMessageUseCase? = nil,
         interactions: VideoInteractionsModel,
         session: SessionStore
     ) {
         self.item = item
-        self.shareLive = shareLive
         self.shareProfile = shareProfile
         self.shareCollection = shareCollection
         self.messaging = messaging
@@ -316,12 +312,6 @@ final class SendVideoViewModel {
         case (.video(let video), .group(let conversationID)):
             _ = try await share(videoID: video.id, inConversation: conversationID, message: message, clientMessageID: clientMessageID)
             interactions.sharedByMessage(video)
-        case (.live(let live), .user(let user)):
-            guard let shareLive else { throw AppError.unexpected }
-            _ = try await shareLive(liveID: live.id, to: user.username)
-        case (.live(let live), .group(let conversationID)):
-            guard let shareLive else { throw AppError.unexpected }
-            _ = try await shareLive(liveID: live.id, inConversation: conversationID)
         case (.profile(let profile), .user(let user)):
             guard let shareProfile else { throw AppError.unexpected }
             _ = try await shareProfile(userID: profile.id, to: user.username, message: message, clientMessageID: clientMessageID)

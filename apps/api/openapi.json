@@ -5398,6 +5398,57 @@
         "security": []
       }
     },
+    "/live/participant-token": {
+      "post": {
+        "operationId": "createLiveParticipantToken",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Jeton frais à chaque appel, jamais mis en cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveParticipantTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Compte non connecté.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compte introuvable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Secret de l’App membre non configuré : Live indisponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "live"
+        ]
+      }
+    },
     "/feed": {
       "get": {
         "operationId": "getFeed",
@@ -12495,6 +12546,18 @@
             "$ref": "#/components/schemas/LiveResponse"
           }
         }
+      },
+      "LiveParticipantTokenResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "JWT HS256 de 5 min, à présenter au serveur commun du Live (SDK d’echimine)."
+          }
+        },
+        "required": [
+          "token"
+        ]
       },
       "FeedViewerStateResponse": {
         "type": "object",

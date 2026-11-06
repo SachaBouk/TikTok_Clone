@@ -5,8 +5,8 @@ import UIKit
 // Création (ADR-062) : vidéos filmées par la caméra ou choisies dans la galerie, toujours ouvertes dans l'éditeur (aperçu,
 // puis éditeur par clips), exportées par « Suivant », puis décrites et réglées (audience, commentaires) sur l'écran de
 // publication. « Ta story » publie directement en story (ADR-051 : 60 s au plus, ou une photo). À la publication, la
-// vidéo passe au modèle partagé des publications (envoi en arrière-plan de l'écran). En mode Live (ADR-053) : un titre
-// facultatif, puis le live s'ouvre en plein écran (rien n'est envoyé ici).
+// vidéo passe au modèle partagé des publications (envoi en arrière-plan de l'écran). En mode Live (ADR-079) : l'écran de
+// lancement du Live commun s'ouvre en plein écran (rien n'est envoyé ici).
 @MainActor
 @Observable
 final class PublishDraftViewModel {
@@ -89,9 +89,6 @@ final class PublishDraftViewModel {
     var notice: String?
     private(set) var state: State = .empty
     // Changer de mode abandonne le média choisi.
-    // Titre du live (mode Live), nettoyé au lancement.
-    var liveTitle = ""
-    var liveTitleRemaining: Int { LiveRules.maxTitleLength - liveTitle.count }
 
     var mode: Mode = .video {
         didSet { if mode != oldValue { discard() } }

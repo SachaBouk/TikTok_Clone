@@ -4,6 +4,7 @@ import { HealthController } from './health/health.controller';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CollectionsModule } from './modules/collections/collections.module';
+import { CrossLiveModule } from './modules/crosslive/crosslive.module';
 import { FeedModule } from './modules/feed/feed.module';
 import { InteractionsModule } from './modules/interactions/interactions.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
@@ -40,6 +41,7 @@ import { RedisModule } from './redis/redis.module';
     CollectionsModule,
     StoriesModule,
     LiveModule,
+    CrossLiveModule,
     NotificationsModule,
     FeedModule,
     SearchModule,

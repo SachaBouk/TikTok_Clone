@@ -141,14 +141,6 @@ struct SocialSpeechTests {
                 == "Contenu retiré Ton commentaire a été retiré., « spam », à l’instant")
     }
 
-    @Test("live : lignes du chat et cadeaux")
-    func liveLines() {
-        #expect(LiveChatSpeech.message(.sample("m1", by: .bob, content: "Coucou"), isHost: false) == "Bob : Coucou")
-        #expect(LiveChatSpeech.message(.sample("m1", by: .bob, content: "Coucou"), isHost: true) == "Bob, créateur : Coucou")
-        #expect(LiveChatSpeech.event(LiveChatEvent(kind: .joined, user: .alice)) == "Alice a rejoint")
-        #expect(LiveChatSpeech.gift(sender: .alice, gift: GiftInfo(code: "rose", name: "Rose", emoji: "🌹")) == "Alice a envoyé Rose")
-    }
-
     @Test("chat d'un live : au plus une annonce toutes les 3 s, les suivantes regroupées")
     func chatAnnouncer() {
         var announcer = LiveChatAnnouncer()
@@ -219,42 +211,5 @@ extension ConversationViewModelTests {
         await viewModel.send()
         #expect(announced.last == "Message envoyé")
         #expect(viewModel.typingSpeech == "Bob écrit…")
-    }
-}
-
-extension LiveRoomTests {
-    @Test("VoiceOver : messages des autres et cadeaux annoncés, sans les siens ni les comptes masqués ; fin annoncée (ADR-076)")
-    func voiceOverAnnouncements() async {
-        repository.state.withLock { $0.connection = .sample() }
-        let model = makeModel(.viewer(liveID: "live-1", source: .link), session: await makeSession(), room: FakeLiveRoom(), hidden: ["carol-id"])
-        var announced: [String] = []
-        model.announce = { announced.append($0) }
-        await model.start()
-        model.apply(.event(.chatMessage(.sample("m1", by: .bob, content: "Coucou"))))
-        model.apply(.event(.chatMessage(.sample("m2", by: .alice, content: "Moi"))))
-        model.apply(.event(.chatMessage(.sample("m3", by: UserSummary(id: "carol-id", username: "carol", displayName: "Carol", avatarURL: nil)))))
-        model.apply(.event(.gift(sender: .bob, gift: GiftInfo(code: "rose", name: "Rose", emoji: "🌹"), amount: 1, giftsCount: 1, giftsAmount: 1)))
-        #expect(announced.first?.hasSuffix("Coucou") == true)
-        #expect(!announced.contains { $0.contains("Moi") || $0.contains("Carol") })
-        #expect(announced.contains("Bob a envoyé Rose"))
-        model.apply(.event(.ended(.moderation)))
-        #expect(await eventually { announced.contains(LiveEndReason.moderation.message) })
-    }
-}
-
-extension LiveTikTokTests {
-    @Test("VoiceOver : live suivant et précédent (ADR-076)")
-    func voiceOverMove() async {
-        repository.state.withLock { $0.discover = [.sample("l1"), .sample("l2", host: .alice)] }
-        let model = LiveFeedModel(load: LoadDiscoverLivesUseCase(lives: repository))
-        await model.start()
-        #expect(!model.hasPrevious(before: "l1"))
-        #expect(!model.move(by: -1))
-        #expect(model.move(by: 1))
-        #expect(model.currentID == "l2")
-        #expect(model.hasPrevious(before: "l2"))
-        #expect(!model.move(by: 1))
-        #expect(model.move(by: -1))
-        #expect(model.currentID == "l1")
     }
 }

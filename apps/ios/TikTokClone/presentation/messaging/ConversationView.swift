@@ -796,3 +796,17 @@ private struct OptionalDefaultAction: ViewModifier {
         }
     }
 }
+
+// Pastille « EN DIRECT » d'une carte de live partagé (ADR-053, anciens lives).
+private struct LiveBadge: View {
+    var body: some View {
+        Text("EN DIRECT")
+            .font(.caption2.weight(.heavy))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.red, in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(.white)
+    }
+}

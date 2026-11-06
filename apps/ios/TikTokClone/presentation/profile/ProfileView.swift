@@ -541,8 +541,7 @@ struct ProfileActionButtonStyle: ButtonStyle {
     }
 }
 
-// Photo d'un profil (en-tête de TikTok) : entourée de l'anneau des stories (ADR-051 : la toucher les ouvre ; en direct, le
-// live) ; sur la sienne, « + » bleu pour la changer (ADR-056), et rond gris « Ajouter » sans photo.
+// Photo d'un profil (en-tête de TikTok) : entourée de l'anneau des stories (ADR-051 : la toucher les ouvre) ; sur la sienne, « + » bleu pour la changer (ADR-056), et rond gris « Ajouter » sans photo.
 struct ProfileAvatar: View {
     let profile: UserProfile
     let isOwn: Bool
@@ -557,24 +556,14 @@ struct ProfileAvatar: View {
     @ViewBuilder
     var body: some View {
         let ring = container.stories.ring(for: profile.id)
-        // En direct (ADR-053) : la photo ouvre le live, avant les stories.
-        let live = container.lives.live(of: profile.id)
         Button {
-            if let live {
-                container.router.openLive(live.id, source: .profile)
-            } else if ring != nil {
+            if ring != nil {
                 container.router.openStories([summary], source: .profile)
             } else if isOwn {
                 changePhoto()
             }
         } label: {
-            if live != nil {
-                AvatarView(url: profile.avatarURL, name: profile.displayName, size: size)
-                    .padding(6)
-                    .overlay { Circle().strokeBorder(.red, lineWidth: 4) }
-                    .overlay(alignment: .bottom) { LiveBadge().offset(y: 8) }
-                    .padding(.bottom, 6)
-            } else if isOwn, profile.avatarURL == nil, ring == nil {
+            if isOwn, profile.avatarURL == nil, ring == nil {
                 // Pas encore de photo : rond gris « Ajouter », comme TikTok.
                 Circle()
                     .fill(Color(.systemGray3))
@@ -591,16 +580,14 @@ struct ProfileAvatar: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(ring == nil && live == nil && !isOwn)
+        .disabled(ring == nil && !isOwn)
         // Sur le bouton de la photo, pas sur l'ensemble : le « + » garde son propre nom (ADR-076).
         .accessibilityLabel(
-            live != nil
-                ? "@\(profile.username) est en direct"
-                : ring != nil ? "Stories de @\(profile.username)" : isOwn ? "Changer la photo de profil" : "Photo de profil de @\(profile.username)"
+            ring != nil ? "Stories de @\(profile.username)" : isOwn ? "Changer la photo de profil" : "Photo de profil de @\(profile.username)"
         )
         .accessibilityIdentifier("profile.avatar")
         .overlay(alignment: .bottomTrailing) {
-            if isOwn, live == nil {
+            if isOwn {
                 Button(action: changePhoto) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
@@ -614,6 +601,5 @@ struct ProfileAvatar: View {
             }
         }
         .task(id: profile.id) { await container.stories.loadRing(for: summary) }
-        .task(id: profile.id) { await container.lives.load(for: summary) }
     }
 }

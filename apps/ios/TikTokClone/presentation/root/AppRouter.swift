@@ -68,35 +68,33 @@ final class AppRouter {
         presentedStories = StoriesRoute(authors: authors, startAuthor: startAuthor, source: source)
     }
 
-    // Live (ADR-053) : le lancer (son auteur) ou le regarder ; ou les lives à faire défiler (icône « LIVE », ADR-066).
-    // Présenté par-dessus tout le reste, à la racine : la vidéo seule et la visionneuse de stories sont fermées.
+    // Live commun (ADR-079, SDK d'echimine) : liste des lives en cours de toutes les apps membres (icône « LIVE »),
+    // écran de lancement (mode Live de la caméra), ou un live par son identifiant (lien d'app, carte d'un message).
+    // Présenté par-dessus tout le reste, à la racine : la vidéo seule, la visionneuse de stories et la création sont fermées.
     struct LiveRoute: Identifiable, Equatable {
         enum Content: Equatable {
-            case room(LiveRoomModel.Mode)
-            case discover
+            case list
+            case launch
+            case watch(liveID: String, source: LiveSource)
         }
 
         let id = UUID()
         let content: Content
-
-        var mode: LiveRoomModel.Mode? {
-            if case .room(let mode) = content { mode } else { nil }
-        }
     }
 
     var presentedLive: LiveRoute?
 
     func openLive(_ liveID: String, source: LiveSource) {
-        presentLive(.room(.viewer(liveID: liveID, source: source)))
+        presentLive(.watch(liveID: liveID, source: source))
     }
 
-    func startLive(title: String) {
-        presentLive(.room(.host(title: title)))
+    func startLive() {
+        presentLive(.launch)
     }
 
-    // Icône « LIVE » de l'accueil (ADR-066).
+    // Icône « LIVE » de l'accueil.
     func openLiveFeed() {
-        presentLive(.discover)
+        presentLive(.list)
     }
 
     private func presentLive(_ content: LiveRoute.Content) {

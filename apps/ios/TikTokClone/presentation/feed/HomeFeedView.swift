@@ -48,10 +48,14 @@ struct HomeFeedView: View {
                 // Lus avant les vidéos (ADR-076) : sinon VoiceOver les atteint après tout le feed.
                 .accessibilitySortPriority(3)
         }
-        // Lives à faire défiler (ADR-066).
+        // Live commun (ADR-079) : lives en cours de toutes les apps membres. Le serveur commun exige un compte connecté.
         .overlay(alignment: .topLeading) {
             Button {
-                container.router.openLiveFeed()
+                if container.session.isSignedIn {
+                    container.router.openLiveFeed()
+                } else {
+                    container.session.requestSignIn(message: "Connecte-toi pour regarder et lancer des lives.")
+                }
             } label: {
                 LiveIcon()
                     .frame(width: 44, height: 36)
@@ -231,7 +235,7 @@ private struct FeedSelector: View {
     }
 }
 
-// Icône « LIVE » de l'accueil (ADR-066), comme celle de TikTok : un cadre aux coins arrondis, ouvert sur les côtés
+// Icône « LIVE » de l'accueil (ADR-066, ouvre le Live commun de l'ADR-079), comme celle de TikTok : un cadre aux coins arrondis, ouvert sur les côtés
 // autour de « LIVE », et une antenne en V posée sur le bord du haut.
 struct LiveIcon: View {
     private static let width: CGFloat = 30

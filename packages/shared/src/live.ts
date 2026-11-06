@@ -127,3 +127,9 @@ export type LiveRoomEvent =
 
 // Sujet des messages de données de LiveKit qui portent ces événements.
 export const LIVE_ROOM_TOPIC = 'live';
+
+// Jeton de Participant du Live commun (ADR-079) : JWT HS256 de 5 min, signé par l'API pour le compte connecté,
+// remis au SDK d'echimine (`tokenProvider`), qui le présente au serveur commun `live.echimine.fr`.
+export interface LiveParticipantTokenDto {
+  token: string;
+}

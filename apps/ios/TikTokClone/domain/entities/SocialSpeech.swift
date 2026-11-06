@@ -220,24 +220,6 @@ enum ActivityRowSpeech {
     }
 }
 
-// Chat d'un live (ADR-076).
-enum LiveChatSpeech {
-    /// « Inès : coucou » ; l'auteur du live : « Inès, créateur : coucou ».
-    static func message(_ message: LiveChatMessage, isHost: Bool) -> String {
-        "\(message.user.displayName)\(isHost ? ", créateur" : "") : \(message.content)"
-    }
-
-    /// « Inès a rejoint », « Inès a aimé le LIVE ».
-    static func event(_ event: LiveChatEvent) -> String {
-        "\(event.user.displayName) \(event.text)"
-    }
-
-    /// « Inès a envoyé Rose ».
-    static func gift(sender: UserSummary, gift: GiftInfo) -> String {
-        "\(sender.displayName) a envoyé \(gift.name)"
-    }
-}
-
 // Annonces du chat d'un live sans inonder VoiceOver : un message est dit tout de suite si le précédent l'a été il y a
 // plus de `interval` ; sinon il attend, et ceux qui attendent sont dits ensemble (les derniers seulement).
 struct LiveChatAnnouncer {

@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import LiveSDK
 import TikTokAPI
 import UIKit
 
@@ -46,8 +47,6 @@ final class AppContainer {
     let commentDislikes = CommentDislikesModel(store: UserDefaultsPreferencesStore())
     // Stories (ADR-051) : rangée de la boîte de réception et anneaux autour des avatars.
     let stories: StoriesModel
-    // Lives (ADR-053) : lives en cours des abonnements et des profils ouverts.
-    let lives: LiveModel
     // Vitesse ×2 du lecteur vidéo, verrouillable (appui long sur un côté de la vidéo).
     let playbackOptions: PlaybackOptionsModel
     // Téléchargement d'une vidéo dans Photos (ADR-067), un à la fois.
@@ -74,7 +73,10 @@ final class AppContainer {
     private let search: any SearchRepository
     private let gifts: any GiftRepository
     private let storyRepository: RemoteStoryRepository
-    private let liveRepository: RemoteLiveRepository
+    // Jeton de Participant du Live commun (ADR-079), demandé par le SDK d'echimine.
+    private let liveTokens: any LiveTokenRepository
+    private let liveServerURL: URL
+    private var isLiveConfigured = false
     // Compte connecté ou non au dernier changement d'activité : l'historique des recherches est effacé à chaque
     // changement de session.
     private var lastSignedIn: Bool?
@@ -169,11 +171,8 @@ final class AppContainer {
             loadTray: LoadStoryTrayUseCase(stories: storyRepository), loadStories: LoadUserStoriesUseCase(stories: storyRepository),
             session: session)
         publishing.onStoryPublished = { [stories] in Task { await stories.refresh() } }
-        let liveRepository = RemoteLiveRepository(client: client)
-        self.liveRepository = liveRepository
-        lives = LiveModel(
-            loadFollowing: LoadFollowingLivesUseCase(lives: liveRepository), loadUserLive: LoadUserLiveUseCase(lives: liveRepository),
-            session: session)
+        liveTokens = RemoteLiveTokenRepository(client: client)
+        liveServerURL = configuration.liveSDKServerURL
         let activityRepository = RemoteActivityRepository(client: client)
         self.activityRepository = activityRepository
         activity = ActivityModel(
@@ -235,6 +234,15 @@ final class AppContainer {
         banners.onShow = { banner in InAppBannerFeedback.play(for: banner) }
     }
 
+    // Live commun (ADR-079) : SDK d'echimine configuré une fois, à la première ouverture d'un écran du Live (pas au
+    // lancement : sa configuration demande déjà un jeton). Le jeton est redemandé à l'API à chaque appel, jamais gardé.
+    func prepareLive() async {
+        guard !isLiveConfigured else { return }
+        isLiveConfigured = true
+        let tokens = liveTokens
+        await LiveSDK.shared.configure(serverURL: liveServerURL) { try await tokens.participantToken() }
+    }
+
     // RevenueCat avec une clé (Config/Local.xcconfig) ; sinon achats indisponibles. En Debug, `-fakePurchases`
     // simule des achats sans compte RevenueCat (rien n'est payé ni crédité).
     private static func makePurchaseService(_ configuration: AppConfiguration) -> any PurchaseService {
@@ -275,7 +283,6 @@ final class AppContainer {
             wallet.reset()
             plus.reset()
             stories.reset()
-            lives.reset()
             videoInteractions.forgetReportedVideos()
         }
     }
@@ -331,7 +338,6 @@ final class AppContainer {
             messaging: messaging,
             loadFollows: LoadFollowsUseCase(relationships: relationships),
             share: ShareVideoByMessageUseCase(messaging: messagingRepository),
-            shareLive: nil,
             shareCollection: ShareCollectionByMessageUseCase(messaging: messagingRepository),
             interactions: videoInteractions,
             session: session
@@ -361,7 +367,6 @@ final class AppContainer {
             messaging: messaging,
             loadFollows: LoadFollowsUseCase(relationships: relationships),
             share: ShareVideoByMessageUseCase(messaging: messagingRepository),
-            shareLive: nil,
             shareProfile: ShareProfileByMessageUseCase(messaging: messagingRepository),
             interactions: videoInteractions,
             session: session
@@ -371,58 +376,6 @@ final class AppContainer {
     // Comptes suggérés sous le profil d'un autre (ADR-069).
     func loadProfileSuggestions() -> LoadProfileSuggestionsUseCase {
         LoadProfileSuggestionsUseCase(suggestions: suggestionRepository)
-    }
-
-    // « Envoyer à » d'un live (ADR-053).
-    func makeSendLiveViewModel(live: LiveStream) -> SendVideoViewModel {
-        SendVideoViewModel(
-            item: .live(live),
-            messaging: messaging,
-            loadFollows: LoadFollowsUseCase(relationships: relationships),
-            share: ShareVideoByMessageUseCase(messaging: messagingRepository),
-            shareLive: ShareLiveByMessageUseCase(messaging: messagingRepository),
-            interactions: videoInteractions,
-            session: session
-        )
-    }
-
-    // Écran d'un live (ADR-053) : sa salle LiveKit (une par ouverture) et son modèle.
-    // `preview` : live déjà connu (lives à faire défiler), affiché pendant la connexion.
-    func makeLiveRoom(mode: LiveRoomModel.Mode, preview: LiveStream? = nil) -> LiveRoomSetup {
-        let room = LiveKitRoom()
-        let model = LiveRoomModel(
-            mode: mode,
-            room: room,
-            startLive: StartLiveUseCase(lives: liveRepository),
-            joinLive: JoinLiveUseCase(lives: liveRepository),
-            loadLive: LoadLiveUseCase(lives: liveRepository),
-            endLive: EndLiveUseCase(lives: liveRepository),
-            sendMessage: SendLiveMessageUseCase(lives: liveRepository),
-            deleteMessage: DeleteLiveMessageUseCase(lives: liveRepository),
-            sendHearts: SendLiveHeartsUseCase(lives: liveRepository),
-            lives: lives,
-            session: session,
-            analytics: analytics,
-            hiddenUserIDs: { [videoInteractions] in videoInteractions.blockedUserIDs },
-            sendGift: SendGiftUseCase(gifts: gifts),
-            recordShare: RecordLiveShareUseCase(lives: liveRepository),
-            loadRelationship: LoadRelationshipUseCase(relationships: relationships),
-            onGiftSent: { [wallet] balance in wallet.giftSent(balance: balance) },
-            preview: preview
-        )
-        return LiveRoomSetup(model: model, room: room)
-    }
-
-    // Lives à faire défiler (icône « LIVE » de l'accueil, ADR-066).
-    func makeLiveFeedModel() -> LiveFeedModel {
-        LiveFeedModel(load: LoadDiscoverLivesUseCase(lives: liveRepository))
-    }
-
-    // Fiche de l'auteur d'un live (ADR-066) : profil public et relation.
-    func makeLiveHostModel(username: String) -> LiveHostModel {
-        LiveHostModel(
-            username: username, loadProfile: LoadProfileUseCase(profiles: profiles),
-            loadRelationship: LoadRelationshipUseCase(relationships: relationships), session: session)
     }
 
     // Historique des mouvements de jetons (paywall).

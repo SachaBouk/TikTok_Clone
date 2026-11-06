@@ -1,22 +1,31 @@
 {
-  "originHash" : "1bb57bca6893059f9a0205dea68d4fa1d56f2c7da2767f72b05b6a0871765b84",
+  "originHash" : "89763a0f1485e53caf3c30039b8cb9e53201d41a636f66e8c199f8deb374dd24",
   "pins" : [
     {
       "identity" : "client-sdk-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/livekit/client-sdk-swift",
+      "location" : "https://github.com/livekit/client-sdk-swift.git",
       "state" : {
-        "revision" : "f07831a7f06bca9e2fc2e136db591b7b42f16d8d",
-        "version" : "2.17.0"
+        "revision" : "43c1c0870e51eedbfd95b20b1b5c43a767886786",
+        "version" : "2.19.0"
       }
     },
     {
-      "identity" : "livekit-uniffi-xcframework",
+      "identity" : "live-sdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/livekit/livekit-uniffi-xcframework.git",
+      "location" : "https://github.com/echimine/live-sdk",
       "state" : {
-        "revision" : "7a9bf91b1601d5c408ae0cac7dc2047b5a4f615e",
-        "version" : "0.1.9"
+        "revision" : "9b2f639c6e038d65dd3ea96ae927fa9d38fc3c77",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "livekit-ffi-xcframework",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/livekit/livekit-ffi-xcframework.git",
+      "state" : {
+        "revision" : "685cfd95e23edf734450125eb58bb3bb21b4133b",
+        "version" : "0.13.1"
       }
     },
     {
@@ -141,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/webrtc-xcframework.git",
       "state" : {
-        "revision" : "c73deceaddd9c07293871ae28f24d4326cc86d62",
-        "version" : "150.7871.2"
+        "revision" : "f843fb1c12017bd17fde38e7293649c204548467",
+        "version" : "150.7871.4"
       }
     },
     {

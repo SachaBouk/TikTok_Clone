@@ -60,7 +60,6 @@ struct OtherProfileTests {
             messaging: messaging,
             loadFollows: LoadFollowsUseCase(relationships: FakeRelationshipRepository()),
             share: ShareVideoByMessageUseCase(messaging: messagingRepository),
-            shareLive: nil,
             shareProfile: ShareProfileByMessageUseCase(messaging: messagingRepository),
             interactions: VideoInteractionsModel(
                 setReaction: SetReactionUseCase(interactions: interactionRepository),

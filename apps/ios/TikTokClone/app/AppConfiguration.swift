@@ -15,6 +15,8 @@ struct AppConfiguration: Sendable {
     var revenueCatAPIKey: String?
     // Clé d'environnement de Mux Data (ADR-074) ; nil : qualité de lecture non mesurée.
     var muxDataEnvironmentKey: String?
+    // Serveur du Live commun d'echimine (ADR-079).
+    var liveSDKServerURL = URL(string: "https://live.echimine.fr")!
 
     // WebSocket du temps réel (ADR-011), sur le même hôte que l'API : ws:// en HTTP, wss:// en HTTPS.
     var realtimeURL: URL {
@@ -33,11 +35,15 @@ struct AppConfiguration: Sendable {
         let host = (bundle.object(forInfoDictionaryKey: "PostHogHost") as? String) ?? ""
         let revenueCatKey = (bundle.object(forInfoDictionaryKey: "RevenueCatAPIKey") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
         let muxDataKey = (bundle.object(forInfoDictionaryKey: "MuxDataEnvironmentKey") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
-        return AppConfiguration(
+        var configuration = AppConfiguration(
             apiBaseURL: url,
             analytics: token.isEmpty ? nil : Analytics(projectToken: token, host: host),
             revenueCatAPIKey: revenueCatKey.isEmpty ? nil : revenueCatKey,
             muxDataEnvironmentKey: muxDataKey.isEmpty ? nil : muxDataKey
         )
+        if let live = bundle.object(forInfoDictionaryKey: "LiveSDKServerURL") as? String, let liveURL = URL(string: live), liveURL.host() != nil {
+            configuration.liveSDKServerURL = liveURL
+        }
+        return configuration
     }
 }

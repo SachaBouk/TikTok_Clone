@@ -36,10 +36,11 @@ packages:
   RevenueCat:
     url: https://github.com/RevenueCat/purchases-ios-spm
     exactVersion: 5.91.0
-  # Live (ADR-053) : SDK officiel de LiveKit (Apache 2.0), pour diffuser et regarder ; version figée.
-  LiveKit:
-    url: https://github.com/livekit/client-sdk-swift
-    exactVersion: 2.17.0
+  # Live commun (ADR-079) : SDK d'echimine (LiveSDK + écrans LiveSDKUI) relié au serveur hébergé live.echimine.fr ;
+  # version figée. Il tire lui-même LiveKit (client-sdk-swift 2.19+), que l'app ne déclare plus.
+  LiveSDK:
+    url: https://github.com/echimine/live-sdk
+    exactVersion: 0.1.0
   # Qualité de lecture (ADR-074) : SDK Mux Data pour AVPlayer (MUXSDKStats, MuxCore) ; version figée.
   MUXSDKStats:
     url: https://github.com/muxinc/mux-stats-sdk-avplayer
@@ -54,7 +55,10 @@ targets:
     dependencies:
       - package: TikTokAPI
       - package: PostHog
-      - package: LiveKit
+      - package: LiveSDK
+        product: LiveSDK
+      - package: LiveSDK
+        product: LiveSDKUI
       - package: RevenueCat
       - package: MUXSDKStats
     info:
@@ -71,9 +75,14 @@ targets:
         RevenueCatAPIKey: $(REVENUECAT_API_KEY)
         # Qualité de lecture (ADR-074) : clé d'environnement de Mux Data (vide : non mesurée).
         MuxDataEnvironmentKey: $(MUX_DATA_ENV_KEY)
-        # Caméra et micro (ADR-052) : filmer des vidéos et des stories. Micro refusé : vidéo sans son.
-        NSCameraUsageDescription: Pour filmer tes vidéos et tes stories.
-        NSMicrophoneUsageDescription: Pour enregistrer le son de tes vidéos.
+        # Live commun (ADR-079) : adresse du serveur d'echimine.
+        LiveSDKServerURL: $(LIVE_SDK_SERVER_URL)
+        # Caméra et micro (ADR-052, ADR-079) : filmer des vidéos et des stories, se filmer pendant un Live ou en y montant
+        # comme co-hôte. Micro refusé : vidéo sans son.
+        NSCameraUsageDescription: Pour filmer tes vidéos et tes stories, et te filmer pendant un Live ou quand tu montes à l'écran. Rien n'est enregistré pendant un Live.
+        NSMicrophoneUsageDescription: Pour enregistrer le son de tes vidéos et te faire entendre pendant un Live ou quand tu montes à l'écran.
+        # Live commun (ADR-079) : un Live continue écran verrouillé.
+        UIBackgroundModes: [audio, voip]
         NSPhotoLibraryUsageDescription: Pour choisir les vidéos et les photos à publier.
         # Écran de publication (ADR-065) : lieux à proximité (demandé sur la page « Ajouter un lieu »), vidéo copiée dans Photos.
         NSLocationWhenInUseUsageDescription: Pour te proposer les lieux autour de toi quand tu ajoutes un lieu à une publication.

@@ -165,15 +165,12 @@ struct InboxView: View {
         // Dernière activité affichée sous « Activité et nouveaux abonnés » (sans marquer lu : seul l'écran d'activité le fait).
         .task { await activity.list.loadFirstIfNeeded() }
         // Rangée relue à chaque affichage de l'onglet : les stories expirent d'elles-mêmes.
-        // Lives des abonnements (ADR-053) aussi : un live terminé disparaît.
         .task { await container.stories.refresh() }
-        .task { await container.lives.refresh() }
         // Tirer pour actualiser avec les deux points, comme TikTok.
         .dotsRefreshable {
             await messaging.refresh()
             await activity.reload()
             await container.stories.refresh()
-            await container.lives.refresh()
         }
     }
 

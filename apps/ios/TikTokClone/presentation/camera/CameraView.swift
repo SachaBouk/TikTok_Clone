@@ -4,7 +4,7 @@ import SwiftUI
 // Caméra plein écran de la création, comme TikTok (ADR-052, ADR-062) : × et réglages à droite (caméra, lampe,
 // minuteur), durée au-dessus du déclencheur (« 3 min », « 60 s », « 15 s ») ou « Vidéo | Photo » en mode Story,
 // « Importer » (galerie) à droite du déclencheur, puis ✓ une fois des segments filmés, et modes « Caméra · Story · Live »
-// en bas. En mode Live : titre et « Lancer le live » sur l'aperçu. Sans caméra (simulateur, refus), les modes et la
+// en bas. En mode Live : « Lancer un live », qui ouvre l'écran de lancement du Live commun (ADR-079). Sans caméra (simulateur, refus), les modes et la
 // galerie restent proposés.
 // Ce que la caméra rend : des segments filmés (vers l'éditeur), ou une photo de story.
 enum CameraOutcome {
@@ -23,7 +23,6 @@ struct CameraView<Preview: View>: View {
     @State private var model: CameraViewModel
     let preview: Preview
     @Binding var mode: PublishDraftViewModel.Mode
-    @Binding var liveTitle: String
     // Dernier média de la galerie, en miniature sur « Importer ».
     let importThumbnail: CGImage?
     let onFinish: (CameraOutcome) -> Void
@@ -31,19 +30,17 @@ struct CameraView<Preview: View>: View {
     let onStartLive: () -> Void
     let onClose: () -> Void
     @State private var confirmingDiscard = false
-    @FocusState private var isEditingTitle: Bool
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
 
     init(
-        model: CameraViewModel, preview: Preview, mode: Binding<PublishDraftViewModel.Mode>, liveTitle: Binding<String>,
+        model: CameraViewModel, preview: Preview, mode: Binding<PublishDraftViewModel.Mode>,
         importThumbnail: CGImage?, onFinish: @escaping (CameraOutcome) -> Void, onImport: @escaping () -> Void,
         onStartLive: @escaping () -> Void, onClose: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
         self.preview = preview
         _mode = mode
-        _liveTitle = liveTitle
         self.importThumbnail = importThumbnail
         self.onFinish = onFinish
         self.onImport = onImport
@@ -122,10 +119,6 @@ struct CameraView<Preview: View>: View {
             HStack(alignment: .top) {
                 closeButton
                 Spacer()
-                if mode == .live {
-                    liveTitleField
-                    Spacer()
-                }
                 settingsColumn
             }
             .padding(.horizontal, 16)
@@ -349,44 +342,24 @@ struct CameraView<Preview: View>: View {
         return model.recording.isFull ? "Durée maximale atteinte" : "Enregistrer"
     }
 
-    // Mode Live (ADR-053) : titre facultatif.
-    private var liveTitleField: some View {
-        TextField("Ajoute un titre", text: $liveTitle, axis: .vertical)
-            .lineLimit(1...2)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white)
-            .focused($isEditingTitle)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-            .frame(maxWidth: 220)
-            .submitLabel(.done)
-            .accessibilityIdentifier("publish.live.title")
-    }
-
+    // Mode Live (ADR-079) : l'écran de lancement du Live commun (aperçu, vérifications, titre) prend le relais.
     private var liveButton: some View {
         VStack(spacing: 8) {
-            if LiveRules.maxTitleLength - liveTitle.count < 20 {
-                Text("\(LiveRules.maxTitleLength - liveTitle.count) caractères restants")
-                    .font(.caption)
-                    .foregroundStyle(liveTitle.count > LiveRules.maxTitleLength ? .red : .white.opacity(0.8))
-            }
             Button {
-                isEditingTitle = false
                 model.stop()
                 onStartLive()
             } label: {
-                Text("Lancer le live")
+                Text("Lancer un live")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Color.brandPink, in: RoundedRectangle(cornerRadius: 10))
             }
-            .disabled(liveTitle.count > LiveRules.maxTitleLength)
             .accessibilityIdentifier("publish.live.start")
-            Text("Tes abonnés sont prévenus. 2 heures au plus, rien n’est enregistré.")
+            Text("Ton live est visible par les utilisateurs de toutes les apps du Live commun. Rien n’est enregistré.")
                 .font(.caption)
+                .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.7))
         }
         .padding(.horizontal, 24)

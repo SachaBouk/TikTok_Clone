@@ -304,39 +304,12 @@ extension AnalyticsEvent {
         return AnalyticsEvent(name: "story_upload_started", properties: properties)
     }
 
-    // Live (ADR-053) : lancement, fin (chiffres), visionnage (source), message, partage.
+    // Live commun (ADR-079) : lancement (écran de lancement du SDK), ouverture d'un live (source). Ce qui se passe dans
+    // le live (chat, réactions, co-hôtes) reste au SDK d'echimine.
     static let liveStarted = AnalyticsEvent(name: "live_started", properties: [:])
-
-    static func liveEnded(_ stats: LiveStats?) -> AnalyticsEvent {
-        guard let stats else { return AnalyticsEvent(name: "live_ended", properties: [:]) }
-        return AnalyticsEvent(
-            name: "live_ended",
-            properties: [
-                "duration_s": .int(stats.durationSeconds), "peak_viewers": .int(stats.peakViewers), "viewers": .int(stats.viewersCount),
-                "hearts": .int(stats.heartsCount), "gifts": .int(stats.giftsCount),
-            ])
-    }
 
     static func liveViewed(source: LiveSource) -> AnalyticsEvent {
         AnalyticsEvent(name: "live_viewed", properties: ["source": .string(source.rawValue)])
-    }
-
-    static let liveMessageSent = AnalyticsEvent(name: "live_message_sent", properties: [:])
-
-    // J'aime envoyés en touchant l'écran d'un live (un lot, ADR-066).
-    static func liveLiked(count: Int) -> AnalyticsEvent {
-        AnalyticsEvent(name: "live_liked", properties: ["count": .int(count)])
-    }
-
-    static let liveRoseSent = AnalyticsEvent(name: "live_rose_sent", properties: [:])
-
-    // Sondage de fin d'un live (ADR-066) : jamais envoyé à l'API.
-    static func liveFeedback(_ answer: LiveFeedback) -> AnalyticsEvent {
-        AnalyticsEvent(name: "live_feedback", properties: ["answer": .string(answer.rawValue)])
-    }
-
-    static func liveShared(byMessage: Bool) -> AnalyticsEvent {
-        AnalyticsEvent(name: "live_shared", properties: ["method": .string(byMessage ? "message" : "system")])
     }
 
     static func storyPublished(ready: Bool) -> AnalyticsEvent {
