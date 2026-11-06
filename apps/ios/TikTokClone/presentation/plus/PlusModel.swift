@@ -102,6 +102,7 @@ final class PlusModel {
             return
         }
         if offers.isEmpty { offersState = .loading }
+        await attachPurchaseUser()
         do {
             offers = PlusRules.ordered(try await purchases.plusOffers())
             offersState = offers.isEmpty ? .failed("Aucune offre disponible pour l’instant.") : .loaded
@@ -143,6 +144,7 @@ final class PlusModel {
     func restore() async {
         guard session.isSignedIn, purchaseState == .idle else { return }
         purchaseState = .restoring
+        await attachPurchaseUser()
         do {
             try await purchases.restorePurchases()
         } catch {
@@ -162,6 +164,14 @@ final class PlusModel {
         } catch {
             message = "Gère ton abonnement depuis les réglages de ton compte Apple."
         }
+    }
+
+    // Achats rattachés au compte connecté avant tout appel à RevenueCat. RootView le fait aussi, mais plus tard (une
+    // tâche après le changement de session) : le paywall de fin d'onboarding s'affiche au moment même où la session est
+    // annoncée (ADR-075), et RevenueCat sans compte répondait « achats indisponibles » (bug rencontré).
+    private func attachPurchaseUser() async {
+        guard let userID = session.profile?.id else { return }
+        await purchases.setUser(userID)
     }
 
     private func waitForActivation(timeoutMessage: String) async {

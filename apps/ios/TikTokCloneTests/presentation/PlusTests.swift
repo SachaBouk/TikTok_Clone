@@ -102,6 +102,12 @@ struct PlusModelTests {
         #expect(model.annualSavingsPercent == 33)
     }
 
+    @Test("offres : achats rattachés au compte avant RevenueCat (paywall de fin d'onboarding)")
+    func offersAttachUser() async {
+        await model.loadOffers()
+        #expect(purchases.users == [UserProfile.alice.id])
+    }
+
     @Test("abonnement validé : attend l'activation, qui arrive par le temps réel")
     func activationByRealtime() async {
         await model.refresh()

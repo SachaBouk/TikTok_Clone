@@ -20,6 +20,8 @@ final class RevenueCatPurchaseService: PurchaseService {
     }
 
     func setUser(_ userID: String?) async {
+        // Même compte (le paywall le rattache lui-même, RootView ensuite) : rien à faire, les packages chargés restent.
+        guard userID != self.userID else { return }
         self.userID = userID
         packages = [:]
         plusPackages = [:]
